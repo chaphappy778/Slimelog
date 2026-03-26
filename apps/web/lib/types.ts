@@ -1,4 +1,5 @@
-// ─── Enums ────────────────────────────────────────────────────────────────────
+// apps/web/lib/types.ts
+// Aligned to SlimeLog schema v1.0 — Migration 20260324000001
 
 export type SlimeType =
   | "butter"
@@ -45,221 +46,6 @@ export type DropStatus =
   | "restocked"
   | "cancelled";
 
-// ─── Core Tables ──────────────────────────────────────────────────────────────
-
-export interface Profile {
-  id: string;
-  username: string;
-  full_name: string | null;
-  avatar_url: string | null;
-  bio: string | null;
-  is_premium: boolean;
-  is_verified: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Brand {
-  id: string;
-  slug: string;
-  name: string;
-  logo_url: string | null;
-  shop_url: string | null;
-  instagram_handle: string | null;
-  tiktok_handle: string | null;
-  is_verified: boolean;
-  owner_id: string | null;
-  avg_shipping: number | null;
-  avg_customer_service: number | null;
-  total_brand_ratings: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Slime {
-  id: string;
-  brand_id: string;
-  name: string;
-  slime_type: SlimeType;
-  colors: string[];
-  scent: string | null;
-  collection_name: string | null;
-  is_limited: boolean;
-  image_url: string | null;
-  created_by: string;
-  // Rolling avg columns
-  avg_texture: number | null;
-  avg_scent: number | null;
-  avg_sound: number | null;
-  avg_drizzle: number | null;
-  avg_creativity: number | null;
-  avg_sensory_fit: number | null;
-  avg_overall: number | null;
-  total_ratings: number;
-  created_at: string;
-  updated_at: string;
-  // Joined
-  brand?: Brand;
-}
-
-export interface CollectionLog {
-  id: string;
-  user_id: string;
-  slime_id: string | null;
-  brand_id: string | null;
-  slime_type: SlimeType;
-  // Free-form fields for pre-catalog entry
-  slime_name?: string;
-  brand_name_raw?: string;
-  // Status
-  in_collection: boolean;
-  in_wishlist: boolean;
-  // Ratings (1–5)
-  rating_texture: number | null;
-  rating_scent: number | null;
-  rating_sound: number | null;
-  rating_drizzle: number | null;
-  rating_creativity: number | null;
-  rating_sensory_fit: number | null;
-  rating_overall: number | null;
-  notes: string | null;
-  logged_at: string;
-  created_at: string;
-  updated_at: string;
-  // Joined
-  slime?: Slime;
-  brand?: Brand;
-  user?: Profile;
-}
-
-export interface BrandRating {
-  id: string;
-  user_id: string;
-  brand_id: string;
-  rating_shipping: number;
-  rating_customer_service: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Drop {
-  id: string;
-  brand_id: string;
-  title: string;
-  description: string | null;
-  status: DropStatus;
-  drop_at: string | null;
-  announced_by: string;
-  created_at: string;
-  updated_at: string;
-  // Joined
-  brand?: Brand;
-  slimes?: Slime[];
-}
-
-export interface ActivityFeedItem {
-  id: string;
-  actor_id: string;
-  activity_type: ActivityType;
-  log_id: string | null;
-  slime_id: string | null;
-  brand_id: string | null;
-  drop_id: string | null;
-  target_user_id: string | null;
-  metadata: Record<string, unknown>;
-  created_at: string;
-  // Joined
-  actor?: Profile;
-  log?: CollectionLog;
-  slime?: Slime;
-  brand?: Brand;
-  drop?: Drop;
-  target_user?: Profile;
-}
-
-export interface LogLike {
-  user_id: string;
-  log_id: string;
-  created_at: string;
-}
-
-export interface LogComment {
-  id: string;
-  log_id: string;
-  user_id: string;
-  body: string;
-  created_at: string;
-  updated_at: string;
-  user?: Profile;
-}
-
-export interface Notification {
-  id: string;
-  recipient_id: string;
-  actor_id: string | null;
-  notification_type: NotificationType;
-  log_id: string | null;
-  drop_id: string | null;
-  brand_id: string | null;
-  is_read: boolean;
-  created_at: string;
-}
-
-export interface SlimeTypeReference {
-  slime_type: SlimeType;
-  display_name: string;
-  made_with: string;
-  key_characteristics: string;
-  what_to_rate: string;
-  sort_order: number;
-}
-
-// ─── Views ────────────────────────────────────────────────────────────────────
-
-export interface ProfileFollowCounts {
-  user_id: string;
-  follower_count: number;
-  following_count: number;
-  brand_follow_count: number;
-}
-
-export interface UserCollectionSummary {
-  user_id: string;
-  total_in_collection: number;
-  total_in_wishlist: number;
-  total_rated: number;
-  avg_overall_given: number | null;
-  distinct_brands_tried: number;
-  distinct_types_tried: number;
-}
-
-export interface TopRatedSlime extends Slime {
-  brand_name: string;
-}
-
-export interface UpcomingDrop extends Drop {
-  brand_logo: string | null;
-  follower_count: number;
-}
-
-// ─── UI / Form helpers ────────────────────────────────────────────────────────
-
-export interface NewLogFormData {
-  slime_name: string;
-  brand_name_raw: string;
-  slime_type: SlimeType | "";
-  rating_texture: number;
-  rating_scent: number;
-  rating_sound: number;
-  rating_drizzle: number;
-  rating_creativity: number;
-  rating_sensory_fit: number;
-  rating_overall: number;
-  notes: string;
-  in_collection: boolean;
-  in_wishlist: boolean;
-}
-
 export type RatingDimension =
   | "texture"
   | "scent"
@@ -268,6 +54,8 @@ export type RatingDimension =
   | "creativity"
   | "sensory_fit"
   | "overall";
+
+// ─── Labels & Colors ──────────────────────────────────────────────────────────
 
 export const SLIME_TYPE_LABELS: Record<SlimeType, string> = {
   butter: "Butter",
@@ -359,3 +147,113 @@ export const RATING_DIMENSIONS: {
     description: "Your final verdict",
   },
 ];
+
+// ─── collection_logs ──────────────────────────────────────────────────────────
+
+export interface CollectionLog {
+  id: string;
+  user_id: string | null;
+  slime_id: string | null;
+  brand_id: string | null;
+  slime_name: string | null;
+  brand_name_raw: string | null;
+  collection_name: string | null;
+  slime_type: SlimeType | null;
+  colors: string[] | null;
+  scent: string | null;
+  cost_paid: number | null;
+  purchased_from: string | null;
+  purchased_at: string | null;
+  likes: string | null;
+  dislikes: string | null;
+  notes: string | null;
+  in_collection: boolean;
+  in_wishlist: boolean;
+  rating_texture: number | null;
+  rating_scent: number | null;
+  rating_sound: number | null;
+  rating_drizzle: number | null;
+  rating_creativity: number | null;
+  rating_sensory_fit: number | null;
+  rating_overall: number | null;
+  is_public: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// ─── Insert payload ───────────────────────────────────────────────────────────
+
+export interface CollectionLogInsert {
+  user_id?: string | null;
+  slime_id?: string | null;
+  brand_id?: string | null;
+  slime_name?: string | null;
+  brand_name_raw?: string | null;
+  collection_name?: string | null;
+  slime_type?: SlimeType | null;
+  colors?: string[] | null;
+  scent?: string | null;
+  cost_paid?: number | null;
+  purchased_from?: string | null;
+  purchased_at?: string | null;
+  likes?: string | null;
+  dislikes?: string | null;
+  notes?: string | null;
+  in_collection?: boolean;
+  in_wishlist?: boolean;
+  rating_texture?: number | null;
+  rating_scent?: number | null;
+  rating_sound?: number | null;
+  rating_drizzle?: number | null;
+  rating_creativity?: number | null;
+  rating_sensory_fit?: number | null;
+  rating_overall?: number | null;
+  is_public?: boolean;
+}
+
+// ─── Log form state (4-step wizard) ──────────────────────────────────────────
+
+export interface LogFormData {
+  // Step 1 — Identity
+  slime_name: string;
+  brand_name_raw: string;
+  slime_type: SlimeType | "";
+
+  // Step 2 — Details
+  colors: string[];
+  scent: string;
+  cost_paid: string;
+
+  // Step 3 — Ratings
+  rating_texture: number | null;
+  rating_scent: number | null;
+  rating_sound: number | null;
+  rating_drizzle: number | null;
+  rating_creativity: number | null;
+  rating_sensory_fit: number | null;
+  rating_overall: number | null;
+
+  // Step 4 — Notes
+  notes: string;
+  in_wishlist: boolean;
+  in_collection: boolean;
+}
+
+export const EMPTY_LOG_FORM: LogFormData = {
+  slime_name: "",
+  brand_name_raw: "",
+  slime_type: "",
+  colors: [],
+  scent: "",
+  cost_paid: "",
+  rating_texture: null,
+  rating_scent: null,
+  rating_sound: null,
+  rating_drizzle: null,
+  rating_creativity: null,
+  rating_sensory_fit: null,
+  rating_overall: null,
+  notes: "",
+  in_wishlist: false,
+  in_collection: true,
+};

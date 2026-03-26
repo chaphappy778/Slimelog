@@ -1,158 +1,271 @@
-'use client';
+"use client";
+// apps/web/app/collection/page.tsx
 
-import { useState } from 'react';
-import { TypeBadge } from '@/components/TypeBadge';
-import { RatingDisplay } from '@/components/RatingInput';
-import { MY_COLLECTION_LOGS, MOCK_COLLECTION_SUMMARY } from '@/lib/mock-data';
-import { CollectionLog, SlimeType, SLIME_TYPE_LABELS } from '@/lib/types';
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { fetchCollectionLogs } from "@/lib/slime-actions";
+import { SLIME_TYPE_LABELS } from "@/lib/types";
+import type { CollectionLog, SlimeType } from "@/lib/types";
 
-type TabFilter = 'collection' | 'wishlist' | 'rated';
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function CollectionItemCard({ log }: { log: CollectionLog }) {
-  const slime = log.slime;
-  const name = slime?.name ?? log.slime_name ?? 'Unknown Slime';
-  const brand = slime?.brand?.name ?? log.brand?.name ?? log.brand_name_raw ?? '';
-  const color = slime?.colors?.[0] ?? '#F9A8D4';
+function formatDate(iso: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(iso));
+}
+
+function RatingDots({ value }: { value: number | null }) {
+  if (!value) return <span className="text-slime-muted text-xs">—</span>;
+  return (
+    <span className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <span
+          key={i}
+          className={`w-1.5 h-1.5 rounded-full ${
+            i <= value ? "bg-slime-accent" : "bg-slime-border"
+          }`}
+        />
+      ))}
+    </span>
+  );
+}
+
+// ─── Slime Card ────────────────────────────────────────────────────────────────
+
+function SlimeCard({ log }: { log: CollectionLog }) {
+  const typeLabel =
+    log.slime_type && SLIME_TYPE_LABELS[log.slime_type as SlimeType]
+      ? SLIME_TYPE_LABELS[log.slime_type as SlimeType]
+      : null;
+
+  const hasRatings =
+    log.rating_overall !== null ||
+    log.rating_texture !== null ||
+    log.rating_scent !== null;
 
   return (
-    <div className="bg-white rounded-2xl overflow-hidden border border-pink-50 shadow-sm active:scale-[0.97] transition-transform">
-      {/* Mini photo area */}
-      <div
-        className="w-full h-28 flex items-center justify-center relative"
-        style={{ background: `linear-gradient(135deg, ${color}55, ${slime?.colors?.[1] ?? color}22)` }}
-      >
-        <span className="text-3xl">🫧</span>
-        {log.in_wishlist && !log.in_collection && (
-          <div className="absolute top-2 right-2 bg-purple-100 text-purple-600 text-[9px] font-black px-1.5 py-0.5 rounded-full">
-            WISH
-          </div>
-        )}
-        {slime?.is_limited && (
-          <div className="absolute top-2 left-2 bg-pink-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">
-            LTD
-          </div>
-        )}
-      </div>
-      <div className="p-2.5">
-        <p className="text-xs font-bold text-gray-800 truncate leading-tight">{name}</p>
-        <p className="text-[10px] text-gray-400 truncate mt-0.5">{brand}</p>
-        <div className="mt-1.5 flex items-center justify-between">
-          <TypeBadge type={log.slime_type} size="sm" />
-          {log.rating_overall && (
-            <span className="text-[10px] font-black text-pink-500">{log.rating_overall}★</span>
+    <div className="bg-slime-card rounded-2xl border border-slime-border p-4 flex flex-col gap-3 shadow-slime-sm hover:shadow-slime transition-shadow duration-200">
+      {/* Top row */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <h3 className="font-bold text-slime-text text-sm leading-snug truncate">
+            {log.slime_name ?? "Unnamed slime"}
+          </h3>
+          {log.brand_name_raw && (
+            <span className="text-xs text-slime-muted truncate">
+              {log.brand_name_raw}
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          {log.is_wishlist ? (
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 border border-violet-500/25">
+              Wishlist
+            </span>
+          ) : (
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slime-accent/15 text-slime-accent border border-slime-accent/25">
+              In Collection
+            </span>
           )}
         </div>
       </div>
+
+      {/* Tags row */}
+      <div className="flex flex-wrap gap-1.5">
+        {typeLabel && (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-slime-surface border border-slime-border text-slime-muted">
+            {typeLabel}
+          </span>
+        )}
+        {log.color_primary && (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-slime-surface border border-slime-border text-slime-muted">
+            {log.color_primary}
+          </span>
+        )}
+        {log.scent && (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-slime-surface border border-slime-border text-slime-muted">
+            🌸 {log.scent}
+          </span>
+        )}
+        {log.cost_paid != null && (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-slime-surface border border-slime-border text-slime-muted">
+            ${Number(log.cost_paid).toFixed(2)}
+          </span>
+        )}
+      </div>
+
+      {/* Ratings */}
+      {hasRatings && (
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 pt-1 border-t border-slime-border">
+          {log.rating_overall !== null && (
+            <div className="flex items-center justify-between col-span-2">
+              <span className="text-xs text-slime-muted font-medium">
+                Overall
+              </span>
+              <div className="flex items-center gap-1.5">
+                <RatingDots value={log.rating_overall} />
+                <span className="text-xs font-bold text-slime-text">
+                  {log.rating_overall}/5
+                </span>
+              </div>
+            </div>
+          )}
+          {[
+            { key: "rating_texture", label: "Texture" },
+            { key: "rating_scent", label: "Scent" },
+            { key: "rating_sound", label: "Sound" },
+            { key: "rating_drizzle", label: "Drizzle" },
+            { key: "rating_creativity", label: "Creativity" },
+            { key: "rating_sensory_fit", label: "Sensory Fit" },
+          ]
+            .filter(({ key }) => log[key as keyof CollectionLog] !== null)
+            .map(({ key, label }) => (
+              <div key={key} className="flex items-center justify-between">
+                <span className="text-xs text-slime-muted">{label}</span>
+                <RatingDots
+                  value={log[key as keyof CollectionLog] as number | null}
+                />
+              </div>
+            ))}
+        </div>
+      )}
+
+      {/* Notes */}
+      {log.notes && (
+        <p className="text-xs text-slime-muted line-clamp-2 italic border-t border-slime-border pt-2">
+          "{log.notes}"
+        </p>
+      )}
+
+      {/* Footer */}
+      <p className="text-xs text-slime-muted/60 mt-auto">
+        {formatDate(log.created_at)}
+      </p>
     </div>
   );
 }
 
-const ALL_TYPES = Object.keys(SLIME_TYPE_LABELS) as SlimeType[];
+// ─── Empty State ───────────────────────────────────────────────────────────────
+
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center text-center py-20 gap-4">
+      <span className="text-5xl">🫙</span>
+      <div>
+        <p className="font-bold text-slime-text">Your collection is empty</p>
+        <p className="text-sm text-slime-muted mt-1">
+          Log your first slime to get started!
+        </p>
+      </div>
+      <Link
+        href="/log"
+        className="mt-2 px-6 py-2.5 rounded-xl bg-slime-accent text-white text-sm font-bold hover:bg-slime-accent-hover transition"
+      >
+        Log a slime ✦
+      </Link>
+    </div>
+  );
+}
+
+// ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function CollectionPage() {
-  const [tab, setTab] = useState<TabFilter>('collection');
-  const [typeFilter, setTypeFilter] = useState<SlimeType | 'all'>('all');
-  const [search, setSearch] = useState('');
+  const [logs, setLogs] = useState<CollectionLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<"all" | "collection" | "wishlist">(
+    "all",
+  );
 
-  const summary = MOCK_COLLECTION_SUMMARY;
+  useEffect(() => {
+    fetchCollectionLogs().then(({ data, error }) => {
+      setLogs(data);
+      setError(error);
+      setLoading(false);
+    });
+  }, []);
 
-  const filtered = MY_COLLECTION_LOGS.filter(log => {
-    if (tab === 'collection' && !log.in_collection) return false;
-    if (tab === 'wishlist' && !log.in_wishlist) return false;
-    if (tab === 'rated' && !log.rating_overall) return false;
-    if (typeFilter !== 'all' && log.slime_type !== typeFilter) return false;
-    const name = log.slime?.name ?? log.slime_name ?? '';
-    const brand = log.slime?.brand?.name ?? log.brand_name_raw ?? '';
-    if (search && !name.toLowerCase().includes(search.toLowerCase()) && !brand.toLowerCase().includes(search.toLowerCase())) return false;
+  const filtered = logs.filter((l) => {
+    if (filter === "collection") return !l.is_wishlist;
+    if (filter === "wishlist") return l.is_wishlist;
     return true;
   });
 
+  const collectionCount = logs.filter((l) => !l.is_wishlist).length;
+  const wishlistCount = logs.filter((l) => l.is_wishlist).length;
+
   return (
-    <div className="min-h-screen">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-pink-50 px-4 py-3">
-        <h1 className="font-black text-2xl gradient-text">My Collection</h1>
-
-        {/* Stats row */}
-        <div className="flex gap-3 mt-2 overflow-x-auto scroll-hide pb-0.5">
-          {[
-            { label: 'Slimes', value: summary.total_in_collection },
-            { label: 'Wishlisted', value: summary.total_in_wishlist },
-            { label: 'Rated', value: summary.total_rated },
-            { label: 'Avg ⭐', value: summary.avg_overall_given?.toFixed(1) ?? '—' },
-            { label: 'Brands', value: summary.distinct_brands_tried },
-            { label: 'Types', value: summary.distinct_types_tried },
-          ].map(stat => (
-            <div key={stat.label} className="shrink-0 text-center bg-pink-50 rounded-xl px-3 py-1.5">
-              <p className="text-sm font-black text-pink-600">{stat.value}</p>
-              <p className="text-[10px] text-gray-400 font-semibold">{stat.label}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Tab pills */}
-        <div className="flex gap-2 mt-3">
-          {([
-            { key: 'collection', label: `📦 Collection (${summary.total_in_collection})` },
-            { key: 'wishlist', label: `💫 Wishlist (${summary.total_in_wishlist})` },
-            { key: 'rated', label: `⭐ Rated` },
-          ] as { key: TabFilter; label: string }[]).map(t => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`shrink-0 text-xs font-bold px-3 py-1.5 rounded-full transition-all ${tab === t.key ? 'bg-pink-500 text-white' : 'bg-pink-50 text-pink-400'}`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </header>
-
-      <div className="px-4 py-4">
-        {/* Search */}
-        <div className="relative mb-3">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803a7.5 7.5 0 0010.607 10.607z" />
-          </svg>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search slimes…"
-            className="w-full bg-pink-50 border border-pink-100 rounded-2xl pl-9 pr-4 py-3 text-sm text-gray-800 placeholder-gray-300"
-          />
-        </div>
-
-        {/* Type filter chips */}
-        <div className="flex gap-2 overflow-x-auto scroll-hide pb-1 mb-3">
-          <button
-            onClick={() => setTypeFilter('all')}
-            className={`shrink-0 text-xs font-bold px-3 py-1.5 rounded-full ${typeFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500'}`}
+    <div className="min-h-screen bg-slime-bg px-4 py-8">
+      <div className="max-w-md mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-extrabold text-slime-text tracking-tight">
+              My Slimes <span className="text-slime-accent">✦</span>
+            </h1>
+            {!loading && (
+              <p className="text-sm text-slime-muted mt-0.5">
+                {collectionCount} in collection · {wishlistCount} on wishlist
+              </p>
+            )}
+          </div>
+          <Link
+            href="/log"
+            className="px-4 py-2 rounded-xl bg-slime-accent text-white text-xs font-bold hover:bg-slime-accent-hover transition"
           >
-            All Types
-          </button>
-          {ALL_TYPES.map(t => (
+            + Log
+          </Link>
+        </div>
+
+        {/* Filter tabs */}
+        <div className="flex gap-2 mb-6">
+          {(["all", "collection", "wishlist"] as const).map((f) => (
             <button
-              key={t}
-              onClick={() => setTypeFilter(t)}
-              className={`shrink-0 rounded-full transition-all ${typeFilter === t ? 'ring-2 ring-pink-400 ring-offset-1' : ''}`}
+              key={f}
+              type="button"
+              onClick={() => setFilter(f)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition capitalize ${
+                filter === f
+                  ? "bg-slime-accent text-white"
+                  : "bg-slime-surface border border-slime-border text-slime-muted hover:border-slime-accent/50"
+              }`}
             >
-              <TypeBadge type={t} size="sm" />
+              {f === "all"
+                ? `All (${logs.length})`
+                : f === "collection"
+                  ? `Collection (${collectionCount})`
+                  : `Wishlist (${wishlistCount})`}
             </button>
           ))}
         </div>
+
+        {/* Loading */}
+        {loading && (
+          <div className="flex justify-center py-20">
+            <div className="w-8 h-8 border-2 border-slime-accent border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+
+        {/* Error */}
+        {error && !loading && (
+          <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">
+            {error}
+          </div>
+        )}
+
+        {/* Empty */}
+        {!loading && !error && filtered.length === 0 && <EmptyState />}
 
         {/* Grid */}
-        {filtered.length > 0 ? (
-          <div className="grid grid-cols-2 gap-3">
-            {filtered.map(log => (
-              <CollectionItemCard key={log.id} log={log} />
+        {!loading && !error && filtered.length > 0 && (
+          <div className="flex flex-col gap-4">
+            {filtered.map((log) => (
+              <SlimeCard key={log.id} log={log} />
             ))}
-          </div>
-        ) : (
-          <div className="text-center py-16">
-            <div className="text-5xl mb-3">🫧</div>
-            <p className="font-bold text-gray-400 text-sm">Nothing here yet</p>
-            <p className="text-xs text-gray-300 mt-1">Log your first slime to get started!</p>
           </div>
         )}
       </div>
