@@ -8,6 +8,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+// Matches the slime_type enum defined in the schema.
 export type SlimeType =
   | "butter"
   | "clear"
@@ -27,13 +30,21 @@ export type SlimeType =
   | "slay";
 
 export interface LogSlimeInput {
+  // Catalog references — both optional for free-form entry
   slime_id?: string;
   brand_id?: string;
+
+  // Free-form fallbacks (used before catalog matching)
   slime_name?: string;
   brand_name_raw?: string;
+
   slime_type: SlimeType;
+
+  // Status flags
   in_collection?: boolean;
   in_wishlist?: boolean;
+
+  // Ratings — all optional, smallint 1–5
   rating_texture?: number;
   rating_scent?: number;
   rating_sound?: number;
@@ -41,28 +52,44 @@ export interface LogSlimeInput {
   rating_creativity?: number;
   rating_sensory_fit?: number;
   rating_overall?: number;
-  scent?: string;
+
+  // Free-form notes
   notes?: string;
   purchase_price?: number;
   purchase_currency?: string;
 }
 
+// ─── Auth guard ───────────────────────────────────────────────────────────────
+
+/**
+ * Returns the authenticated user's id, or throws if no session exists.
+ * Called at the top of every mutating action — never trust user_id from args.
+ */
 async function requireAuthUserId(): Promise<string> {
   const supabase = await createClient();
   const {
     data: { user },
     error,
   } = await supabase.auth.getUser();
+
   if (error || !user) {
     throw new Error("Authentication required. Please sign in to log slimes.");
   }
+
   return user.id;
 }
 
+// ─── Actions ──────────────────────────────────────────────────────────────────
+
+/**
+ * Inserts a new collection_logs row for the authenticated user.
+ * Throws if unauthenticated or if the insert fails.
+ */
 export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
   const userId = await requireAuthUserId();
   const supabase = await createClient();
 
+  // Validate ratings are in range 1–5 if provided
   const ratingFields = [
     "rating_texture",
     "rating_scent",
@@ -83,7 +110,7 @@ export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
   const { data, error } = await supabase
     .from("collection_logs")
     .insert({
-      user_id: userId,
+      user_id: userId, // ← always from session, never from client input
       slime_id: input.slime_id ?? null,
       brand_id: input.brand_id ?? null,
       slime_name: input.slime_name ?? null,
@@ -112,9 +139,15 @@ export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
 
   revalidatePath("/collection");
   revalidatePath("/");
+
   return { id: data.id };
 }
 
+/**
+ * Updates an existing collection_logs row.
+ * Enforces ownership — RLS will reject if user_id doesn't match, and we
+ * double-check by filtering on user_id in the UPDATE query.
+ */
 export async function updateSlimeLog(
   logId: string,
   input: Partial<LogSlimeInput>,
@@ -125,6 +158,8 @@ export async function updateSlimeLog(
   const { error } = await supabase
     .from("collection_logs")
     .update({
+      ...(input.slime_id !== undefined && { slime_id: input.slime_id }),
+      ...(input.brand_id !== undefined && { brand_id: input.brand_id }),
       ...(input.slime_name !== undefined && { slime_name: input.slime_name }),
       ...(input.brand_name_raw !== undefined && {
         brand_name_raw: input.brand_name_raw,
@@ -163,7 +198,7 @@ export async function updateSlimeLog(
       }),
     })
     .eq("id", logId)
-    .eq("user_id", userId);
+    .eq("user_id", userId); // ownership guard in addition to RLS
 
   if (error) {
     console.error("[updateSlimeLog] update error:", error.message);
@@ -174,6 +209,9 @@ export async function updateSlimeLog(
   revalidatePath("/");
 }
 
+/**
+ * Deletes a collection_logs row owned by the authenticated user.
+ */
 export async function deleteSlimeLog(logId: string): Promise<void> {
   const userId = await requireAuthUserId();
   const supabase = await createClient();
@@ -182,7 +220,7 @@ export async function deleteSlimeLog(logId: string): Promise<void> {
     .from("collection_logs")
     .delete()
     .eq("id", logId)
-    .eq("user_id", userId);
+    .eq("user_id", userId); // ownership guard in addition to RLS
 
   if (error) {
     console.error("[deleteSlimeLog] delete error:", error.message);
@@ -193,6 +231,9 @@ export async function deleteSlimeLog(logId: string): Promise<void> {
   revalidatePath("/");
 }
 
+/**
+ * Fetches collection_logs for the authenticated user.
+ */
 export async function getUserCollectionLogs() {
   const userId = await requireAuthUserId();
   const supabase = await createClient();
