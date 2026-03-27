@@ -1,239 +1,298 @@
-'use client';
+// apps/web/app/discover/page.tsx
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
-import { useState } from 'react';
-import { SlimeCard } from '@/components/SlimeCard';
-import { TypeBadge } from '@/components/TypeBadge';
-import { MOCK_SLIMES, MOCK_BRANDS, MOCK_DROPS } from '@/lib/mock-data';
-import { SlimeType, SLIME_TYPE_LABELS, Drop } from '@/lib/types';
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-const ALL_TYPES = Object.keys(SLIME_TYPE_LABELS) as SlimeType[];
+type TopRatedSlime = {
+  id: string;
+  slime_name: string | null;
+  brand_name: string | null; // direct column on the view
+  slime_type: string | null;
+  avg_overall: number | null;
+  total_ratings: number | null; // corrected: was log_count
+};
 
-function DropCard({ drop, compact = false }: { drop: Drop; compact?: boolean }) {
-  const isLive = drop.status === 'live';
-  const isAnnounced = drop.status === 'announced';
-  const date = drop.drop_at
-    ? new Date(drop.drop_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-    : 'TBA';
+type UpcomingDrop = {
+  id: string;
+  drop_name: string | null;
+  drop_at: string | null; // corrected: was drop_date
+  status: string | null;
+  brand_name: string | null; // direct column on the view
+};
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// ─── Drop status config ───────────────────────────────────────────────────────
+// Typed as a plain const (not Record<string,...>) so lookups return
+// the object type directly — no union with "" or undefined in the value type.
+
+const DROP_STATUS = {
+  announced: {
+    label: "Announced",
+    bg: "bg-violet-100",
+    text: "text-violet-700",
+  },
+  live: { label: "🔴 Live", bg: "bg-green-100", text: "text-green-700" },
+  sold_out: { label: "Sold Out", bg: "bg-gray-100", text: "text-gray-500" },
+  restocked: { label: "Restocked", bg: "bg-sky-100", text: "text-sky-700" },
+  cancelled: { label: "Cancelled", bg: "bg-red-50", text: "text-red-400" },
+} as const;
+
+type StatusBadge = { label: string; bg: string; text: string };
+
+// Helper with explicit return type — TS trusts the shape without fighting the ternary
+function getStatusBadge(status: string | null): StatusBadge {
+  if (status && status in DROP_STATUS) {
+    return DROP_STATUS[status as keyof typeof DROP_STATUS];
+  }
+  return {
+    label: status ?? "Unknown",
+    bg: "bg-gray-100",
+    text: "text-gray-600",
+  };
+}
+
+function formatDropDate(dateStr: string | null): string {
+  if (!dateStr) return "TBA";
+  const d = new Date(dateStr);
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function RatingBar({ avg }: { avg: number | null }) {
+  const pct = avg ? ((avg - 1) / 4) * 100 : 0;
   return (
-    <div className={`bg-white rounded-2xl border ${isLive ? 'border-green-200' : 'border-pink-100'} p-4 shadow-sm`}>
-      <div className="flex items-center gap-2 mb-2">
-        {isLive && (
-          <span className="badge-live inline-flex items-center gap-1 text-[10px] font-black text-green-700 bg-green-100 px-2 py-0.5 rounded-full uppercase tracking-widest">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-            Live
-          </span>
-        )}
-        {isAnnounced && (
-          <span className="text-[10px] font-black text-pink-600 bg-pink-100 px-2 py-0.5 rounded-full uppercase tracking-widest">
-            Upcoming
-          </span>
-        )}
-        <span className="text-xs font-semibold text-gray-400">{drop.brand?.name}</span>
+    <div className="flex items-center gap-2">
+      <div className="flex-1 h-1.5 rounded-full bg-pink-100 overflow-hidden">
+        <div
+          className="h-full rounded-full"
+          style={{
+            width: `${pct}%`,
+            background: "linear-gradient(90deg, #f472b6, #a855f7)",
+          }}
+        />
       </div>
-      <p className="font-bold text-gray-900 text-sm">{drop.title}</p>
-      {!compact && drop.description && (
-        <p className="text-xs text-gray-500 mt-1 line-clamp-2">{drop.description}</p>
-      )}
-      <div className="flex items-center justify-between mt-3">
-        <span className="text-xs text-gray-400">🕐 {date}</span>
-        <button className={`text-xs font-bold px-4 py-2 rounded-xl active:scale-95 transition-transform ${isLive ? 'bg-green-500 text-white' : 'bg-pink-500 text-white'}`}>
-          {isLive ? 'Shop →' : 'Notify me'}
-        </button>
+      <span className="text-xs font-semibold text-pink-600 tabular-nums w-7 text-right">
+        {avg ? avg.toFixed(1) : "—"}
+      </span>
+    </div>
+  );
+}
+
+// ─── Section header ───────────────────────────────────────────────────────────
+
+function SectionHeader({
+  emoji,
+  title,
+  subtitle,
+}: {
+  emoji: string;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 mb-4">
+      <div
+        className="w-9 h-9 rounded-2xl flex items-center justify-center text-lg shrink-0"
+        style={{ background: "linear-gradient(135deg, #fce7f3, #f3e8ff)" }}
+        aria-hidden="true"
+      >
+        {emoji}
+      </div>
+      <div>
+        <h2 className="text-base font-bold text-gray-900 leading-tight">
+          {title}
+        </h2>
+        <p className="text-xs text-gray-400">{subtitle}</p>
       </div>
     </div>
   );
 }
 
-type DiscoverTab = 'trending' | 'top-rated' | 'drops' | 'types';
+function EmptySection({ message }: { message: string }) {
+  return (
+    <div className="text-center py-10 text-gray-400 text-sm">{message}</div>
+  );
+}
 
-export default function DiscoverPage() {
-  const [tab, setTab] = useState<DiscoverTab>('trending');
-  const [search, setSearch] = useState('');
+// ─── Top-rated card ───────────────────────────────────────────────────────────
 
-  const topRated = [...MOCK_SLIMES].sort((a, b) => (b.avg_overall ?? 0) - (a.avg_overall ?? 0));
-  const trending = [...MOCK_SLIMES].sort((a, b) => b.total_ratings - a.total_ratings);
-
-  const filteredSlimes = (tab === 'top-rated' ? topRated : trending).filter(s => {
-    if (!search) return true;
-    return (
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.brand?.name.toLowerCase().includes(search.toLowerCase())
-    );
-  });
+function TopRatedCard({ slime, rank }: { slime: TopRatedSlime; rank: number }) {
+  const isTop3 = rank <= 3;
+  const rankEmoji = ["🥇", "🥈", "🥉"][rank - 1] ?? null;
 
   return (
-    <div className="min-h-screen">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-pink-50 px-4 py-3">
-        <h1 className="font-black text-2xl gradient-text">Discover</h1>
+    <article className="bg-white rounded-2xl border border-pink-50 shadow-sm p-4 flex items-center gap-3">
+      <div
+        className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-sm font-black
+          ${isTop3 ? "text-white" : "bg-gray-50 text-gray-400"}`}
+        style={
+          isTop3
+            ? { background: "linear-gradient(135deg, #f472b6, #a855f7)" }
+            : undefined
+        }
+        aria-label={`Rank ${rank}`}
+      >
+        {rankEmoji ?? rank}
+      </div>
 
-        {/* Search */}
-        <div className="relative mt-2">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803a7.5 7.5 0 0010.607 10.607z" />
-          </svg>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search slimes, brands…"
-            className="w-full bg-pink-50 border border-pink-100 rounded-2xl pl-9 pr-4 py-3 text-sm text-gray-800 placeholder-gray-300"
-          />
-        </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-gray-900 truncate leading-tight">
+          {slime.slime_name ?? "Unnamed slime"}
+        </p>
+        <p className="text-xs text-gray-400 truncate">
+          {slime.brand_name ?? "Unknown brand"}
+        </p>
+        <RatingBar avg={slime.avg_overall} />
+      </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 mt-3 overflow-x-auto scroll-hide">
-          {([
-            { key: 'trending', label: '🔥 Trending' },
-            { key: 'top-rated', label: '⭐ Top Rated' },
-            { key: 'drops', label: '🚨 Drops' },
-            { key: 'types', label: '🧬 Types' },
-          ] as { key: DiscoverTab; label: string }[]).map(t => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`shrink-0 text-xs font-bold px-4 py-1.5 rounded-full transition-all ${tab === t.key ? 'bg-pink-500 text-white' : 'bg-pink-50 text-pink-400'}`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+      <div className="text-right shrink-0">
+        <p className="text-xs text-gray-400">{slime.total_ratings ?? 0}</p>{" "}
+        {/* corrected: was log_count */}
+        <p className="text-[10px] text-gray-300">ratings</p>
+      </div>
+    </article>
+  );
+}
+
+// ─── Drop card ────────────────────────────────────────────────────────────────
+
+function DropCard({ drop }: { drop: UpcomingDrop }) {
+  const statusBadge = getStatusBadge(drop.status);
+
+  return (
+    <article className="bg-white rounded-2xl border border-pink-50 shadow-sm p-4 flex items-center justify-between gap-3">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-gray-900 truncate leading-tight">
+          {drop.drop_name ?? "Unnamed drop"}
+        </p>
+        <p className="text-xs text-gray-400 truncate mt-0.5">
+          {drop.brand_name ?? "Unknown brand"}
+        </p>
+        <p className="text-xs text-gray-500 mt-1 font-medium">
+          {formatDropDate(drop.drop_at)}
+        </p>
+      </div>
+      <span
+        className={`shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full ${statusBadge.bg} ${statusBadge.text}`}
+      >
+        {statusBadge.label}
+      </span>
+    </article>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default async function DiscoverPage() {
+  const cookieStore = await cookies();
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name) {
+          return cookieStore.get(name)?.value;
+        },
+      },
+    },
+  );
+
+  const [topRatedResult, dropsResult] = await Promise.all([
+    supabase
+      .from("top_rated_slimes")
+      .select(
+        "id, slime_name, brand_name, slime_type, avg_overall, total_ratings",
+      ) // corrected: brand_name direct, total_ratings not log_count
+      .order("avg_overall", { ascending: false })
+      .limit(10),
+
+    supabase
+      .from("upcoming_drops")
+      .select("id, drop_name, drop_at, status, brand_name") // corrected: brand_name direct, drop_at not drop_date
+      .in("status", ["announced", "live"])
+      .order("drop_at", { ascending: true }) // corrected: drop_at
+      .limit(15),
+  ]);
+
+  const topSlimes: TopRatedSlime[] = topRatedResult.error
+    ? []
+    : (topRatedResult.data ?? []);
+  const drops: UpcomingDrop[] = dropsResult.error
+    ? []
+    : (dropsResult.data ?? []);
+
+  const hasErrors = topRatedResult.error || dropsResult.error;
+
+  return (
+    <main
+      className="min-h-screen pb-24"
+      style={{
+        background: "linear-gradient(160deg, #fdf2f8 0%, #faf5ff 100%)",
+      }}
+    >
+      <header className="px-4 pt-10 pb-6">
+        <h1
+          className="text-2xl font-black tracking-tight"
+          style={{
+            background: "linear-gradient(90deg, #ec4899, #a855f7)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+          }}
+        >
+          Discover
+        </h1>
+        <p className="text-sm text-gray-500 mt-0.5">
+          Top-rated slimes & upcoming drops
+        </p>
       </header>
 
-      <div className="px-4 py-4">
+      {hasErrors && (
+        <div className="mx-4 mb-4 px-4 py-3 rounded-2xl bg-red-50 border border-red-100 text-xs text-red-500">
+          Some data couldn't load — try refreshing.
+        </div>
+      )}
 
-        {/* ── Trending / Top Rated ──────────────── */}
-        {(tab === 'trending' || tab === 'top-rated') && (
-          <>
-            {tab === 'trending' && (
-              <div className="mb-4">
-                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">🔥 Most Logged This Week</p>
-                {/* Hero card */}
-                {filteredSlimes[0] && (
-                  <div className="bg-gradient-to-br from-pink-50 to-purple-50 rounded-3xl p-4 mb-4 border border-pink-100">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="bg-pink-500 text-white text-xs font-black px-2.5 py-1 rounded-full">#1 This Week</span>
-                      <TypeBadge type={filteredSlimes[0].slime_type} size="sm" />
-                    </div>
-                    <h2 className="font-black text-xl text-gray-900">{filteredSlimes[0].name}</h2>
-                    <p className="text-sm text-gray-500">{filteredSlimes[0].brand?.name}</p>
-                    <div className="flex items-center gap-3 mt-3">
-                      <span className="text-2xl font-black text-pink-500">{filteredSlimes[0].avg_overall?.toFixed(1)}</span>
-                      <div>
-                        <div className="flex">
-                          {[1,2,3,4,5].map(s => (
-                            <span key={s} className={`text-sm ${s <= Math.round(filteredSlimes[0].avg_overall ?? 0) ? 'text-pink-400' : 'text-gray-200'}`}>★</span>
-                          ))}
-                        </div>
-                        <p className="text-xs text-gray-400">{filteredSlimes[0].total_ratings.toLocaleString()} logs</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {tab === 'top-rated' && (
-              <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">⭐ Highest Rated · Min 3 ratings</p>
-            )}
-
-            <div className="grid grid-cols-2 gap-3">
-              {filteredSlimes.map((slime, i) => (
-                <SlimeCard
-                  key={slime.id}
-                  slime={slime}
-                  rank={tab === 'top-rated' ? i + 1 : undefined}
-                />
-              ))}
-            </div>
-
-            {filteredSlimes.length === 0 && (
-              <div className="text-center py-12">
-                <div className="text-4xl mb-2">🔍</div>
-                <p className="text-sm text-gray-400 font-semibold">No slimes found</p>
-              </div>
-            )}
-          </>
+      {/* ── Top rated ──────────────────────────────────────────────────── */}
+      <section className="px-4 mb-8">
+        <SectionHeader
+          emoji="🏆"
+          title="Top Rated Slimes"
+          subtitle="Minimum 3 community ratings"
+        />
+        {topSlimes.length === 0 ? (
+          <EmptySection message="No highly-rated slimes yet — go log some!" />
+        ) : (
+          <div className="flex flex-col gap-3">
+            {topSlimes.map((slime, i) => (
+              <TopRatedCard key={slime.id} slime={slime} rank={i + 1} />
+            ))}
+          </div>
         )}
+      </section>
 
-        {/* ── Drops ──────────────────────────────── */}
-        {tab === 'drops' && (
-          <div className="space-y-4">
-            {MOCK_DROPS.filter(d => d.status === 'live').length > 0 && (
-              <>
-                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">🟢 Live Now</p>
-                {MOCK_DROPS.filter(d => d.status === 'live').map(drop => (
-                  <DropCard key={drop.id} drop={drop} />
-                ))}
-              </>
-            )}
-
-            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mt-4">📅 Upcoming</p>
-            {MOCK_DROPS.filter(d => d.status === 'announced').map(drop => (
+      {/* ── Upcoming drops ─────────────────────────────────────────────── */}
+      <section className="px-4">
+        <SectionHeader
+          emoji="📅"
+          title="Upcoming Drops"
+          subtitle="Announced & live right now"
+        />
+        {drops.length === 0 ? (
+          <EmptySection message="No drops announced yet — check back soon." />
+        ) : (
+          <div className="flex flex-col gap-3">
+            {drops.map((drop) => (
               <DropCard key={drop.id} drop={drop} />
             ))}
-
-            {/* Brand follow suggestions */}
-            <div className="mt-4">
-              <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">🏪 Follow Brands for Drop Alerts</p>
-              <div className="space-y-2">
-                {MOCK_BRANDS.map(brand => (
-                  <div key={brand.id} className="flex items-center gap-3 bg-white rounded-2xl p-3 border border-pink-50">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-100 to-purple-100 flex items-center justify-center text-lg shrink-0">
-                      🫧
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-sm text-gray-800 truncate">{brand.name}</p>
-                      <p className="text-xs text-gray-400">
-                        ⭐ Shipping {brand.avg_shipping?.toFixed(1)} · CS {brand.avg_customer_service?.toFixed(1)}
-                      </p>
-                    </div>
-                    <button className="shrink-0 text-xs font-bold px-3 py-2 bg-pink-50 text-pink-500 rounded-xl active:scale-95 transition-transform">
-                      Follow
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         )}
-
-        {/* ── Types Guide ────────────────────────── */}
-        {tab === 'types' && (
-          <div className="space-y-2">
-            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">🧬 Slime Type Guide</p>
-            {ALL_TYPES.map(type => (
-              <div key={type} className="bg-white rounded-2xl border border-pink-50 p-4">
-                <div className="flex items-center justify-between mb-1">
-                  <TypeBadge type={type} size="md" />
-                </div>
-                <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
-                  {TYPE_DESCRIPTIONS[type]}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
-
-const TYPE_DESCRIPTIONS: Record<SlimeType, string> = {
-  butter: 'Soft, spreadable texture with a smooth, creamy feel. Melts in your hands. Perfect for relaxing kneading.',
-  clear: 'Transparent base. Shows off add-ins like glitter, charms, and foam beads. Satisfying stretch and clarity.',
-  cloud: 'Light, airy texture made with shaving cream or foam clay. Fluffy and soft with a distinctive crunch.',
-  icee: 'Granular, crunchy texture. Sounds like packing snow. Extremely satisfying ASMR for crunch lovers.',
-  fluffy: 'Ultra-light whipped texture. Deflates slowly on stretch. Soft sounds, gentle on hands.',
-  floam: 'Packed with micro foam beads for maximum crunch. Thick and moldable with incredible texture.',
-  snow_fizz: 'Fizzy, powdery texture that collapses softly. Gentle sounds, relaxing sensory experience.',
-  thick_and_glossy: 'Heavy, satisfying drizzle. Pulls like taffy. Loud pops and drizzle sounds.',
-  jelly: 'Clear, slightly firm texture. Jiggle effect. Great bubble pop ASMR.',
-  beaded: 'Filled with water beads or fishbowl beads. Wet, squishy sounds with satisfying texture.',
-  clay: 'Moldable and firm. Holds shape. Great for sculpture play and creative activation.',
-  cloud_cream: 'Whipped cream texture with a cloud base. Dreamy consistency, gorgeous drizzle.',
-  magnetic: 'Contains iron filings — responds to magnets! Novelty type with unique visual effects.',
-  thermochromic: 'Color-changing slime. Reacts to heat from your hands. Mesmerizing visual transformation.',
-  avalanche: 'Classic butter-clear hybrid. Falls in satisfying sheets. Deep, satisfying drizzle and pull.',
-  slay: 'Premium craft slime with designer scents and curated add-ins. For the serious collector.',
-};

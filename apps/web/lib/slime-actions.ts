@@ -53,6 +53,9 @@ export interface LogSlimeInput {
   rating_sensory_fit?: number;
   rating_overall?: number;
 
+  // Details
+  scent?: string;
+
   // Free-form notes
   notes?: string;
   purchase_price?: number;
@@ -125,6 +128,7 @@ export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
       rating_creativity: input.rating_creativity ?? null,
       rating_sensory_fit: input.rating_sensory_fit ?? null,
       rating_overall: input.rating_overall ?? null,
+      scent: input.scent ?? null,
       notes: input.notes ?? null,
       purchase_price: input.purchase_price ?? null,
       purchase_currency: input.purchase_currency ?? "USD",

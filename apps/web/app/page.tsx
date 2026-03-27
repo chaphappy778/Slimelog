@@ -1,130 +1,259 @@
-'use client';
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import { formatDistanceToNow } from "date-fns";
 
-import { useState } from 'react';
-import { LogCard } from '@/components/SlimeCard';
-import { MOCK_FEED, MOCK_DROPS } from '@/lib/mock-data';
-import { ActivityFeedItem, Drop } from '@/lib/types';
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-function DropBanner({ drop }: { drop: Drop }) {
-  const isLive = drop.status === 'live';
-  const dropDate = drop.drop_at
-    ? new Date(drop.drop_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-    : 'TBA';
+type FeedLog = {
+  id: string;
+  created_at: string;
+  slime_name: string | null;
+  brand_name_raw: string | null;
+  slime_type: string | null;
+  rating_overall: number | null; // ← FIXED
+  profiles: { username: string | null }[] | null;
+  brands: { name: string | null }[] | null;
+};
+
+// ─── Type badge palette (all 16 types) ───────────────────────────────────────
+
+const TYPE_STYLE: Record<string, { bg: string; text: string; label: string }> =
+  {
+    butter: { bg: "bg-yellow-100", text: "text-yellow-700", label: "Butter" },
+    clear: { bg: "bg-sky-100", text: "text-sky-700", label: "Clear" },
+    cloud: { bg: "bg-slate-100", text: "text-slate-600", label: "Cloud" },
+    icee: { bg: "bg-cyan-100", text: "text-cyan-700", label: "Icee" },
+    fluffy: { bg: "bg-pink-100", text: "text-pink-600", label: "Fluffy" },
+    floam: { bg: "bg-lime-100", text: "text-lime-700", label: "Floam" },
+    snow_fizz: { bg: "bg-blue-50", text: "text-blue-500", label: "Snow Fizz" },
+    thick_and_glossy: {
+      bg: "bg-fuchsia-100",
+      text: "text-fuchsia-700",
+      label: "Thick & Glossy",
+    },
+    jelly: { bg: "bg-violet-100", text: "text-violet-700", label: "Jelly" },
+    beaded: { bg: "bg-orange-100", text: "text-orange-600", label: "Beaded" },
+    clay: { bg: "bg-amber-100", text: "text-amber-700", label: "Clay" },
+    cloud_cream: {
+      bg: "bg-rose-50",
+      text: "text-rose-500",
+      label: "Cloud Cream",
+    },
+    magnetic: { bg: "bg-zinc-200", text: "text-zinc-700", label: "Magnetic" },
+    thermochromic: {
+      bg: "bg-purple-100",
+      text: "text-purple-700",
+      label: "Thermochromic",
+    },
+    avalanche: {
+      bg: "bg-indigo-100",
+      text: "text-indigo-600",
+      label: "Avalanche",
+    },
+    slay: { bg: "bg-red-100", text: "text-red-600", label: "Slay" },
+  };
+
+const fallbackType = {
+  bg: "bg-gray-100",
+  text: "text-gray-500",
+  label: "Unknown",
+};
+
+// ─── Stars renderer ───────────────────────────────────────────────────────────
+
+function Stars({ rating }: { rating: number | null }) {
+  if (!rating) return <span className="text-xs text-gray-400">No rating</span>;
+  return (
+    <span
+      className="flex items-center gap-0.5"
+      aria-label={`${rating} out of 5`}
+    >
+      {[1, 2, 3, 4, 5].map((n) => (
+        <span
+          key={n}
+          className={`text-sm leading-none ${n <= rating ? "text-pink-500" : "text-gray-200"}`}
+        >
+          ★
+        </span>
+      ))}
+    </span>
+  );
+}
+
+// ─── Feed card ────────────────────────────────────────────────────────────────
+
+function FeedCard({ log }: { log: FeedLog }) {
+  const typeStyle =
+    (log.slime_type && TYPE_STYLE[log.slime_type]) || fallbackType;
+  const brandName =
+    log.brands?.[0]?.name ?? log.brand_name_raw ?? "Unknown brand";
+  const slimeName = log.slime_name ?? "Untitled slime";
+  const username = log.profiles?.[0]?.username ?? "anonymous";
+  const timeAgo = formatDistanceToNow(new Date(log.created_at), {
+    addSuffix: true,
+  });
 
   return (
-    <div className={`rounded-2xl overflow-hidden border ${isLive ? 'border-green-200 bg-gradient-to-r from-green-50 to-emerald-50' : 'border-pink-100 bg-gradient-to-r from-pink-50 to-purple-50'} p-4`}>
-      <div className="flex items-center gap-2 mb-1">
-        {isLive ? (
-          <span className="badge-live inline-flex items-center gap-1.5 text-[10px] font-black text-green-700 bg-green-100 px-2 py-0.5 rounded-full uppercase tracking-widest">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
-            Live Now
+    <article className="relative bg-white rounded-3xl shadow-sm border border-pink-50 overflow-hidden transition-shadow hover:shadow-md">
+      {/* Decorative gel blob */}
+      <div
+        className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-10 blur-2xl pointer-events-none"
+        style={{ background: "radial-gradient(circle, #f472b6, #a855f7)" }}
+        aria-hidden="true"
+      />
+
+      <div className="p-4 flex flex-col gap-2.5">
+        {/* Header row */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-gray-900 text-sm leading-tight truncate">
+              {slimeName}
+            </p>
+            <p className="text-xs text-gray-400 truncate mt-0.5">{brandName}</p>
+          </div>
+          <span
+            className={`shrink-0 text-[10px] font-semibold px-2 py-1 rounded-full ${typeStyle.bg} ${typeStyle.text}`}
+          >
+            {typeStyle.label}
           </span>
-        ) : (
-          <span className="text-[10px] font-black text-pink-600 bg-pink-100 px-2 py-0.5 rounded-full uppercase tracking-widest">
-            Drop Alert 🚨
-          </span>
-        )}
-        <span className="text-xs font-bold text-gray-500">{drop.brand?.name}</span>
+        </div>
+        {/* Rating */}
+        <Stars rating={log.rating_overall} /> {/* ← FIXED */}
+        {/* Footer */}
+        <div className="flex items-center justify-between pt-1 border-t border-pink-50">
+          <div className="flex items-center gap-1.5">
+            {/* Avatar blob */}
+            <div
+              className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold"
+              style={{
+                background: "linear-gradient(135deg, #f472b6, #a855f7)",
+              }}
+              aria-hidden="true"
+            >
+              {username.charAt(0).toUpperCase()}
+            </div>
+            <span className="text-xs text-gray-500">@{username}</span>
+          </div>
+          <time className="text-[11px] text-gray-400" dateTime={log.created_at}>
+            {timeAgo}
+          </time>
+        </div>
       </div>
-      <p className="font-bold text-gray-900 text-sm">{drop.title}</p>
-      {drop.description && (
-        <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{drop.description}</p>
-      )}
-      <div className="flex items-center justify-between mt-2">
-        <span className="text-xs text-gray-500">🕐 {dropDate}</span>
-        <button className={`text-xs font-bold px-3 py-1.5 rounded-xl ${isLive ? 'bg-green-500 text-white' : 'bg-pink-500 text-white'} active:scale-95 transition-transform`}>
-          {isLive ? 'Shop Now →' : 'Set Reminder'}
-        </button>
+    </article>
+  );
+}
+
+// ─── Empty state ──────────────────────────────────────────────────────────────
+
+function EmptyFeed() {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
+      <div
+        className="w-20 h-20 rounded-full flex items-center justify-center text-4xl"
+        style={{ background: "linear-gradient(135deg, #fce7f3, #f3e8ff)" }}
+      >
+        🫧
       </div>
+      <p className="text-gray-700 font-semibold">No logs yet</p>
+      <p className="text-sm text-gray-400 max-w-xs">
+        Be the first to log a slime and get this feed poppin'.
+      </p>
     </div>
   );
 }
 
-export default function FeedPage() {
-  const [likedLogs, setLikedLogs] = useState<Set<string>>(new Set());
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
-  const toggleLike = (logId: string) => {
-    setLikedLogs(prev => {
-      const next = new Set(prev);
-      next.has(logId) ? next.delete(logId) : next.add(logId);
-      return next;
-    });
-  };
+export default async function HomePage() {
+  // Next.js 16: cookies() must be awaited before passing to createServerClient
+  const cookieStore = await cookies();
 
-  // Insert a live drop banner after the first feed item
-  const liveDrop = MOCK_DROPS.find(d => d.status === 'live');
-  const announcedDrop = MOCK_DROPS.find(d => d.status === 'announced');
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name) {
+          return cookieStore.get(name)?.value;
+        },
+      },
+    },
+  );
+
+  // Public query — no auth required. Join profiles for username, brands for name.
+  // collection_logs.brand_id is nullable (free-form logs won't have it), so left join.
+  const { data: logs, error } = await supabase
+    .from("collection_logs")
+    .select(
+      `
+    id,
+    created_at,
+    slime_name,
+    brand_name_raw,
+    slime_type,
+    rating_overall,
+    profiles!collection_logs_user_id_fkey ( username ),
+    brands ( name )
+  `,
+    ) // ← FIXED
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  // Non-fatal: render empty state rather than throw on query error
+  const feedLogs = (error ? [] : (logs ?? [])) as unknown as FeedLog[];
 
   return (
-    <div className="min-h-screen slime-blob">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-pink-50 px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="font-black text-2xl gradient-text leading-none">SlimeLog</h1>
-            <p className="text-xs text-gray-400 font-medium">Your slime feed 🫧</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button className="w-10 h-10 flex items-center justify-center rounded-full bg-pink-50 text-pink-500 active:scale-95 transition-transform">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
-              </svg>
-            </button>
-          </div>
+    <div
+      className="min-h-screen"
+      style={{
+        background: "linear-gradient(160deg, #fdf2f8 0%, #faf5ff 100%)",
+      }}
+    >
+      {/* ── Hero header ─────────────────────────────────────────────────── */}
+      <header className="px-4 pt-10 pb-6">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-2xl" aria-hidden="true">
+            🫧
+          </span>
+          <h1
+            className="text-2xl font-black tracking-tight"
+            style={{
+              background: "linear-gradient(90deg, #ec4899, #a855f7)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            }}
+          >
+            SlimeLog
+          </h1>
         </div>
-
-        {/* Tab pills */}
-        <div className="flex gap-2 mt-3 overflow-x-auto scroll-hide pb-0.5">
-          {['Following', 'Everyone', 'Drops', 'Hauls'].map((tab, i) => (
-            <button
-              key={tab}
-              className={`shrink-0 text-xs font-bold px-4 py-1.5 rounded-full transition-all ${i === 0 ? 'bg-pink-500 text-white' : 'bg-pink-50 text-pink-400'}`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
+        <p className="text-sm text-gray-500 pl-9">
+          What the community is logging
+        </p>
       </header>
 
-      <div className="px-4 py-4 space-y-4">
-
-        {/* Live drop banner at top if any */}
-        {liveDrop && <DropBanner drop={liveDrop} />}
-
-        {/* Feed items */}
-        {MOCK_FEED.map((item: ActivityFeedItem, idx) => {
-          if (item.activity_type === 'drop_announced' && item.drop) {
-            return (
-              <DropBanner key={item.id} drop={item.drop} />
-            );
-          }
-
-          if (item.log) {
-            return (
-              <LogCard
-                key={item.id}
-                log={item.log}
-                showUser
-                likeCount={Number(item.metadata?.like_count ?? 0) + (likedLogs.has(item.log.id) ? 1 : 0)}
-                commentCount={Number(item.metadata?.comment_count ?? 0)}
-                onLike={() => item.log && toggleLike(item.log.id)}
-              />
-            );
-          }
-
-          return null;
-        })}
-
-        {/* Upcoming drop teaser */}
-        {announcedDrop && (
-          <div>
-            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Upcoming Drop</p>
-            <DropBanner drop={announcedDrop} />
+      {/* ── Feed ────────────────────────────────────────────────────────── */}
+      <section className="px-4 pb-24">
+        {error && (
+          <div className="mb-4 px-4 py-3 rounded-2xl bg-red-50 border border-red-100 text-xs text-red-500">
+            Couldn't load the feed right now — try refreshing.
           </div>
         )}
 
-        <p className="text-center text-xs text-gray-300 py-6">You're all caught up 🫧</p>
-      </div>
+        {feedLogs.length === 0 && !error ? (
+          <EmptyFeed />
+        ) : (
+          <>
+            <p className="text-xs text-gray-400 mb-4 font-medium uppercase tracking-wider">
+              Recent logs · {feedLogs.length} shown
+            </p>
+            <div className="flex flex-col gap-3">
+              {feedLogs.map((log) => (
+                <FeedCard key={log.id} log={log} />
+              ))}
+            </div>
+          </>
+        )}
+      </section>
     </div>
   );
 }

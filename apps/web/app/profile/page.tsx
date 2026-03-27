@@ -1,326 +1,278 @@
-"use client";
+// apps/web/app/profile/page.tsx
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { formatDistanceToNow } from "date-fns";
 
-import { useState } from "react";
-import { TypeBadge } from "@/components/TypeBadge";
-import { LogCard } from "@/components/SlimeCard";
-import {
-  MOCK_PROFILE,
-  MOCK_COLLECTION_SUMMARY,
-  MY_COLLECTION_LOGS,
-} from "@/lib/mock-data";
-import { RATING_DIMENSIONS, SlimeType, SLIME_TYPE_LABELS } from "@/lib/types";
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-const ALL_TYPES = Object.keys(SLIME_TYPE_LABELS) as SlimeType[];
+type CollectionSummary = {
+  user_id: string;
+  total_in_collection: number | null;
+  total_in_wishlist: number | null;
+  total_rated: number | null;
+  avg_overall_given: number | null;
+  distinct_brands_tried: number | null;
+  distinct_types_tried: number | null;
+};
 
-function StatPill({ value, label }: { value: string | number; label: string }) {
+type RecentLog = {
+  id: string;
+  created_at: string;
+  slime_name: string | null;
+  brand_name_raw: string | null;
+  slime_type: string | null;
+  overall: number | null;
+  brands: { name: string | null }[] | null; // Fix 4: array, not single object
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const TYPE_LABEL: Record<string, string> = {
+  butter: "Butter",
+  clear: "Clear",
+  cloud: "Cloud",
+  icee: "Icee",
+  fluffy: "Fluffy",
+  floam: "Floam",
+  snow_fizz: "Snow Fizz",
+  thick_and_glossy: "Thick & Glossy",
+  jelly: "Jelly",
+  beaded: "Beaded",
+  clay: "Clay",
+  cloud_cream: "Cloud Cream",
+  magnetic: "Magnetic",
+  thermochromic: "Thermochromic",
+  avalanche: "Avalanche",
+  slay: "Slay",
+};
+
+function StatTile({
+  value,
+  label,
+  accent,
+}: {
+  value: string | number | null;
+  label: string;
+  accent: string;
+}) {
   return (
-    <div className="flex flex-col items-center">
-      <span className="font-black text-xl text-gray-900">{value}</span>
-      <span className="text-[10px] text-gray-400 font-semibold text-center">
-        {label}
-      </span>
+    <div className="bg-white rounded-2xl border border-pink-50 shadow-sm p-4 flex flex-col gap-1">
+      <p
+        className="text-2xl font-black tabular-nums leading-none"
+        style={{
+          background: accent,
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent",
+        }}
+      >
+        {value ?? "—"}
+      </p>
+      <p className="text-xs text-gray-400 font-medium leading-snug">{label}</p>
     </div>
   );
 }
 
-export default function ProfilePage() {
-  const [activeTab, setActiveTab] = useState<"logs" | "stats" | "brands">(
-    "logs",
-  );
-
-  const profile = MOCK_PROFILE;
-  const summary = MOCK_COLLECTION_SUMMARY;
-  const recentLogs = MY_COLLECTION_LOGS.filter((l) => l.rating_overall).slice(
-    0,
-    5,
-  );
-
-  // Build type frequency from logs
-  const typeCounts = MY_COLLECTION_LOGS.reduce<Record<string, number>>(
-    (acc, log) => {
-      if (!log.slime_type) return acc;
-      acc[log.slime_type] = (acc[log.slime_type] ?? 0) + 1;
-      return acc;
-    },
-    {},
-  );
-  const topTypes = Object.entries(typeCounts)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 5) as [SlimeType, number][];
+function RecentLogRow({ log }: { log: RecentLog }) {
+  const brandName =
+    log.brands?.[0]?.name ?? log.brand_name_raw ?? "Unknown brand"; // Fix 4: [0]?.name
+  const typeLabel =
+    (log.slime_type && TYPE_LABEL[log.slime_type]) ?? log.slime_type ?? "—";
+  const timeAgo = formatDistanceToNow(new Date(log.created_at), {
+    addSuffix: true,
+  });
 
   return (
-    <div className="min-h-screen">
-      {/* Header */}
-      <header className="bg-white border-b border-pink-50 px-4 pb-0">
-        <div className="flex items-center justify-between pt-4 pb-4">
-          <div className="flex items-center gap-3">
-            {/* Avatar */}
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-pink-200 to-purple-300 flex items-center justify-center shrink-0">
-              <span className="text-2xl font-black text-white">
-                {profile.username.slice(0, 2).toUpperCase()}
-              </span>
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h1 className="font-black text-gray-900 text-lg leading-tight">
-                  @{profile.username}
-                </h1>
-                {profile.is_premium && (
-                  <span className="text-xs bg-gradient-to-r from-pink-400 to-purple-400 text-white font-bold px-2 py-0.5 rounded-full">
-                    PRO
-                  </span>
-                )}
-              </div>
-              {profile.full_name && (
-                <p className="text-sm text-gray-500">{profile.full_name}</p>
-              )}
-            </div>
-          </div>
-          <button className="px-4 py-2 border border-pink-200 rounded-xl text-xs font-bold text-pink-500 active:scale-95 transition-transform">
-            Edit
-          </button>
-        </div>
-
-        {profile.bio && (
-          <p className="text-sm text-gray-600 leading-relaxed pb-3">
-            {profile.bio}
-          </p>
+    <li className="flex items-center gap-3 py-3 border-b border-pink-50 last:border-0">
+      <div
+        className="w-9 h-9 rounded-2xl shrink-0 flex items-center justify-center text-lg"
+        style={{ background: "linear-gradient(135deg, #fce7f3, #f3e8ff)" }}
+        aria-hidden="true"
+      >
+        🫧
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-gray-900 truncate leading-tight">
+          {log.slime_name ?? "Untitled slime"}
+        </p>
+        <p className="text-xs text-gray-400 truncate">
+          {brandName} · {typeLabel}
+        </p>
+      </div>
+      <div className="text-right shrink-0">
+        {log.overall ? (
+          <p className="text-sm font-bold text-pink-500">{log.overall}/5</p>
+        ) : (
+          <p className="text-xs text-gray-300">no rating</p>
         )}
+        <time className="text-[10px] text-gray-300" dateTime={log.created_at}>
+          {timeAgo}
+        </time>
+      </div>
+    </li>
+  );
+}
 
-        {/* Stats row */}
-        <div className="flex justify-around py-3 border-t border-pink-50">
-          <StatPill value={summary.total_in_collection} label="Collection" />
-          <div className="w-px bg-pink-50" />
-          <StatPill value={summary.total_in_wishlist} label="Wishlist" />
-          <div className="w-px bg-pink-50" />
-          <StatPill value={summary.total_rated} label="Rated" />
-          <div className="w-px bg-pink-50" />
-          <StatPill value="—" label="Followers" />
-          <div className="w-px bg-pink-50" />
-          <StatPill value="—" label="Following" />
-        </div>
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
-        {/* Follow / message */}
-        <div className="flex gap-2 pb-3">
-          <button className="flex-1 py-2.5 bg-gradient-to-r from-pink-400 to-purple-500 text-white text-sm font-bold rounded-xl active:scale-95 transition-transform">
-            Follow
-          </button>
-          <button className="w-12 h-[42px] bg-pink-50 text-pink-500 rounded-xl flex items-center justify-center active:scale-95 transition-transform">
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"
-              />
-            </svg>
-          </button>
-        </div>
+export default async function ProfilePage() {
+  const cookieStore = await cookies();
 
-        {/* Tab pills */}
-        <div className="flex gap-2 pb-3 overflow-x-auto scroll-hide">
-          {(
-            [
-              { key: "logs", label: "📋 Recent Logs" },
-              { key: "stats", label: "📊 Stats" },
-              { key: "brands", label: "🏪 Brands" },
-            ] as { key: typeof activeTab; label: string }[]
-          ).map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setActiveTab(t.key)}
-              className={`shrink-0 text-xs font-bold px-4 py-1.5 rounded-full transition-all ${activeTab === t.key ? "bg-pink-500 text-white" : "bg-pink-50 text-pink-400"}`}
-            >
-              {t.label}
-            </button>
-          ))}
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name) {
+          return cookieStore.get(name)?.value;
+        },
+      },
+    },
+  );
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const [summaryResult, profileResult, recentLogsResult] = await Promise.all([
+    supabase
+      .from("user_collection_summary")
+      .select(
+        "user_id, total_in_collection, total_in_wishlist, total_rated, avg_overall_given, distinct_brands_tried, distinct_types_tried",
+      )
+      .eq("user_id", user.id)
+      .maybeSingle(),
+
+    supabase
+      .from("profiles")
+      .select("username")
+      .eq("id", user.id)
+      .maybeSingle(),
+
+    supabase
+      .from("collection_logs")
+      .select(
+        "id, created_at, slime_name, brand_name_raw, slime_type, overall, brands ( name )",
+      )
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(5),
+  ]);
+
+  const summary: CollectionSummary | null = summaryResult.data ?? null;
+  const username = profileResult.data?.username ?? "slimer";
+  const recentLogs: RecentLog[] = recentLogsResult.data ?? [];
+
+  const typeCounts: Record<string, number> = {};
+  for (const log of recentLogs) {
+    if (log.slime_type)
+      typeCounts[log.slime_type] = (typeCounts[log.slime_type] ?? 0) + 1;
+  }
+  const topType =
+    Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  const topTypeLabel = topType ? (TYPE_LABEL[topType] ?? topType) : null;
+
+  const hasErrors =
+    summaryResult.error || profileResult.error || recentLogsResult.error;
+
+  return (
+    <main
+      className="min-h-screen pb-24"
+      style={{
+        background: "linear-gradient(160deg, #fdf2f8 0%, #faf5ff 100%)",
+      }}
+    >
+      <header className="px-4 pt-10 pb-6">
+        <div className="flex items-center gap-4">
+          <div
+            className="w-16 h-16 rounded-3xl flex items-center justify-center text-white text-2xl font-black shadow-md"
+            style={{ background: "linear-gradient(135deg, #f472b6, #a855f7)" }}
+            aria-hidden="true"
+          >
+            {username.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <h1 className="text-xl font-black text-gray-900 leading-tight">
+              @{username}
+            </h1>
+            <p className="text-sm text-gray-400 mt-0.5">
+              Your slime collection
+            </p>
+          </div>
         </div>
       </header>
 
-      <div className="px-4 py-4">
-        {/* ── Recent Logs ──────────────────────── */}
-        {activeTab === "logs" && (
-          <div className="space-y-4">
-            {recentLogs.map((log) => (
-              <LogCard key={log.id} log={log} showUser={false} />
-            ))}
-            {recentLogs.length === 0 && (
-              <div className="text-center py-12">
-                <div className="text-5xl mb-3">🫧</div>
-                <p className="font-bold text-gray-400 text-sm">No logs yet</p>
-              </div>
-            )}
-          </div>
-        )}
+      {hasErrors && (
+        <div className="mx-4 mb-4 px-4 py-3 rounded-2xl bg-red-50 border border-red-100 text-xs text-red-500">
+          Some stats couldn't load — try refreshing.
+        </div>
+      )}
 
-        {/* ── Stats ────────────────────────────── */}
-        {activeTab === "stats" && (
-          <div className="space-y-4">
-            {/* Average ratings breakdown */}
-            <div className="bg-white rounded-2xl border border-pink-50 p-4">
-              <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
-                Average Ratings Given
-              </p>
+      <section className="px-4 mb-8">
+        <h2 className="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-3">
+          Collection Stats
+        </h2>
+        <div className="grid grid-cols-2 gap-3">
+          <StatTile
+            value={summary?.total_in_collection ?? 0}
+            label="Slimes logged"
+            accent="linear-gradient(90deg, #ec4899, #a855f7)"
+          />
+          <StatTile
+            value={
+              summary?.avg_overall_given != null
+                ? summary.avg_overall_given.toFixed(1)
+                : null
+            }
+            label="Avg rating given"
+            accent="linear-gradient(90deg, #f59e0b, #ec4899)"
+          />
+          <StatTile
+            value={summary?.distinct_brands_tried ?? 0}
+            label="Brands tried"
+            accent="linear-gradient(90deg, #a855f7, #6366f1)"
+          />
+          <StatTile
+            value={topTypeLabel ?? summary?.distinct_types_tried ?? 0}
+            label={topTypeLabel ? "Fave type (recent)" : "Types tried"}
+            accent="linear-gradient(90deg, #ec4899, #f97316)"
+          />
+        </div>
+      </section>
 
-              {/* Overall big number */}
-              <div className="flex items-center gap-3 mb-4 pb-3 border-b border-pink-50">
-                <span className="text-4xl font-black gradient-text">
-                  {summary.avg_overall_given?.toFixed(1) ?? "—"}
-                </span>
-                <div>
-                  <div className="flex">
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <span
-                        key={s}
-                        className={`text-sm ${s <= Math.round(summary.avg_overall_given ?? 0) ? "text-pink-400" : "text-gray-200"}`}
-                      >
-                        ★
-                      </span>
-                    ))}
-                  </div>
-                  <p className="text-xs text-gray-400">
-                    Overall average across {summary.total_rated} ratings
-                  </p>
-                </div>
-              </div>
-
-              {RATING_DIMENSIONS.filter((d) => d.key !== "overall").map(
-                (dim) => (
-                  <div key={dim.key} className="flex items-center gap-3 mb-2">
-                    <span className="text-sm w-5">{dim.emoji}</span>
-                    <span className="text-xs text-gray-500 w-20 shrink-0">
-                      {dim.label}
-                    </span>
-                    <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-pink-400 to-purple-400 rounded-full"
-                        style={{ width: `${(4.5 / 5) * 100}%` }}
-                      />
-                    </div>
-                    <span className="text-xs font-bold text-gray-500 w-6 text-right">
-                      4.5
-                    </span>
-                  </div>
-                ),
-              )}
-            </div>
-
-            {/* Type breakdown */}
-            <div className="bg-white rounded-2xl border border-pink-50 p-4">
-              <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
-                Top Slime Types
-              </p>
-              <div className="space-y-2">
-                {topTypes.map(([type, count]) => (
-                  <div key={type} className="flex items-center gap-3">
-                    <TypeBadge type={type} size="sm" />
-                    <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-pink-300 to-purple-300 rounded-full"
-                        style={{
-                          width: `${(count / MY_COLLECTION_LOGS.length) * 100}%`,
-                        }}
-                      />
-                    </div>
-                    <span className="text-xs font-bold text-gray-500 w-4 text-right">
-                      {count}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Collection badges */}
-            <div className="bg-white rounded-2xl border border-pink-50 p-4">
-              <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
-                Collection Milestones
-              </p>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  {
-                    emoji: "🫧",
-                    label: "100+ Slimes",
-                    unlocked: summary.total_in_collection >= 100,
-                  },
-                  {
-                    emoji: "🏆",
-                    label: "Top Rater",
-                    unlocked: summary.total_rated >= 50,
-                  },
-                  {
-                    emoji: "🌈",
-                    label: "10 Types",
-                    unlocked: summary.distinct_types_tried >= 10,
-                  },
-                  {
-                    emoji: "🏪",
-                    label: "10 Brands",
-                    unlocked: summary.distinct_brands_tried >= 10,
-                  },
-                  {
-                    emoji: "⭐",
-                    label: "4.0+ Avg",
-                    unlocked: (summary.avg_overall_given ?? 0) >= 4,
-                  },
-                  {
-                    emoji: "💫",
-                    label: "Wishlist 25+",
-                    unlocked: summary.total_in_wishlist >= 25,
-                  },
-                ].map((badge) => (
-                  <div
-                    key={badge.label}
-                    className={`flex flex-col items-center gap-1 p-2 rounded-xl ${badge.unlocked ? "bg-pink-50" : "bg-gray-50 opacity-40"}`}
-                  >
-                    <span className="text-2xl">{badge.emoji}</span>
-                    <span className="text-[9px] font-bold text-gray-500 text-center leading-tight">
-                      {badge.label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── Brands ───────────────────────────── */}
-        {activeTab === "brands" && (
-          <div className="space-y-2">
-            <p className="text-xs text-gray-400 mb-3">
-              {summary.distinct_brands_tried} brands tried
-            </p>
-            {/* Placeholder list */}
-            {[
-              "Peachybbies",
-              "Crafted Slimes",
-              "Sloomoo Institute",
-              "Glamour Slimes",
-              "The Slime Spot",
-            ].map((brand) => (
-              <div
-                key={brand}
-                className="flex items-center gap-3 bg-white rounded-2xl p-3 border border-pink-50"
+      <section className="px-4">
+        <h2 className="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-3">
+          Recent Activity
+        </h2>
+        <div className="bg-white rounded-2xl border border-pink-50 shadow-sm px-4">
+          {recentLogs.length === 0 ? (
+            <div className="py-10 text-center text-gray-400 text-sm">
+              No logs yet — head to{" "}
+              <span
+                className="font-semibold"
+                style={{
+                  background: "linear-gradient(90deg, #ec4899, #a855f7)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                }}
               >
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-100 to-purple-100 flex items-center justify-center text-lg shrink-0">
-                  🫧
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-sm text-gray-800">{brand}</p>
-                  <p className="text-xs text-gray-400">3 slimes tried</p>
-                </div>
-                <button className="text-xs font-bold text-pink-400 px-2 py-1.5">
-                  View →
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+                /log
+              </span>{" "}
+              to add your first slime.
+            </div>
+          ) : (
+            <ul role="list">
+              {recentLogs.map((log) => (
+                <RecentLogRow key={log.id} log={log} />
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+    </main>
   );
 }
