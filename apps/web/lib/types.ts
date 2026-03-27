@@ -148,6 +148,56 @@ export const RATING_DIMENSIONS: {
   },
 ];
 
+// ─── Core entities ────────────────────────────────────────────────────────────
+
+export interface Brand {
+  id: string;
+  slug: string;
+  name: string;
+  logo_url: string | null;
+  shop_url: string | null;
+  instagram_handle: string | null;
+  tiktok_handle: string | null;
+  is_verified: boolean;
+  owner_id: string | null;
+  avg_shipping: number | null;
+  avg_customer_service: number | null;
+  total_brand_ratings: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Slime {
+  id: string;
+  brand_id: string;
+  name: string;
+  slime_type: SlimeType;
+  colors: string[];
+  scent: string | null;
+  collection_name: string | null;
+  is_limited: boolean;
+  image_url: string | null;
+  avg_overall: number | null;
+  total_ratings: number;
+  created_at: string;
+  updated_at: string;
+  brand?: Brand;
+}
+
+export interface Drop {
+  id: string;
+  brand_id: string;
+  title: string;
+  description: string | null;
+  status: DropStatus;
+  drop_at: string | null;
+  announced_by: string;
+  created_at: string;
+  updated_at: string;
+  brand?: Brand | null;
+  slimes?: Slime[];
+}
+
 // ─── collection_logs ──────────────────────────────────────────────────────────
 
 export interface CollectionLog {
@@ -179,6 +229,14 @@ export interface CollectionLog {
   is_public: boolean;
   created_at: string;
   updated_at: string;
+  // Joined relations
+  slime?: Slime | null;
+  brand?: Brand | null;
+  user?: {
+    id: string;
+    username: string;
+    avatar_url: string | null;
+  } | null;
 }
 
 // ─── Insert payload ───────────────────────────────────────────────────────────
@@ -211,20 +269,39 @@ export interface CollectionLogInsert {
   is_public?: boolean;
 }
 
+// ─── Activity feed ────────────────────────────────────────────────────────────
+
+export interface ActivityFeedItem {
+  id: string;
+  actor_id: string;
+  activity_type: ActivityType;
+  log_id: string | null;
+  slime_id: string | null;
+  brand_id: string | null;
+  drop_id: string | null;
+  target_user_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  actor?: {
+    id: string;
+    username: string;
+    avatar_url: string | null;
+  } | null;
+  log?: CollectionLog | null;
+  slime?: Slime | null;
+  brand?: Brand | null;
+  drop?: Drop | null;
+}
+
 // ─── Log form state (4-step wizard) ──────────────────────────────────────────
 
 export interface LogFormData {
-  // Step 1 — Identity
   slime_name: string;
   brand_name_raw: string;
   slime_type: SlimeType | "";
-
-  // Step 2 — Details
   colors: string[];
   scent: string;
   cost_paid: string;
-
-  // Step 3 — Ratings
   rating_texture: number | null;
   rating_scent: number | null;
   rating_sound: number | null;
@@ -232,8 +309,6 @@ export interface LogFormData {
   rating_creativity: number | null;
   rating_sensory_fit: number | null;
   rating_overall: number | null;
-
-  // Step 4 — Notes
   notes: string;
   in_wishlist: boolean;
   in_collection: boolean;

@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { fetchCollectionLogs } from "@/lib/slime-actions";
+import { getUserCollectionLogs } from "@/lib/slime-actions";
 import { SLIME_TYPE_LABELS } from "@/lib/types";
 import type { CollectionLog, SlimeType } from "@/lib/types";
 
@@ -46,6 +46,8 @@ function SlimeCard({ log }: { log: CollectionLog }) {
     log.rating_texture !== null ||
     log.rating_scent !== null;
 
+  const primaryColor = log.colors?.[0] ?? null;
+
   return (
     <div className="bg-slime-card rounded-2xl border border-slime-border p-4 flex flex-col gap-3 shadow-slime-sm hover:shadow-slime transition-shadow duration-200">
       {/* Top row */}
@@ -62,7 +64,7 @@ function SlimeCard({ log }: { log: CollectionLog }) {
         </div>
 
         <div className="flex flex-col items-end gap-1 shrink-0">
-          {log.is_wishlist ? (
+          {log.in_wishlist ? (
             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 border border-violet-500/25">
               Wishlist
             </span>
@@ -81,9 +83,9 @@ function SlimeCard({ log }: { log: CollectionLog }) {
             {typeLabel}
           </span>
         )}
-        {log.color_primary && (
+        {primaryColor && (
           <span className="text-xs px-2 py-0.5 rounded-full bg-slime-surface border border-slime-border text-slime-muted">
-            {log.color_primary}
+            {primaryColor}
           </span>
         )}
         {log.scent && (
@@ -182,21 +184,27 @@ export default function CollectionPage() {
   );
 
   useEffect(() => {
-    fetchCollectionLogs().then(({ data, error }) => {
-      setLogs(data);
-      setError(error);
-      setLoading(false);
-    });
+    getUserCollectionLogs()
+      .then((data) => {
+        setLogs((data ?? []) as unknown as CollectionLog[]);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(
+          err instanceof Error ? err.message : "Failed to load collection.",
+        );
+        setLoading(false);
+      });
   }, []);
 
   const filtered = logs.filter((l) => {
-    if (filter === "collection") return !l.is_wishlist;
-    if (filter === "wishlist") return l.is_wishlist;
+    if (filter === "collection") return !l.in_wishlist;
+    if (filter === "wishlist") return l.in_wishlist;
     return true;
   });
 
-  const collectionCount = logs.filter((l) => !l.is_wishlist).length;
-  const wishlistCount = logs.filter((l) => l.is_wishlist).length;
+  const collectionCount = logs.filter((l) => !l.in_wishlist).length;
+  const wishlistCount = logs.filter((l) => l.in_wishlist).length;
 
   return (
     <div className="min-h-screen bg-slime-bg px-4 py-8">

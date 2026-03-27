@@ -3,26 +3,27 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { insertCollectionLog } from "@/lib/slime-actions";
-import { EMPTY_LOG_FORM, SLIME_TYPE_LABELS } from "@/lib/types";
-import type { LogFormData, SlimeType } from "@/lib/types";
+import { logSlime } from "@/lib/slime-actions";
+import type { LogSlimeInput } from "@/lib/slime-actions";
+import { SLIME_TYPE_LABELS } from "@/lib/types";
+import type { SlimeType } from "@/lib/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const STEPS = ["Identity", "Details", "Ratings", "Notes"] as const;
 type Step = 0 | 1 | 2 | 3;
 
+type RatingKey =
+  | "rating_texture"
+  | "rating_scent"
+  | "rating_sound"
+  | "rating_drizzle"
+  | "rating_creativity"
+  | "rating_sensory_fit"
+  | "rating_overall";
+
 const RATING_FIELDS: {
-  key: keyof Pick<
-    LogFormData,
-    | "rating_texture"
-    | "rating_scent"
-    | "rating_sound"
-    | "rating_drizzle"
-    | "rating_creativity"
-    | "rating_sensory_fit"
-    | "rating_overall"
-  >;
+  key: RatingKey;
   label: string;
   emoji: string;
 }[] = [
@@ -34,6 +35,44 @@ const RATING_FIELDS: {
   { key: "rating_sensory_fit", label: "Sensory Fit", emoji: "🧠" },
   { key: "rating_overall", label: "Overall", emoji: "⭐" },
 ];
+
+// ─── Local form state ─────────────────────────────────────────────────────────
+
+interface FormState {
+  slime_name: string;
+  brand_name_raw: string;
+  slime_type: SlimeType | "";
+  scent: string;
+  purchase_price: string;
+  rating_texture: number | null;
+  rating_scent: number | null;
+  rating_sound: number | null;
+  rating_drizzle: number | null;
+  rating_creativity: number | null;
+  rating_sensory_fit: number | null;
+  rating_overall: number | null;
+  notes: string;
+  in_wishlist: boolean;
+  in_collection: boolean;
+}
+
+const EMPTY_FORM: FormState = {
+  slime_name: "",
+  brand_name_raw: "",
+  slime_type: "",
+  scent: "",
+  purchase_price: "",
+  rating_texture: null,
+  rating_scent: null,
+  rating_sound: null,
+  rating_drizzle: null,
+  rating_creativity: null,
+  rating_sensory_fit: null,
+  rating_overall: null,
+  notes: "",
+  in_wishlist: false,
+  in_collection: true,
+};
 
 // ─── Star Rating Component ─────────────────────────────────────────────────────
 
@@ -114,7 +153,7 @@ function StepIndicator({ step }: { step: Step }) {
   );
 }
 
-// ─── Field Components ──────────────────────────────────────────────────────────
+// ─── Field Component ───────────────────────────────────────────────────────────
 
 function Field({
   label,
@@ -141,24 +180,54 @@ const inputCls =
 export default function LogPage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>(0);
-  const [form, setForm] = useState<LogFormData>(EMPTY_LOG_FORM);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  function set<K extends keyof LogFormData>(key: K, value: LogFormData[K]) {
+  function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
   async function handleSubmit() {
-    setSaving(true);
-    setSaveError(null);
-    const { error } = await insertCollectionLog(form);
-    setSaving(false);
-    if (error) {
-      setSaveError(error);
+    if (!form.slime_type) {
+      setSaveError("Please select a slime type.");
       return;
     }
-    router.push("/collection");
+
+    setSaving(true);
+    setSaveError(null);
+
+    try {
+      const input: LogSlimeInput = {
+        slime_name: form.slime_name.trim() || undefined,
+        brand_name_raw: form.brand_name_raw.trim() || undefined,
+        slime_type: form.slime_type as SlimeType,
+        scent: form.scent.trim() || undefined,
+        purchase_price:
+          form.purchase_price !== ""
+            ? parseFloat(form.purchase_price)
+            : undefined,
+        in_collection: form.in_collection,
+        in_wishlist: form.in_wishlist,
+        rating_texture: form.rating_texture ?? undefined,
+        rating_scent: form.rating_scent ?? undefined,
+        rating_sound: form.rating_sound ?? undefined,
+        rating_drizzle: form.rating_drizzle ?? undefined,
+        rating_creativity: form.rating_creativity ?? undefined,
+        rating_sensory_fit: form.rating_sensory_fit ?? undefined,
+        rating_overall: form.rating_overall ?? undefined,
+        notes: form.notes.trim() || undefined,
+      };
+
+      await logSlime(input);
+      router.push("/collection");
+    } catch (err) {
+      setSaveError(
+        err instanceof Error ? err.message : "Something went wrong.",
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -202,7 +271,7 @@ export default function LogPage() {
               />
             </Field>
 
-            <Field label="Slime Type">
+            <Field label="Slime Type *">
               <select
                 className={inputCls}
                 value={form.slime_type}
@@ -224,7 +293,10 @@ export default function LogPage() {
             {/* Wishlist toggle */}
             <button
               type="button"
-              onClick={() => set("in_wishlist", !form.in_wishlist)}
+              onClick={() => {
+                set("in_wishlist", !form.in_wishlist);
+                set("in_collection", form.in_wishlist);
+              }}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-sm font-medium ${
                 form.in_wishlist
                   ? "border-slime-accent bg-slime-accent/10 text-slime-accent"
@@ -242,17 +314,6 @@ export default function LogPage() {
           <div className="flex flex-col gap-5">
             <h2 className="text-lg font-bold text-slime-text">Tell us more</h2>
 
-            <Field label="Primary Color">
-              <input
-                className={inputCls}
-                placeholder="e.g. Sage green, Peach"
-                value={form.colors[0] ?? ""}
-                onChange={(e) =>
-                  set("colors", e.target.value ? [e.target.value] : [])
-                }
-              />
-            </Field>
-
             <Field label="Scent">
               <input
                 className={inputCls}
@@ -262,15 +323,15 @@ export default function LogPage() {
               />
             </Field>
 
-            <Field label="Cost Paid ($)">
+            <Field label="Purchase Price ($)">
               <input
                 className={inputCls}
                 type="number"
                 min="0"
                 step="0.01"
                 placeholder="0.00"
-                value={form.cost_paid}
-                onChange={(e) => set("cost_paid", e.target.value)}
+                value={form.purchase_price}
+                onChange={(e) => set("purchase_price", e.target.value)}
               />
             </Field>
           </div>

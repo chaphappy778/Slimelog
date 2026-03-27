@@ -1,96 +1,223 @@
-"use server";
 // apps/web/lib/slime-actions.ts
+// Server Actions for Slimelog collection logging.
+// Every insert into collection_logs now requires an authenticated session.
+// user_id is read from the validated session — never trusted from the client.
 
-import { createClient } from "@/lib/supabase/client";
-import type { CollectionLog, LogFormData } from "@/lib/types";
+"use server";
 
-// ─── Helper: get the browser Supabase client ──────────────────────────────────
-// NOTE: Using browser client per spec (auth workstream TBD).
-// Switch to server client + session when auth is wired.
-function getClient() {
-  return createClient();
+import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
+
+export type SlimeType =
+  | "butter"
+  | "clear"
+  | "cloud"
+  | "icee"
+  | "fluffy"
+  | "floam"
+  | "snow_fizz"
+  | "thick_and_glossy"
+  | "jelly"
+  | "beaded"
+  | "clay"
+  | "cloud_cream"
+  | "magnetic"
+  | "thermochromic"
+  | "avalanche"
+  | "slay";
+
+export interface LogSlimeInput {
+  slime_id?: string;
+  brand_id?: string;
+  slime_name?: string;
+  brand_name_raw?: string;
+  slime_type: SlimeType;
+  in_collection?: boolean;
+  in_wishlist?: boolean;
+  rating_texture?: number;
+  rating_scent?: number;
+  rating_sound?: number;
+  rating_drizzle?: number;
+  rating_creativity?: number;
+  rating_sensory_fit?: number;
+  rating_overall?: number;
+  scent?: string;
+  notes?: string;
+  purchase_price?: number;
+  purchase_currency?: string;
 }
 
-// ─── insertCollectionLog ──────────────────────────────────────────────────────
-//
-// Writes one row to collection_logs with all form fields merged.
-// Ratings and metadata are written in a single INSERT (no second round-trip).
-//
-// Column names aligned to migration 20260324000001:
-//   slime_name, brand_name_raw, slime_type, colors (array),
-//   scent, cost_paid, notes, in_wishlist, in_collection,
-//   rating_texture, rating_scent, rating_sound, rating_drizzle,
-//   rating_creativity, rating_sensory_fit, rating_overall
-//
-// user_id is currently omitted — RLS is relaxed for anon testing.
-// Add `user_id: (await supabase.auth.getUser()).data.user?.id` when auth lands.
+async function requireAuthUserId(): Promise<string> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+  if (error || !user) {
+    throw new Error("Authentication required. Please sign in to log slimes.");
+  }
+  return user.id;
+}
 
-export async function insertCollectionLog(
-  form: LogFormData,
-): Promise<{ data: CollectionLog | null; error: string | null }> {
-  const supabase = getClient();
+export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
+  const userId = await requireAuthUserId();
+  const supabase = await createClient();
 
-  const payload = {
-    // Identity
-    slime_name: form.slime_name.trim() || null,
-    brand_name_raw: form.brand_name_raw.trim() || null,
-    slime_type: form.slime_type || null,
+  const ratingFields = [
+    "rating_texture",
+    "rating_scent",
+    "rating_sound",
+    "rating_drizzle",
+    "rating_creativity",
+    "rating_sensory_fit",
+    "rating_overall",
+  ] as const;
 
-    // Details
-    colors: form.colors.length > 0 ? form.colors : null,
-    scent: form.scent.trim() || null,
-    cost_paid: form.cost_paid !== "" ? parseFloat(form.cost_paid) : null,
-    notes: form.notes.trim() || null,
-
-    // Status — correct column names from schema
-    in_wishlist: form.in_wishlist,
-    in_collection: form.in_collection,
-
-    // Ratings (null = not rated)
-    rating_texture: form.rating_texture,
-    rating_scent: form.rating_scent,
-    rating_sound: form.rating_sound,
-    rating_drizzle: form.rating_drizzle,
-    rating_creativity: form.rating_creativity,
-    rating_sensory_fit: form.rating_sensory_fit,
-    rating_overall: form.rating_overall,
-  };
+  for (const field of ratingFields) {
+    const val = input[field];
+    if (val !== undefined && (val < 1 || val > 5 || !Number.isInteger(val))) {
+      throw new Error(`${field} must be an integer between 1 and 5.`);
+    }
+  }
 
   const { data, error } = await supabase
     .from("collection_logs")
-    .insert(payload)
-    .select()
+    .insert({
+      user_id: userId,
+      slime_id: input.slime_id ?? null,
+      brand_id: input.brand_id ?? null,
+      slime_name: input.slime_name ?? null,
+      brand_name_raw: input.brand_name_raw ?? null,
+      slime_type: input.slime_type,
+      in_collection: input.in_collection ?? true,
+      in_wishlist: input.in_wishlist ?? false,
+      rating_texture: input.rating_texture ?? null,
+      rating_scent: input.rating_scent ?? null,
+      rating_sound: input.rating_sound ?? null,
+      rating_drizzle: input.rating_drizzle ?? null,
+      rating_creativity: input.rating_creativity ?? null,
+      rating_sensory_fit: input.rating_sensory_fit ?? null,
+      rating_overall: input.rating_overall ?? null,
+      notes: input.notes ?? null,
+      purchase_price: input.purchase_price ?? null,
+      purchase_currency: input.purchase_currency ?? "USD",
+    })
+    .select("id")
     .single();
 
   if (error) {
-    console.error("[insertCollectionLog]", error);
-    return { data: null, error: error.message };
+    console.error("[logSlime] insert error:", error.message);
+    throw new Error(`Failed to log slime: ${error.message}`);
   }
 
-  return { data: data as CollectionLog, error: null };
+  revalidatePath("/collection");
+  revalidatePath("/");
+  return { id: data.id };
 }
 
-// ─── fetchCollectionLogs ──────────────────────────────────────────────────────
-//
-// Returns all collection_logs rows, newest first.
-// When auth is wired, RLS will automatically scope to the session user.
-// Until then returns all rows visible to anon (per current RLS policy).
+export async function updateSlimeLog(
+  logId: string,
+  input: Partial<LogSlimeInput>,
+): Promise<void> {
+  const userId = await requireAuthUserId();
+  const supabase = await createClient();
 
-export async function fetchCollectionLogs(): Promise<{
-  data: CollectionLog[];
-  error: string | null;
-}> {
-  const supabase = getClient();
+  const { error } = await supabase
+    .from("collection_logs")
+    .update({
+      ...(input.slime_name !== undefined && { slime_name: input.slime_name }),
+      ...(input.brand_name_raw !== undefined && {
+        brand_name_raw: input.brand_name_raw,
+      }),
+      ...(input.slime_type !== undefined && { slime_type: input.slime_type }),
+      ...(input.in_collection !== undefined && {
+        in_collection: input.in_collection,
+      }),
+      ...(input.in_wishlist !== undefined && {
+        in_wishlist: input.in_wishlist,
+      }),
+      ...(input.rating_texture !== undefined && {
+        rating_texture: input.rating_texture,
+      }),
+      ...(input.rating_scent !== undefined && {
+        rating_scent: input.rating_scent,
+      }),
+      ...(input.rating_sound !== undefined && {
+        rating_sound: input.rating_sound,
+      }),
+      ...(input.rating_drizzle !== undefined && {
+        rating_drizzle: input.rating_drizzle,
+      }),
+      ...(input.rating_creativity !== undefined && {
+        rating_creativity: input.rating_creativity,
+      }),
+      ...(input.rating_sensory_fit !== undefined && {
+        rating_sensory_fit: input.rating_sensory_fit,
+      }),
+      ...(input.rating_overall !== undefined && {
+        rating_overall: input.rating_overall,
+      }),
+      ...(input.notes !== undefined && { notes: input.notes }),
+      ...(input.purchase_price !== undefined && {
+        purchase_price: input.purchase_price,
+      }),
+    })
+    .eq("id", logId)
+    .eq("user_id", userId);
+
+  if (error) {
+    console.error("[updateSlimeLog] update error:", error.message);
+    throw new Error(`Failed to update log: ${error.message}`);
+  }
+
+  revalidatePath("/collection");
+  revalidatePath("/");
+}
+
+export async function deleteSlimeLog(logId: string): Promise<void> {
+  const userId = await requireAuthUserId();
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("collection_logs")
+    .delete()
+    .eq("id", logId)
+    .eq("user_id", userId);
+
+  if (error) {
+    console.error("[deleteSlimeLog] delete error:", error.message);
+    throw new Error(`Failed to delete log: ${error.message}`);
+  }
+
+  revalidatePath("/collection");
+  revalidatePath("/");
+}
+
+export async function getUserCollectionLogs() {
+  const userId = await requireAuthUserId();
+  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("collection_logs")
-    .select("*")
+    .select(
+      `
+      id, slime_type, slime_name, brand_name_raw,
+      in_collection, in_wishlist,
+      rating_overall, rating_texture, rating_scent,
+      rating_sound, rating_drizzle, rating_creativity, rating_sensory_fit,
+      notes, purchase_price, purchase_currency,
+      created_at, updated_at,
+      slimes ( id, name, colors, scent ),
+      brands ( id, name, slug )
+    `,
+    )
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
   if (error) {
-    console.error("[fetchCollectionLogs]", error);
-    return { data: [], error: error.message };
+    console.error("[getUserCollectionLogs] query error:", error.message);
+    throw new Error(`Failed to fetch collection: ${error.message}`);
   }
 
-  return { data: (data ?? []) as CollectionLog[], error: null };
+  return data;
 }

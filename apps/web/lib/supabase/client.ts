@@ -4,7 +4,6 @@
 // import type { Database } from '@/types/supabase' // uncomment when types are generated
 
 import { createBrowserClient } from "@supabase/ssr";
-import type { Database } from "@/types/supabase"; // generated types — adjust path if needed
 
 let client: ReturnType<typeof createBrowserClient> | undefined;
 
