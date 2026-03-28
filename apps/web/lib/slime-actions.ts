@@ -55,6 +55,12 @@ export interface LogSlimeInput {
 
   // Details
   scent?: string;
+  colors?: string[];
+
+  // Shipping / fulfillment dates — ISO 8601 date strings (YYYY-MM-DD)
+  order_date?: string;
+  ship_date?: string;
+  received_date?: string;
 
   // Free-form notes
   notes?: string;
@@ -129,6 +135,10 @@ export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
       rating_sensory_fit: input.rating_sensory_fit ?? null,
       rating_overall: input.rating_overall ?? null,
       scent: input.scent ?? null,
+      colors: input.colors ?? null,
+      order_date: input.order_date ?? null,
+      ship_date: input.ship_date ?? null,
+      received_date: input.received_date ?? null,
       notes: input.notes ?? null,
       purchase_price: input.purchase_price ?? null,
       purchase_currency: input.purchase_currency ?? "USD",
@@ -200,6 +210,12 @@ export async function updateSlimeLog(
       ...(input.purchase_price !== undefined && {
         purchase_price: input.purchase_price,
       }),
+      ...(input.colors !== undefined && { colors: input.colors }),
+      ...(input.order_date !== undefined && { order_date: input.order_date }),
+      ...(input.ship_date !== undefined && { ship_date: input.ship_date }),
+      ...(input.received_date !== undefined && {
+        received_date: input.received_date,
+      }),
     })
     .eq("id", logId)
     .eq("user_id", userId); // ownership guard in addition to RLS
@@ -251,6 +267,7 @@ export async function getUserCollectionLogs() {
       rating_overall, rating_texture, rating_scent,
       rating_sound, rating_drizzle, rating_creativity, rating_sensory_fit,
       notes, purchase_price, purchase_currency,
+      colors, order_date, ship_date, received_date,
       created_at, updated_at,
       slimes ( id, name, colors, scent ),
       brands ( id, name, slug )

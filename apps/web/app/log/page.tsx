@@ -36,6 +36,39 @@ const RATING_FIELDS: {
   { key: "rating_overall", label: "Overall", emoji: "⭐" },
 ];
 
+// ─── Color presets ────────────────────────────────────────────────────────────
+
+interface ColorSwatch {
+  label: string;
+  /** CSS color value used for the swatch circle */
+  hex: string;
+  /** The string stored in the colors[] array */
+  value: string;
+  /** Light swatches need a dark border so they're visible on light cards */
+  dark?: boolean;
+}
+
+const COLOR_SWATCHES: ColorSwatch[] = [
+  { label: "White", hex: "#FFFFFF", value: "white", dark: true },
+  { label: "Cream", hex: "#FFF5DC", value: "cream", dark: true },
+  { label: "Pink", hex: "#FFB6C1", value: "pink" },
+  { label: "Hot Pink", hex: "#FF3E8A", value: "hot pink" },
+  { label: "Purple", hex: "#9B5DE5", value: "purple" },
+  { label: "Lavender", hex: "#C9B8F5", value: "lavender" },
+  { label: "Blue", hex: "#4A90E2", value: "blue" },
+  { label: "Mint", hex: "#98E4C8", value: "mint" },
+  { label: "Green", hex: "#4CAF50", value: "green" },
+  { label: "Yellow", hex: "#FFE135", value: "yellow", dark: true },
+  { label: "Orange", hex: "#FF8C42", value: "orange" },
+  { label: "Red", hex: "#E94040", value: "red" },
+  { label: "Black", hex: "#1A1A1A", value: "black" },
+  {
+    label: "Holographic",
+    hex: "conic-gradient(from 0deg, #ff6ec7, #a855f7, #3b82f6, #06b6d4, #22c55e, #eab308, #f97316, #ff6ec7)",
+    value: "holographic",
+  },
+];
+
 // ─── Local form state ─────────────────────────────────────────────────────────
 
 interface FormState {
@@ -44,6 +77,14 @@ interface FormState {
   slime_type: SlimeType | "";
   scent: string;
   purchase_price: string;
+  // Color picker
+  selected_color_values: string[];
+  color_description: string;
+  // Shipping dates
+  order_date: string;
+  ship_date: string;
+  received_date: string;
+  // Ratings
   rating_texture: number | null;
   rating_scent: number | null;
   rating_sound: number | null;
@@ -62,6 +103,11 @@ const EMPTY_FORM: FormState = {
   slime_type: "",
   scent: "",
   purchase_price: "",
+  selected_color_values: [],
+  color_description: "",
+  order_date: "",
+  ship_date: "",
+  received_date: "",
   rating_texture: null,
   rating_scent: null,
   rating_sound: null,
@@ -73,6 +119,21 @@ const EMPTY_FORM: FormState = {
   in_wishlist: false,
   in_collection: true,
 };
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Combines selected swatch values and a free-text description into the
+ * `colors` string[] that gets written to collection_logs.
+ */
+function buildColorsArray(
+  selectedValues: string[],
+  description: string,
+): string[] | undefined {
+  const trimmed = description.trim();
+  const parts = [...selectedValues, ...(trimmed ? [trimmed] : [])];
+  return parts.length > 0 ? parts : undefined;
+}
 
 // ─── Star Rating Component ─────────────────────────────────────────────────────
 
@@ -157,23 +218,195 @@ function StepIndicator({ step }: { step: Step }) {
 
 function Field({
   label,
+  optional,
+  hint,
   children,
 }: {
   label: string;
+  optional?: boolean;
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-xs font-semibold uppercase tracking-wider text-slime-muted">
-        {label}
-      </label>
+      <div className="flex items-center gap-2">
+        <label className="text-xs font-semibold uppercase tracking-wider text-slime-muted">
+          {label}
+        </label>
+        {optional && (
+          <span className="text-xs text-slime-muted/60 normal-case tracking-normal font-normal">
+            optional
+          </span>
+        )}
+      </div>
       {children}
+      {hint && <p className="text-xs text-slime-muted/70 mt-0.5">{hint}</p>}
     </div>
   );
 }
 
 const inputCls =
   "w-full rounded-xl bg-slime-surface border border-slime-border px-4 py-3 text-sm text-slime-text placeholder:text-slime-muted focus:outline-none focus:ring-2 focus:ring-slime-accent/50 transition";
+
+// ─── Color Picker Component ───────────────────────────────────────────────────
+
+function ColorPicker({
+  selectedValues,
+  onToggle,
+  description,
+  onDescriptionChange,
+}: {
+  selectedValues: string[];
+  onToggle: (value: string) => void;
+  description: string;
+  onDescriptionChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Swatch grid — 7 columns, large tap targets */}
+      <div className="grid grid-cols-7 gap-2">
+        {COLOR_SWATCHES.map((swatch) => {
+          const isSelected = selectedValues.includes(swatch.value);
+          const isGradient = swatch.hex.startsWith("conic-gradient");
+
+          return (
+            <button
+              key={swatch.value}
+              type="button"
+              onClick={() => onToggle(swatch.value)}
+              aria-label={`${swatch.label}${isSelected ? " (selected)" : ""}`}
+              aria-pressed={isSelected}
+              className={`relative w-full aspect-square rounded-full transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-slime-accent ${
+                isSelected
+                  ? "ring-2 ring-slime-accent ring-offset-2 ring-offset-slime-card scale-110"
+                  : swatch.dark
+                    ? "ring-1 ring-slime-border hover:scale-105"
+                    : "hover:scale-105"
+              }`}
+              style={
+                isGradient
+                  ? { background: swatch.hex }
+                  : { backgroundColor: swatch.hex }
+              }
+            >
+              {isSelected && (
+                <span
+                  className="absolute inset-0 flex items-center justify-center text-xs font-bold"
+                  style={{
+                    color:
+                      swatch.dark || swatch.value === "holographic"
+                        ? "#1A1A1A"
+                        : "#FFFFFF",
+                    textShadow:
+                      swatch.value === "holographic"
+                        ? "0 0 4px rgba(255,255,255,0.8)"
+                        : undefined,
+                  }}
+                >
+                  ✓
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Selected pills */}
+      {selectedValues.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {selectedValues.map((val) => (
+            <span
+              key={val}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slime-accent/15 border border-slime-accent/30 text-xs font-medium text-slime-accent"
+            >
+              {val}
+              <button
+                type="button"
+                onClick={() => onToggle(val)}
+                className="ml-0.5 hover:text-slime-text transition"
+                aria-label={`Remove ${val}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Free-text description */}
+      <input
+        className={inputCls}
+        placeholder='e.g. "galaxy swirl" or "mint chocolate chip"'
+        value={description}
+        onChange={(e) => onDescriptionChange(e.target.value)}
+      />
+    </div>
+  );
+}
+
+// ─── Shipping Dates Section ────────────────────────────────────────────────────
+
+function ShippingDates({
+  orderDate,
+  shipDate,
+  receivedDate,
+  onChange,
+}: {
+  orderDate: string;
+  shipDate: string;
+  receivedDate: string;
+  onChange: (
+    field: "order_date" | "ship_date" | "received_date",
+    value: string,
+  ) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Community note */}
+      <div className="flex items-start gap-2.5 rounded-xl bg-slime-surface border border-slime-border px-3.5 py-3">
+        <span className="text-base mt-0.5">📦</span>
+        <p className="text-xs text-slime-muted leading-relaxed">
+          Shipping data helps the community rate brands accurately.
+        </p>
+      </div>
+
+      <Field label="Order Date" optional>
+        <input
+          type="date"
+          className={inputCls}
+          value={orderDate}
+          onChange={(e) => onChange("order_date", e.target.value)}
+        />
+      </Field>
+
+      <Field
+        label="Ship Date"
+        optional
+        hint="When you received tracking/shipping notification"
+      >
+        <input
+          type="date"
+          className={inputCls}
+          value={shipDate}
+          onChange={(e) => onChange("ship_date", e.target.value)}
+        />
+      </Field>
+
+      <Field
+        label="Received Date"
+        optional
+        hint="When the slime physically arrived"
+      >
+        <input
+          type="date"
+          className={inputCls}
+          value={receivedDate}
+          onChange={(e) => onChange("received_date", e.target.value)}
+        />
+      </Field>
+    </div>
+  );
+}
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
@@ -188,6 +421,18 @@ export default function LogPage() {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  function toggleColor(value: string) {
+    setForm((f) => {
+      const already = f.selected_color_values.includes(value);
+      return {
+        ...f,
+        selected_color_values: already
+          ? f.selected_color_values.filter((v) => v !== value)
+          : [...f.selected_color_values, value],
+      };
+    });
+  }
+
   async function handleSubmit() {
     if (!form.slime_type) {
       setSaveError("Please select a slime type.");
@@ -198,6 +443,11 @@ export default function LogPage() {
     setSaveError(null);
 
     try {
+      const colors = buildColorsArray(
+        form.selected_color_values,
+        form.color_description,
+      );
+
       const input: LogSlimeInput = {
         slime_name: form.slime_name.trim() || undefined,
         brand_name_raw: form.brand_name_raw.trim() || undefined,
@@ -209,6 +459,10 @@ export default function LogPage() {
             : undefined,
         in_collection: form.in_collection,
         in_wishlist: form.in_wishlist,
+        colors,
+        order_date: form.order_date || undefined,
+        ship_date: form.ship_date || undefined,
+        received_date: form.received_date || undefined,
         rating_texture: form.rating_texture ?? undefined,
         rating_scent: form.rating_scent ?? undefined,
         rating_sound: form.rating_sound ?? undefined,
@@ -262,7 +516,7 @@ export default function LogPage() {
               />
             </Field>
 
-            <Field label="Brand / Shop Name">
+            <Field label="Brand / Shop Name" optional>
               <input
                 className={inputCls}
                 placeholder="e.g. Peachybbies"
@@ -314,7 +568,7 @@ export default function LogPage() {
           <div className="flex flex-col gap-5">
             <h2 className="text-lg font-bold text-slime-text">Tell us more</h2>
 
-            <Field label="Scent">
+            <Field label="Scent" optional>
               <input
                 className={inputCls}
                 placeholder="e.g. Watermelon candy"
@@ -323,7 +577,7 @@ export default function LogPage() {
               />
             </Field>
 
-            <Field label="Purchase Price ($)">
+            <Field label="Purchase Price ($)" optional>
               <input
                 className={inputCls}
                 type="number"
@@ -334,6 +588,29 @@ export default function LogPage() {
                 onChange={(e) => set("purchase_price", e.target.value)}
               />
             </Field>
+
+            {/* ── Color Picker ── */}
+            <Field label="Colors" optional>
+              <ColorPicker
+                selectedValues={form.selected_color_values}
+                onToggle={toggleColor}
+                description={form.color_description}
+                onDescriptionChange={(v) => set("color_description", v)}
+              />
+            </Field>
+
+            {/* ── Shipping Dates ── */}
+            <div className="pt-1">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slime-muted mb-3">
+                Shipping Dates
+              </p>
+              <ShippingDates
+                orderDate={form.order_date}
+                shipDate={form.ship_date}
+                receivedDate={form.received_date}
+                onChange={(field, value) => set(field, value)}
+              />
+            </div>
           </div>
         )}
 
@@ -358,7 +635,7 @@ export default function LogPage() {
           <div className="flex flex-col gap-5">
             <h2 className="text-lg font-bold text-slime-text">Any notes?</h2>
 
-            <Field label="Notes">
+            <Field label="Notes" optional>
               <textarea
                 className={`${inputCls} resize-none h-36`}
                 placeholder="Texture thoughts, storage tips, first impressions…"
@@ -378,6 +655,16 @@ export default function LogPage() {
               {form.slime_type && (
                 <p>Type: {SLIME_TYPE_LABELS[form.slime_type as SlimeType]}</p>
               )}
+              {form.selected_color_values.length > 0 ||
+              form.color_description.trim() ? (
+                <p>
+                  Colors:{" "}
+                  {buildColorsArray(
+                    form.selected_color_values,
+                    form.color_description,
+                  )?.join(", ")}
+                </p>
+              ) : null}
               {form.rating_overall && (
                 <p>Overall rating: {form.rating_overall}/5</p>
               )}
