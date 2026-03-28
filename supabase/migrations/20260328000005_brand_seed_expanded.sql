@@ -1,4 +1,4 @@
--- =============================================================================
+  -- =============================================================================
 -- SlimeLog — Expanded Brand Seed Data
 -- File:    20260328000005_brand_seed_expanded.sql
 -- Purpose: (1) Add all remaining brands-table columns for the full product.

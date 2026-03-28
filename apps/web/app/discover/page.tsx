@@ -6,26 +6,22 @@ import { cookies } from "next/headers";
 
 type TopRatedSlime = {
   id: string;
-  slime_name: string | null;
-  brand_name: string | null; // direct column on the view
+  name: string | null; // ← FIXED: view column is `name`, not `slime_name`
+  brand_name: string | null;
   slime_type: string | null;
   avg_overall: number | null;
-  total_ratings: number | null; // corrected: was log_count
+  total_ratings: number | null;
 };
 
 type UpcomingDrop = {
   id: string;
-  drop_name: string | null;
-  drop_at: string | null; // corrected: was drop_date
+  name: string | null; // ← FIXED: view column is `name`, not `drop_name`
+  drop_at: string | null;
   status: string | null;
-  brand_name: string | null; // direct column on the view
+  brand_name: string | null;
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 // ─── Drop status config ───────────────────────────────────────────────────────
-// Typed as a plain const (not Record<string,...>) so lookups return
-// the object type directly — no union with "" or undefined in the value type.
 
 const DROP_STATUS = {
   announced: {
@@ -41,7 +37,6 @@ const DROP_STATUS = {
 
 type StatusBadge = { label: string; bg: string; text: string };
 
-// Helper with explicit return type — TS trusts the shape without fighting the ternary
 function getStatusBadge(status: string | null): StatusBadge {
   if (status && status in DROP_STATUS) {
     return DROP_STATUS[status as keyof typeof DROP_STATUS];
@@ -142,7 +137,7 @@ function TopRatedCard({ slime, rank }: { slime: TopRatedSlime; rank: number }) {
 
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-gray-900 truncate leading-tight">
-          {slime.slime_name ?? "Unnamed slime"}
+          {slime.name ?? "Unnamed slime"} {/* ← FIXED: was slime.slime_name */}
         </p>
         <p className="text-xs text-gray-400 truncate">
           {slime.brand_name ?? "Unknown brand"}
@@ -151,8 +146,7 @@ function TopRatedCard({ slime, rank }: { slime: TopRatedSlime; rank: number }) {
       </div>
 
       <div className="text-right shrink-0">
-        <p className="text-xs text-gray-400">{slime.total_ratings ?? 0}</p>{" "}
-        {/* corrected: was log_count */}
+        <p className="text-xs text-gray-400">{slime.total_ratings ?? 0}</p>
         <p className="text-[10px] text-gray-300">ratings</p>
       </div>
     </article>
@@ -168,7 +162,7 @@ function DropCard({ drop }: { drop: UpcomingDrop }) {
     <article className="bg-white rounded-2xl border border-pink-50 shadow-sm p-4 flex items-center justify-between gap-3">
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-gray-900 truncate leading-tight">
-          {drop.drop_name ?? "Unnamed drop"}
+          {drop.name ?? "Unnamed drop"} {/* ← FIXED: was drop.drop_name */}
         </p>
         <p className="text-xs text-gray-400 truncate mt-0.5">
           {drop.brand_name ?? "Unknown brand"}
@@ -206,17 +200,17 @@ export default async function DiscoverPage() {
   const [topRatedResult, dropsResult] = await Promise.all([
     supabase
       .from("top_rated_slimes")
-      .select(
-        "id, slime_name, brand_name, slime_type, avg_overall, total_ratings",
-      ) // corrected: brand_name direct, total_ratings not log_count
+      .select("id, name, brand_name, slime_type, avg_overall, total_ratings")
+      // ↑ FIXED: `name` not `slime_name` — matches confirmed view schema
       .order("avg_overall", { ascending: false })
       .limit(10),
 
     supabase
       .from("upcoming_drops")
-      .select("id, drop_name, drop_at, status, brand_name") // corrected: brand_name direct, drop_at not drop_date
+      .select("id, name, drop_at, status, brand_name")
+      // ↑ FIXED: `name` not `drop_name` — matches confirmed view schema
       .in("status", ["announced", "live"])
-      .order("drop_at", { ascending: true }) // corrected: drop_at
+      .order("drop_at", { ascending: true })
       .limit(15),
   ]);
 
