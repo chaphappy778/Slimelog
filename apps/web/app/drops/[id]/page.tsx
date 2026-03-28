@@ -23,18 +23,16 @@ type DropDetail = {
 type DropSlime = {
   drop_id: string;
   slime_id: string | null;
-  slimes:
-    | {
-        id: string;
-        name: string | null;
-        slime_type: string | null;
-        description: string | null;
-        scent: string | null;
-        retail_price: number | null;
-        colors: string[] | null;
-        image_url: string | null;
-      }[]
-    | null;
+  slimes: {
+    id: string;
+    name: string | null;
+    slime_type: string | null;
+    description: string | null;
+    scent: string | null;
+    retail_price: number | null;
+    colors: string[] | null;
+    image_url: string | null;
+  } | null;
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -170,7 +168,7 @@ function buildLogUrl(
   dropName: string | null,
   brandName: string | null,
 ): string {
-  const s = slime.slimes?.[0];
+  const s = slime.slimes;
   const params = new URLSearchParams();
   if (s?.name) params.set("slime_name", s.name);
   if (brandName) params.set("brand", brandName);
@@ -221,7 +219,7 @@ function SlimeCard({
   dropName: string | null;
   brandName: string | null;
 }) {
-  const s = slime.slimes?.[0];
+  const s = slime.slimes;
   const logUrl = buildLogUrl(slime, dropName, brandName);
 
   return (
@@ -319,7 +317,7 @@ export default async function DropDetailPage({
     supabase
       .from("drop_slimes")
       .select(
-        "drop_id, slime_id, slimes!drop_slimes_slime_id_fkey (id,name, slime_type, description, scent, retail_price, colors,image_url)",
+        "drop_id, slime_id, slimes!drop_slimes_slime_id_fkey (id, name, slime_type, description, scent, retail_price, colors, image_url)",
       )
       .eq("drop_id", id),
   ]);
@@ -351,12 +349,14 @@ export default async function DropDetailPage({
       follower_count: null,
     };
 
-    const slimes: DropSlime[] = slimesResult.data ?? [];
+    const slimes: DropSlime[] = (slimesResult.data ??
+      []) as unknown as DropSlime[];
     return <DropView drop={fallbackDrop} slimes={slimes} />;
   }
 
   const drop: DropDetail = dropResult.data;
-  const slimes: DropSlime[] = slimesResult.data ?? [];
+  const slimes: DropSlime[] = (slimesResult.data ??
+    []) as unknown as DropSlime[];
 
   return <DropView drop={drop} slimes={slimes} />;
 }
