@@ -1,8 +1,12 @@
+// apps/web/app/page.tsx
+// Updated: FeedCard is now wrapped in a Link to /slimes/[id]
+
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { formatDistanceToNow } from "date-fns";
+import Link from "next/link";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type FeedLog = {
   id: string;
@@ -10,7 +14,7 @@ type FeedLog = {
   slime_name: string | null;
   brand_name_raw: string | null;
   slime_type: string | null;
-  rating_overall: number | null; // ← FIXED
+  rating_overall: number | null;
   profiles: { username: string | null }[] | null;
   brands: { name: string | null }[] | null;
 };
@@ -80,7 +84,7 @@ function Stars({ rating }: { rating: number | null }) {
   );
 }
 
-// ─── Feed card ────────────────────────────────────────────────────────────────
+// ─── Feed card — now tappable ─────────────────────────────────────────────────
 
 function FeedCard({ log }: { log: FeedLog }) {
   const typeStyle =
@@ -94,52 +98,61 @@ function FeedCard({ log }: { log: FeedLog }) {
   });
 
   return (
-    <article className="relative bg-white rounded-3xl shadow-sm border border-pink-50 overflow-hidden transition-shadow hover:shadow-md">
-      {/* Decorative gel blob */}
-      <div
-        className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-10 blur-2xl pointer-events-none"
-        style={{ background: "radial-gradient(circle, #f472b6, #a855f7)" }}
-        aria-hidden="true"
-      />
+    // ↓ Wrap entire card in a Link — tapping anywhere navigates to detail page
+    <Link href={`/slimes/${log.id}`} className="block group">
+      <article className="relative bg-white rounded-3xl shadow-sm border border-pink-50 overflow-hidden transition-all duration-100 group-hover:shadow-md group-active:scale-[0.98]">
+        {/* Decorative gel blob */}
+        <div
+          className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-10 blur-2xl pointer-events-none"
+          style={{ background: "radial-gradient(circle, #f472b6, #a855f7)" }}
+          aria-hidden="true"
+        />
 
-      <div className="p-4 flex flex-col gap-2.5">
-        {/* Header row */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-gray-900 text-sm leading-tight truncate">
-              {slimeName}
-            </p>
-            <p className="text-xs text-gray-400 truncate mt-0.5">{brandName}</p>
-          </div>
-          <span
-            className={`shrink-0 text-[10px] font-semibold px-2 py-1 rounded-full ${typeStyle.bg} ${typeStyle.text}`}
-          >
-            {typeStyle.label}
-          </span>
-        </div>
-        {/* Rating */}
-        <Stars rating={log.rating_overall} /> {/* ← FIXED */}
-        {/* Footer */}
-        <div className="flex items-center justify-between pt-1 border-t border-pink-50">
-          <div className="flex items-center gap-1.5">
-            {/* Avatar blob */}
-            <div
-              className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold"
-              style={{
-                background: "linear-gradient(135deg, #f472b6, #a855f7)",
-              }}
-              aria-hidden="true"
-            >
-              {username.charAt(0).toUpperCase()}
+        <div className="p-4 flex flex-col gap-2.5">
+          {/* Header row */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-gray-900 text-sm leading-tight truncate">
+                {slimeName}
+              </p>
+              <p className="text-xs text-gray-400 truncate mt-0.5">
+                {brandName}
+              </p>
             </div>
-            <span className="text-xs text-gray-500">@{username}</span>
+            <span
+              className={`shrink-0 text-[10px] font-semibold px-2 py-1 rounded-full ${typeStyle.bg} ${typeStyle.text}`}
+            >
+              {typeStyle.label}
+            </span>
           </div>
-          <time className="text-[11px] text-gray-400" dateTime={log.created_at}>
-            {timeAgo}
-          </time>
+
+          {/* Rating */}
+          <Stars rating={log.rating_overall} />
+
+          {/* Footer */}
+          <div className="flex items-center justify-between pt-1 border-t border-pink-50">
+            <div className="flex items-center gap-1.5">
+              <div
+                className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold"
+                style={{
+                  background: "linear-gradient(135deg, #f472b6, #a855f7)",
+                }}
+                aria-hidden="true"
+              >
+                {username.charAt(0).toUpperCase()}
+              </div>
+              <span className="text-xs text-gray-500">@{username}</span>
+            </div>
+            <time
+              className="text-[11px] text-gray-400"
+              dateTime={log.created_at}
+            >
+              {timeAgo}
+            </time>
+          </div>
         </div>
-      </div>
-    </article>
+      </article>
+    </Link>
   );
 }
 
@@ -180,26 +193,23 @@ export default async function HomePage() {
     },
   );
 
-  // Public query — no auth required. Join profiles for username, brands for name.
-  // collection_logs.brand_id is nullable (free-form logs won't have it), so left join.
   const { data: logs, error } = await supabase
     .from("collection_logs")
     .select(
       `
-    id,
-    created_at,
-    slime_name,
-    brand_name_raw,
-    slime_type,
-    rating_overall,
-    profiles!collection_logs_user_id_fkey ( username ),
-    brands ( name )
-  `,
-    ) // ← FIXED
+      id,
+      created_at,
+      slime_name,
+      brand_name_raw,
+      slime_type,
+      rating_overall,
+      profiles!collection_logs_user_id_fkey ( username ),
+      brands ( name )
+    `,
+    )
     .order("created_at", { ascending: false })
     .limit(20);
 
-  // Non-fatal: render empty state rather than throw on query error
   const feedLogs = (error ? [] : (logs ?? [])) as unknown as FeedLog[];
 
   return (

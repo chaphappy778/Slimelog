@@ -1,5 +1,7 @@
-"use client";
 // apps/web/app/collection/page.tsx
+// Updated: SlimeCard is now wrapped in a Link to /slimes/[id]
+
+"use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -33,7 +35,7 @@ function RatingDots({ value }: { value: number | null }) {
   );
 }
 
-// ─── Slime Card ────────────────────────────────────────────────────────────────
+// ─── Slime Card — now tappable ────────────────────────────────────────────────
 
 function SlimeCard({ log }: { log: CollectionLog }) {
   const typeLabel =
@@ -48,106 +50,115 @@ function SlimeCard({ log }: { log: CollectionLog }) {
 
   const primaryColor = log.colors?.[0] ?? null;
 
+  // Resolved price: prefer purchase_price (migration 000004), fall back to cost_paid
+  const displayPrice =
+    (log as any).purchase_price != null
+      ? (log as any).purchase_price
+      : log.cost_paid;
+
   return (
-    <div className="bg-slime-card rounded-2xl border border-slime-border p-4 flex flex-col gap-3 shadow-slime-sm hover:shadow-slime transition-shadow duration-200">
-      {/* Top row */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex flex-col gap-0.5 min-w-0">
-          <h3 className="font-bold text-slime-text text-sm leading-snug truncate">
-            {log.slime_name ?? "Unnamed slime"}
-          </h3>
-          {log.brand_name_raw && (
-            <span className="text-xs text-slime-muted truncate">
-              {log.brand_name_raw}
-            </span>
-          )}
-        </div>
-
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          {log.in_wishlist ? (
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 border border-violet-500/25">
-              Wishlist
-            </span>
-          ) : (
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slime-accent/15 text-slime-accent border border-slime-accent/25">
-              In Collection
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Tags row */}
-      <div className="flex flex-wrap gap-1.5">
-        {typeLabel && (
-          <span className="text-xs px-2 py-0.5 rounded-full bg-slime-surface border border-slime-border text-slime-muted">
-            {typeLabel}
-          </span>
-        )}
-        {primaryColor && (
-          <span className="text-xs px-2 py-0.5 rounded-full bg-slime-surface border border-slime-border text-slime-muted">
-            {primaryColor}
-          </span>
-        )}
-        {log.scent && (
-          <span className="text-xs px-2 py-0.5 rounded-full bg-slime-surface border border-slime-border text-slime-muted">
-            🌸 {log.scent}
-          </span>
-        )}
-        {log.cost_paid != null && (
-          <span className="text-xs px-2 py-0.5 rounded-full bg-slime-surface border border-slime-border text-slime-muted">
-            ${Number(log.cost_paid).toFixed(2)}
-          </span>
-        )}
-      </div>
-
-      {/* Ratings */}
-      {hasRatings && (
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 pt-1 border-t border-slime-border">
-          {log.rating_overall !== null && (
-            <div className="flex items-center justify-between col-span-2">
-              <span className="text-xs text-slime-muted font-medium">
-                Overall
+    // ↓ Wrap entire card in a Link — tapping anywhere navigates to detail page
+    <Link href={`/slimes/${log.id}`} className="block group">
+      <div className="bg-slime-card rounded-2xl border border-slime-border p-4 flex flex-col gap-3 shadow-slime-sm group-hover:shadow-slime group-active:scale-[0.98] transition-all duration-200">
+        {/* Top row */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <h3 className="font-bold text-slime-text text-sm leading-snug truncate">
+              {log.slime_name ?? "Unnamed slime"}
+            </h3>
+            {log.brand_name_raw && (
+              <span className="text-xs text-slime-muted truncate">
+                {log.brand_name_raw}
               </span>
-              <div className="flex items-center gap-1.5">
-                <RatingDots value={log.rating_overall} />
-                <span className="text-xs font-bold text-slime-text">
-                  {log.rating_overall}/5
-                </span>
-              </div>
-            </div>
-          )}
-          {[
-            { key: "rating_texture", label: "Texture" },
-            { key: "rating_scent", label: "Scent" },
-            { key: "rating_sound", label: "Sound" },
-            { key: "rating_drizzle", label: "Drizzle" },
-            { key: "rating_creativity", label: "Creativity" },
-            { key: "rating_sensory_fit", label: "Sensory Fit" },
-          ]
-            .filter(({ key }) => log[key as keyof CollectionLog] !== null)
-            .map(({ key, label }) => (
-              <div key={key} className="flex items-center justify-between">
-                <span className="text-xs text-slime-muted">{label}</span>
-                <RatingDots
-                  value={log[key as keyof CollectionLog] as number | null}
-                />
-              </div>
-            ))}
+            )}
+          </div>
+
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            {log.in_wishlist ? (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 border border-violet-500/25">
+                Wishlist
+              </span>
+            ) : (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slime-accent/15 text-slime-accent border border-slime-accent/25">
+                In Collection
+              </span>
+            )}
+          </div>
         </div>
-      )}
 
-      {/* Notes */}
-      {log.notes && (
-        <p className="text-xs text-slime-muted line-clamp-2 italic border-t border-slime-border pt-2">
-          "{log.notes}"
+        {/* Tags row */}
+        <div className="flex flex-wrap gap-1.5">
+          {typeLabel && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-slime-surface border border-slime-border text-slime-muted">
+              {typeLabel}
+            </span>
+          )}
+          {primaryColor && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-slime-surface border border-slime-border text-slime-muted">
+              {primaryColor}
+            </span>
+          )}
+          {log.scent && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-slime-surface border border-slime-border text-slime-muted">
+              🌸 {log.scent}
+            </span>
+          )}
+          {displayPrice != null && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-slime-surface border border-slime-border text-slime-muted">
+              ${Number(displayPrice).toFixed(2)}
+            </span>
+          )}
+        </div>
+
+        {/* Ratings */}
+        {hasRatings && (
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 pt-1 border-t border-slime-border">
+            {log.rating_overall !== null && (
+              <div className="flex items-center justify-between col-span-2">
+                <span className="text-xs text-slime-muted font-medium">
+                  Overall
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <RatingDots value={log.rating_overall} />
+                  <span className="text-xs font-bold text-slime-text">
+                    {log.rating_overall}/5
+                  </span>
+                </div>
+              </div>
+            )}
+            {[
+              { key: "rating_texture", label: "Texture" },
+              { key: "rating_scent", label: "Scent" },
+              { key: "rating_sound", label: "Sound" },
+              { key: "rating_drizzle", label: "Drizzle" },
+              { key: "rating_creativity", label: "Creativity" },
+              { key: "rating_sensory_fit", label: "Sensory Fit" },
+            ]
+              .filter(({ key }) => log[key as keyof CollectionLog] !== null)
+              .map(({ key, label }) => (
+                <div key={key} className="flex items-center justify-between">
+                  <span className="text-xs text-slime-muted">{label}</span>
+                  <RatingDots
+                    value={log[key as keyof CollectionLog] as number | null}
+                  />
+                </div>
+              ))}
+          </div>
+        )}
+
+        {/* Notes */}
+        {log.notes && (
+          <p className="text-xs text-slime-muted line-clamp-2 italic border-t border-slime-border pt-2">
+            "{log.notes}"
+          </p>
+        )}
+
+        {/* Footer */}
+        <p className="text-xs text-slime-muted/60 mt-auto">
+          {formatDate(log.created_at)}
         </p>
-      )}
-
-      {/* Footer */}
-      <p className="text-xs text-slime-muted/60 mt-auto">
-        {formatDate(log.created_at)}
-      </p>
-    </div>
+      </div>
+    </Link>
   );
 }
 
