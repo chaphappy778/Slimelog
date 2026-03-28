@@ -124,7 +124,6 @@ export default async function BrandPage({ params }: PageProps) {
   const { slug } = await params;
   const supabase = await createClient();
 
-  // Fetch brand
   const { data: brand, error: brandError } = await supabase
     .from("brands")
     .select(
@@ -142,7 +141,6 @@ export default async function BrandPage({ params }: PageProps) {
 
   if (brandError || !brand) notFound();
 
-  // Fetch recent community logs for this brand
   const { data: logs } = await supabase
     .from("collection_logs")
     .select(
@@ -161,8 +159,8 @@ export default async function BrandPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-pink-50 via-fuchsia-50/20 to-white pb-28">
-      {/* Back button header */}
-      <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-pink-100 px-4 pt-safe-top">
+      {/* ── Sticky back nav ─────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-pink-100 px-4">
         <div className="max-w-[390px] mx-auto flex items-center gap-3 py-3">
           <Link
             href="/brands"
@@ -187,9 +185,16 @@ export default async function BrandPage({ params }: PageProps) {
 
       <div className="max-w-[390px] mx-auto px-4 space-y-4 pt-5">
         {/* ── Brand Header Card ───────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl border border-pink-100 shadow-sm overflow-hidden">
-          {/* Gradient banner */}
-          <div className="h-20 bg-gradient-to-br from-pink-300 via-fuchsia-300 to-violet-300 relative">
+        {/*
+          Outer card: relative, no overflow-hidden — lets avatar protrude
+          Banner: h-28, rounded-t-3xl, overflow-hidden — clips itself only
+          Avatar: absolute relative to outer card at top-16 left-4
+                  (banner is h-28=7rem, top-16=4rem centres avatar on boundary)
+          White section: pt-10 clears the bottom half of the avatar
+        */}
+        <div className="relative bg-white rounded-3xl border border-pink-100 shadow-sm">
+          {/* Hero banner */}
+          <div className="h-28 rounded-t-3xl overflow-hidden bg-gradient-to-br from-pink-300 via-fuchsia-300 to-violet-300 relative">
             <div
               className="absolute inset-0 opacity-20"
               style={{
@@ -200,44 +205,47 @@ export default async function BrandPage({ params }: PageProps) {
             />
           </div>
 
-          {/* Logo overlapping banner */}
-          <div className="px-4 pb-4">
-            <div className="-mt-8 mb-3 flex items-end justify-between">
-              <div className="w-16 h-16 rounded-2xl border-4 border-white shadow-md bg-gradient-to-br from-pink-100 to-violet-100 flex items-center justify-center overflow-hidden">
-                {brand.logo_url ? (
-                  <img
-                    src={brand.logo_url}
-                    alt={brand.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-xl font-black bg-gradient-to-br from-pink-500 to-violet-500 bg-clip-text text-transparent">
-                    {initials}
+          {/* Avatar — absolute to outer card, centred on banner/white boundary */}
+          <div className="absolute top-16 left-4 z-10">
+            <div className="w-16 h-16 rounded-2xl border-4 border-white shadow-md bg-gradient-to-br from-pink-100 to-violet-100 flex items-center justify-center overflow-hidden">
+              {brand.logo_url ? (
+                <img
+                  src={brand.logo_url}
+                  alt={brand.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-xl font-black bg-gradient-to-br from-pink-500 to-violet-500 bg-clip-text text-transparent select-none">
+                  {initials}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* White content section */}
+          <div className="px-4 pt-10 pb-4">
+            {/* Name + verified badge + Follow button */}
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <h1 className="text-lg font-black text-gray-900 leading-tight">
+                  {brand.name}
+                </h1>
+                {brand.verification_tier === "verified" && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-sm uppercase tracking-wide shrink-0">
+                    <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 fill-white">
+                      <path d="M6 1L7.3 4H11L8.3 6.2l.9 3.3L6 7.8 2.8 9.5l.9-3.3L1 4h3.7z" />
+                    </svg>
+                    Verified
                   </span>
                 )}
               </div>
-
-              {/* ✅ Real Follow button — replaces UI stub */}
-              <div className="mt-2">
+              <div className="shrink-0">
                 <FollowBrandButton
                   brandId={brand.id}
                   brandSlug={brand.slug}
                   initialFollowerCount={brand.follower_count ?? 0}
                 />
               </div>
-            </div>
-
-            {/* Name + badges */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-lg font-black text-gray-900">{brand.name}</h1>
-              {brand.verification_tier === "verified" && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-sm uppercase tracking-wide">
-                  <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 fill-white">
-                    <path d="M6 1L7.3 4H11L8.3 6.2l.9 3.3L6 7.8 2.8 9.5l.9-3.3L1 4h3.7z" />
-                  </svg>
-                  Verified
-                </span>
-              )}
             </div>
 
             {/* Owner */}
@@ -247,7 +255,7 @@ export default async function BrandPage({ params }: PageProps) {
               </p>
             )}
 
-            {/* Location + founded */}
+            {/* Location + founded + followers */}
             <div className="flex items-center gap-3 mt-2 flex-wrap">
               {brand.location && (
                 <span className="flex items-center gap-1 text-xs text-gray-500">
@@ -396,8 +404,6 @@ export default async function BrandPage({ params }: PageProps) {
           <h2 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3 px-1">
             Community Stats
           </h2>
-
-          {/* Pill grid */}
           <div className="grid grid-cols-4 gap-2 mb-3">
             <StatPill
               label="Total Logs"
@@ -423,7 +429,6 @@ export default async function BrandPage({ params }: PageProps) {
             />
           </div>
 
-          {/* Ratings */}
           {(brand.avg_shipping != null ||
             brand.avg_customer_service != null) && (
             <div className="bg-white rounded-2xl border border-pink-100 shadow-sm px-4 py-2">
@@ -483,7 +488,6 @@ export default async function BrandPage({ params }: PageProps) {
                     key={log.id}
                     className="bg-white rounded-2xl border border-pink-100 shadow-sm p-3 flex items-start gap-3"
                   >
-                    {/* Avatar */}
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-200 to-violet-200 flex items-center justify-center shrink-0 overflow-hidden">
                       {avatarUrl ? (
                         <img
@@ -529,7 +533,6 @@ export default async function BrandPage({ params }: PageProps) {
                           </div>
                         )}
                       </div>
-
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                         {typeColor && log.slime_type && (
                           <span
