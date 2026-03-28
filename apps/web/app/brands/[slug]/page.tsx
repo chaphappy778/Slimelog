@@ -3,6 +3,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import FollowBrandButton from "@/components/FollowBrandButton";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -215,13 +216,15 @@ export default async function BrandPage({ params }: PageProps) {
                   </span>
                 )}
               </div>
-              {/* Follow button (UI stub — wire up with client component) */}
-              <button className="flex items-center gap-1.5 bg-gradient-to-r from-pink-500 to-fuchsia-500 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-sm active:scale-95 transition-transform mt-2">
-                <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 fill-current">
-                  <path d="M8 1a4 4 0 1 0 0 8A4 4 0 0 0 8 1zm-7 13c0-2.76 3.13-5 7-5s7 2.24 7 5H1z" />
-                </svg>
-                Follow
-              </button>
+
+              {/* ✅ Real Follow button — replaces UI stub */}
+              <div className="mt-2">
+                <FollowBrandButton
+                  brandId={brand.id}
+                  brandSlug={brand.slug}
+                  initialFollowerCount={brand.follower_count ?? 0}
+                />
+              </div>
             </div>
 
             {/* Name + badges */}

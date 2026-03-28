@@ -1,0 +1,295 @@
+# Project Master Summary
+
+**Last updated: March 28, 2026**
+**Chat: Master HQ — StartupLenz + Slimelog**
+
+---
+
+## STARTUPLENZ
+
+### Overview
+
+Vertical-specific startup cost modeling tool with live tariff and BLS data.
+
+- **Tagline:** "Know your numbers before you commit."
+- **URL:** startuplenz.com
+- **Repo:** ~/Projects/startuplenz
+- **Stack:** Next.js 16, TypeScript, Tailwind CSS, Supabase, GitHub
+
+### Current HEAD
+
+`0914829` — feat(auth): add Supabase Auth with Next.js 16 compatibility fixes
+
+### Deployed Migrations — 12 Total
+
+| Migration       | Description                     | Status     |
+| --------------- | ------------------------------- | ---------- |
+| 20260321_000001 | Extensions & enums              | ✅ Applied |
+| 20260321_000002 | Core tables                     | ✅ Applied |
+| 20260321_000003 | Cost data tables + external_key | ✅ Applied |
+| 20260321_000004 | User content tables             | ✅ Applied |
+| 20260321_000005 | Alert tables                    | ✅ Applied |
+| 20260321_000006 | Indexes                         | ✅ Applied |
+| 20260321_000007 | RLS policies                    | ✅ Applied |
+| 20260321_000008 | Seed data                       | ✅ Applied |
+| 20260321_000009 | Functions & triggers            | ✅ Applied |
+| 20260321_000010 | fn_insert_cost_snapshot         | ✅ Applied |
+| 20260322_000011 | Handmade vertical seed          | ✅ Applied |
+| 20260323_000012 | Auth trigger                    | ✅ Applied |
+
+### Repo Structure
+
+```
+startuplenz/
+├── docs/
+│   ├── StartupLenz_Product_Brief_v1.1.docx
+│   └── schema-reference.md
+├── supabase/migrations/          ✅ 12 migration files
+├── services/sync/                ✅ BLS, USITC, platform monitoring
+├── packages/vertical-models/handmade/  ✅ Formula engine
+└── apps/web/
+    ├── proxy.ts                  ✅ Session refresh + route protection (Next.js 16)
+    ├── app/
+    │   ├── page.tsx              ✅ Home page with vertical selector
+    │   ├── layout.tsx            ✅
+    │   ├── login/page.tsx        ✅ Email/password + Google OAuth
+    │   ├── signup/page.tsx       ✅ Registration form
+    │   ├── auth/callback/route.ts ✅ PKCE handler
+    │   └── model/[vertical]/page.tsx ✅ Auth-gated calculator
+    ├── components/
+    │   ├── VerticalSelector.tsx  ✅ Lock icons on gated verticals
+    │   ├── AssumptionsPanel.tsx  ✅
+    │   ├── CostBreakdown.tsx     ✅
+    │   ├── GrowthTrajectory.tsx  ✅
+    │   ├── MonthlySnapshot.tsx   ✅
+    │   └── InsightCallout.tsx    ✅
+    └── lib/
+        ├── auth.ts               ✅ getUser, getUserTier, canAccessVertical
+        ├── modelClient.ts        ✅
+        ├── supabase/server.ts    ✅ async cookies() for Next.js 16
+        └── supabase/client.ts    ✅ Singleton browser client
+```
+
+### Live Application State
+
+| Route                      | Status    | Notes                                     |
+| -------------------------- | --------- | ----------------------------------------- |
+| `/`                        | ✅ Live   | Home with 6 vertical cards                |
+| `/login`                   | ✅ Live   | Email/password + Google OAuth             |
+| `/signup`                  | ✅ Live   | Registration form                         |
+| `/auth/callback`           | ✅ Live   | PKCE code exchange                        |
+| `/model/handmade-craft`    | ✅ Live   | Auth gate working, calculator placeholder |
+| `/model/[other verticals]` | ⏸ Pending | Vertical modules not yet built            |
+
+### Product Tiers
+
+- **Free:** 3 verticals
+- **Pro:** $19/mo
+- **Team:** $49/mo
+- **API/White-label:** Custom
+
+### Next Steps — StartupLenz
+
+1. **Integration chat** — Wire real vertical model into calculator UI (replace placeholder)
+2. Test signup flow end-to-end — confirm auth trigger creates users row + Free tier subscription
+3. Add Google OAuth credentials in Supabase dashboard
+4. Build remaining 5 vertical modules (Food & Beverage, E-commerce, Service Business, SaaS, Retail)
+
+### Key Technical Notes
+
+- `middleware.ts` renamed to `proxy.ts` for Next.js 16 (export named `proxy`)
+- `cookies()` must be awaited — already done in server.ts
+- `params` is async in Next.js 16 — handled in model/[vertical]/page.tsx
+- Supabase types not yet generated — `@/types/supabase` import commented out
+
+---
+
+## SLIMELOG
+
+### Overview
+
+Untappd-style slime collection tracking and social rating app.
+
+- **Tagline:** "Track. Rate. Discover. Connect."
+- **URL:** slimelog.com
+- **Repo:** ~/Projects/Slimelog (github: chaphappy778/Slimelog)
+- **Stack:** Next.js 16, TypeScript, Tailwind CSS, Supabase, GitHub
+- **App Store path:** Web app → Capacitor → iOS + Android
+
+### Current HEAD
+
+`7eaacb4` — feat(drops): drop detail pages with slime listings and one-click log
+
+### Team
+
+- **Developer:** ChapDaddy
+- **CMO / Community Advisor:** Jennifer (wife) — slime collector, taxonomy author, brand advisor
+
+### Deployed Migrations — 7 Total
+
+| Migration       | Description                                              | Status     |
+| --------------- | -------------------------------------------------------- | ---------- |
+| 20260324_000001 | Initial schema (13 tables, 4 views, triggers, RLS, seed) | ✅ Applied |
+| 20260325_000001 | Anon RLS policies for dev                                | ✅ Applied |
+| 20260326_000002 | Shipping time tracking fields                            | ✅ Applied |
+| 20260326_000003 | Revert anon RLS — owner-only writes                      | ✅ Applied |
+| 20260327_000004 | Purchase price and currency fields                       | ✅ Applied |
+| 20260328_000005 | Brand catalog expanded — 12 brands, 11 new columns       | ✅ Applied |
+| 20260328_000006 | Seed test drops — 3 drops, 9 slimes                      | ✅ Applied |
+
+### Repo Structure
+
+```
+Slimelog/
+├── docs/
+│   ├── SlimeLog_Product_Brief_and_Taxonomy.docx
+│   └── schema-reference.md          ← Updated March 28
+├── supabase/migrations/             ✅ 7 migration files
+└── apps/web/
+    ├── proxy.ts                     ✅ Session refresh + route protection
+    ├── app/
+    │   ├── page.tsx                 ✅ Home/feed — live community logs
+    │   ├── layout.tsx               ✅
+    │   ├── globals.css              ✅ Slimelog light pink theme
+    │   ├── log/page.tsx             ✅ 4-step wizard → Supabase
+    │   ├── collection/page.tsx      ✅ Live user collection
+    │   ├── discover/page.tsx        ✅ Top rated + drops — live data
+    │   ├── profile/page.tsx         ✅ Live stats + recent activity
+    │   ├── brands/page.tsx          ✅ 12 brand directory
+    │   ├── brands/[slug]/page.tsx   ✅ Brand detail page
+    │   ├── slimes/[id]/page.tsx     ✅ Slime detail + delete
+    │   └── drops/[id]/page.tsx      ✅ Drop detail + one-click log
+    ├── components/
+    │   ├── BottomNav.tsx            ✅ Feed, Collection, Log (center), Discover, Brands
+    │   ├── BrandCard.tsx            ✅
+    │   ├── SlimeCard.tsx            ✅
+    │   ├── RatingInput.tsx          ✅
+    │   ├── TypeBadge.tsx            ✅
+    │   └── DeleteLogButton.tsx      ✅ Two-tap confirm pattern
+    └── lib/
+        ├── types.ts                 ✅ Aligned to schema
+        ├── mock-data.ts             ✅
+        ├── slime-actions.ts         ✅ logSlime, getUserCollectionLogs, deleteSlimeLog
+        ├── auth.ts                  ✅ getSession, getUser, getUserProfile
+        └── supabase/
+            ├── client.ts            ✅ Browser client
+            └── server.ts            ✅ async cookies() for Next.js 16
+```
+
+### Live Application State — 10 Routes
+
+| Route                | Data                         | Status |
+| -------------------- | ---------------------------- | ------ |
+| `/`                  | Live community feed          | ✅     |
+| `/log`               | 4-step form → Supabase       | ✅     |
+| `/collection`        | Live user logs               | ✅     |
+| `/slimes/[id]`       | Full detail + delete         | ✅     |
+| `/discover`          | Live top rated + drops       | ✅     |
+| `/drops/[id]`        | Drop detail + one-click log  | ✅     |
+| `/brands`            | 12 live verified brands      | ✅     |
+| `/brands/[slug]`     | Brand detail + stats         | ✅     |
+| `/profile`           | Live stats + recent activity | ✅     |
+| `/login` + `/signup` | Auth flows                   | ✅     |
+
+### Brand Catalog — 12 Verified Brands
+
+| UUID | Brand            | Website           | Location        |
+| ---- | ---------------- | ----------------- | --------------- |
+| b001 | Momo Slimes      | momoslimes.com    | —               |
+| b002 | Peachybbbies     | peachybbies.com   | Austin, TX      |
+| b003 | Ky Slimes        | kyslime.com       | Honolulu, HI    |
+| b004 | Dope Slimes      | dopeslimes.com    | —               |
+| b005 | Slime Sweet Pea  | sallysweetpea.com | New York, NY    |
+| b006 | Obsidian Slimes  | slimeobsidian.com | —               |
+| b007 | Pilot Slimes     | pilotslime.com    | —               |
+| b008 | Sandy Slimes     | sandyslimes.com   | San Antonio, TX |
+| b009 | OG Slimes        | ogslimes.com      | —               |
+| b010 | Strawb Slimes    | strawbslimes.com  | —               |
+| b011 | AfterDark Slimes | — (Etsy)          | —               |
+| b012 | Swae Slimes      | — (Etsy)          | —               |
+
+### Seed Drops — 3 Test Drops
+
+| Drop            | Brand           | Status    | Date         |
+| --------------- | --------------- | --------- | ------------ |
+| Sundae Funday   | Peachybbbies    | announced | Mar 30, 2026 |
+| Midnight Flight | Pilot Slimes    | live      | Mar 28, 2026 |
+| Garden Party    | Slime Sweet Pea | announced | Apr 2, 2026  |
+
+### Slime Taxonomy — 16 Types
+
+butter, clear, cloud, icee, fluffy, floam, snow_fizz, thick_and_glossy, jelly, beaded, clay, cloud_cream, magnetic, thermochromic, avalanche, slay
+
+### Rating Dimensions
+
+**Per slime:** texture, scent, sound/ASMR, drizzle, creativity, sensory fit, overall
+**Per brand:** shipping, customer service
+**Objective shipping data:** order_date, ship_date, received_date, days_to_ship, days_to_receive
+
+### Log Form Features
+
+- Step 1: Slime name, brand, type, wishlist toggle, collection name
+- Step 2: Colors (swatches + free text), scent, cost, shipping dates
+- Step 3: All 7 rating dimensions
+- Step 4: Likes, dislikes, notes
+- URL pre-fill from drop pages (slime_name, brand, collection, type)
+
+### Next Steps — Slimelog (Priority Order)
+
+1. **Follow button** on brand pages — insert/delete brand_follows, update follower count
+2. **Social layer** — user following system, activity feed showing followed users
+3. **Photo upload** — Supabase Storage bucket, image upload in Log form
+4. **Username editing** — settings/profile edit route
+5. **Drop creation** — simplified brand dashboard for creating drops (post-launch or v2)
+6. **Capacitor** — wrap for iOS and Android App Store submission
+
+### App Store Timeline
+
+- **Target launch:** Late April to early May 2026
+- **Apple Developer Program:** $99/year (required)
+- **Google Play:** $25 one-time
+- **Capacitor:** Free and open source
+
+### Key Technical Notes — Next.js 16
+
+- `proxy.ts` not `middleware.ts` — export named `proxy`
+- `cookies()` must be awaited — done in server.ts
+- `params` is async — handled in all dynamic routes
+- Supabase relations return arrays for one-to-many, objects for many-to-one via FK hint
+- FK hint syntax: `table!constraint_name(columns)` — no spaces inside parens
+
+### Monetization Path
+
+- **Free:** Full collection tracking, social feed, drop notifications
+- **Premium ($4.99/mo):** Advanced stats, export, early drop alerts, profile customization
+- **Brand verification ($29/mo):** Verified badge, drop tools, analytics, review response
+- **Featured placement:** Post-scale revenue
+- **Marketplace (Phase 3):** In-app purchasing
+
+---
+
+## SHARED TECHNICAL NOTES
+
+### Chat Structure
+
+- **This chat:** Master HQ — strategy, architecture, planning, cross-project decisions
+- **GitHub/VS Code chat:** File placement, git commits, terminal commands
+- **Schema chats:** Database migrations, SQL queries
+- **Auth chat:** Auth workstreams (both projects)
+- **Real data chat:** Wiring Supabase queries to frontend
+
+### Next.js 16 Breaking Changes (both projects)
+
+- `middleware.ts` → `proxy.ts`, export `proxy` not `middleware`
+- `cookies()` must be awaited: `const cookieStore = await cookies()`
+- `params` is async: `const { slug } = await params`
+- `headers()` is async
+
+### Migration Naming Convention
+
+Format: `YYYYMMDDNNNNNN_description.sql`
+Always run `pwd` before Supabase commands to confirm correct project directory.
+
+### File Placement Rule
+
+Always label files with full destination path before code blocks. Multiple files named `page.tsx` must be distinguished by their containing folder path, not just filename.
