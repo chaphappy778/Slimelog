@@ -1,12 +1,13 @@
 // apps/web/app/discover/page.tsx
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import Link from "next/link";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type TopRatedSlime = {
   id: string;
-  name: string | null; // ← FIXED: view column is `name`, not `slime_name`
+  name: string | null;
   brand_name: string | null;
   slime_type: string | null;
   avg_overall: number | null;
@@ -15,7 +16,7 @@ type TopRatedSlime = {
 
 type UpcomingDrop = {
   id: string;
-  name: string | null; // ← FIXED: view column is `name`, not `drop_name`
+  name: string | null;
   drop_at: string | null;
   status: string | null;
   brand_name: string | null;
@@ -137,7 +138,7 @@ function TopRatedCard({ slime, rank }: { slime: TopRatedSlime; rank: number }) {
 
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-gray-900 truncate leading-tight">
-          {slime.name ?? "Unnamed slime"} {/* ← FIXED: was slime.slime_name */}
+          {slime.name ?? "Unnamed slime"}
         </p>
         <p className="text-xs text-gray-400 truncate">
           {slime.brand_name ?? "Unknown brand"}
@@ -154,29 +155,55 @@ function TopRatedCard({ slime, rank }: { slime: TopRatedSlime; rank: number }) {
 }
 
 // ─── Drop card ────────────────────────────────────────────────────────────────
+// UPDATED: wrapped in Link to /drops/[id]
 
 function DropCard({ drop }: { drop: UpcomingDrop }) {
   const statusBadge = getStatusBadge(drop.status);
+  const isLive = drop.status === "live";
 
   return (
-    <article className="bg-white rounded-2xl border border-pink-50 shadow-sm p-4 flex items-center justify-between gap-3">
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-900 truncate leading-tight">
-          {drop.name ?? "Unnamed drop"} {/* ← FIXED: was drop.drop_name */}
-        </p>
-        <p className="text-xs text-gray-400 truncate mt-0.5">
-          {drop.brand_name ?? "Unknown brand"}
-        </p>
-        <p className="text-xs text-gray-500 mt-1 font-medium">
-          {formatDropDate(drop.drop_at)}
-        </p>
-      </div>
-      <span
-        className={`shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full ${statusBadge.bg} ${statusBadge.text}`}
+    <Link
+      href={`/drops/${drop.id}`}
+      className="block group"
+      aria-label={`View drop: ${drop.name ?? "Unnamed drop"}`}
+    >
+      <article
+        className="bg-white rounded-2xl border shadow-sm p-4 flex items-center justify-between gap-3 transition-all duration-150 group-active:scale-[0.98]"
+        style={{
+          borderColor: isLive ? "#bbf7d0" : "#fce7f3",
+          boxShadow: isLive
+            ? "0 1px 3px 0 rgba(16, 185, 129, 0.08)"
+            : "0 1px 3px 0 rgba(244, 114, 182, 0.08)",
+        }}
       >
-        {statusBadge.label}
-      </span>
-    </article>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-gray-900 truncate leading-tight group-hover:text-pink-600 transition-colors">
+            {drop.name ?? "Unnamed drop"}
+          </p>
+          <p className="text-xs text-gray-400 truncate mt-0.5">
+            {drop.brand_name ?? "Unknown brand"}
+          </p>
+          <p className="text-xs text-gray-500 mt-1 font-medium">
+            {formatDropDate(drop.drop_at)}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <span
+            className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${statusBadge.bg} ${statusBadge.text}`}
+          >
+            {statusBadge.label}
+          </span>
+          {/* Chevron affordance */}
+          <span
+            className="text-gray-300 text-xs group-hover:text-pink-400 transition-colors"
+            aria-hidden="true"
+          >
+            ›
+          </span>
+        </div>
+      </article>
+    </Link>
   );
 }
 
@@ -201,14 +228,12 @@ export default async function DiscoverPage() {
     supabase
       .from("top_rated_slimes")
       .select("id, name, brand_name, slime_type, avg_overall, total_ratings")
-      // ↑ FIXED: `name` not `slime_name` — matches confirmed view schema
       .order("avg_overall", { ascending: false })
       .limit(10),
 
     supabase
       .from("upcoming_drops")
       .select("id, name, drop_at, status, brand_name")
-      // ↑ FIXED: `name` not `drop_name` — matches confirmed view schema
       .in("status", ["announced", "live"])
       .order("drop_at", { ascending: true })
       .limit(15),
@@ -275,7 +300,7 @@ export default async function DiscoverPage() {
         <SectionHeader
           emoji="📅"
           title="Upcoming Drops"
-          subtitle="Announced & live right now"
+          subtitle="Tap a drop to see what's included"
         />
         {drops.length === 0 ? (
           <EmptySection message="No drops announced yet — check back soon." />

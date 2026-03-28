@@ -2,7 +2,7 @@
 // apps/web/app/log/page.tsx
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { logSlime } from "@/lib/slime-actions";
 import type { LogSlimeInput } from "@/lib/slime-actions";
 import { SLIME_TYPE_LABELS } from "@/lib/types";
@@ -40,11 +40,8 @@ const RATING_FIELDS: {
 
 interface ColorSwatch {
   label: string;
-  /** CSS color value used for the swatch circle */
   hex: string;
-  /** The string stored in the colors[] array */
   value: string;
-  /** Light swatches need a dark border so they're visible on light cards */
   dark?: boolean;
 }
 
@@ -74,17 +71,15 @@ const COLOR_SWATCHES: ColorSwatch[] = [
 interface FormState {
   slime_name: string;
   brand_name_raw: string;
+  collection_name: string;
   slime_type: SlimeType | "";
   scent: string;
   purchase_price: string;
-  // Color picker
   selected_color_values: string[];
   color_description: string;
-  // Shipping dates
   order_date: string;
   ship_date: string;
   received_date: string;
-  // Ratings
   rating_texture: number | null;
   rating_scent: number | null;
   rating_sound: number | null;
@@ -97,35 +92,8 @@ interface FormState {
   in_collection: boolean;
 }
 
-const EMPTY_FORM: FormState = {
-  slime_name: "",
-  brand_name_raw: "",
-  slime_type: "",
-  scent: "",
-  purchase_price: "",
-  selected_color_values: [],
-  color_description: "",
-  order_date: "",
-  ship_date: "",
-  received_date: "",
-  rating_texture: null,
-  rating_scent: null,
-  rating_sound: null,
-  rating_drizzle: null,
-  rating_creativity: null,
-  rating_sensory_fit: null,
-  rating_overall: null,
-  notes: "",
-  in_wishlist: false,
-  in_collection: true,
-};
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Combines selected swatch values and a free-text description into the
- * `colors` string[] that gets written to collection_logs.
- */
 function buildColorsArray(
   selectedValues: string[],
   description: string,
@@ -263,7 +231,6 @@ function ColorPicker({
 }) {
   return (
     <div className="flex flex-col gap-3">
-      {/* Swatch grid — 7 columns, large tap targets */}
       <div className="grid grid-cols-7 gap-2">
         {COLOR_SWATCHES.map((swatch) => {
           const isSelected = selectedValues.includes(swatch.value);
@@ -311,7 +278,6 @@ function ColorPicker({
         })}
       </div>
 
-      {/* Selected pills */}
       {selectedValues.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {selectedValues.map((val) => (
@@ -333,7 +299,6 @@ function ColorPicker({
         </div>
       )}
 
-      {/* Free-text description */}
       <input
         className={inputCls}
         placeholder='e.g. "galaxy swirl" or "mint chocolate chip"'
@@ -362,7 +327,6 @@ function ShippingDates({
 }) {
   return (
     <div className="flex flex-col gap-4">
-      {/* Community note */}
       <div className="flex items-start gap-2.5 rounded-xl bg-slime-surface border border-slime-border px-3.5 py-3">
         <span className="text-base mt-0.5">📦</span>
         <p className="text-xs text-slime-muted leading-relaxed">
@@ -412,8 +376,34 @@ function ShippingDates({
 
 export default function LogPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState<Step>(0);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+
+  // Pre-fill from URL params (e.g. coming from a drop page)
+  const [form, setForm] = useState<FormState>({
+    slime_name: searchParams.get("slime_name") ?? "",
+    brand_name_raw: searchParams.get("brand") ?? "",
+    collection_name: searchParams.get("collection") ?? "",
+    slime_type: (searchParams.get("type") as SlimeType) ?? "",
+    scent: "",
+    purchase_price: "",
+    selected_color_values: [],
+    color_description: "",
+    order_date: "",
+    ship_date: "",
+    received_date: "",
+    rating_texture: null,
+    rating_scent: null,
+    rating_sound: null,
+    rating_drizzle: null,
+    rating_creativity: null,
+    rating_sensory_fit: null,
+    rating_overall: null,
+    notes: "",
+    in_wishlist: false,
+    in_collection: true,
+  });
+
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -525,6 +515,15 @@ export default function LogPage() {
               />
             </Field>
 
+            <Field label="Collection" optional>
+              <input
+                className={inputCls}
+                placeholder="e.g. Sundae Funday"
+                value={form.collection_name}
+                onChange={(e) => set("collection_name", e.target.value)}
+              />
+            </Field>
+
             <Field label="Slime Type *">
               <select
                 className={inputCls}
@@ -589,7 +588,6 @@ export default function LogPage() {
               />
             </Field>
 
-            {/* ── Color Picker ── */}
             <Field label="Colors" optional>
               <ColorPicker
                 selectedValues={form.selected_color_values}
@@ -599,7 +597,6 @@ export default function LogPage() {
               />
             </Field>
 
-            {/* ── Shipping Dates ── */}
             <div className="pt-1">
               <p className="text-xs font-semibold uppercase tracking-wider text-slime-muted mb-3">
                 Shipping Dates
@@ -644,7 +641,6 @@ export default function LogPage() {
               />
             </Field>
 
-            {/* Summary pill */}
             <div className="rounded-xl bg-slime-surface border border-slime-border p-4 text-sm text-slime-muted space-y-1">
               <p>
                 <span className="font-semibold text-slime-text">
@@ -652,6 +648,9 @@ export default function LogPage() {
                 </span>
                 {form.brand_name_raw ? ` by ${form.brand_name_raw}` : ""}
               </p>
+              {form.collection_name && (
+                <p>Collection: {form.collection_name}</p>
+              )}
               {form.slime_type && (
                 <p>Type: {SLIME_TYPE_LABELS[form.slime_type as SlimeType]}</p>
               )}
