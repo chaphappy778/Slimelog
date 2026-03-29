@@ -1,7 +1,7 @@
 "use client";
 // apps/web/app/log/page.tsx
 
-import { useState, useRef } from "react";
+import { useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { logSlime } from "@/lib/slime-actions";
 import type { LogSlimeInput } from "@/lib/slime-actions";
@@ -9,21 +9,6 @@ import { SLIME_TYPE_LABELS } from "@/lib/types";
 import type { SlimeType } from "@/lib/types";
 import { ImageUpload } from "@/components/ImageUpload";
 import { createBrowserClient } from "@supabase/ssr";
-
-// ─── Auth helper ──────────────────────────────────────────────────────────────
-// We need the userId at render time to pass to ImageUpload.
-// This component is 'use client', so we read it from Supabase's browser client.
-// Wrap your page in a Suspense boundary or pass userId as a prop from a Server
-// Component if you need SSR-safe hydration.
-//
-// Pattern used here: read from the client session on first render via useState
-// initializer. Works for SPA-style navigation; for SSR pass userId as a prop.
-
-function useCurrentUserId(): string | null {
-  // Lazily evaluated — runs once on mount via the useState initializer trick.
-  // The actual value is populated in a useEffect below; we start null.
-  return null; // see userId state in the page component
-}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -94,13 +79,10 @@ interface FormState {
   purchase_price: string;
   selected_color_values: string[];
   color_description: string;
-  // ── NEW ──
   image_url: string | null;
-  // ── Dates ──
   order_date: string;
   ship_date: string;
   received_date: string;
-  // ── Ratings ──
   rating_texture: number | null;
   rating_scent: number | null;
   rating_sound: number | null;
@@ -124,7 +106,7 @@ function buildColorsArray(
   return parts.length > 0 ? parts : undefined;
 }
 
-// ─── Star Rating Component ─────────────────────────────────────────────────────
+// ─── Star Rating Component ────────────────────────────────────────────────────
 
 function StarRating({
   value,
@@ -172,7 +154,7 @@ function StarRating({
   );
 }
 
-// ─── Step Indicator ────────────────────────────────────────────────────────────
+// ─── Step Indicator ───────────────────────────────────────────────────────────
 
 function StepIndicator({ step }: { step: Step }) {
   return (
@@ -203,7 +185,7 @@ function StepIndicator({ step }: { step: Step }) {
   );
 }
 
-// ─── Field Component ───────────────────────────────────────────────────────────
+// ─── Field Component ──────────────────────────────────────────────────────────
 
 function Field({
   label,
@@ -330,7 +312,7 @@ function ColorPicker({
   );
 }
 
-// ─── Shipping Dates Section ────────────────────────────────────────────────────
+// ─── Shipping Dates Section ───────────────────────────────────────────────────
 
 function ShippingDates({
   orderDate,
@@ -393,20 +375,16 @@ function ShippingDates({
   );
 }
 
-// ─── Page ──────────────────────────────────────────────────────────────────────
+// ─── Inner Page (uses useSearchParams) ───────────────────────────────────────
 
-export default function LogPage() {
+function LogPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState<Step>(0);
 
-  // Resolve the current user's ID from the Supabase browser client.
-  // We use a lazy useState so this only runs once and doesn't block render.
-  const [userId, setUserId] = useState<string | null>(() => null);
-
-  // Fetch user ID once on mount (client-side only)
-  // Using a plain ref + one-time effect avoids re-render loops.
+  const [userId, setUserId] = useState<string | null>(null);
   const userIdFetchedRef = useRef(false);
+
   if (typeof window !== "undefined" && !userIdFetchedRef.current) {
     userIdFetchedRef.current = true;
     const supabase = createBrowserClient(
@@ -418,7 +396,6 @@ export default function LogPage() {
     });
   }
 
-  // Pre-fill from URL params (e.g. coming from a drop page)
   const [form, setForm] = useState<FormState>({
     slime_name: searchParams.get("slime_name") ?? "",
     brand_name_raw: searchParams.get("brand") ?? "",
@@ -428,7 +405,7 @@ export default function LogPage() {
     purchase_price: "",
     selected_color_values: [],
     color_description: "",
-    image_url: null, // ← NEW
+    image_url: null,
     order_date: "",
     ship_date: "",
     received_date: "",
@@ -490,7 +467,7 @@ export default function LogPage() {
         in_collection: form.in_collection,
         in_wishlist: form.in_wishlist,
         colors,
-        image_url: form.image_url ?? undefined, // ← NEW
+        image_url: form.image_url ?? undefined,
         order_date: form.order_date || undefined,
         ship_date: form.ship_date || undefined,
         received_date: form.received_date || undefined,
@@ -514,9 +491,6 @@ export default function LogPage() {
       setSaving(false);
     }
   }
-
-  // Need a useRef import — add it at the top of the file
-  // (already imported above via the userId fetch pattern)
 
   return (
     <div className="min-h-screen bg-slime-bg px-4 py-8 flex flex-col items-center">
@@ -587,7 +561,6 @@ export default function LogPage() {
               </select>
             </Field>
 
-            {/* Wishlist toggle */}
             <button
               type="button"
               onClick={() => {
@@ -611,7 +584,6 @@ export default function LogPage() {
           <div className="flex flex-col gap-5">
             <h2 className="text-lg font-bold text-slime-text">Tell us more</h2>
 
-            {/* ── Photo upload — NEW ── */}
             <Field label="Photo" optional>
               {userId ? (
                 <ImageUpload
@@ -624,7 +596,6 @@ export default function LogPage() {
                   aspectRatio="4:3"
                 />
               ) : (
-                // User ID not yet resolved (brief flash) — show a skeleton
                 <div className="w-full aspect-[4/3] rounded-2xl bg-slime-surface border border-slime-border animate-pulse" />
               )}
             </Field>
@@ -704,7 +675,6 @@ export default function LogPage() {
             </Field>
 
             <div className="rounded-xl bg-slime-surface border border-slime-border p-4 text-sm text-slime-muted space-y-1">
-              {/* Photo thumbnail in summary */}
               {form.image_url && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -789,7 +759,27 @@ export default function LogPage() {
   );
 }
 
-// ─── Missing import ────────────────────────────────────────────────────────────
-// Add `useRef` to the React import at the top:
-// import { useState, useRef, useCallback } from "react";
-// The useRef usage above (userIdFetchedRef) requires it.
+// ─── Loading fallback ─────────────────────────────────────────────────────────
+
+function LogPageLoading() {
+  return (
+    <div className="min-h-screen bg-slime-bg flex items-center justify-center">
+      <div className="text-pink-400 text-sm font-medium animate-pulse">
+        Loading…
+      </div>
+    </div>
+  );
+}
+
+// ─── Default export with Suspense boundary ────────────────────────────────────
+// Required by Next.js when useSearchParams() is used in a client component.
+// Without this, static generation throws:
+//   "useSearchParams() should be wrapped in a suspense boundary"
+
+export default function LogPage() {
+  return (
+    <Suspense fallback={<LogPageLoading />}>
+      <LogPageInner />
+    </Suspense>
+  );
+}
