@@ -1,10 +1,23 @@
-// apps/web/app/page.tsx
-// Updated: FeedCard is now wrapped in a Link to /slimes/[id]
+// ============================================================
+// File: apps/web/app/page.tsx
+// Home feed — Community tab (all public logs, unchanged) +
+//             Following tab (activity_feed + profiles join).
+//
+// Following feed query strategy:
+//   1. Get current user session
+//   2. Fetch following_ids from follows table
+//   3. Query activity_feed WHERE actor_id = ANY(following_ids)
+//      AND activity_type = 'log_created', ordered desc, limit 20
+//   4. Slime display fields (name, type, brand, rating) come
+//      directly from the metadata jsonb column — no extra join
+//   5. Join profiles on actor_id to get username for the card
+// ============================================================
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
+import FeedTabs from "@/components/FeedTabs";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -17,6 +30,22 @@ type FeedLog = {
   rating_overall: number | null;
   profiles: { username: string | null }[] | null;
   brands: { name: string | null }[] | null;
+};
+
+// Shape of an activity_feed row with the profiles join included
+type ActivityFeedRow = {
+  id: string;
+  created_at: string;
+  actor_id: string;
+  activity_type: string;
+  log_id: string | null;
+  metadata: {
+    slime_name?: string | null;
+    slime_type?: string | null;
+    brand_name_raw?: string | null;
+    rating_overall?: number | null;
+  } | null;
+  profiles: { username: string | null } | { username: string | null }[] | null;
 };
 
 // ─── Type badge palette (all 16 types) ───────────────────────────────────────
@@ -63,7 +92,7 @@ const fallbackType = {
   label: "Unknown",
 };
 
-// ─── Stars renderer ───────────────────────────────────────────────────────────
+// ─── Stars ────────────────────────────────────────────────────────────────────
 
 function Stars({ rating }: { rating: number | null }) {
   if (!rating) return <span className="text-xs text-gray-400">No rating</span>;
@@ -84,7 +113,7 @@ function Stars({ rating }: { rating: number | null }) {
   );
 }
 
-// ─── Feed card — now tappable ─────────────────────────────────────────────────
+// ─── Feed card — username tappable ───────────────────────────────────────────
 
 function FeedCard({ log }: { log: FeedLog }) {
   const typeStyle =
@@ -92,16 +121,14 @@ function FeedCard({ log }: { log: FeedLog }) {
   const brandName =
     log.brands?.[0]?.name ?? log.brand_name_raw ?? "Unknown brand";
   const slimeName = log.slime_name ?? "Untitled slime";
-  const username = log.profiles?.[0]?.username ?? "anonymous";
+  const username = log.profiles?.[0]?.username ?? null;
   const timeAgo = formatDistanceToNow(new Date(log.created_at), {
     addSuffix: true,
   });
 
   return (
-    // ↓ Wrap entire card in a Link — tapping anywhere navigates to detail page
     <Link href={`/slimes/${log.id}`} className="block group">
       <article className="relative bg-white rounded-3xl shadow-sm border border-pink-50 overflow-hidden transition-all duration-100 group-hover:shadow-md group-active:scale-[0.98]">
-        {/* Decorative gel blob */}
         <div
           className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-10 blur-2xl pointer-events-none"
           style={{ background: "radial-gradient(circle, #f472b6, #a855f7)" }}
@@ -129,20 +156,41 @@ function FeedCard({ log }: { log: FeedLog }) {
           {/* Rating */}
           <Stars rating={log.rating_overall} />
 
-          {/* Footer */}
+          {/* Footer — username links to profile */}
           <div className="flex items-center justify-between pt-1 border-t border-pink-50">
-            <div className="flex items-center gap-1.5">
-              <div
-                className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold"
-                style={{
-                  background: "linear-gradient(135deg, #f472b6, #a855f7)",
-                }}
-                aria-hidden="true"
+            {username ? (
+              <Link
+                href={`/users/${username}`}
+                onClick={(e) => e.stopPropagation()}
+                className="flex items-center gap-1.5 group/user"
               >
-                {username.charAt(0).toUpperCase()}
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0"
+                  style={{
+                    background: "linear-gradient(135deg, #f472b6, #a855f7)",
+                  }}
+                  aria-hidden="true"
+                >
+                  {username.charAt(0).toUpperCase()}
+                </div>
+                <span className="text-xs text-gray-500 group-hover/user:text-pink-500 transition-colors">
+                  @{username}
+                </span>
+              </Link>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold"
+                  style={{
+                    background: "linear-gradient(135deg, #f472b6, #a855f7)",
+                  }}
+                  aria-hidden="true"
+                >
+                  ?
+                </div>
+                <span className="text-xs text-gray-500">@anonymous</span>
               </div>
-              <span className="text-xs text-gray-500">@{username}</span>
-            </div>
+            )}
             <time
               className="text-[11px] text-gray-400"
               dateTime={log.created_at}
@@ -156,7 +204,7 @@ function FeedCard({ log }: { log: FeedLog }) {
   );
 }
 
-// ─── Empty state ──────────────────────────────────────────────────────────────
+// ─── Empty states ─────────────────────────────────────────────────────────────
 
 function EmptyFeed() {
   return (
@@ -175,42 +223,170 @@ function EmptyFeed() {
   );
 }
 
+function EmptyFollowingFeed() {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
+      <div
+        className="w-20 h-20 rounded-full flex items-center justify-center text-4xl"
+        style={{ background: "linear-gradient(135deg, #fce7f3, #f3e8ff)" }}
+      >
+        👀
+      </div>
+      <p className="text-gray-700 font-semibold">Nothing here yet</p>
+      <p className="text-sm text-gray-400 max-w-xs">
+        Follow some slimers to see their logs here.
+      </p>
+    </div>
+  );
+}
+
+function LoginPrompt() {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 gap-4 text-center px-6">
+      <div
+        className="w-20 h-20 rounded-full flex items-center justify-center text-4xl"
+        style={{ background: "linear-gradient(135deg, #fce7f3, #f3e8ff)" }}
+      >
+        🔒
+      </div>
+      <p className="text-gray-700 font-semibold">
+        Sign in to see your Following feed
+      </p>
+      <p className="text-sm text-gray-400 max-w-xs">
+        Log in to follow slimers and see their latest ratings here.
+      </p>
+      <Link
+        href="/login"
+        className="mt-1 inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold text-white"
+        style={{ background: "linear-gradient(90deg, #ec4899, #a855f7)" }}
+      >
+        Sign in
+      </Link>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default async function HomePage() {
-  // Next.js 16: cookies() must be awaited before passing to createServerClient
-  const cookieStore = await cookies();
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const { tab } = await searchParams;
+  const activeTab = tab === "following" ? "following" : "community";
 
+  const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name) {
-          return cookieStore.get(name)?.value;
-        },
-      },
-    },
+    { cookies: { get: (name) => cookieStore.get(name)?.value } },
   );
 
-  const { data: logs, error } = await supabase
-    .from("collection_logs")
-    .select(
-      `
-      id,
-      created_at,
-      slime_name,
-      brand_name_raw,
-      slime_type,
-      rating_overall,
-      profiles!collection_logs_user_id_fkey ( username ),
-      brands ( name )
-    `,
-    )
-    .order("created_at", { ascending: false })
-    .limit(20);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const isLoggedIn = !!user;
 
-  const feedLogs = (error ? [] : (logs ?? [])) as unknown as FeedLog[];
+  // ── Community feed (all public logs — unchanged) ──────────────────────────
+  let communityLogs: FeedLog[] = [];
+  let communityError = false;
+
+  if (activeTab === "community") {
+    const { data, error } = await supabase
+      .from("collection_logs")
+      .select(
+        `id, created_at, slime_name, brand_name_raw, slime_type, rating_overall,
+         profiles!collection_logs_user_id_fkey ( username ),
+         brands ( name )`,
+      )
+      .eq("is_public", true)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    communityLogs = (error ? [] : (data ?? [])) as unknown as FeedLog[];
+    communityError = !!error;
+  }
+
+  // ── Following feed ────────────────────────────────────────────────────────
+  let followingLogs: FeedLog[] = [];
+  let followingError = false;
+
+  if (activeTab === "following" && isLoggedIn && user) {
+    // Step 1 — resolve the set of user IDs the current user follows
+    const { data: followRows, error: followsErr } = await supabase
+      .from("follows")
+      .select("following_id")
+      .eq("follower_id", user.id);
+
+    if (followsErr) {
+      followingError = true;
+    } else {
+      const followingIds = (followRows ?? []).map(
+        (r) => r.following_id as string,
+      );
+
+      if (followingIds.length > 0) {
+        // Step 2 — fetch activity_feed rows for log_created events from those users.
+        //   · metadata jsonb already holds slime_name, slime_type, brand_name_raw,
+        //     rating_overall written by the trigger — no join to collection_logs needed.
+        //   · Join profiles on actor_id to get the poster's username for the card.
+        const { data: activityRows, error: activityErr } = await supabase
+          .from("activity_feed")
+          .select(
+            `id,
+             created_at,
+             actor_id,
+             log_id,
+             metadata,
+             profiles!activity_feed_actor_id_fkey ( username )`,
+          )
+          .eq("activity_type", "log_created")
+          .in("actor_id", followingIds)
+          .order("created_at", { ascending: false })
+          .limit(20);
+
+        if (activityErr) {
+          followingError = true;
+        } else {
+          // Step 3 — normalise ActivityFeedRow → FeedLog for the shared FeedCard
+          followingLogs = (
+            (activityRows ?? []) as unknown as ActivityFeedRow[]
+          ).map((row): FeedLog => {
+            const meta = row.metadata ?? {};
+
+            // Supabase returns single-object joins as a plain object, not an array.
+            // Guard for both shapes.
+            const profileObj = Array.isArray(row.profiles)
+              ? ((row.profiles as { username: string | null }[])[0] ?? null)
+              : (row.profiles as { username: string | null } | null);
+
+            return {
+              // Use log_id so the card href correctly links to the slime detail page
+              id: row.log_id ?? row.id,
+              created_at: row.created_at,
+              slime_name: meta.slime_name ?? null,
+              brand_name_raw: meta.brand_name_raw ?? null,
+              slime_type: meta.slime_type ?? null,
+              rating_overall:
+                meta.rating_overall != null
+                  ? Number(meta.rating_overall)
+                  : null,
+              profiles: profileObj ? [{ username: profileObj.username }] : null,
+              // brand display name is not stored in metadata; brand_name_raw is the
+              // fallback used by FeedCard when brands is null.
+              brands: null,
+            };
+          });
+        }
+      }
+      // followingIds.length === 0 → followingLogs stays [] → EmptyFollowingFeed shown
+    }
+  }
+
+  const displayLogs = activeTab === "following" ? followingLogs : communityLogs;
+  const displayError =
+    activeTab === "following" ? followingError : communityError;
 
   return (
     <div
@@ -220,7 +396,7 @@ export default async function HomePage() {
       }}
     >
       {/* ── Hero header ─────────────────────────────────────────────────── */}
-      <header className="px-4 pt-10 pb-6">
+      <header className="px-4 pt-10 pb-4">
         <div className="flex items-center gap-2 mb-1">
           <span className="text-2xl" aria-hidden="true">
             🫧
@@ -241,26 +417,44 @@ export default async function HomePage() {
         </p>
       </header>
 
+      {/* ── Tab toggle ──────────────────────────────────────────────────── */}
+      <div className="px-4 pb-4">
+        <FeedTabs activeTab={activeTab} isLoggedIn={isLoggedIn} />
+      </div>
+
       {/* ── Feed ────────────────────────────────────────────────────────── */}
       <section className="px-4 pb-24">
-        {error && (
-          <div className="mb-4 px-4 py-3 rounded-2xl bg-red-50 border border-red-100 text-xs text-red-500">
-            Couldn't load the feed right now — try refreshing.
-          </div>
-        )}
-
-        {feedLogs.length === 0 && !error ? (
-          <EmptyFeed />
+        {activeTab === "following" && !isLoggedIn ? (
+          <LoginPrompt />
         ) : (
           <>
-            <p className="text-xs text-gray-400 mb-4 font-medium uppercase tracking-wider">
-              Recent logs · {feedLogs.length} shown
-            </p>
-            <div className="flex flex-col gap-3">
-              {feedLogs.map((log) => (
-                <FeedCard key={log.id} log={log} />
-              ))}
-            </div>
+            {displayError && (
+              <div className="mb-4 px-4 py-3 rounded-2xl bg-red-50 border border-red-100 text-xs text-red-500">
+                Couldn't load the feed right now — try refreshing.
+              </div>
+            )}
+
+            {displayLogs.length === 0 && !displayError ? (
+              activeTab === "following" ? (
+                <EmptyFollowingFeed />
+              ) : (
+                <EmptyFeed />
+              )
+            ) : (
+              <>
+                <p className="text-xs text-gray-400 mb-4 font-medium uppercase tracking-wider">
+                  {activeTab === "following"
+                    ? "From people you follow"
+                    : "Recent logs"}{" "}
+                  · {displayLogs.length} shown
+                </p>
+                <div className="flex flex-col gap-3">
+                  {displayLogs.map((log) => (
+                    <FeedCard key={log.id} log={log} />
+                  ))}
+                </div>
+              </>
+            )}
           </>
         )}
       </section>
