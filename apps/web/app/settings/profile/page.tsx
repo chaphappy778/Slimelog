@@ -1,11 +1,5 @@
 "use client";
 // apps/web/app/settings/profile/page.tsx
-//
-// Merged version:
-//  - Username availability checking with debounce (from original)
-//  - ImageUpload component for avatar (from new version)
-//  - location and website_url fields (from new version)
-//  - updateProfile server action for saving (from original)
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createBrowserClient } from "@supabase/ssr";
@@ -28,8 +22,6 @@ type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid";
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function validateUsername(value: string): "invalid" | "valid" {
   return USERNAME_RE.test(value) ? "valid" : "invalid";
 }
@@ -42,7 +34,7 @@ function UsernameStatusIcon({ status }: { status: UsernameStatus }) {
     return (
       <span className="inline-flex items-center justify-center w-5 h-5">
         <svg
-          className="animate-spin text-gray-400"
+          className="animate-spin text-slime-muted"
           xmlns="http://www.w3.org/2000/svg"
           fill="none"
           viewBox="0 0 24 24"
@@ -68,14 +60,14 @@ function UsernameStatusIcon({ status }: { status: UsernameStatus }) {
   }
   if (status === "available") {
     return (
-      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-50">
+      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slime-accent/20">
         <svg
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 20 20"
           fill="currentColor"
           width={12}
           height={12}
-          className="text-emerald-500"
+          className="text-slime-accent"
         >
           <path
             fillRule="evenodd"
@@ -87,14 +79,14 @@ function UsernameStatusIcon({ status }: { status: UsernameStatus }) {
     );
   }
   return (
-    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-50">
+    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500/20">
       <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 20 20"
         fill="currentColor"
         width={12}
         height={12}
-        className="text-red-500"
+        className="text-red-400"
       >
         <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
       </svg>
@@ -109,13 +101,12 @@ function UsernameHint({
   status: UsernameStatus;
   username: string;
 }) {
-  if (status === "idle") {
+  if (status === "idle")
     return (
-      <p className="text-xs text-gray-400 mt-1.5">
+      <p className="text-xs text-slime-muted mt-1.5">
         3–20 characters, letters, numbers, and underscores only.
       </p>
     );
-  }
   if (status === "invalid" && username.length > 0) {
     return (
       <p className="text-xs text-red-400 mt-1.5">
@@ -127,34 +118,33 @@ function UsernameHint({
       </p>
     );
   }
-  if (status === "taken") {
+  if (status === "taken")
     return (
       <p className="text-xs text-red-400 mt-1.5">
         @{username} is already taken.
       </p>
     );
-  }
-  if (status === "available") {
+  if (status === "available")
     return (
-      <p className="text-xs text-emerald-500 mt-1.5">
+      <p className="text-xs text-slime-accent mt-1.5">
         @{username} is available!
       </p>
     );
-  }
   return null;
 }
+
+const inputCls =
+  "w-full px-3 py-2.5 rounded-xl border border-slime-border bg-slime-surface text-sm text-slime-text placeholder:text-slime-muted outline-none focus:border-slime-accent/50 focus:ring-1 focus:ring-slime-accent/30 transition-colors";
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ProfileSettingsPage() {
   const router = useRouter();
-
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   );
 
-  // ── Auth guard ──
   const [authChecked, setAuthChecked] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
 
@@ -169,7 +159,6 @@ export default function ProfileSettingsPage() {
     });
   }, []);
 
-  // ── Initial profile load ──
   const [originalForm, setOriginalForm] = useState<FormState>({
     username: "",
     bio: "",
@@ -209,7 +198,6 @@ export default function ProfileSettingsPage() {
       });
   }, [userId]);
 
-  // ── Username availability ──
   const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>("idle");
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -233,9 +221,7 @@ export default function ProfileSettingsPage() {
   const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setForm((f) => ({ ...f, username: value }));
-
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
-
     if (value === originalForm.username || value === "") {
       setUsernameStatus("idle");
       return;
@@ -248,7 +234,6 @@ export default function ProfileSettingsPage() {
     debounceTimer.current = setTimeout(() => checkUsername(value), 500);
   };
 
-  // ── Save logic ──
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -274,13 +259,11 @@ export default function ProfileSettingsPage() {
     setSaving(true);
     setSaveError(null);
     setSaveSuccess(false);
-
     const result = await updateProfile({
       username: form.username,
       bio: form.bio || undefined,
       avatar_url: form.avatar_url || undefined,
     });
-
     setSaving(false);
     if (result.success) {
       setSaveSuccess(true);
@@ -292,38 +275,26 @@ export default function ProfileSettingsPage() {
     }
   };
 
-  // ── Loading skeleton ──
   if (!authChecked || profileLoading) {
     return (
-      <main
-        className="min-h-screen pb-24"
-        style={{
-          background: "linear-gradient(160deg, #fdf2f8 0%, #faf5ff 100%)",
-        }}
-      >
+      <main className="min-h-screen pb-24 bg-slime-bg">
         <div className="px-4 pt-10 space-y-4 animate-pulse">
-          <div className="h-6 w-32 bg-pink-100 rounded-xl" />
-          <div className="h-28 w-28 bg-pink-100 rounded-2xl" />
-          <div className="h-12 bg-white rounded-2xl border border-pink-50" />
-          <div className="h-24 bg-white rounded-2xl border border-pink-50" />
-          <div className="h-12 bg-white rounded-2xl border border-pink-50" />
+          <div className="h-6 w-32 bg-slime-surface rounded-xl" />
+          <div className="h-28 w-28 bg-slime-surface rounded-2xl" />
+          <div className="h-12 bg-slime-card rounded-2xl border border-slime-border" />
+          <div className="h-24 bg-slime-card rounded-2xl border border-slime-border" />
+          <div className="h-12 bg-slime-card rounded-2xl border border-slime-border" />
         </div>
       </main>
     );
   }
 
   return (
-    <main
-      className="min-h-screen pb-28"
-      style={{
-        background: "linear-gradient(160deg, #fdf2f8 0%, #faf5ff 100%)",
-      }}
-    >
-      {/* Header */}
+    <main className="min-h-screen pb-28 bg-slime-bg">
       <header className="px-4 pt-10 pb-6 flex items-center gap-3">
         <Link
           href="/profile"
-          className="w-8 h-8 rounded-xl bg-white border border-pink-100 shadow-sm flex items-center justify-center active:scale-90 transition-transform"
+          className="w-8 h-8 rounded-xl bg-slime-surface border border-slime-border flex items-center justify-center active:scale-90 transition-transform"
           aria-label="Back to profile"
         >
           <svg
@@ -332,7 +303,7 @@ export default function ProfileSettingsPage() {
             fill="currentColor"
             width={16}
             height={16}
-            className="text-gray-400"
+            className="text-slime-muted"
           >
             <path
               fillRule="evenodd"
@@ -342,19 +313,19 @@ export default function ProfileSettingsPage() {
           </svg>
         </Link>
         <div>
-          <h1 className="text-xl font-black text-gray-900 leading-tight">
+          <h1 className="text-xl font-black text-slime-text leading-tight">
             Edit Profile
           </h1>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <p className="text-xs text-slime-muted mt-0.5">
             Update your SlimeLog presence
           </p>
         </div>
       </header>
 
       <div className="px-4 space-y-5">
-        {/* ── Avatar upload ── */}
-        <section className="bg-white rounded-2xl border border-pink-50 shadow-sm p-4 space-y-2">
-          <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">
+        {/* Avatar */}
+        <section className="bg-slime-card rounded-2xl border border-slime-border p-4 space-y-2">
+          <p className="text-xs text-slime-muted font-semibold uppercase tracking-wider">
             Profile Photo
           </p>
           {userId ? (
@@ -373,17 +344,17 @@ export default function ProfileSettingsPage() {
                 />
               </div>
               <div className="flex-1 flex flex-col justify-center gap-1 pt-1">
-                <p className="text-sm font-semibold text-gray-700 leading-tight">
+                <p className="text-sm font-semibold text-slime-text leading-tight">
                   {form.username || "Your Name"}
                 </p>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-slime-muted">
                   Tap to upload or change your avatar. Max 2 MB.
                 </p>
                 {form.avatar_url && (
                   <button
                     type="button"
                     onClick={() => setForm((f) => ({ ...f, avatar_url: null }))}
-                    className="mt-1 text-xs text-pink-400 font-medium text-left active:opacity-70 transition-opacity"
+                    className="mt-1 text-xs text-red-400 font-medium text-left active:opacity-70 transition-opacity"
                   >
                     Remove photo
                   </button>
@@ -391,20 +362,20 @@ export default function ProfileSettingsPage() {
               </div>
             </div>
           ) : (
-            <div className="w-24 aspect-square rounded-2xl bg-pink-50 border border-pink-100 animate-pulse" />
+            <div className="w-24 aspect-square rounded-2xl bg-slime-surface border border-slime-border animate-pulse" />
           )}
         </section>
 
-        {/* ── Username ── */}
-        <section className="bg-white rounded-2xl border border-pink-50 shadow-sm p-4 space-y-1">
+        {/* Username */}
+        <section className="bg-slime-card rounded-2xl border border-slime-border p-4 space-y-1">
           <label
             htmlFor="username"
-            className="text-xs text-gray-400 font-semibold uppercase tracking-wider"
+            className="text-xs text-slime-muted font-semibold uppercase tracking-wider"
           >
             Username
           </label>
           <div className="relative flex items-center mt-1">
-            <span className="absolute left-3 text-gray-400 text-sm font-medium select-none">
+            <span className="absolute left-3 text-slime-muted text-sm font-medium select-none">
               @
             </span>
             <input
@@ -417,12 +388,12 @@ export default function ProfileSettingsPage() {
               onChange={handleUsernameChange}
               maxLength={20}
               placeholder="your_username"
-              className={`w-full pl-7 pr-10 py-2.5 rounded-xl border text-sm font-semibold text-gray-900 placeholder:text-gray-300 outline-none transition-colors ${
+              className={`w-full pl-7 pr-10 py-2.5 rounded-xl border text-sm font-semibold placeholder:text-slime-muted outline-none transition-colors bg-slime-surface text-slime-text ${
                 usernameStatus === "taken" || usernameStatus === "invalid"
-                  ? "border-red-200 bg-red-50/40 focus:border-red-300"
+                  ? "border-red-500/40 focus:border-red-500/60"
                   : usernameStatus === "available"
-                    ? "border-emerald-200 bg-emerald-50/30 focus:border-emerald-300"
-                    : "border-pink-100 bg-pink-50/20 focus:border-fuchsia-300"
+                    ? "border-slime-accent/40 focus:border-slime-accent/60"
+                    : "border-slime-border focus:border-slime-accent/50"
               }`}
             />
             <div className="absolute right-3">
@@ -432,12 +403,12 @@ export default function ProfileSettingsPage() {
           <UsernameHint status={usernameStatus} username={form.username} />
         </section>
 
-        {/* ── Bio ── */}
-        <section className="bg-white rounded-2xl border border-pink-50 shadow-sm p-4 space-y-1">
+        {/* Bio */}
+        <section className="bg-slime-card rounded-2xl border border-slime-border p-4 space-y-1">
           <div className="flex items-center justify-between">
             <label
               htmlFor="bio"
-              className="text-xs text-gray-400 font-semibold uppercase tracking-wider"
+              className="text-xs text-slime-muted font-semibold uppercase tracking-wider"
             >
               Bio
             </label>
@@ -445,9 +416,9 @@ export default function ProfileSettingsPage() {
               className={`text-xs font-medium tabular-nums transition-colors ${
                 form.bio.length > 140
                   ? form.bio.length > 150
-                    ? "text-red-500"
-                    : "text-amber-500"
-                  : "text-gray-300"
+                    ? "text-red-400"
+                    : "text-amber-400"
+                  : "text-slime-muted"
               }`}
             >
               {form.bio.length}/150
@@ -457,18 +428,18 @@ export default function ProfileSettingsPage() {
             id="bio"
             rows={3}
             value={form.bio}
-            onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))}
             maxLength={150}
+            onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))}
             placeholder="Tell the slime world about yourself…"
-            className="w-full mt-1 px-3 py-2.5 rounded-xl border border-pink-100 bg-pink-50/20 text-sm text-gray-800 placeholder:text-gray-300 resize-none outline-none focus:border-fuchsia-300 transition-colors"
+            className={`${inputCls} resize-none mt-1`}
           />
         </section>
 
-        {/* ── Location ── */}
-        <section className="bg-white rounded-2xl border border-pink-50 shadow-sm p-4 space-y-1">
+        {/* Location */}
+        <section className="bg-slime-card rounded-2xl border border-slime-border p-4 space-y-1">
           <label
             htmlFor="location"
-            className="text-xs text-gray-400 font-semibold uppercase tracking-wider"
+            className="text-xs text-slime-muted font-semibold uppercase tracking-wider"
           >
             Location
           </label>
@@ -476,20 +447,20 @@ export default function ProfileSettingsPage() {
             id="location"
             type="text"
             value={form.location}
+            maxLength={100}
+            placeholder="e.g. Austin, TX"
             onChange={(e) =>
               setForm((f) => ({ ...f, location: e.target.value }))
             }
-            maxLength={100}
-            placeholder="e.g. Austin, TX"
-            className="w-full mt-1 px-3 py-2.5 rounded-xl border border-pink-100 bg-pink-50/20 text-sm text-gray-800 placeholder:text-gray-300 outline-none focus:border-fuchsia-300 transition-colors"
+            className={`${inputCls} mt-1`}
           />
         </section>
 
-        {/* ── Website ── */}
-        <section className="bg-white rounded-2xl border border-pink-50 shadow-sm p-4 space-y-1">
+        {/* Website */}
+        <section className="bg-slime-card rounded-2xl border border-slime-border p-4 space-y-1">
           <label
             htmlFor="website_url"
-            className="text-xs text-gray-400 font-semibold uppercase tracking-wider"
+            className="text-xs text-slime-muted font-semibold uppercase tracking-wider"
           >
             Website
           </label>
@@ -498,23 +469,23 @@ export default function ProfileSettingsPage() {
             type="url"
             inputMode="url"
             value={form.website_url}
+            maxLength={200}
+            placeholder="https://yourshop.com"
             onChange={(e) =>
               setForm((f) => ({ ...f, website_url: e.target.value }))
             }
-            maxLength={200}
-            placeholder="https://yourshop.com"
-            className="w-full mt-1 px-3 py-2.5 rounded-xl border border-pink-100 bg-pink-50/20 text-sm text-gray-800 placeholder:text-gray-300 outline-none focus:border-fuchsia-300 transition-colors"
+            className={`${inputCls} mt-1`}
           />
         </section>
 
-        {/* ── Save feedback ── */}
+        {/* Feedback */}
         {saveError && (
-          <div className="px-4 py-3 rounded-2xl bg-red-50 border border-red-100 text-xs text-red-500">
+          <div className="px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-xs text-red-400">
             {saveError}
           </div>
         )}
         {saveSuccess && (
-          <div className="px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-100 text-xs text-emerald-600 font-semibold flex items-center gap-2">
+          <div className="px-4 py-3 rounded-2xl bg-slime-accent/10 border border-slime-accent/30 text-xs text-slime-accent font-semibold flex items-center gap-2">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 20 20"
@@ -532,15 +503,20 @@ export default function ProfileSettingsPage() {
           </div>
         )}
 
-        {/* ── Save button ── */}
+        {/* Save button */}
         <button
           onClick={handleSave}
           disabled={!isFormValid || saving}
           className={`w-full py-3.5 rounded-2xl text-sm font-black tracking-wide transition-all active:scale-95 ${
             isFormValid && !saving
-              ? "bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-md shadow-pink-200/60"
-              : "bg-gray-100 text-gray-300 cursor-not-allowed"
+              ? "text-slime-bg shadow-glow-green"
+              : "bg-slime-surface text-slime-muted cursor-not-allowed"
           }`}
+          style={
+            isFormValid && !saving
+              ? { background: "linear-gradient(135deg, #39FF14, #00F0FF)" }
+              : undefined
+          }
         >
           {saving ? "Saving…" : "Save Profile"}
         </button>

@@ -1,17 +1,12 @@
 "use client";
-
-// ============================================================
-// File: apps/web/components/FollowUserButton.tsx
-// Client component — follow/unfollow a user profile.
-// Mirrors the FollowBrandButton pattern but targets `follows`.
-// ============================================================
+// apps/web/components/FollowUserButton.tsx
 
 import { useState, useTransition } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 
 interface FollowUserButtonProps {
   targetUserId: string;
-  currentUserId: string | null; // null = not logged in
+  currentUserId: string | null;
   initialIsFollowing: boolean;
 }
 
@@ -23,7 +18,6 @@ export default function FollowUserButton({
   const [isFollowing, setIsFollowing] = useState(initialIsFollowing);
   const [isPending, startTransition] = useTransition();
 
-  // Hide button entirely when viewing your own profile
   if (!currentUserId || currentUserId === targetUserId) return null;
 
   const supabase = createBrowserClient(
@@ -34,21 +28,16 @@ export default function FollowUserButton({
   function handleClick() {
     startTransition(async () => {
       if (isFollowing) {
-        // Unfollow — delete the row
         const { error } = await supabase
           .from("follows")
           .delete()
           .eq("follower_id", currentUserId)
           .eq("following_id", targetUserId);
-
         if (!error) setIsFollowing(false);
       } else {
-        // Follow — insert a row
-        const { error } = await supabase.from("follows").insert({
-          follower_id: currentUserId,
-          following_id: targetUserId,
-        });
-
+        const { error } = await supabase
+          .from("follows")
+          .insert({ follower_id: currentUserId, following_id: targetUserId });
         if (!error) setIsFollowing(true);
       }
     });
@@ -64,9 +53,14 @@ export default function FollowUserButton({
         "transition-all duration-150 select-none",
         "disabled:opacity-60 disabled:cursor-not-allowed",
         isFollowing
-          ? "bg-pink-50 text-pink-500 border border-pink-200 hover:bg-pink-100 hover:border-pink-300"
-          : "bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-[0.98]",
+          ? "bg-slime-accent/10 text-slime-accent border border-slime-accent/30 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30"
+          : "text-slime-bg shadow-glow-green hover:scale-[1.02] active:scale-[0.98]",
       ].join(" ")}
+      style={
+        !isFollowing
+          ? { background: "linear-gradient(135deg, #39FF14, #00F0FF)" }
+          : undefined
+      }
     >
       {isPending ? (
         <span className="w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />

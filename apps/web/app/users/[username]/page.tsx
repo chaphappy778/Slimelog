@@ -1,9 +1,4 @@
-// ============================================================
-// File: apps/web/app/users/[username]/page.tsx
-// Public user profile — no auth required to VIEW.
-// Shows avatar, bio, stats, recent public logs, follow button.
-// ============================================================
-
+// apps/web/app/users/[username]/page.tsx
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
@@ -33,26 +28,26 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 const TYPE_STYLE: Record<string, { bg: string; text: string }> = {
-  butter: { bg: "bg-yellow-100", text: "text-yellow-700" },
-  clear: { bg: "bg-sky-100", text: "text-sky-700" },
-  cloud: { bg: "bg-slate-100", text: "text-slate-600" },
-  icee: { bg: "bg-cyan-100", text: "text-cyan-700" },
-  fluffy: { bg: "bg-pink-100", text: "text-pink-600" },
-  floam: { bg: "bg-lime-100", text: "text-lime-700" },
-  snow_fizz: { bg: "bg-blue-50", text: "text-blue-500" },
-  thick_and_glossy: { bg: "bg-fuchsia-100", text: "text-fuchsia-700" },
-  jelly: { bg: "bg-violet-100", text: "text-violet-700" },
-  beaded: { bg: "bg-orange-100", text: "text-orange-600" },
-  clay: { bg: "bg-amber-100", text: "text-amber-700" },
-  cloud_cream: { bg: "bg-rose-50", text: "text-rose-500" },
-  magnetic: { bg: "bg-zinc-200", text: "text-zinc-700" },
-  thermochromic: { bg: "bg-purple-100", text: "text-purple-700" },
-  avalanche: { bg: "bg-indigo-100", text: "text-indigo-600" },
-  slay: { bg: "bg-red-100", text: "text-red-600" },
+  butter: { bg: "bg-yellow-900/40", text: "text-yellow-300" },
+  clear: { bg: "bg-sky-900/40", text: "text-sky-300" },
+  cloud: { bg: "bg-slate-800", text: "text-slate-300" },
+  icee: { bg: "bg-cyan-900/40", text: "text-cyan-300" },
+  fluffy: { bg: "bg-pink-900/40", text: "text-pink-300" },
+  floam: { bg: "bg-lime-900/40", text: "text-lime-300" },
+  snow_fizz: { bg: "bg-blue-900/40", text: "text-blue-300" },
+  thick_and_glossy: { bg: "bg-fuchsia-900/40", text: "text-fuchsia-300" },
+  jelly: { bg: "bg-violet-900/40", text: "text-violet-300" },
+  beaded: { bg: "bg-orange-900/40", text: "text-orange-300" },
+  clay: { bg: "bg-amber-900/40", text: "text-amber-300" },
+  cloud_cream: { bg: "bg-rose-900/40", text: "text-rose-300" },
+  magnetic: { bg: "bg-zinc-800", text: "text-zinc-300" },
+  thermochromic: { bg: "bg-purple-900/40", text: "text-purple-300" },
+  avalanche: { bg: "bg-indigo-900/40", text: "text-indigo-300" },
+  slay: { bg: "bg-red-900/40", text: "text-red-300" },
 };
 
 function Stars({ rating }: { rating: number | null }) {
-  if (!rating) return <span className="text-xs text-gray-400">—</span>;
+  if (!rating) return <span className="text-xs text-slime-muted">—</span>;
   return (
     <span
       className="flex items-center gap-0.5"
@@ -61,7 +56,7 @@ function Stars({ rating }: { rating: number | null }) {
       {[1, 2, 3, 4, 5].map((n) => (
         <span
           key={n}
-          className={`text-xs ${n <= rating ? "text-pink-500" : "text-gray-200"}`}
+          className={`text-xs ${n <= rating ? "text-slime-accent" : "text-slime-border"}`}
         >
           ★
         </span>
@@ -77,19 +72,15 @@ export default async function UserProfilePage({
 }: {
   params: Promise<{ username: string }>;
 }) {
-  // Next.js 16 — params is async
   const { username } = await params;
   const cookieStore = await cookies();
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: { get: (name) => cookieStore.get(name)?.value },
-    },
+    { cookies: { get: (name) => cookieStore.get(name)?.value } },
   );
 
-  // ── Fetch profile ─────────────────────────────────────────────────────────
   const { data: profile } = await supabase
     .from("profiles")
     .select(
@@ -100,13 +91,11 @@ export default async function UserProfilePage({
 
   if (!profile) notFound();
 
-  // ── Current user (for follow button) ─────────────────────────────────────
   const {
     data: { user },
   } = await supabase.auth.getUser();
   const currentUserId = user?.id ?? null;
 
-  // ── Is current user already following this profile? ───────────────────────
   let initialIsFollowing = false;
   if (currentUserId && currentUserId !== profile.id) {
     const { data: existingFollow } = await supabase
@@ -118,7 +107,6 @@ export default async function UserProfilePage({
     initialIsFollowing = !!existingFollow;
   }
 
-  // ── Follower / following counts ───────────────────────────────────────────
   const [{ count: followerCount }, { count: followingCount }] =
     await Promise.all([
       supabase
@@ -131,7 +119,6 @@ export default async function UserProfilePage({
         .eq("follower_id", profile.id),
     ]);
 
-  // ── Recent public logs (last 6) ───────────────────────────────────────────
   const { data: logs } = await supabase
     .from("collection_logs")
     .select(
@@ -142,7 +129,6 @@ export default async function UserProfilePage({
     .order("created_at", { ascending: false })
     .limit(6);
 
-  // ── Collection stats ──────────────────────────────────────────────────────
   const { data: allLogs } = await supabase
     .from("collection_logs")
     .select("slime_type, rating_overall")
@@ -150,7 +136,6 @@ export default async function UserProfilePage({
     .eq("is_public", true);
 
   const totalLogged = allLogs?.length ?? 0;
-
   const ratingsOnly = (allLogs ?? []).filter((l) => l.rating_overall != null);
   const avgRating =
     ratingsOnly.length > 0
@@ -160,7 +145,6 @@ export default async function UserProfilePage({
         ).toFixed(1)
       : null;
 
-  // Favorite slime type — most logged
   const typeCounts: Record<string, number> = {};
   for (const l of allLogs ?? []) {
     if (l.slime_type)
@@ -169,21 +153,15 @@ export default async function UserProfilePage({
   const favoriteType =
     Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
   const favoriteTypeStyle = favoriteType ? TYPE_STYLE[favoriteType] : null;
-
   const avatarInitial = (profile.username ?? "?").charAt(0).toUpperCase();
 
   return (
-    <div
-      className="min-h-screen"
-      style={{
-        background: "linear-gradient(160deg, #fdf2f8 0%, #faf5ff 100%)",
-      }}
-    >
-      {/* ── Back link ───────────────────────────────────────────────────── */}
+    <div className="min-h-screen bg-slime-bg">
+      {/* Back link */}
       <div className="px-4 pt-6">
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-pink-500 transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs text-slime-muted hover:text-slime-accent transition-colors"
         >
           <svg
             className="w-3.5 h-3.5"
@@ -201,23 +179,22 @@ export default async function UserProfilePage({
         </Link>
       </div>
 
-      {/* ── Profile card ────────────────────────────────────────────────── */}
+      {/* Profile card */}
       <header className="px-4 pt-6 pb-4">
-        <div className="bg-white rounded-3xl border border-pink-50 shadow-sm p-5">
+        <div className="bg-slime-card rounded-3xl border border-slime-border p-5">
           <div className="flex items-start gap-4">
-            {/* Avatar */}
             {profile.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={profile.avatar_url}
                 alt={`${profile.username}'s avatar`}
-                className="w-16 h-16 rounded-full object-cover shrink-0 ring-2 ring-pink-100"
+                className="w-16 h-16 rounded-full object-cover shrink-0 ring-2 ring-slime-accent/30"
               />
             ) : (
               <div
-                className="w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-black shrink-0 ring-2 ring-pink-100"
+                className="w-16 h-16 rounded-full flex items-center justify-center text-slime-bg text-xl font-black shrink-0 ring-2 ring-slime-accent/30"
                 style={{
-                  background: "linear-gradient(135deg, #f472b6, #a855f7)",
+                  background: "linear-gradient(135deg, #39FF14, #00F0FF)",
                 }}
                 aria-hidden="true"
               >
@@ -225,30 +202,29 @@ export default async function UserProfilePage({
               </div>
             )}
 
-            {/* Name + actions */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="font-black text-lg text-gray-900 tracking-tight">
+                <h1 className="font-black text-lg text-slime-text tracking-tight">
                   @{profile.username}
                 </h1>
                 {profile.is_verified && (
-                  <span className="text-[10px] font-semibold bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full">
+                  <span className="text-[10px] font-semibold bg-slime-accent/20 text-slime-accent px-2 py-0.5 rounded-full">
                     ✓ Verified
                   </span>
                 )}
                 {profile.is_premium && (
-                  <span className="text-[10px] font-semibold bg-pink-100 text-pink-500 px-2 py-0.5 rounded-full">
+                  <span className="text-[10px] font-semibold bg-slime-cyan/20 text-slime-cyan px-2 py-0.5 rounded-full">
                     ✦ Pro
                   </span>
                 )}
               </div>
               {profile.location && (
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs text-slime-muted mt-0.5">
                   📍 {profile.location}
                 </p>
               )}
               {profile.bio && (
-                <p className="text-sm text-gray-600 mt-2 leading-snug">
+                <p className="text-sm text-slime-text mt-2 leading-snug">
                   {profile.bio}
                 </p>
               )}
@@ -257,7 +233,7 @@ export default async function UserProfilePage({
                   href={profile.website_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs text-pink-400 hover:text-pink-500 mt-1 inline-block truncate max-w-full"
+                  className="text-xs text-slime-accent hover:text-slime-cyan mt-1 inline-block truncate max-w-full transition-colors"
                 >
                   {profile.website_url.replace(/^https?:\/\//, "")}
                 </a>
@@ -266,29 +242,29 @@ export default async function UserProfilePage({
           </div>
 
           {/* Follow counts + button */}
-          <div className="flex items-center justify-between mt-4 pt-4 border-t border-pink-50">
+          <div className="flex items-center justify-between mt-4 pt-4 border-t border-slime-border">
             <div className="flex gap-4">
               <div className="text-center">
-                <p className="font-black text-gray-900 text-base">
+                <p className="font-black text-slime-text text-base">
                   {followerCount ?? 0}
                 </p>
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider">
+                <p className="text-[10px] text-slime-muted uppercase tracking-wider">
                   Followers
                 </p>
               </div>
               <div className="text-center">
-                <p className="font-black text-gray-900 text-base">
+                <p className="font-black text-slime-text text-base">
                   {followingCount ?? 0}
                 </p>
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider">
+                <p className="text-[10px] text-slime-muted uppercase tracking-wider">
                   Following
                 </p>
               </div>
               <div className="text-center">
-                <p className="font-black text-gray-900 text-base">
+                <p className="font-black text-slime-text text-base">
                   {totalLogged}
                 </p>
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider">
+                <p className="text-[10px] text-slime-muted uppercase tracking-wider">
                   Logged
                 </p>
               </div>
@@ -302,27 +278,26 @@ export default async function UserProfilePage({
         </div>
       </header>
 
-      {/* ── Stats row ───────────────────────────────────────────────────── */}
+      {/* Stats row */}
       <section className="px-4 pb-4">
         <div className="grid grid-cols-3 gap-2">
-          {/* Total logged */}
-          <div className="bg-white rounded-2xl border border-pink-50 shadow-sm p-3 text-center">
-            <p className="text-2xl font-black text-gray-900">{totalLogged}</p>
-            <p className="text-[10px] text-gray-400 uppercase tracking-wider mt-0.5">
+          <div className="bg-slime-card rounded-2xl border border-slime-border p-3 text-center">
+            <p className="text-2xl font-black text-slime-accent">
+              {totalLogged}
+            </p>
+            <p className="text-[10px] text-slime-muted uppercase tracking-wider mt-0.5">
               Slimes logged
             </p>
           </div>
-          {/* Avg rating */}
-          <div className="bg-white rounded-2xl border border-pink-50 shadow-sm p-3 text-center">
-            <p className="text-2xl font-black text-gray-900">
+          <div className="bg-slime-card rounded-2xl border border-slime-border p-3 text-center">
+            <p className="text-2xl font-black text-slime-cyan">
               {avgRating ?? "—"}
             </p>
-            <p className="text-[10px] text-gray-400 uppercase tracking-wider mt-0.5">
+            <p className="text-[10px] text-slime-muted uppercase tracking-wider mt-0.5">
               Avg rating
             </p>
           </div>
-          {/* Fav type */}
-          <div className="bg-white rounded-2xl border border-pink-50 shadow-sm p-3 text-center flex flex-col items-center justify-center gap-1">
+          <div className="bg-slime-card rounded-2xl border border-slime-border p-3 text-center flex flex-col items-center justify-center gap-1">
             {favoriteType && favoriteTypeStyle ? (
               <span
                 className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${favoriteTypeStyle.bg} ${favoriteTypeStyle.text}`}
@@ -330,32 +305,27 @@ export default async function UserProfilePage({
                 {TYPE_LABELS[favoriteType] ?? favoriteType}
               </span>
             ) : (
-              <span className="text-xl font-black text-gray-900">—</span>
+              <span className="text-xl font-black text-slime-text">—</span>
             )}
-            <p className="text-[10px] text-gray-400 uppercase tracking-wider">
+            <p className="text-[10px] text-slime-muted uppercase tracking-wider">
               Fav type
             </p>
           </div>
         </div>
       </section>
 
-      {/* ── Recent logs ─────────────────────────────────────────────────── */}
+      {/* Recent logs */}
       <section className="px-4 pb-24">
-        <h2 className="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-3">
+        <h2 className="text-xs text-slime-muted font-semibold uppercase tracking-wider mb-3">
           Recent logs
         </h2>
 
         {!logs || logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
-            <div
-              className="w-14 h-14 rounded-full flex items-center justify-center text-3xl"
-              style={{
-                background: "linear-gradient(135deg, #fce7f3, #f3e8ff)",
-              }}
-            >
+            <div className="w-14 h-14 rounded-full flex items-center justify-center text-3xl bg-slime-surface border border-slime-border">
               🫧
             </div>
-            <p className="text-sm text-gray-500">No public logs yet</p>
+            <p className="text-sm text-slime-muted">No public logs yet</p>
           </div>
         ) : (
           <div className="flex flex-col gap-2.5">
@@ -383,13 +353,13 @@ export default async function UserProfilePage({
                   href={`/slimes/${log.id}`}
                   className="block group"
                 >
-                  <article className="bg-white rounded-2xl border border-pink-50 shadow-sm p-4 transition-all duration-100 group-hover:shadow-md group-active:scale-[0.98]">
+                  <article className="bg-slime-card rounded-2xl border border-slime-border p-4 transition-all duration-100 group-hover:border-slime-accent/30 group-hover:shadow-slime-sm group-active:scale-[0.98]">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-gray-900 text-sm truncate">
+                        <p className="font-semibold text-slime-text text-sm truncate">
                           {log.slime_name ?? "Untitled slime"}
                         </p>
-                        <p className="text-xs text-gray-400 truncate mt-0.5">
+                        <p className="text-xs text-slime-muted truncate mt-0.5">
                           {brandName}
                         </p>
                       </div>
@@ -404,7 +374,7 @@ export default async function UserProfilePage({
                     <div className="flex items-center justify-between mt-2">
                       <Stars rating={log.rating_overall} />
                       <time
-                        className="text-[11px] text-gray-400"
+                        className="text-[11px] text-slime-muted"
                         dateTime={log.created_at}
                       >
                         {formatDistanceToNow(new Date(log.created_at), {

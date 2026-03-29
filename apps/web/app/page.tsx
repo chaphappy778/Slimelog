@@ -1,7 +1,4 @@
 // apps/web/app/page.tsx
-// Home feed — Community tab (all public logs) + Following tab (activity_feed).
-// PageHeader replaces the inline hero header.
-
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { formatDistanceToNow } from "date-fns";
@@ -41,50 +38,63 @@ type ActivityFeedRow = {
 
 const TYPE_STYLE: Record<string, { bg: string; text: string; label: string }> =
   {
-    butter: { bg: "bg-yellow-100", text: "text-yellow-700", label: "Butter" },
-    clear: { bg: "bg-sky-100", text: "text-sky-700", label: "Clear" },
-    cloud: { bg: "bg-slate-100", text: "text-slate-600", label: "Cloud" },
-    icee: { bg: "bg-cyan-100", text: "text-cyan-700", label: "Icee" },
-    fluffy: { bg: "bg-pink-100", text: "text-pink-600", label: "Fluffy" },
-    floam: { bg: "bg-lime-100", text: "text-lime-700", label: "Floam" },
-    snow_fizz: { bg: "bg-blue-50", text: "text-blue-500", label: "Snow Fizz" },
+    butter: {
+      bg: "bg-yellow-900/40",
+      text: "text-yellow-300",
+      label: "Butter",
+    },
+    clear: { bg: "bg-sky-900/40", text: "text-sky-300", label: "Clear" },
+    cloud: { bg: "bg-slate-800", text: "text-slate-300", label: "Cloud" },
+    icee: { bg: "bg-cyan-900/40", text: "text-cyan-300", label: "Icee" },
+    fluffy: { bg: "bg-pink-900/40", text: "text-pink-300", label: "Fluffy" },
+    floam: { bg: "bg-lime-900/40", text: "text-lime-300", label: "Floam" },
+    snow_fizz: {
+      bg: "bg-blue-900/40",
+      text: "text-blue-300",
+      label: "Snow Fizz",
+    },
     thick_and_glossy: {
-      bg: "bg-fuchsia-100",
-      text: "text-fuchsia-700",
+      bg: "bg-fuchsia-900/40",
+      text: "text-fuchsia-300",
       label: "Thick & Glossy",
     },
-    jelly: { bg: "bg-violet-100", text: "text-violet-700", label: "Jelly" },
-    beaded: { bg: "bg-orange-100", text: "text-orange-600", label: "Beaded" },
-    clay: { bg: "bg-amber-100", text: "text-amber-700", label: "Clay" },
+    jelly: { bg: "bg-violet-900/40", text: "text-violet-300", label: "Jelly" },
+    beaded: {
+      bg: "bg-orange-900/40",
+      text: "text-orange-300",
+      label: "Beaded",
+    },
+    clay: { bg: "bg-amber-900/40", text: "text-amber-300", label: "Clay" },
     cloud_cream: {
-      bg: "bg-rose-50",
-      text: "text-rose-500",
+      bg: "bg-rose-900/40",
+      text: "text-rose-300",
       label: "Cloud Cream",
     },
-    magnetic: { bg: "bg-zinc-200", text: "text-zinc-700", label: "Magnetic" },
+    magnetic: { bg: "bg-zinc-800", text: "text-zinc-300", label: "Magnetic" },
     thermochromic: {
-      bg: "bg-purple-100",
-      text: "text-purple-700",
+      bg: "bg-purple-900/40",
+      text: "text-purple-300",
       label: "Thermochromic",
     },
     avalanche: {
-      bg: "bg-indigo-100",
-      text: "text-indigo-600",
+      bg: "bg-indigo-900/40",
+      text: "text-indigo-300",
       label: "Avalanche",
     },
-    slay: { bg: "bg-red-100", text: "text-red-600", label: "Slay" },
+    slay: { bg: "bg-red-900/40", text: "text-red-300", label: "Slay" },
   };
 
 const fallbackType = {
-  bg: "bg-gray-100",
-  text: "text-gray-500",
+  bg: "bg-slime-surface",
+  text: "text-slime-muted",
   label: "Unknown",
 };
 
 // ─── Stars ────────────────────────────────────────────────────────────────────
 
 function Stars({ rating }: { rating: number | null }) {
-  if (!rating) return <span className="text-xs text-gray-400">No rating</span>;
+  if (!rating)
+    return <span className="text-xs text-slime-muted">No rating</span>;
   return (
     <span
       className="flex items-center gap-0.5"
@@ -93,7 +103,7 @@ function Stars({ rating }: { rating: number | null }) {
       {[1, 2, 3, 4, 5].map((n) => (
         <span
           key={n}
-          className={`text-sm leading-none ${n <= rating ? "text-pink-500" : "text-gray-200"}`}
+          className={`text-sm leading-none ${n <= rating ? "text-slime-accent" : "text-slime-border"}`}
         >
           ★
         </span>
@@ -117,20 +127,20 @@ function FeedCard({ log }: { log: FeedLog }) {
 
   return (
     <Link href={`/slimes/${log.id}`} className="block group">
-      <article className="relative bg-white rounded-3xl shadow-sm border border-pink-50 overflow-hidden transition-all duration-100 group-hover:shadow-md group-active:scale-[0.98]">
+      <article className="relative bg-slime-card rounded-2xl border border-slime-border overflow-hidden transition-all duration-100 group-hover:border-slime-accent/30 group-hover:shadow-slime-sm group-active:scale-[0.98]">
         <div
           className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-10 blur-2xl pointer-events-none"
-          style={{ background: "radial-gradient(circle, #f472b6, #a855f7)" }}
+          style={{ background: "radial-gradient(circle, #39FF14, #00F0FF)" }}
           aria-hidden="true"
         />
 
         <div className="p-4 flex flex-col gap-2.5">
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-gray-900 text-sm leading-tight truncate">
+              <p className="font-semibold text-slime-text text-sm leading-tight truncate">
                 {slimeName}
               </p>
-              <p className="text-xs text-gray-400 truncate mt-0.5">
+              <p className="text-xs text-slime-muted truncate mt-0.5">
                 {brandName}
               </p>
             </div>
@@ -143,7 +153,7 @@ function FeedCard({ log }: { log: FeedLog }) {
 
           <Stars rating={log.rating_overall} />
 
-          <div className="flex items-center justify-between pt-1 border-t border-pink-50">
+          <div className="flex items-center justify-between pt-1 border-t border-slime-border">
             {username ? (
               <Link
                 href={`/users/${username}`}
@@ -151,34 +161,34 @@ function FeedCard({ log }: { log: FeedLog }) {
                 className="flex items-center gap-1.5 group/user"
               >
                 <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0"
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-slime-bg text-[9px] font-bold shrink-0"
                   style={{
-                    background: "linear-gradient(135deg, #f472b6, #a855f7)",
+                    background: "linear-gradient(135deg, #39FF14, #00F0FF)",
                   }}
                   aria-hidden="true"
                 >
                   {username.charAt(0).toUpperCase()}
                 </div>
-                <span className="text-xs text-gray-500 group-hover/user:text-pink-500 transition-colors">
+                <span className="text-xs text-slime-muted group-hover/user:text-slime-accent transition-colors">
                   @{username}
                 </span>
               </Link>
             ) : (
               <div className="flex items-center gap-1.5">
                 <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold"
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-slime-bg text-[9px] font-bold"
                   style={{
-                    background: "linear-gradient(135deg, #f472b6, #a855f7)",
+                    background: "linear-gradient(135deg, #39FF14, #00F0FF)",
                   }}
                   aria-hidden="true"
                 >
                   ?
                 </div>
-                <span className="text-xs text-gray-500">@anonymous</span>
+                <span className="text-xs text-slime-muted">@anonymous</span>
               </div>
             )}
             <time
-              className="text-[11px] text-gray-400"
+              className="text-[11px] text-slime-muted"
               dateTime={log.created_at}
             >
               {timeAgo}
@@ -195,14 +205,11 @@ function FeedCard({ log }: { log: FeedLog }) {
 function EmptyFeed() {
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-      <div
-        className="w-20 h-20 rounded-full flex items-center justify-center text-4xl"
-        style={{ background: "linear-gradient(135deg, #fce7f3, #f3e8ff)" }}
-      >
+      <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl bg-slime-surface border border-slime-border">
         🫧
       </div>
-      <p className="text-gray-700 font-semibold">No logs yet</p>
-      <p className="text-sm text-gray-400 max-w-xs">
+      <p className="text-slime-text font-semibold">No logs yet</p>
+      <p className="text-sm text-slime-muted max-w-xs">
         Be the first to log a slime and get this feed poppin'.
       </p>
     </div>
@@ -212,14 +219,11 @@ function EmptyFeed() {
 function EmptyFollowingFeed() {
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
-      <div
-        className="w-20 h-20 rounded-full flex items-center justify-center text-4xl"
-        style={{ background: "linear-gradient(135deg, #fce7f3, #f3e8ff)" }}
-      >
+      <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl bg-slime-surface border border-slime-border">
         👀
       </div>
-      <p className="text-gray-700 font-semibold">Nothing here yet</p>
-      <p className="text-sm text-gray-400 max-w-xs">
+      <p className="text-slime-text font-semibold">Nothing here yet</p>
+      <p className="text-sm text-slime-muted max-w-xs">
         Follow some slimers to see their logs here.
       </p>
     </div>
@@ -229,22 +233,19 @@ function EmptyFollowingFeed() {
 function LoginPrompt() {
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-4 text-center px-6">
-      <div
-        className="w-20 h-20 rounded-full flex items-center justify-center text-4xl"
-        style={{ background: "linear-gradient(135deg, #fce7f3, #f3e8ff)" }}
-      >
+      <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl bg-slime-surface border border-slime-border">
         🔒
       </div>
-      <p className="text-gray-700 font-semibold">
+      <p className="text-slime-text font-semibold">
         Sign in to see your Following feed
       </p>
-      <p className="text-sm text-gray-400 max-w-xs">
+      <p className="text-sm text-slime-muted max-w-xs">
         Log in to follow slimers and see their latest ratings here.
       </p>
       <Link
         href="/login"
-        className="mt-1 inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold text-white"
-        style={{ background: "linear-gradient(90deg, #ec4899, #a855f7)" }}
+        className="mt-1 inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold text-slime-bg shadow-glow-green"
+        style={{ background: "linear-gradient(135deg, #39FF14, #00F0FF)" }}
       >
         Sign in
       </Link>
@@ -313,12 +314,7 @@ export default async function HomePage({
         const { data: activityRows, error: activityErr } = await supabase
           .from("activity_feed")
           .select(
-            `id,
-             created_at,
-             actor_id,
-             log_id,
-             metadata,
-             profiles!activity_feed_actor_id_fkey ( username )`,
+            `id, created_at, actor_id, log_id, metadata, profiles!activity_feed_actor_id_fkey ( username )`,
           )
           .eq("activity_type", "log_created")
           .in("actor_id", followingIds)
@@ -360,56 +356,30 @@ export default async function HomePage({
     activeTab === "following" ? followingError : communityError;
 
   return (
-    <div
-      className="min-h-screen"
-      style={{
-        background: "linear-gradient(160deg, #fdf2f8 0%, #faf5ff 100%)",
-      }}
-    >
-      {/* Fixed page header */}
+    <div className="min-h-screen bg-slime-bg">
       <PageHeader />
 
-      {/* Content — push below fixed header */}
       <div className="pt-14">
-        {/* ── Hero header ─────────────────────────────────────────────────── */}
-        <header className="px-4 pt-10 pb-4">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-2xl" aria-hidden="true">
-              🫧
-            </span>
-            <h1
-              className="text-2xl font-black tracking-tight"
-              style={{
-                background: "linear-gradient(90deg, #ec4899, #a855f7)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-              }}
-            >
-              SlimeLog
-            </h1>
-          </div>
-          <p className="text-sm text-gray-500 pl-9">
+        <div className="px-4 pt-6 pb-2">
+          <p className="text-sm text-slime-muted">
             What the community is logging
           </p>
-        </header>
+        </div>
 
-        {/* ── Tab toggle ──────────────────────────────────────────────────── */}
         <div className="px-4 pb-4">
           <FeedTabs activeTab={activeTab} isLoggedIn={isLoggedIn} />
         </div>
 
-        {/* ── Feed ────────────────────────────────────────────────────────── */}
         <section className="px-4 pb-24">
           {activeTab === "following" && !isLoggedIn ? (
             <LoginPrompt />
           ) : (
             <>
               {displayError && (
-                <div className="mb-4 px-4 py-3 rounded-2xl bg-red-50 border border-red-100 text-xs text-red-500">
+                <div className="mb-4 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-xs text-red-400">
                   Couldn't load the feed right now — try refreshing.
                 </div>
               )}
-
               {displayLogs.length === 0 && !displayError ? (
                 activeTab === "following" ? (
                   <EmptyFollowingFeed />
@@ -418,7 +388,7 @@ export default async function HomePage({
                 )
               ) : (
                 <>
-                  <p className="text-xs text-gray-400 mb-4 font-medium uppercase tracking-wider">
+                  <p className="text-xs text-slime-muted mb-4 font-medium uppercase tracking-wider">
                     {activeTab === "following"
                       ? "From people you follow"
                       : "Recent logs"}{" "}

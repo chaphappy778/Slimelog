@@ -22,10 +22,8 @@ const NAV_ITEMS = [
         strokeLinejoin="round"
       >
         {active ? (
-          // Filled house
           <path d="M11.47 3.84a.75.75 0 011.06 0l8.69 8.69a.75.75 0 101.06-1.06l-1.32-1.323V18a3 3 0 01-3 3H5a3 3 0 01-3-3v-7.853L.72 11.47a.75.75 0 001.06 1.06l9.69-9.69zM9 21h6v-6a.75.75 0 00-.75-.75h-4.5A.75.75 0 009 15v6z" />
         ) : (
-          // Outline house
           <>
             <path d="M3 9.75L12 3l9 6.75V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.75z" />
             <path d="M9 21V12h6v9" />
@@ -167,7 +165,14 @@ export default function BottomNav() {
       {/* Spacer so page content isn't hidden behind the fixed bar */}
       <div className="h-16 shrink-0" aria-hidden="true" />
 
-      <nav className="fixed bottom-0 inset-x-0 z-50 bg-white/95 backdrop-blur-md border-t border-pink-100">
+      <nav
+        className="fixed bottom-0 inset-x-0 z-20"
+        style={{
+          background: "rgba(10, 10, 10, 0.96)",
+          borderTop: "1px solid rgba(57, 255, 20, 0.12)",
+          boxShadow: "0 -4px 24px 0 rgba(57, 255, 20, 0.06)",
+        }}
+      >
         <div className="max-w-[390px] mx-auto flex items-center justify-around px-2 h-16">
           {/* ── Feed (left of center) ── */}
           <NavItem item={NAV_ITEMS[0]} pathname={pathname} />
@@ -179,18 +184,23 @@ export default function BottomNav() {
             className="flex flex-col items-center -mt-5"
             aria-label="Log a slime"
           >
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-pink-500 to-violet-500 flex items-center justify-center shadow-lg active:scale-90 transition-transform">
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-glow-green active:scale-90 transition-transform"
+              style={{
+                background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+              }}
+            >
               <svg
                 width={28}
                 height={28}
                 viewBox="0 0 24 24"
-                fill="white"
+                fill="#0a0a0a"
                 aria-hidden="true"
               >
                 <path d="M12 4a1 1 0 0 1 1 1v6h6a1 1 0 0 1 0 2h-6v6a1 1 0 0 1-2 0v-6H5a1 1 0 0 1 0-2h6V5a1 1 0 0 1 1-1z" />
               </svg>
             </div>
-            <span className="text-[10px] font-bold text-fuchsia-500 mt-1">
+            <span className="text-[10px] font-bold text-slime-accent mt-1">
               Log
             </span>
           </Link>
@@ -224,11 +234,13 @@ function NavItem({
       className="flex flex-col items-center gap-0.5 flex-1 py-1 active:scale-95 transition-transform"
       aria-current={active ? "page" : undefined}
     >
-      <span className={active ? "text-fuchsia-600" : "text-gray-400"}>
+      <span className={active ? "text-slime-accent" : "text-slime-muted"}>
         {item.icon(active)}
       </span>
       <span
-        className={`text-[10px] font-semibold ${active ? "text-fuchsia-600" : "text-gray-400"}`}
+        className={`text-[10px] font-semibold ${
+          active ? "text-slime-accent" : "text-slime-muted"
+        }`}
       >
         {item.label}
       </span>

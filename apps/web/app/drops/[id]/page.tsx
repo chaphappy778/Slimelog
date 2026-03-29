@@ -40,33 +40,33 @@ type DropSlime = {
 const DROP_STATUS = {
   announced: {
     label: "Announced",
-    bg: "bg-violet-100",
-    text: "text-violet-700",
+    bg: "bg-violet-900/40",
+    text: "text-violet-300",
     dot: "bg-violet-400",
   },
   live: {
     label: "Live Now",
-    bg: "bg-emerald-100",
-    text: "text-emerald-700",
+    bg: "bg-emerald-900/40",
+    text: "text-emerald-300",
     dot: "bg-emerald-400",
   },
   sold_out: {
     label: "Sold Out",
-    bg: "bg-gray-100",
-    text: "text-gray-500",
-    dot: "bg-gray-400",
+    bg: "bg-slime-surface",
+    text: "text-slime-muted",
+    dot: "bg-slime-muted",
   },
   restocked: {
     label: "Restocked",
-    bg: "bg-sky-100",
-    text: "text-sky-700",
+    bg: "bg-sky-900/40",
+    text: "text-sky-300",
     dot: "bg-sky-400",
   },
   cancelled: {
     label: "Cancelled",
-    bg: "bg-red-50",
+    bg: "bg-red-900/40",
     text: "text-red-400",
-    dot: "bg-red-300",
+    dot: "bg-red-400",
   },
 } as const;
 
@@ -90,42 +90,36 @@ const SLIME_TYPE_LABELS: Record<string, string> = {
 };
 
 const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
-  butter: { bg: "bg-yellow-100", text: "text-yellow-700" },
-  clear: { bg: "bg-sky-100", text: "text-sky-700" },
-  cloud: { bg: "bg-blue-50", text: "text-blue-500" },
-  cloud_cream: { bg: "bg-purple-50", text: "text-purple-500" },
-  fluffy: { bg: "bg-pink-100", text: "text-pink-600" },
-  floam: { bg: "bg-lime-100", text: "text-lime-700" },
-  jelly: { bg: "bg-violet-100", text: "text-violet-600" },
-  thick_and_glossy: { bg: "bg-gray-100", text: "text-gray-600" },
-  icee: { bg: "bg-cyan-100", text: "text-cyan-700" },
-  beaded: { bg: "bg-orange-100", text: "text-orange-600" },
-  clay: { bg: "bg-amber-100", text: "text-amber-700" },
-  magnetic: { bg: "bg-slate-100", text: "text-slate-600" },
-  thermochromic: { bg: "bg-rose-100", text: "text-rose-600" },
-  snow_fizz: { bg: "bg-indigo-50", text: "text-indigo-500" },
-  avalanche: { bg: "bg-teal-100", text: "text-teal-700" },
-  slay: { bg: "bg-fuchsia-100", text: "text-fuchsia-600" },
+  butter: { bg: "bg-yellow-900/40", text: "text-yellow-300" },
+  clear: { bg: "bg-sky-900/40", text: "text-sky-300" },
+  cloud: { bg: "bg-blue-900/40", text: "text-blue-300" },
+  cloud_cream: { bg: "bg-purple-900/40", text: "text-purple-300" },
+  fluffy: { bg: "bg-pink-900/40", text: "text-pink-300" },
+  floam: { bg: "bg-lime-900/40", text: "text-lime-300" },
+  jelly: { bg: "bg-violet-900/40", text: "text-violet-300" },
+  thick_and_glossy: { bg: "bg-slime-surface", text: "text-slime-muted" },
+  icee: { bg: "bg-cyan-900/40", text: "text-cyan-300" },
+  beaded: { bg: "bg-orange-900/40", text: "text-orange-300" },
+  clay: { bg: "bg-amber-900/40", text: "text-amber-300" },
+  magnetic: { bg: "bg-zinc-800", text: "text-zinc-300" },
+  thermochromic: { bg: "bg-rose-900/40", text: "text-rose-300" },
+  snow_fizz: { bg: "bg-indigo-900/40", text: "text-indigo-300" },
+  avalanche: { bg: "bg-teal-900/40", text: "text-teal-300" },
+  slay: { bg: "bg-fuchsia-900/40", text: "text-fuchsia-300" },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-type StatusConfig = {
-  label: string;
-  bg: string;
-  text: string;
-  dot: string;
-};
+type StatusConfig = { label: string; bg: string; text: string; dot: string };
 
 function getStatusConfig(status: string | null): StatusConfig {
-  if (status && status in DROP_STATUS) {
+  if (status && status in DROP_STATUS)
     return DROP_STATUS[status as keyof typeof DROP_STATUS];
-  }
   return {
     label: status ?? "Unknown",
-    bg: "bg-gray-100",
-    text: "text-gray-600",
-    dot: "bg-gray-400",
+    bg: "bg-slime-surface",
+    text: "text-slime-muted",
+    dot: "bg-slime-muted",
   };
 }
 
@@ -133,9 +127,9 @@ function formatDropDate(dateStr: string | null): string {
   if (!dateStr) return "Date TBA";
   const d = new Date(dateStr);
   const now = new Date();
-  const diffMs = d.getTime() - now.getTime();
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
+  const diffDays = Math.ceil(
+    (d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+  );
   const formatted = d.toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
@@ -145,7 +139,6 @@ function formatDropDate(dateStr: string | null): string {
     minute: "2-digit",
     timeZoneName: "short",
   });
-
   if (diffDays === 0) return `Today · ${formatted}`;
   if (diffDays === 1) return `Tomorrow · ${formatted}`;
   if (diffDays > 1 && diffDays <= 7)
@@ -198,8 +191,8 @@ function SlimeTypeBadge({ slimeType }: { slimeType: string | null }) {
   if (!slimeType) return null;
   const label = SLIME_TYPE_LABELS[slimeType] ?? slimeType;
   const colors = TYPE_COLORS[slimeType] ?? {
-    bg: "bg-gray-100",
-    text: "text-gray-600",
+    bg: "bg-slime-surface",
+    text: "text-slime-muted",
   };
   return (
     <span
@@ -223,7 +216,7 @@ function SlimeCard({
   const logUrl = buildLogUrl(slime, dropName, brandName);
 
   return (
-    <article className="bg-white rounded-2xl border border-pink-50 shadow-sm overflow-hidden">
+    <article className="bg-slime-card rounded-2xl border border-slime-border overflow-hidden hover:border-slime-accent/30 transition-colors">
       {s?.image_url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -233,11 +226,7 @@ function SlimeCard({
         />
       ) : (
         <div
-          className="w-full h-32 flex items-center justify-center text-4xl"
-          style={{
-            background:
-              "linear-gradient(135deg, #fce7f3 0%, #f3e8ff 50%, #e0f2fe 100%)",
-          }}
+          className="w-full h-32 flex items-center justify-center text-4xl bg-slime-surface"
           aria-hidden="true"
         >
           🫧
@@ -250,29 +239,26 @@ function SlimeCard({
         </div>
 
         <div className="flex items-start justify-between gap-2 mb-1.5">
-          <h3 className="text-sm font-bold text-gray-900 leading-snug">
+          <h3 className="text-sm font-bold text-slime-text leading-snug">
             {s?.name ?? "Unnamed Slime"}
           </h3>
           {s?.retail_price != null && (
-            <span className="text-sm font-bold text-pink-600 shrink-0">
+            <span className="text-sm font-bold text-slime-accent shrink-0">
               {formatPrice(s.retail_price)}
             </span>
           )}
         </div>
 
         {s?.description && (
-          <p className="text-xs text-gray-500 leading-relaxed mb-3 line-clamp-2">
+          <p className="text-xs text-slime-muted leading-relaxed mb-3 line-clamp-2">
             {s.description}
           </p>
         )}
 
         <Link
           href={logUrl}
-          className="flex items-center justify-center gap-1.5 w-full text-xs font-semibold py-2 rounded-xl transition-opacity active:opacity-70"
-          style={{
-            background: "linear-gradient(90deg, #f9a8d4, #c084fc)",
-            color: "white",
-          }}
+          className="flex items-center justify-center gap-1.5 w-full text-xs font-bold py-2 rounded-xl transition-opacity active:opacity-70 text-slime-bg"
+          style={{ background: "linear-gradient(90deg, #39FF14, #00F0FF)" }}
         >
           <span aria-hidden="true">＋</span>
           Log this slime
@@ -290,19 +276,12 @@ export default async function DropDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-
   const cookieStore = await cookies();
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name) {
-          return cookieStore.get(name)?.value;
-        },
-      },
-    },
+    { cookies: { get: (name) => cookieStore.get(name)?.value } },
   );
 
   const [dropResult, slimesResult] = await Promise.all([
@@ -349,16 +328,20 @@ export default async function DropDetailPage({
       follower_count: null,
     };
 
-    const slimes: DropSlime[] = (slimesResult.data ??
-      []) as unknown as DropSlime[];
-    return <DropView drop={fallbackDrop} slimes={slimes} />;
+    return (
+      <DropView
+        drop={fallbackDrop}
+        slimes={(slimesResult.data ?? []) as unknown as DropSlime[]}
+      />
+    );
   }
 
-  const drop: DropDetail = dropResult.data;
-  const slimes: DropSlime[] = (slimesResult.data ??
-    []) as unknown as DropSlime[];
-
-  return <DropView drop={drop} slimes={slimes} />;
+  return (
+    <DropView
+      drop={dropResult.data}
+      slimes={(slimesResult.data ?? []) as unknown as DropSlime[]}
+    />
+  );
 }
 
 // ─── View ─────────────────────────────────────────────────────────────────────
@@ -367,12 +350,7 @@ function DropView({ drop, slimes }: { drop: DropDetail; slimes: DropSlime[] }) {
   const isLive = drop.status === "live";
 
   return (
-    <main
-      className="min-h-screen pb-28"
-      style={{
-        background: "linear-gradient(160deg, #fdf2f8 0%, #faf5ff 100%)",
-      }}
-    >
+    <main className="min-h-screen pb-28 bg-slime-bg">
       {drop.cover_image_url ? (
         <div className="relative w-full h-52 overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -381,42 +359,37 @@ function DropView({ drop, slimes }: { drop: DropDetail; slimes: DropSlime[] }) {
             alt={drop.name ?? "Drop cover"}
             className="w-full h-full object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-slime-bg/80 to-transparent" />
         </div>
       ) : (
         <div
-          className="w-full h-44 flex items-center justify-center text-6xl relative overflow-hidden"
-          style={{
-            background: isLive
-              ? "linear-gradient(135deg, #6ee7b7 0%, #3b82f6 50%, #8b5cf6 100%)"
-              : "linear-gradient(135deg, #fce7f3 0%, #f3e8ff 50%, #dbeafe 100%)",
-          }}
+          className="w-full h-44 flex items-center justify-center text-6xl relative overflow-hidden bg-slime-surface"
           aria-hidden="true"
         >
           <span className="drop-shadow-lg">{isLive ? "🔴" : "🫧"}</span>
           <div
-            className="absolute -top-8 -right-8 w-32 h-32 rounded-full opacity-30"
+            className="absolute -top-8 -right-8 w-32 h-32 rounded-full opacity-20"
             style={{
-              background: "radial-gradient(circle, #f472b6, transparent)",
+              background: "radial-gradient(circle, #39FF14, transparent)",
             }}
           />
           <div
-            className="absolute -bottom-8 -left-8 w-40 h-40 rounded-full opacity-20"
+            className="absolute -bottom-8 -left-8 w-40 h-40 rounded-full opacity-15"
             style={{
-              background: "radial-gradient(circle, #a855f7, transparent)",
+              background: "radial-gradient(circle, #00F0FF, transparent)",
             }}
           />
         </div>
       )}
 
       <div className="px-4 pt-4 pb-1">
-        <a
+        <Link
           href="/discover"
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-pink-500 transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-slime-muted hover:text-slime-accent transition-colors"
         >
           <span aria-hidden="true">←</span>
           Discover
-        </a>
+        </Link>
       </div>
 
       <header className="px-4 pt-2 pb-5">
@@ -425,37 +398,28 @@ function DropView({ drop, slimes }: { drop: DropDetail; slimes: DropSlime[] }) {
           {drop.brand_slug ? (
             <Link
               href={`/brands/${drop.brand_slug}`}
-              className="text-xs font-semibold text-pink-500 hover:text-pink-700 transition-colors underline-offset-2 hover:underline"
+              className="text-xs font-semibold text-slime-accent hover:text-slime-cyan transition-colors"
             >
               {drop.brand_name ?? "Unknown Brand"}
             </Link>
           ) : (
-            <span className="text-xs text-gray-400">
+            <span className="text-xs text-slime-muted">
               {drop.brand_name ?? "Unknown Brand"}
             </span>
           )}
         </div>
 
-        <h1
-          className="text-3xl font-black tracking-tight mb-2 leading-tight"
-          style={{
-            background: isLive
-              ? "linear-gradient(90deg, #10b981, #3b82f6)"
-              : "linear-gradient(90deg, #ec4899, #a855f7)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-          }}
-        >
+        <h1 className="text-3xl font-black tracking-tight mb-2 leading-tight text-holo">
           {drop.name ?? "Unnamed Drop"}
         </h1>
 
         {drop.description && (
-          <p className="text-sm text-gray-600 leading-relaxed mb-3">
+          <p className="text-sm text-slime-muted leading-relaxed mb-3">
             {drop.description}
           </p>
         )}
 
-        <p className="text-xs text-gray-500 font-medium mb-4">
+        <p className="text-xs text-slime-muted font-medium mb-4">
           <span aria-hidden="true">🗓 </span>
           {formatDropDate(drop.drop_at)}
         </p>
@@ -465,43 +429,38 @@ function DropView({ drop, slimes }: { drop: DropDetail; slimes: DropSlime[] }) {
             href={drop.shop_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl text-sm font-bold text-white shadow-sm transition-opacity active:opacity-80"
-            style={{
-              background: isLive
-                ? "linear-gradient(90deg, #10b981, #3b82f6)"
-                : "linear-gradient(90deg, #ec4899, #a855f7)",
-            }}
+            className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl text-sm font-bold text-slime-bg shadow-glow-green transition-opacity active:opacity-80"
+            style={{ background: "linear-gradient(90deg, #39FF14, #00F0FF)" }}
           >
             {isLive ? "🛒 Shop Now" : "🔔 Visit Shop"}
-            <span aria-hidden="true" className="text-white/70 text-xs">
+            <span aria-hidden="true" className="opacity-70 text-xs">
               ↗
             </span>
           </a>
         )}
 
         {drop.status === "sold_out" && (
-          <div className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl text-sm font-semibold text-gray-400 bg-gray-100">
+          <div className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl text-sm font-semibold text-slime-muted bg-slime-surface border border-slime-border">
             Sold Out
           </div>
         )}
       </header>
 
-      <div className="mx-4 mb-5 h-px bg-gradient-to-r from-transparent via-pink-200 to-transparent" />
+      <div className="mx-4 mb-5 h-px bg-gradient-to-r from-transparent via-slime-border to-transparent" />
 
       <section className="px-4">
         <div className="flex items-center gap-3 mb-4">
           <div
-            className="w-9 h-9 rounded-2xl flex items-center justify-center text-lg shrink-0"
-            style={{ background: "linear-gradient(135deg, #fce7f3, #f3e8ff)" }}
+            className="w-9 h-9 rounded-2xl flex items-center justify-center text-lg shrink-0 bg-slime-surface border border-slime-border"
             aria-hidden="true"
           >
             🫧
           </div>
           <div>
-            <h2 className="text-base font-bold text-gray-900 leading-tight">
+            <h2 className="text-base font-bold text-slime-text leading-tight">
               Slimes in This Drop
             </h2>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-slime-muted">
               {slimes.length} {slimes.length === 1 ? "slime" : "slimes"}{" "}
               included
             </p>
@@ -509,7 +468,7 @@ function DropView({ drop, slimes }: { drop: DropDetail; slimes: DropSlime[] }) {
         </div>
 
         {slimes.length === 0 ? (
-          <div className="text-center py-10 text-gray-400 text-sm">
+          <div className="text-center py-10 text-slime-muted text-sm">
             Slime details coming soon — check back closer to the drop!
           </div>
         ) : (
@@ -529,14 +488,11 @@ function DropView({ drop, slimes }: { drop: DropDetail; slimes: DropSlime[] }) {
 
       {slimes.length > 0 && (
         <div className="px-4 mt-8">
-          <div
-            className="rounded-2xl p-4 text-center"
-            style={{ background: "linear-gradient(135deg, #fce7f3, #f3e8ff)" }}
-          >
-            <p className="text-sm font-semibold text-gray-700 mb-1">
+          <div className="rounded-2xl p-4 text-center bg-slime-surface border border-slime-border">
+            <p className="text-sm font-semibold text-slime-text mb-1">
               Already tried {slimes.length > 1 ? "these slimes" : "this slime"}?
             </p>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-slime-muted">
               Tap "Log this slime" on any slime above to add it to your
               collection.
             </p>

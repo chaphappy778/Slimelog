@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { useState } from "react";
 
 interface RatingInputProps {
   value: number;
@@ -20,18 +20,17 @@ export function RatingInput({
   disabled = false,
 }: RatingInputProps) {
   const [hovered, setHovered] = useState(0);
-
   const display = hovered || value;
 
   return (
-    <div className="flex items-center justify-between py-3 border-b border-pink-50 last:border-0">
+    <div className="flex items-center justify-between py-3 border-b border-slime-border last:border-0">
       <div className="flex flex-col gap-0.5 min-w-0">
         <div className="flex items-center gap-1.5">
           <span className="text-base leading-none">{emoji}</span>
-          <span className="text-sm font-semibold text-gray-800">{label}</span>
+          <span className="text-sm font-semibold text-slime-text">{label}</span>
         </div>
         {description && (
-          <span className="text-xs text-gray-400 pl-6">{description}</span>
+          <span className="text-xs text-slime-muted pl-6">{description}</span>
         )}
       </div>
 
@@ -44,9 +43,7 @@ export function RatingInput({
             key={star}
             type="button"
             disabled={disabled}
-            className={`w-8 h-8 flex items-center justify-center rounded-full transition-all active:scale-90 ${
-              disabled ? 'cursor-default' : 'cursor-pointer hover:scale-110'
-            }`}
+            className={`w-8 h-8 flex items-center justify-center rounded-full transition-all active:scale-90 ${disabled ? "cursor-default" : "cursor-pointer hover:scale-110"}`}
             onMouseEnter={() => !disabled && setHovered(star)}
             onClick={() => !disabled && onChange(star)}
             aria-label={`Rate ${star} out of 5`}
@@ -54,9 +51,10 @@ export function RatingInput({
             <svg
               viewBox="0 0 24 24"
               className="w-6 h-6 transition-colors"
-              fill={star <= display ? 'currentColor' : 'none'}
+              fill={star <= display ? "currentColor" : "none"}
               stroke="currentColor"
               strokeWidth={star <= display ? 0 : 1.5}
+              style={{ color: star <= display ? "#39FF14" : "#2a2a2a" }}
             >
               <path
                 strokeLinecap="round"
@@ -66,28 +64,28 @@ export function RatingInput({
             </svg>
           </button>
         ))}
-
-        <span className="w-8 text-right text-sm font-bold text-pink-500 tabular-nums">
-          {value > 0 ? value.toFixed(0) : '–'}
+        <span className="w-8 text-right text-sm font-bold text-slime-accent tabular-nums">
+          {value > 0 ? value.toFixed(0) : "–"}
         </span>
       </div>
     </div>
   );
 }
 
-// ─── Display-only version (read mode) ─────────────────────────────────────────
-
 interface RatingDisplayProps {
   value: number | null;
-  size?: 'sm' | 'md';
+  size?: "sm" | "md";
   showEmpty?: boolean;
 }
 
-export function RatingDisplay({ value, size = 'md', showEmpty = false }: RatingDisplayProps) {
+export function RatingDisplay({
+  value,
+  size = "md",
+  showEmpty = false,
+}: RatingDisplayProps) {
   if (value === null && !showEmpty) return null;
-
   const stars = value ?? 0;
-  const starSize = size === 'sm' ? 'w-3 h-3' : 'w-4 h-4';
+  const starSize = size === "sm" ? "w-3 h-3" : "w-4 h-4";
 
   return (
     <div className="flex items-center gap-0.5">
@@ -96,10 +94,10 @@ export function RatingDisplay({ value, size = 'md', showEmpty = false }: RatingD
           key={star}
           viewBox="0 0 24 24"
           className={`${starSize} transition-colors`}
-          fill={star <= stars ? 'currentColor' : 'none'}
+          fill={star <= stars ? "currentColor" : "none"}
           stroke="currentColor"
           strokeWidth={star <= stars ? 0 : 1.5}
-          style={{ color: star <= stars ? '#f472b6' : '#e5e7eb' }}
+          style={{ color: star <= stars ? "#39FF14" : "#2a2a2a" }}
         >
           <path
             strokeLinecap="round"
@@ -109,7 +107,9 @@ export function RatingDisplay({ value, size = 'md', showEmpty = false }: RatingD
         </svg>
       ))}
       {value !== null && (
-        <span className={`ml-1 font-bold tabular-nums ${size === 'sm' ? 'text-xs' : 'text-sm'} text-gray-600`}>
+        <span
+          className={`ml-1 font-bold tabular-nums ${size === "sm" ? "text-xs" : "text-sm"} text-slime-accent`}
+        >
           {value.toFixed(1)}
         </span>
       )}

@@ -1,6 +1,4 @@
 // apps/web/app/slimes/[id]/page.tsx
-// Next.js 16 — params is a Promise; cookies() must be awaited.
-
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
@@ -21,21 +19,17 @@ type SlimeDetail = {
   colors: string[] | null;
   scent: string | null;
   image_url: string | null;
-  // Purchase
   purchase_price: number | null;
   purchase_currency: string | null;
   cost_paid: number | null;
   purchased_from: string | null;
   purchased_at: string | null;
-  // Notes
   likes: string | null;
   dislikes: string | null;
   notes: string | null;
-  // Flags
   in_collection: boolean;
   in_wishlist: boolean;
   is_public: boolean;
-  // Ratings
   rating_overall: number | null;
   rating_texture: number | null;
   rating_scent: number | null;
@@ -43,13 +37,11 @@ type SlimeDetail = {
   rating_drizzle: number | null;
   rating_creativity: number | null;
   rating_sensory_fit: number | null;
-  // Shipping
   order_date: string | null;
   ship_date: string | null;
   received_date: string | null;
   days_to_ship: number | null;
   days_to_receive: number | null;
-  // Joined
   brands: { name: string; slug: string } | null;
 };
 
@@ -75,17 +67,17 @@ const COLOR_MAP: Record<string, string> = {
 };
 
 function colorDot(color: string) {
-  const bg = COLOR_MAP[color.toLowerCase()] ?? "#e5e7eb";
-  const isDark = color.toLowerCase() === "black";
+  const bg = COLOR_MAP[color.toLowerCase()] ?? "#2a2a2a";
+  const isDark = ["black", "purple", "blue"].includes(color.toLowerCase());
   return (
     <span
       key={color}
       title={color}
-      className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-black/10"
-      style={{ backgroundColor: bg, color: isDark ? "#f9fafb" : "#374151" }}
+      className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-white/10"
+      style={{ backgroundColor: bg, color: isDark ? "#f9fafb" : "#111111" }}
     >
       <span
-        className="w-2 h-2 rounded-full inline-block border border-black/10"
+        className="w-2 h-2 rounded-full inline-block border border-white/10"
         style={{ backgroundColor: bg }}
       />
       {color}
@@ -120,7 +112,7 @@ function StarRating({
       {[1, 2, 3, 4, 5].map((n) => (
         <span
           key={n}
-          className={`${starSize} leading-none ${n <= rating ? "text-pink-500" : "text-gray-200"}`}
+          className={`${starSize} leading-none ${n <= rating ? "text-slime-accent" : "text-slime-border"}`}
         >
           ★
         </span>
@@ -136,7 +128,7 @@ function DotRating({ value }: { value: number | null }) {
       {[1, 2, 3, 4, 5].map((i) => (
         <span
           key={i}
-          className={`w-2 h-2 rounded-full ${i <= value ? "bg-pink-400" : "bg-gray-200"}`}
+          className={`w-2 h-2 rounded-full ${i <= value ? "bg-slime-accent" : "bg-slime-border"}`}
         />
       ))}
     </span>
@@ -151,9 +143,9 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="bg-white rounded-3xl border border-pink-100 shadow-sm overflow-hidden">
-      <div className="px-5 py-3 border-b border-pink-50 bg-gradient-to-r from-pink-50/60 to-purple-50/40">
-        <h2 className="text-xs font-bold uppercase tracking-widest text-pink-400">
+    <section className="bg-slime-card rounded-2xl border border-slime-border overflow-hidden">
+      <div className="px-5 py-3 border-b border-slime-border bg-slime-surface">
+        <h2 className="text-xs font-bold uppercase tracking-widest text-slime-accent">
           {title}
         </h2>
       </div>
@@ -170,7 +162,7 @@ function DetailRow({
   value: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 py-1.5 border-b border-pink-50 last:border-0">
+    <div className="flex items-start justify-between gap-3 py-1.5 border-b border-slime-border last:border-0">
       <span className="text-xs text-slime-muted font-medium shrink-0">
         {label}
       </span>
@@ -187,8 +179,8 @@ function ShippingStat({
   value: string | number | null;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-2xl bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-100 p-3 gap-0.5">
-      <span className="text-2xl font-black text-purple-500 leading-none">
+    <div className="flex flex-col items-center justify-center rounded-2xl bg-slime-surface border border-slime-border p-3 gap-0.5">
+      <span className="text-2xl font-black text-slime-cyan leading-none">
         {value ?? "—"}
       </span>
       <span className="text-[10px] text-slime-muted font-medium text-center">
@@ -202,7 +194,7 @@ function TextBlock({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-pink-300">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-slime-accent/70">
         {label}
       </span>
       <p className="text-sm text-slime-text leading-relaxed">{value}</p>
@@ -218,15 +210,12 @@ export default async function SlimeDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-
   const cookieStore = await cookies();
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: { get: (name) => cookieStore.get(name)?.value },
-    },
+    { cookies: { get: (name) => cookieStore.get(name)?.value } },
   );
 
   const { data, error } = await supabase
@@ -252,7 +241,6 @@ export default async function SlimeDetailPage({
   if (error || !data) notFound();
 
   const log = data as unknown as SlimeDetail;
-
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -260,7 +248,6 @@ export default async function SlimeDetailPage({
 
   const brandName = log.brands?.name ?? log.brand_name_raw ?? "Unknown brand";
   const brandHref = log.brands?.slug ? `/brands/${log.brands.slug}` : null;
-
   const displayPrice = log.purchase_price ?? log.cost_paid;
   const currency = log.purchase_currency ?? "USD";
 
@@ -283,27 +270,27 @@ export default async function SlimeDetailPage({
   const hasNotes = log.likes || log.dislikes || log.notes;
 
   return (
-    <div
-      className="min-h-screen pb-24"
-      style={{
-        background: "linear-gradient(160deg, #fdf2f8 0%, #faf5ff 100%)",
-      }}
-    >
-      {/* ── Sticky top bar ──────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-pink-100 px-4 py-3 flex items-center justify-between gap-2">
+    <div className="min-h-screen pb-24 bg-slime-bg">
+      {/* Sticky top bar */}
+      <div
+        className="sticky top-0 z-20 px-4 py-3 flex items-center justify-between gap-2"
+        style={{
+          background: "rgba(10,10,10,0.92)",
+          borderBottom: "1px solid rgba(57,255,20,0.12)",
+        }}
+      >
         <Link
           href="/collection"
-          className="flex items-center gap-1.5 text-sm font-semibold text-pink-500 hover:text-pink-600 transition"
+          className="flex items-center gap-1.5 text-sm font-semibold text-slime-accent hover:text-slime-cyan transition"
         >
           <span className="text-base leading-none">←</span>
           <span>Back</span>
         </Link>
-
         <span
-          className={`text-xs font-bold px-3 py-1 rounded-full ${
+          className={`text-xs font-bold px-3 py-1 rounded-full border ${
             log.in_wishlist
-              ? "bg-violet-100 text-violet-600 border border-violet-200"
-              : "bg-pink-100 text-pink-600 border border-pink-200"
+              ? "bg-violet-900/40 text-violet-300 border-violet-500/30"
+              : "bg-slime-accent/10 text-slime-accent border-slime-accent/30"
           }`}
         >
           {log.in_wishlist ? "✦ Wishlist" : "✦ In Collection"}
@@ -311,16 +298,14 @@ export default async function SlimeDetailPage({
       </div>
 
       <div className="px-4 pt-6 flex flex-col gap-5 max-w-lg mx-auto">
-        {/* ── Hero header ─────────────────────────────────────────────────── */}
-        <div className="bg-white rounded-3xl border border-pink-100 shadow-sm overflow-hidden flex flex-col gap-3 relative">
-          {/* Decorative blob */}
+        {/* Hero */}
+        <div className="bg-slime-card rounded-2xl border border-slime-border overflow-hidden flex flex-col relative">
           <div
-            className="absolute -top-8 -right-8 w-32 h-32 rounded-full opacity-[0.08] blur-3xl pointer-events-none z-0"
-            style={{ background: "radial-gradient(circle, #f472b6, #a855f7)" }}
+            className="absolute -top-8 -right-8 w-32 h-32 rounded-full opacity-10 blur-3xl pointer-events-none z-0"
+            style={{ background: "radial-gradient(circle, #39FF14, #00F0FF)" }}
             aria-hidden="true"
           />
 
-          {/* ── Photo ── */}
           {log.image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -330,76 +315,66 @@ export default async function SlimeDetailPage({
             />
           ) : (
             <div
-              className="w-full h-40 flex items-center justify-center text-4xl"
-              style={{
-                background:
-                  "linear-gradient(135deg, #fce7f3 0%, #f3e8ff 50%, #e0f2fe 100%)",
-              }}
+              className="w-full h-40 flex items-center justify-center text-4xl bg-slime-surface"
               aria-hidden="true"
             >
               🫧
             </div>
           )}
 
-          <div className="px-5 pb-5 flex flex-col gap-3 relative z-10">
-            {/* Slime name */}
-            <h1 className="text-2xl font-black text-gray-900 leading-tight tracking-tight pr-4">
+          <div className="px-5 pb-5 pt-4 flex flex-col gap-3 relative z-10">
+            <h1 className="text-2xl font-black text-slime-text leading-tight tracking-tight pr-4">
               {log.slime_name ?? "Untitled Slime"}
             </h1>
-
-            {/* Brand */}
-            <div className="flex items-center gap-1.5 text-sm text-gray-500">
+            <div className="flex items-center gap-1.5 text-sm text-slime-muted">
               <span>by</span>
               {brandHref ? (
                 <Link
                   href={brandHref}
-                  className="font-semibold text-pink-500 hover:text-pink-600 underline underline-offset-2 transition"
+                  className="font-semibold text-slime-accent hover:text-slime-cyan underline underline-offset-2 transition"
                 >
                   {brandName}
                 </Link>
               ) : (
-                <span className="font-semibold text-gray-700">{brandName}</span>
+                <span className="font-semibold text-slime-text">
+                  {brandName}
+                </span>
               )}
             </div>
-
-            {/* Type badge + colors */}
             <div className="flex flex-wrap items-center gap-2">
               {log.slime_type && <TypeBadge type={log.slime_type as any} />}
               {log.colors?.map((c) => colorDot(c))}
             </div>
-
-            {/* Scent */}
             {log.scent && (
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-slime-muted">
                 <span className="mr-1">🌸</span>
-                <span className="font-medium">{log.scent}</span>
+                <span className="font-medium text-slime-text">{log.scent}</span>
               </p>
             )}
           </div>
         </div>
 
-        {/* ── Ratings ─────────────────────────────────────────────────────── */}
+        {/* Ratings */}
         <Section title="Ratings">
-          <div className="flex items-center justify-between mb-4 pb-4 border-b border-pink-50">
+          <div className="flex items-center justify-between mb-4 pb-4 border-b border-slime-border">
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-pink-300 mb-1">
+              <p className="text-xs font-bold uppercase tracking-widest text-slime-muted mb-1">
                 Overall
               </p>
               <StarRating rating={log.rating_overall} size="lg" />
             </div>
             {log.rating_overall != null && (
-              <span className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-br from-pink-500 to-purple-500">
+              <span className="text-4xl font-black text-slime-accent">
                 {log.rating_overall}
-                <span className="text-xl text-gray-300">/5</span>
+                <span className="text-xl text-slime-border">/5</span>
               </span>
             )}
           </div>
-
           {hasSubRatings ? (
             <div className="grid grid-cols-2 gap-x-6 gap-y-3">
               {SUB_RATINGS.map(({ key, label }) => (
                 <div key={key} className="flex flex-col gap-1">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slime-muted">
                     {label}
                   </span>
                   <DotRating value={log[key] as number | null} />
@@ -413,7 +388,6 @@ export default async function SlimeDetailPage({
           )}
         </Section>
 
-        {/* ── Details ─────────────────────────────────────────────────────── */}
         {hasDetails && (
           <Section title="Details">
             {log.collection_name && (
@@ -435,7 +409,6 @@ export default async function SlimeDetailPage({
           </Section>
         )}
 
-        {/* ── Notes ───────────────────────────────────────────────────────── */}
         {hasNotes && (
           <Section title="Notes">
             <div className="flex flex-col gap-4">
@@ -446,7 +419,6 @@ export default async function SlimeDetailPage({
           </Section>
         )}
 
-        {/* ── Shipping ────────────────────────────────────────────────────── */}
         {hasShipping && (
           <Section title="Shipping">
             <div className="grid grid-cols-2 gap-3 mb-4">
@@ -470,12 +442,11 @@ export default async function SlimeDetailPage({
           </Section>
         )}
 
-        {/* ── Actions ─────────────────────────────────────────────────────── */}
         {isOwner && (
           <div className="flex gap-3 pt-1">
             <Link
               href={`/log/edit/${id}`}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border-2 border-pink-200 text-pink-500 font-bold text-sm hover:bg-pink-50 transition"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-slime-accent/40 text-slime-accent font-bold text-sm hover:bg-slime-accent/10 transition"
             >
               ✎ Edit
             </Link>

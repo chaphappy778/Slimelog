@@ -1,10 +1,5 @@
 "use client";
-
-// ============================================================
-// File: apps/web/components/FeedTabs.tsx
-// Client component — Community / Following tab toggle.
-// Pushes ?tab= to the URL so the server page re-renders.
-// ============================================================
+// apps/web/components/FeedTabs.tsx
 
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
@@ -27,7 +22,10 @@ export default function FeedTabs({ activeTab, isLoggedIn }: FeedTabsProps) {
   return (
     <div
       className="inline-flex w-full rounded-2xl p-1 gap-1"
-      style={{ background: "rgba(244, 114, 182, 0.08)" }}
+      style={{
+        background: "rgba(57, 255, 20, 0.06)",
+        border: "1px solid rgba(57, 255, 20, 0.12)",
+      }}
       role="tablist"
       aria-label="Feed tabs"
     >
@@ -40,14 +38,13 @@ export default function FeedTabs({ activeTab, isLoggedIn }: FeedTabsProps) {
           "flex-1 py-2 px-3 rounded-xl text-sm font-semibold transition-all duration-150",
           "disabled:opacity-60",
           activeTab === "community"
-            ? "bg-white text-gray-900 shadow-sm"
-            : "text-gray-400 hover:text-gray-600",
+            ? "bg-slime-surface text-slime-accent shadow-sm border border-slime-accent/20"
+            : "text-slime-muted hover:text-slime-text",
         ].join(" ")}
       >
         🌍 Community
       </button>
 
-      {/* Only render Following tab when user is logged in */}
       {isLoggedIn && (
         <button
           role="tab"
@@ -58,21 +55,20 @@ export default function FeedTabs({ activeTab, isLoggedIn }: FeedTabsProps) {
             "flex-1 py-2 px-3 rounded-xl text-sm font-semibold transition-all duration-150",
             "disabled:opacity-60",
             activeTab === "following"
-              ? "bg-white text-gray-900 shadow-sm"
-              : "text-gray-400 hover:text-gray-600",
+              ? "bg-slime-surface text-slime-accent shadow-sm border border-slime-accent/20"
+              : "text-slime-muted hover:text-slime-text",
           ].join(" ")}
         >
-          💜 Following
+          💚 Following
         </button>
       )}
 
-      {/* Unauthenticated users see a disabled Following tab with a hint */}
       {!isLoggedIn && (
         <button
           role="tab"
           aria-disabled="true"
           onClick={() => navigate("following")}
-          className="flex-1 py-2 px-3 rounded-xl text-sm font-semibold text-gray-300 cursor-pointer hover:text-gray-400 transition-colors"
+          className="flex-1 py-2 px-3 rounded-xl text-sm font-semibold text-slime-muted/50 cursor-pointer hover:text-slime-muted transition-colors"
           title="Sign in to see your Following feed"
         >
           🔒 Following

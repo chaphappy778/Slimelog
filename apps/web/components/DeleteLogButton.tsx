@@ -1,6 +1,4 @@
 // apps/web/components/DeleteLogButton.tsx
-// Client component — handles confirm dialog, calls server action, redirects.
-
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -15,7 +13,6 @@ export function DeleteLogButton({ logId }: { logId: string }) {
   function handleClick() {
     if (!confirming) {
       setConfirming(true);
-      // Auto-reset after 3 s if user doesn't confirm
       setTimeout(() => setConfirming(false), 3000);
       return;
     }
@@ -40,7 +37,7 @@ export function DeleteLogButton({ logId }: { logId: string }) {
       className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl font-bold text-sm transition ${
         confirming
           ? "bg-red-500 text-white border-2 border-red-500 animate-pulse"
-          : "border-2 border-red-200 text-red-400 hover:bg-red-50"
+          : "border border-red-500/30 text-red-400 hover:bg-red-500/10"
       } disabled:opacity-60`}
     >
       {isPending ? (

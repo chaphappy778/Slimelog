@@ -45,15 +45,15 @@ function Avatar({
       <img
         src={profile.avatar_url}
         alt="Profile photo"
-        className={`${dim} rounded-full object-cover ring-2 ring-pink-200`}
+        className={`${dim} rounded-full object-cover ring-2 ring-slime-accent/30`}
       />
     );
   }
 
   return (
     <div
-      className={`${dim} rounded-full flex items-center justify-center text-white font-black shrink-0`}
-      style={{ background: "linear-gradient(135deg, #f472b6, #a855f7)" }}
+      className={`${dim} rounded-full flex items-center justify-center font-black shrink-0 text-slime-bg`}
+      style={{ background: "linear-gradient(135deg, #39FF14, #00F0FF)" }}
       aria-hidden="true"
     >
       {getInitials(profile?.username ?? null)}
@@ -72,7 +72,7 @@ function NavSection({
 }) {
   return (
     <div className="px-4 py-3">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 px-2">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-slime-muted mb-1.5 px-2">
         {title}
       </p>
       <div className="flex flex-col gap-0.5">{children}</div>
@@ -95,8 +95,8 @@ function NavItem({
 }) {
   const cls = `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-100 active:scale-[0.97] ${
     danger
-      ? "text-red-500 hover:bg-red-50"
-      : "text-gray-700 hover:bg-pink-50 hover:text-pink-600"
+      ? "text-red-400 hover:bg-red-500/10"
+      : "text-slime-text hover:bg-slime-surface hover:text-slime-accent"
   }`;
 
   if (!href) return null;
@@ -112,7 +112,7 @@ function NavItem({
 // ─── Divider ─────────────────────────────────────────────────────────────────
 
 function Divider() {
-  return <div className="mx-4 border-t border-pink-50" />;
+  return <div className="mx-4 border-t border-slime-border" />;
 }
 
 // ─── Wavy top edge SVG ───────────────────────────────────────────────────────
@@ -127,7 +127,7 @@ function WavyTop() {
     >
       <path
         d="M0,24 C30,8 60,18 100,12 C140,6 160,20 200,14 C240,8 270,18 320,10 L320,24 Z"
-        fill="white"
+        fill="#111111"
       />
     </svg>
   );
@@ -144,13 +144,11 @@ export default function SlimeMenu() {
   const router = useRouter();
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  // Close on route change
   useEffect(() => {
     if (isOpen) handleClose();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
-  // Load user session
   useEffect(() => {
     const supabase = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -207,41 +205,38 @@ export default function SlimeMenu() {
 
   return (
     <>
-      {/* ── Trigger pair ────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2">
-        {/* Blob hamburger */}
-        <button
-          onClick={handleOpen}
-          aria-label="Open navigation menu"
-          aria-expanded={isOpen}
-          className="relative w-9 h-9 flex flex-col items-center justify-center gap-1 transition-transform duration-150 active:scale-90"
-          style={{
-            background: "linear-gradient(135deg, #fce7f3, #f3e8ff)",
-            borderRadius: "60% 40% 55% 45% / 45% 55% 40% 60%",
-            border: "1.5px solid #f9a8d4",
-          }}
-        >
-          {[0, 1, 2].map((i) => (
-            <span
-              key={i}
-              className="block bg-pink-500 rounded-full transition-all duration-200"
-              style={{
-                height: "2px",
-                width: i === 1 ? "14px" : "18px",
-                marginLeft: i === 1 ? "4px" : "0",
-              }}
-            />
-          ))}
-        </button>
-      </div>
+      {/* ── Trigger ─────────────────────────────────────────────────── */}
+      <button
+        onClick={handleOpen}
+        aria-label="Open navigation menu"
+        aria-expanded={isOpen}
+        className="relative w-9 h-9 flex flex-col items-center justify-center gap-1 transition-transform duration-150 active:scale-90"
+        style={{
+          background: "linear-gradient(135deg, #1a1a1a, #2a2a2a)",
+          borderRadius: "60% 40% 55% 45% / 45% 55% 40% 60%",
+          border: "1.5px solid rgba(57, 255, 20, 0.4)",
+        }}
+      >
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className="block rounded-full transition-all duration-200"
+            style={{
+              height: "2px",
+              width: i === 1 ? "14px" : "18px",
+              marginLeft: i === 1 ? "4px" : "0",
+              background: "#39FF14",
+            }}
+          />
+        ))}
+      </button>
 
       {/* ── Overlay + Panel ─────────────────────────────────────────── */}
       {isOpen && (
         <>
-          {/* Dark overlay */}
           <div
             ref={overlayRef}
-            className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px]"
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[2px]"
             style={{
               animation: isAnimatingOut
                 ? "fadeOut 280ms ease forwards"
@@ -251,13 +246,14 @@ export default function SlimeMenu() {
             aria-hidden="true"
           />
 
-          {/* Menu panel */}
           <div
             role="dialog"
             aria-modal="true"
             aria-label="Navigation menu"
-            className="fixed top-0 right-0 z-50 h-full w-[80vw] max-w-[320px] bg-white shadow-2xl flex flex-col overflow-y-auto"
+            className="fixed top-0 right-0 z-50 h-full w-[80vw] max-w-[320px] flex flex-col overflow-y-auto shadow-2xl"
             style={{
+              background: "#111111",
+              borderLeft: "1px solid rgba(57, 255, 20, 0.12)",
               animation: isAnimatingOut
                 ? "slimeReabsorb 280ms cubic-bezier(0.4, 0, 1, 1) forwards"
                 : "slimeDrip 380ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards",
@@ -272,20 +268,20 @@ export default function SlimeMenu() {
             <Link
               href="/profile"
               onClick={handleClose}
-              className="flex items-center gap-3 px-4 py-4 hover:bg-pink-50 transition-colors"
+              className="flex items-center gap-3 px-4 py-4 hover:bg-slime-surface transition-colors"
             >
               <Avatar profile={profile} size="md" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-gray-900 truncate leading-tight">
+                <p className="text-sm font-bold text-slime-text truncate leading-tight">
                   {loading ? (
-                    <span className="inline-block w-24 h-4 bg-pink-100 rounded animate-pulse" />
+                    <span className="inline-block w-24 h-4 bg-slime-surface rounded animate-pulse" />
                   ) : (
                     displayName
                   )}
                 </p>
-                <p className="text-xs text-gray-400 truncate mt-0.5">
+                <p className="text-xs text-slime-muted truncate mt-0.5">
                   {loading ? (
-                    <span className="inline-block w-16 h-3 bg-pink-50 rounded animate-pulse mt-0.5" />
+                    <span className="inline-block w-16 h-3 bg-slime-surface rounded animate-pulse mt-0.5" />
                   ) : handle ? (
                     `@${handle}`
                   ) : (
@@ -293,14 +289,13 @@ export default function SlimeMenu() {
                   )}
                 </p>
               </div>
-              <span className="text-gray-300 text-xs shrink-0" aria-hidden>
+              <span className="text-slime-muted text-xs shrink-0" aria-hidden>
                 ›
               </span>
             </Link>
 
             <Divider />
 
-            {/* My Stuff */}
             <NavSection title="My Stuff">
               <NavItem
                 href="/collection"
@@ -324,7 +319,6 @@ export default function SlimeMenu() {
 
             <Divider />
 
-            {/* Explore */}
             <NavSection title="Explore">
               <NavItem href="/" icon="🫧" label="Feed" onClose={handleClose} />
               <NavItem
@@ -343,7 +337,6 @@ export default function SlimeMenu() {
 
             <Divider />
 
-            {/* Learn */}
             <NavSection title="Learn">
               <NavItem
                 href="/guide"
@@ -361,21 +354,19 @@ export default function SlimeMenu() {
 
             <Divider />
 
-            {/* Account */}
             <NavSection title="Account">
               <button
                 onClick={handleSignOut}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-500 hover:bg-red-50 transition-all duration-100 active:scale-[0.97] w-full text-left"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-400 hover:bg-red-500/10 transition-all duration-100 active:scale-[0.97] w-full text-left"
               >
                 <span className="text-base w-5 text-center">🚪</span>
                 Sign Out
               </button>
             </NavSection>
 
-            {/* Bottom safe area spacer */}
             <div className="flex-1" />
             <div className="pb-8 px-4">
-              <p className="text-[10px] text-gray-300 text-center">
+              <p className="text-[10px] text-slime-muted text-center">
                 SlimeLog · Rate it. Log it. Love it.
               </p>
             </div>
@@ -383,45 +374,19 @@ export default function SlimeMenu() {
         </>
       )}
 
-      {/* ── Animation keyframes (injected via style tag) ─────────────── */}
       <style>{`
         @keyframes slimeDrip {
-          0% {
-            transform: translateY(-100%) scaleY(0.3);
-            transform-origin: top right;
-            opacity: 0;
-          }
-          60% {
-            transform: translateY(4px) scaleY(1.02);
-            opacity: 1;
-          }
-          80% {
-            transform: translateY(-2px) scaleY(0.98);
-          }
-          100% {
-            transform: translateY(0) scaleY(1);
-            opacity: 1;
-          }
+          0% { transform: translateY(-100%) scaleY(0.3); transform-origin: top right; opacity: 0; }
+          60% { transform: translateY(4px) scaleY(1.02); opacity: 1; }
+          80% { transform: translateY(-2px) scaleY(0.98); }
+          100% { transform: translateY(0) scaleY(1); opacity: 1; }
         }
-
         @keyframes slimeReabsorb {
           0% { transform: translateY(0) scaleY(1); opacity: 1; }
-          100% {
-            transform: translateY(-100%) scaleY(0.3);
-            transform-origin: top right;
-            opacity: 0;
-          }
+          100% { transform: translateY(-100%) scaleY(0.3); transform-origin: top right; opacity: 0; }
         }
-
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-
-        @keyframes fadeOut {
-          from { opacity: 1; }
-          to { opacity: 0; }
-        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
       `}</style>
     </>
   );
