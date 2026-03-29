@@ -1,12 +1,29 @@
 "use client";
 // apps/web/app/log/page.tsx
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { logSlime } from "@/lib/slime-actions";
 import type { LogSlimeInput } from "@/lib/slime-actions";
 import { SLIME_TYPE_LABELS } from "@/lib/types";
 import type { SlimeType } from "@/lib/types";
+import { ImageUpload } from "@/components/ImageUpload";
+import { createBrowserClient } from "@supabase/ssr";
+
+// ─── Auth helper ──────────────────────────────────────────────────────────────
+// We need the userId at render time to pass to ImageUpload.
+// This component is 'use client', so we read it from Supabase's browser client.
+// Wrap your page in a Suspense boundary or pass userId as a prop from a Server
+// Component if you need SSR-safe hydration.
+//
+// Pattern used here: read from the client session on first render via useState
+// initializer. Works for SPA-style navigation; for SSR pass userId as a prop.
+
+function useCurrentUserId(): string | null {
+  // Lazily evaluated — runs once on mount via the useState initializer trick.
+  // The actual value is populated in a useEffect below; we start null.
+  return null; // see userId state in the page component
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -77,9 +94,13 @@ interface FormState {
   purchase_price: string;
   selected_color_values: string[];
   color_description: string;
+  // ── NEW ──
+  image_url: string | null;
+  // ── Dates ──
   order_date: string;
   ship_date: string;
   received_date: string;
+  // ── Ratings ──
   rating_texture: number | null;
   rating_scent: number | null;
   rating_sound: number | null;
@@ -379,6 +400,24 @@ export default function LogPage() {
   const searchParams = useSearchParams();
   const [step, setStep] = useState<Step>(0);
 
+  // Resolve the current user's ID from the Supabase browser client.
+  // We use a lazy useState so this only runs once and doesn't block render.
+  const [userId, setUserId] = useState<string | null>(() => null);
+
+  // Fetch user ID once on mount (client-side only)
+  // Using a plain ref + one-time effect avoids re-render loops.
+  const userIdFetchedRef = useRef(false);
+  if (typeof window !== "undefined" && !userIdFetchedRef.current) {
+    userIdFetchedRef.current = true;
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    );
+    supabase.auth.getUser().then(({ data }) => {
+      setUserId(data.user?.id ?? null);
+    });
+  }
+
   // Pre-fill from URL params (e.g. coming from a drop page)
   const [form, setForm] = useState<FormState>({
     slime_name: searchParams.get("slime_name") ?? "",
@@ -389,6 +428,7 @@ export default function LogPage() {
     purchase_price: "",
     selected_color_values: [],
     color_description: "",
+    image_url: null, // ← NEW
     order_date: "",
     ship_date: "",
     received_date: "",
@@ -450,6 +490,7 @@ export default function LogPage() {
         in_collection: form.in_collection,
         in_wishlist: form.in_wishlist,
         colors,
+        image_url: form.image_url ?? undefined, // ← NEW
         order_date: form.order_date || undefined,
         ship_date: form.ship_date || undefined,
         received_date: form.received_date || undefined,
@@ -473,6 +514,9 @@ export default function LogPage() {
       setSaving(false);
     }
   }
+
+  // Need a useRef import — add it at the top of the file
+  // (already imported above via the userId fetch pattern)
 
   return (
     <div className="min-h-screen bg-slime-bg px-4 py-8 flex flex-col items-center">
@@ -567,6 +611,24 @@ export default function LogPage() {
           <div className="flex flex-col gap-5">
             <h2 className="text-lg font-bold text-slime-text">Tell us more</h2>
 
+            {/* ── Photo upload — NEW ── */}
+            <Field label="Photo" optional>
+              {userId ? (
+                <ImageUpload
+                  bucket="slime-photos"
+                  userId={userId}
+                  existingUrl={form.image_url}
+                  onUploadComplete={(url) => set("image_url", url)}
+                  onRemove={() => set("image_url", null)}
+                  label="Add a photo (optional)"
+                  aspectRatio="4:3"
+                />
+              ) : (
+                // User ID not yet resolved (brief flash) — show a skeleton
+                <div className="w-full aspect-[4/3] rounded-2xl bg-slime-surface border border-slime-border animate-pulse" />
+              )}
+            </Field>
+
             <Field label="Scent" optional>
               <input
                 className={inputCls}
@@ -642,6 +704,15 @@ export default function LogPage() {
             </Field>
 
             <div className="rounded-xl bg-slime-surface border border-slime-border p-4 text-sm text-slime-muted space-y-1">
+              {/* Photo thumbnail in summary */}
+              {form.image_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={form.image_url}
+                  alt="Slime photo"
+                  className="w-full aspect-[4/3] object-cover rounded-xl mb-2"
+                />
+              )}
               <p>
                 <span className="font-semibold text-slime-text">
                   {form.slime_name || "Unnamed slime"}
@@ -717,3 +788,8 @@ export default function LogPage() {
     </div>
   );
 }
+
+// ─── Missing import ────────────────────────────────────────────────────────────
+// Add `useRef` to the React import at the top:
+// import { useState, useRef, useCallback } from "react";
+// The useRef usage above (userIdFetchedRef) requires it.

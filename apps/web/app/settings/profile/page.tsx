@@ -1,26 +1,30 @@
-// apps/web/app/settings/profile/page.tsx
 "use client";
+// apps/web/app/settings/profile/page.tsx
+//
+// Merged version:
+//  - Username availability checking with debounce (from original)
+//  - ImageUpload component for avatar (from new version)
+//  - location and website_url fields (from new version)
+//  - updateProfile server action for saving (from original)
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { updateProfile, checkUsernameAvailable } from "@/lib/profile-actions";
+import { ImageUpload } from "@/components/ImageUpload";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type FormState = {
   username: string;
   bio: string;
-  avatar_url: string;
+  location: string;
+  website_url: string;
+  avatar_url: string | null;
 };
 
-type UsernameStatus =
-  | "idle" // no input yet or unchanged from original
-  | "checking" // debounced request in flight
-  | "available" // confirmed not taken
-  | "taken" // confirmed taken
-  | "invalid"; // fails local regex
+type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid";
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
 
@@ -82,7 +86,6 @@ function UsernameStatusIcon({ status }: { status: UsernameStatus }) {
       </span>
     );
   }
-  // taken or invalid → red X
   return (
     <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-50">
       <svg
@@ -146,8 +149,6 @@ function UsernameHint({
 export default function ProfileSettingsPage() {
   const router = useRouter();
 
-  // Supabase browser client — safe to instantiate at module level in a
-  // client component as long as env vars are present.
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -172,12 +173,16 @@ export default function ProfileSettingsPage() {
   const [originalForm, setOriginalForm] = useState<FormState>({
     username: "",
     bio: "",
-    avatar_url: "",
+    location: "",
+    website_url: "",
+    avatar_url: null,
   });
   const [form, setForm] = useState<FormState>({
     username: "",
     bio: "",
-    avatar_url: "",
+    location: "",
+    website_url: "",
+    avatar_url: null,
   });
   const [profileLoading, setProfileLoading] = useState(true);
 
@@ -185,7 +190,7 @@ export default function ProfileSettingsPage() {
     if (!userId) return;
     supabase
       .from("profiles")
-      .select("username, bio, avatar_url")
+      .select("username, bio, location, website_url, avatar_url")
       .eq("id", userId)
       .maybeSingle()
       .then(({ data }) => {
@@ -193,7 +198,9 @@ export default function ProfileSettingsPage() {
           const loaded: FormState = {
             username: data.username ?? "",
             bio: data.bio ?? "",
-            avatar_url: data.avatar_url ?? "",
+            location: data.location ?? "",
+            website_url: data.website_url ?? "",
+            avatar_url: data.avatar_url ?? null,
           };
           setOriginalForm(loaded);
           setForm(loaded);
@@ -208,7 +215,6 @@ export default function ProfileSettingsPage() {
 
   const checkUsername = useCallback(
     async (value: string) => {
-      // Same as original — no need to check
       if (value === originalForm.username) {
         setUsernameStatus("idle");
         return;
@@ -230,11 +236,7 @@ export default function ProfileSettingsPage() {
 
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
 
-    if (value === originalForm.username) {
-      setUsernameStatus("idle");
-      return;
-    }
-    if (value === "") {
+    if (value === originalForm.username || value === "") {
       setUsernameStatus("idle");
       return;
     }
@@ -254,6 +256,8 @@ export default function ProfileSettingsPage() {
   const hasChanges =
     form.username !== originalForm.username ||
     form.bio !== originalForm.bio ||
+    form.location !== originalForm.location ||
+    form.website_url !== originalForm.website_url ||
     form.avatar_url !== originalForm.avatar_url;
 
   const isFormValid =
@@ -299,6 +303,7 @@ export default function ProfileSettingsPage() {
       >
         <div className="px-4 pt-10 space-y-4 animate-pulse">
           <div className="h-6 w-32 bg-pink-100 rounded-xl" />
+          <div className="h-28 w-28 bg-pink-100 rounded-2xl" />
           <div className="h-12 bg-white rounded-2xl border border-pink-50" />
           <div className="h-24 bg-white rounded-2xl border border-pink-50" />
           <div className="h-12 bg-white rounded-2xl border border-pink-50" />
@@ -347,6 +352,49 @@ export default function ProfileSettingsPage() {
       </header>
 
       <div className="px-4 space-y-5">
+        {/* ── Avatar upload ── */}
+        <section className="bg-white rounded-2xl border border-pink-50 shadow-sm p-4 space-y-2">
+          <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">
+            Profile Photo
+          </p>
+          {userId ? (
+            <div className="flex items-start gap-4">
+              <div className="w-24 shrink-0">
+                <ImageUpload
+                  bucket="avatars"
+                  userId={userId}
+                  existingUrl={form.avatar_url}
+                  onUploadComplete={(url) =>
+                    setForm((f) => ({ ...f, avatar_url: url }))
+                  }
+                  onRemove={() => setForm((f) => ({ ...f, avatar_url: null }))}
+                  label="Add photo"
+                  aspectRatio="square"
+                />
+              </div>
+              <div className="flex-1 flex flex-col justify-center gap-1 pt-1">
+                <p className="text-sm font-semibold text-gray-700 leading-tight">
+                  {form.username || "Your Name"}
+                </p>
+                <p className="text-xs text-gray-400">
+                  Tap to upload or change your avatar. Max 2 MB.
+                </p>
+                {form.avatar_url && (
+                  <button
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, avatar_url: null }))}
+                    className="mt-1 text-xs text-pink-400 font-medium text-left active:opacity-70 transition-opacity"
+                  >
+                    Remove photo
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="w-24 aspect-square rounded-2xl bg-pink-50 border border-pink-100 animate-pulse" />
+          )}
+        </section>
+
         {/* ── Username ── */}
         <section className="bg-white rounded-2xl border border-pink-50 shadow-sm p-4 space-y-1">
           <label
@@ -416,42 +464,47 @@ export default function ProfileSettingsPage() {
           />
         </section>
 
-        {/* ── Avatar URL ── */}
+        {/* ── Location ── */}
         <section className="bg-white rounded-2xl border border-pink-50 shadow-sm p-4 space-y-1">
           <label
-            htmlFor="avatar_url"
+            htmlFor="location"
             className="text-xs text-gray-400 font-semibold uppercase tracking-wider"
           >
-            Avatar URL
+            Location
           </label>
           <input
-            id="avatar_url"
-            type="url"
-            autoComplete="off"
-            value={form.avatar_url}
+            id="location"
+            type="text"
+            value={form.location}
             onChange={(e) =>
-              setForm((f) => ({ ...f, avatar_url: e.target.value }))
+              setForm((f) => ({ ...f, location: e.target.value }))
             }
-            placeholder="https://example.com/your-photo.jpg"
+            maxLength={100}
+            placeholder="e.g. Austin, TX"
             className="w-full mt-1 px-3 py-2.5 rounded-xl border border-pink-100 bg-pink-50/20 text-sm text-gray-800 placeholder:text-gray-300 outline-none focus:border-fuchsia-300 transition-colors"
           />
-          <p className="text-xs text-gray-400 mt-1.5">
-            Photo upload coming soon — paste an image URL for now.
-          </p>
-          {form.avatar_url && (
-            <div className="mt-2 flex items-center gap-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={form.avatar_url}
-                alt="Avatar preview"
-                className="w-10 h-10 rounded-2xl object-cover border border-pink-100"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = "none";
-                }}
-              />
-              <span className="text-xs text-gray-400">Preview</span>
-            </div>
-          )}
+        </section>
+
+        {/* ── Website ── */}
+        <section className="bg-white rounded-2xl border border-pink-50 shadow-sm p-4 space-y-1">
+          <label
+            htmlFor="website_url"
+            className="text-xs text-gray-400 font-semibold uppercase tracking-wider"
+          >
+            Website
+          </label>
+          <input
+            id="website_url"
+            type="url"
+            inputMode="url"
+            value={form.website_url}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, website_url: e.target.value }))
+            }
+            maxLength={200}
+            placeholder="https://yourshop.com"
+            className="w-full mt-1 px-3 py-2.5 rounded-xl border border-pink-100 bg-pink-50/20 text-sm text-gray-800 placeholder:text-gray-300 outline-none focus:border-fuchsia-300 transition-colors"
+          />
         </section>
 
         {/* ── Save feedback ── */}

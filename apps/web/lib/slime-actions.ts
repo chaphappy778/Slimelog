@@ -37,12 +37,14 @@ export interface LogSlimeInput {
   // Free-form fallbacks (used before catalog matching)
   slime_name?: string;
   brand_name_raw?: string;
+  collection_name?: string;
 
   slime_type: SlimeType;
 
   // Status flags
   in_collection?: boolean;
   in_wishlist?: boolean;
+  is_public?: boolean;
 
   // Ratings — all optional, smallint 1–5
   rating_texture?: number;
@@ -56,6 +58,7 @@ export interface LogSlimeInput {
   // Details
   scent?: string;
   colors?: string[];
+  image_url?: string;
 
   // Shipping / fulfillment dates — ISO 8601 date strings (YYYY-MM-DD)
   order_date?: string;
@@ -124,9 +127,11 @@ export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
       brand_id: input.brand_id ?? null,
       slime_name: input.slime_name ?? null,
       brand_name_raw: input.brand_name_raw ?? null,
+      collection_name: input.collection_name ?? null,
       slime_type: input.slime_type,
       in_collection: input.in_collection ?? true,
       in_wishlist: input.in_wishlist ?? false,
+      is_public: input.is_public ?? true,
       rating_texture: input.rating_texture ?? null,
       rating_scent: input.rating_scent ?? null,
       rating_sound: input.rating_sound ?? null,
@@ -136,6 +141,7 @@ export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
       rating_overall: input.rating_overall ?? null,
       scent: input.scent ?? null,
       colors: input.colors ?? null,
+      image_url: input.image_url ?? null,
       order_date: input.order_date ?? null,
       ship_date: input.ship_date ?? null,
       received_date: input.received_date ?? null,
@@ -178,6 +184,9 @@ export async function updateSlimeLog(
       ...(input.brand_name_raw !== undefined && {
         brand_name_raw: input.brand_name_raw,
       }),
+      ...(input.collection_name !== undefined && {
+        collection_name: input.collection_name,
+      }),
       ...(input.slime_type !== undefined && { slime_type: input.slime_type }),
       ...(input.in_collection !== undefined && {
         in_collection: input.in_collection,
@@ -210,6 +219,7 @@ export async function updateSlimeLog(
       ...(input.purchase_price !== undefined && {
         purchase_price: input.purchase_price,
       }),
+      ...(input.image_url !== undefined && { image_url: input.image_url }),
       ...(input.colors !== undefined && { colors: input.colors }),
       ...(input.order_date !== undefined && { order_date: input.order_date }),
       ...(input.ship_date !== undefined && { ship_date: input.ship_date }),
@@ -262,12 +272,12 @@ export async function getUserCollectionLogs() {
     .from("collection_logs")
     .select(
       `
-      id, slime_type, slime_name, brand_name_raw,
+      id, slime_type, slime_name, brand_name_raw, collection_name,
       in_collection, in_wishlist,
       rating_overall, rating_texture, rating_scent,
       rating_sound, rating_drizzle, rating_creativity, rating_sensory_fit,
       notes, purchase_price, purchase_currency,
-      colors, order_date, ship_date, received_date,
+      colors, image_url, order_date, ship_date, received_date,
       created_at, updated_at,
       slimes ( id, name, colors, scent ),
       brands ( id, name, slug )

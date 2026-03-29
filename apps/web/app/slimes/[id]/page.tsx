@@ -20,6 +20,7 @@ type SlimeDetail = {
   slime_type: string | null;
   colors: string[] | null;
   scent: string | null;
+  image_url: string | null;
   // Purchase
   purchase_price: number | null;
   purchase_currency: string | null;
@@ -101,8 +102,6 @@ function fmt(iso: string | null) {
   }).format(new Date(iso));
 }
 
-// ─── Stars (large, for overall) ───────────────────────────────────────────────
-
 function StarRating({
   rating,
   size = "lg",
@@ -130,8 +129,6 @@ function StarRating({
   );
 }
 
-// ─── Dot rating (for sub-ratings) ─────────────────────────────────────────────
-
 function DotRating({ value }: { value: number | null }) {
   if (value == null) return <span className="text-xs text-slime-muted">—</span>;
   return (
@@ -145,8 +142,6 @@ function DotRating({ value }: { value: number | null }) {
     </span>
   );
 }
-
-// ─── Section wrapper ──────────────────────────────────────────────────────────
 
 function Section({
   title,
@@ -167,8 +162,6 @@ function Section({
   );
 }
 
-// ─── Detail row ───────────────────────────────────────────────────────────────
-
 function DetailRow({
   label,
   value,
@@ -185,8 +178,6 @@ function DetailRow({
     </div>
   );
 }
-
-// ─── Shipping stat bubble ─────────────────────────────────────────────────────
 
 function ShippingStat({
   label,
@@ -207,8 +198,6 @@ function ShippingStat({
   );
 }
 
-// ─── Free-text block ──────────────────────────────────────────────────────────
-
 function TextBlock({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
   return (
@@ -221,21 +210,15 @@ function TextBlock({ label, value }: { label: string; value: string | null }) {
   );
 }
 
-// ─── Back button (client component inline) ────────────────────────────────────
-// We use a simple Link to /collection as a fallback since this is a server page.
-// For true browser-back, see note below.
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function SlimeDetailPage({
   params,
 }: {
-  // Next.js 16: params is a Promise
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
 
-  // Next.js 16: cookies() must be awaited
   const cookieStore = await cookies();
 
   const supabase = createServerClient(
@@ -246,13 +229,12 @@ export default async function SlimeDetailPage({
     },
   );
 
-  // Fetch the log. Left-join brands so free-form logs still render.
   const { data, error } = await supabase
     .from("collection_logs")
     .select(
       `
       id, created_at, slime_name, brand_id, brand_name_raw,
-      collection_name, slime_type, colors, scent,
+      collection_name, slime_type, colors, scent, image_url,
       purchase_price, purchase_currency, cost_paid,
       purchased_from, purchased_at,
       likes, dislikes, notes,
@@ -269,19 +251,16 @@ export default async function SlimeDetailPage({
 
   if (error || !data) notFound();
 
-  // Type-cast after the join shape is known
   const log = data as unknown as SlimeDetail;
 
-  // Auth check — only needed to conditionally show edit/delete
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const isOwner = !!user; // Tighten this to user.id === log.user_id once user_id is in select
+  const isOwner = !!user;
 
   const brandName = log.brands?.name ?? log.brand_name_raw ?? "Unknown brand";
   const brandHref = log.brands?.slug ? `/brands/${log.brands.slug}` : null;
 
-  // Resolved price: prefer purchase_price (migration 000004), fall back to cost_paid
   const displayPrice = log.purchase_price ?? log.cost_paid;
   const currency = log.purchase_currency ?? "USD";
 
@@ -312,7 +291,6 @@ export default async function SlimeDetailPage({
     >
       {/* ── Sticky top bar ──────────────────────────────────────────────── */}
       <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-pink-100 px-4 py-3 flex items-center justify-between gap-2">
-        {/* Back — links to collection as safe fallback */}
         <Link
           href="/collection"
           className="flex items-center gap-1.5 text-sm font-semibold text-pink-500 hover:text-pink-600 transition"
@@ -321,7 +299,6 @@ export default async function SlimeDetailPage({
           <span>Back</span>
         </Link>
 
-        {/* Status badge */}
         <span
           className={`text-xs font-bold px-3 py-1 rounded-full ${
             log.in_wishlist
@@ -335,52 +312,74 @@ export default async function SlimeDetailPage({
 
       <div className="px-4 pt-6 flex flex-col gap-5 max-w-lg mx-auto">
         {/* ── Hero header ─────────────────────────────────────────────────── */}
-        <div className="bg-white rounded-3xl border border-pink-100 shadow-sm p-5 flex flex-col gap-3 relative overflow-hidden">
+        <div className="bg-white rounded-3xl border border-pink-100 shadow-sm overflow-hidden flex flex-col gap-3 relative">
           {/* Decorative blob */}
           <div
-            className="absolute -top-8 -right-8 w-32 h-32 rounded-full opacity-[0.08] blur-3xl pointer-events-none"
+            className="absolute -top-8 -right-8 w-32 h-32 rounded-full opacity-[0.08] blur-3xl pointer-events-none z-0"
             style={{ background: "radial-gradient(circle, #f472b6, #a855f7)" }}
             aria-hidden="true"
           />
 
-          {/* Slime name */}
-          <h1 className="text-2xl font-black text-gray-900 leading-tight tracking-tight pr-4">
-            {log.slime_name ?? "Untitled Slime"}
-          </h1>
+          {/* ── Photo ── */}
+          {log.image_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={log.image_url}
+              alt={log.slime_name ?? "Slime photo"}
+              className="w-full h-56 object-cover"
+            />
+          ) : (
+            <div
+              className="w-full h-40 flex items-center justify-center text-4xl"
+              style={{
+                background:
+                  "linear-gradient(135deg, #fce7f3 0%, #f3e8ff 50%, #e0f2fe 100%)",
+              }}
+              aria-hidden="true"
+            >
+              🫧
+            </div>
+          )}
 
-          {/* Brand */}
-          <div className="flex items-center gap-1.5 text-sm text-gray-500">
-            <span>by</span>
-            {brandHref ? (
-              <Link
-                href={brandHref}
-                className="font-semibold text-pink-500 hover:text-pink-600 underline underline-offset-2 transition"
-              >
-                {brandName}
-              </Link>
-            ) : (
-              <span className="font-semibold text-gray-700">{brandName}</span>
+          <div className="px-5 pb-5 flex flex-col gap-3 relative z-10">
+            {/* Slime name */}
+            <h1 className="text-2xl font-black text-gray-900 leading-tight tracking-tight pr-4">
+              {log.slime_name ?? "Untitled Slime"}
+            </h1>
+
+            {/* Brand */}
+            <div className="flex items-center gap-1.5 text-sm text-gray-500">
+              <span>by</span>
+              {brandHref ? (
+                <Link
+                  href={brandHref}
+                  className="font-semibold text-pink-500 hover:text-pink-600 underline underline-offset-2 transition"
+                >
+                  {brandName}
+                </Link>
+              ) : (
+                <span className="font-semibold text-gray-700">{brandName}</span>
+              )}
+            </div>
+
+            {/* Type badge + colors */}
+            <div className="flex flex-wrap items-center gap-2">
+              {log.slime_type && <TypeBadge type={log.slime_type as any} />}
+              {log.colors?.map((c) => colorDot(c))}
+            </div>
+
+            {/* Scent */}
+            {log.scent && (
+              <p className="text-sm text-gray-500">
+                <span className="mr-1">🌸</span>
+                <span className="font-medium">{log.scent}</span>
+              </p>
             )}
           </div>
-
-          {/* Type badge + colors */}
-          <div className="flex flex-wrap items-center gap-2">
-            {log.slime_type && <TypeBadge type={log.slime_type as any} />}
-            {log.colors?.map((c) => colorDot(c))}
-          </div>
-
-          {/* Scent */}
-          {log.scent && (
-            <p className="text-sm text-gray-500">
-              <span className="mr-1">🌸</span>
-              <span className="font-medium">{log.scent}</span>
-            </p>
-          )}
         </div>
 
         {/* ── Ratings ─────────────────────────────────────────────────────── */}
         <Section title="Ratings">
-          {/* Overall — large */}
           <div className="flex items-center justify-between mb-4 pb-4 border-b border-pink-50">
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-pink-300 mb-1">
@@ -396,7 +395,6 @@ export default async function SlimeDetailPage({
             )}
           </div>
 
-          {/* Sub-ratings grid */}
           {hasSubRatings ? (
             <div className="grid grid-cols-2 gap-x-6 gap-y-3">
               {SUB_RATINGS.map(({ key, label }) => (
@@ -437,7 +435,7 @@ export default async function SlimeDetailPage({
           </Section>
         )}
 
-        {/* ── Notes / Likes / Dislikes ─────────────────────────────────────── */}
+        {/* ── Notes ───────────────────────────────────────────────────────── */}
         {hasNotes && (
           <Section title="Notes">
             <div className="flex flex-col gap-4">
@@ -451,7 +449,6 @@ export default async function SlimeDetailPage({
         {/* ── Shipping ────────────────────────────────────────────────────── */}
         {hasShipping && (
           <Section title="Shipping">
-            {/* Stats row */}
             <div className="grid grid-cols-2 gap-3 mb-4">
               <ShippingStat
                 label="Days to ship"
@@ -462,15 +459,11 @@ export default async function SlimeDetailPage({
                 value={log.days_to_receive ?? "—"}
               />
             </div>
-
-            {/* Date details */}
             <div className="flex flex-col gap-0">
               <DetailRow label="Order date" value={fmt(log.order_date)} />
               <DetailRow label="Ship date" value={fmt(log.ship_date)} />
               <DetailRow label="Received" value={fmt(log.received_date)} />
             </div>
-
-            {/* Attribution note */}
             <p className="text-[11px] text-slime-muted mt-3 text-center italic">
               This shipping data helps rate {brandName}
             </p>
@@ -480,15 +473,12 @@ export default async function SlimeDetailPage({
         {/* ── Actions ─────────────────────────────────────────────────────── */}
         {isOwner && (
           <div className="flex gap-3 pt-1">
-            {/* Edit — placeholder href, ready for future edit flow */}
             <Link
               href={`/log/edit/${id}`}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border-2 border-pink-200 text-pink-500 font-bold text-sm hover:bg-pink-50 transition"
             >
               ✎ Edit
             </Link>
-
-            {/* Delete — client component handles confirmation + server action */}
             <DeleteLogButton logId={id} />
           </div>
         )}
