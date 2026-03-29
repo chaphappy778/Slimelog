@@ -4,8 +4,12 @@ import BottomNav from "@/components/BottomNav";
 
 export const metadata: Metadata = {
   title: "SlimeLog",
-  description: "Log every slime. Rate. Discover. Haul.",
+  description: "Rate It. Log It. Love It.",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/logo-icon.svg",
+    apple: "/logo-icon.svg",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

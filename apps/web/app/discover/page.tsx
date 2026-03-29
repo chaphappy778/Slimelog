@@ -1,7 +1,10 @@
 // apps/web/app/discover/page.tsx
+// Updated: uses PageHeader, pt-14 push, removes inline header.
+
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import Link from "next/link";
+import PageHeader from "@/components/PageHeader";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -79,8 +82,6 @@ function RatingBar({ avg }: { avg: number | null }) {
   );
 }
 
-// ─── Section header ───────────────────────────────────────────────────────────
-
 function SectionHeader({
   emoji,
   title,
@@ -114,8 +115,6 @@ function EmptySection({ message }: { message: string }) {
     <div className="text-center py-10 text-gray-400 text-sm">{message}</div>
   );
 }
-
-// ─── Top-rated card ───────────────────────────────────────────────────────────
 
 function TopRatedCard({ slime, rank }: { slime: TopRatedSlime; rank: number }) {
   const isTop3 = rank <= 3;
@@ -154,9 +153,6 @@ function TopRatedCard({ slime, rank }: { slime: TopRatedSlime; rank: number }) {
   );
 }
 
-// ─── Drop card ────────────────────────────────────────────────────────────────
-// UPDATED: wrapped in Link to /drops/[id]
-
 function DropCard({ drop }: { drop: UpcomingDrop }) {
   const statusBadge = getStatusBadge(drop.status);
   const isLive = drop.status === "live";
@@ -194,7 +190,6 @@ function DropCard({ drop }: { drop: UpcomingDrop }) {
           >
             {statusBadge.label}
           </span>
-          {/* Chevron affordance */}
           <span
             className="text-gray-300 text-xs group-hover:text-pink-400 transition-colors"
             aria-hidden="true"
@@ -255,63 +250,70 @@ export default async function DiscoverPage() {
         background: "linear-gradient(160deg, #fdf2f8 0%, #faf5ff 100%)",
       }}
     >
-      <header className="px-4 pt-10 pb-6">
-        <h1
-          className="text-2xl font-black tracking-tight"
-          style={{
-            background: "linear-gradient(90deg, #ec4899, #a855f7)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-          }}
-        >
-          Discover
-        </h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          Top-rated slimes & upcoming drops
-        </p>
-      </header>
+      {/* Fixed page header */}
+      <PageHeader />
 
-      {hasErrors && (
-        <div className="mx-4 mb-4 px-4 py-3 rounded-2xl bg-red-50 border border-red-100 text-xs text-red-500">
-          Some data couldn't load — try refreshing.
+      {/* Content — push below fixed header */}
+      <div className="pt-14">
+        {/* Page title */}
+        <div className="px-4 pt-6 pb-6">
+          <h1
+            className="text-2xl font-black tracking-tight"
+            style={{
+              background: "linear-gradient(90deg, #ec4899, #a855f7)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            }}
+          >
+            Discover
+          </h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Top-rated slimes & upcoming drops
+          </p>
         </div>
-      )}
 
-      {/* ── Top rated ──────────────────────────────────────────────────── */}
-      <section className="px-4 mb-8">
-        <SectionHeader
-          emoji="🏆"
-          title="Top Rated Slimes"
-          subtitle="Minimum 3 community ratings"
-        />
-        {topSlimes.length === 0 ? (
-          <EmptySection message="No highly-rated slimes yet — go log some!" />
-        ) : (
-          <div className="flex flex-col gap-3">
-            {topSlimes.map((slime, i) => (
-              <TopRatedCard key={slime.id} slime={slime} rank={i + 1} />
-            ))}
+        {hasErrors && (
+          <div className="mx-4 mb-4 px-4 py-3 rounded-2xl bg-red-50 border border-red-100 text-xs text-red-500">
+            Some data couldn't load — try refreshing.
           </div>
         )}
-      </section>
 
-      {/* ── Upcoming drops ─────────────────────────────────────────────── */}
-      <section className="px-4">
-        <SectionHeader
-          emoji="📅"
-          title="Upcoming Drops"
-          subtitle="Tap a drop to see what's included"
-        />
-        {drops.length === 0 ? (
-          <EmptySection message="No drops announced yet — check back soon." />
-        ) : (
-          <div className="flex flex-col gap-3">
-            {drops.map((drop) => (
-              <DropCard key={drop.id} drop={drop} />
-            ))}
-          </div>
-        )}
-      </section>
+        {/* Top rated */}
+        <section className="px-4 mb-8">
+          <SectionHeader
+            emoji="🏆"
+            title="Top Rated Slimes"
+            subtitle="Minimum 3 community ratings"
+          />
+          {topSlimes.length === 0 ? (
+            <EmptySection message="No highly-rated slimes yet — go log some!" />
+          ) : (
+            <div className="flex flex-col gap-3">
+              {topSlimes.map((slime, i) => (
+                <TopRatedCard key={slime.id} slime={slime} rank={i + 1} />
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Upcoming drops */}
+        <section className="px-4">
+          <SectionHeader
+            emoji="📅"
+            title="Upcoming Drops"
+            subtitle="Tap a drop to see what's included"
+          />
+          {drops.length === 0 ? (
+            <EmptySection message="No drops announced yet — check back soon." />
+          ) : (
+            <div className="flex flex-col gap-3">
+              {drops.map((drop) => (
+                <DropCard key={drop.id} drop={drop} />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
     </main>
   );
 }

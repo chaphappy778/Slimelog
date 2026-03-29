@@ -1,5 +1,5 @@
 // apps/web/app/collection/page.tsx
-// Updated: SlimeCard shows uploaded photo, links to /slimes/[id]
+// Updated: uses PageHeader, adds pt-14 to push content below fixed header.
 
 "use client";
 
@@ -8,6 +8,7 @@ import Link from "next/link";
 import { getUserCollectionLogs } from "@/lib/slime-actions";
 import { SLIME_TYPE_LABELS } from "@/lib/types";
 import type { CollectionLog, SlimeType } from "@/lib/types";
+import PageHeader from "@/components/PageHeader";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -60,7 +61,6 @@ function SlimeCard({ log }: { log: CollectionLog }) {
   return (
     <Link href={`/slimes/${log.id}`} className="block group">
       <div className="bg-slime-card rounded-2xl border border-slime-border overflow-hidden shadow-slime-sm group-hover:shadow-slime group-active:scale-[0.98] transition-all duration-200">
-        {/* ── Photo ── */}
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -81,9 +81,7 @@ function SlimeCard({ log }: { log: CollectionLog }) {
           </div>
         )}
 
-        {/* ── Card content ── */}
         <div className="p-4 flex flex-col gap-3">
-          {/* Top row */}
           <div className="flex items-start justify-between gap-2">
             <div className="flex flex-col gap-0.5 min-w-0">
               <h3 className="font-bold text-slime-text text-sm leading-snug truncate">
@@ -109,7 +107,6 @@ function SlimeCard({ log }: { log: CollectionLog }) {
             </div>
           </div>
 
-          {/* Tags row */}
           <div className="flex flex-wrap gap-1.5">
             {typeLabel && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-slime-surface border border-slime-border text-slime-muted">
@@ -133,7 +130,6 @@ function SlimeCard({ log }: { log: CollectionLog }) {
             )}
           </div>
 
-          {/* Ratings */}
           {hasRatings && (
             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 pt-1 border-t border-slime-border">
               {log.rating_overall !== null && (
@@ -169,14 +165,12 @@ function SlimeCard({ log }: { log: CollectionLog }) {
             </div>
           )}
 
-          {/* Notes */}
           {log.notes && (
             <p className="text-xs text-slime-muted line-clamp-2 italic border-t border-slime-border pt-2">
               "{log.notes}"
             </p>
           )}
 
-          {/* Footer */}
           <p className="text-xs text-slime-muted/60 mt-auto">
             {formatDate(log.created_at)}
           </p>
@@ -186,7 +180,7 @@ function SlimeCard({ log }: { log: CollectionLog }) {
   );
 }
 
-// ─── Empty State ───────────────────────────────────────────────────────────────
+// ─── Empty State ──────────────────────────────────────────────────────────────
 
 function EmptyState() {
   return (
@@ -208,7 +202,7 @@ function EmptyState() {
   );
 }
 
-// ─── Page ──────────────────────────────────────────────────────────────────────
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CollectionPage() {
   const [logs, setLogs] = useState<CollectionLog[]>([]);
@@ -242,75 +236,77 @@ export default function CollectionPage() {
   const wishlistCount = logs.filter((l) => l.in_wishlist).length;
 
   return (
-    <div className="min-h-screen bg-slime-bg px-4 py-8">
-      <div className="max-w-md mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-extrabold text-slime-text tracking-tight">
-              My Slimes <span className="text-slime-accent">✦</span>
-            </h1>
-            {!loading && (
-              <p className="text-sm text-slime-muted mt-0.5">
-                {collectionCount} in collection · {wishlistCount} on wishlist
-              </p>
-            )}
-          </div>
-          <Link
-            href="/log"
-            className="px-4 py-2 rounded-xl bg-slime-accent text-white text-xs font-bold hover:bg-slime-accent-hover transition"
-          >
-            + Log
-          </Link>
-        </div>
+    <div className="min-h-screen bg-slime-bg">
+      {/* Fixed page header */}
+      <PageHeader />
 
-        {/* Filter tabs */}
-        <div className="flex gap-2 mb-6">
-          {(["all", "collection", "wishlist"] as const).map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition capitalize ${
-                filter === f
-                  ? "bg-slime-accent text-white"
-                  : "bg-slime-surface border border-slime-border text-slime-muted hover:border-slime-accent/50"
-              }`}
+      {/* Content — push below fixed header */}
+      <div className="pt-14 px-4 py-8">
+        <div className="max-w-md mx-auto">
+          {/* Page title row */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-extrabold text-slime-text tracking-tight">
+                My Slimes <span className="text-slime-accent">✦</span>
+              </h1>
+              {!loading && (
+                <p className="text-sm text-slime-muted mt-0.5">
+                  {collectionCount} in collection · {wishlistCount} on wishlist
+                </p>
+              )}
+            </div>
+            <Link
+              href="/log"
+              className="px-4 py-2 rounded-xl bg-slime-accent text-white text-xs font-bold hover:bg-slime-accent-hover transition"
             >
-              {f === "all"
-                ? `All (${logs.length})`
-                : f === "collection"
-                  ? `Collection (${collectionCount})`
-                  : `Wishlist (${wishlistCount})`}
-            </button>
-          ))}
-        </div>
-
-        {/* Loading */}
-        {loading && (
-          <div className="flex justify-center py-20">
-            <div className="w-8 h-8 border-2 border-slime-accent border-t-transparent rounded-full animate-spin" />
+              + Log
+            </Link>
           </div>
-        )}
 
-        {/* Error */}
-        {error && !loading && (
-          <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">
-            {error}
-          </div>
-        )}
-
-        {/* Empty */}
-        {!loading && !error && filtered.length === 0 && <EmptyState />}
-
-        {/* Grid */}
-        {!loading && !error && filtered.length > 0 && (
-          <div className="flex flex-col gap-4">
-            {filtered.map((log) => (
-              <SlimeCard key={log.id} log={log} />
+          {/* Filter tabs */}
+          <div className="flex gap-2 mb-6">
+            {(["all", "collection", "wishlist"] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition capitalize ${
+                  filter === f
+                    ? "bg-slime-accent text-white"
+                    : "bg-slime-surface border border-slime-border text-slime-muted hover:border-slime-accent/50"
+                }`}
+              >
+                {f === "all"
+                  ? `All (${logs.length})`
+                  : f === "collection"
+                    ? `Collection (${collectionCount})`
+                    : `Wishlist (${wishlistCount})`}
+              </button>
             ))}
           </div>
-        )}
+
+          {loading && (
+            <div className="flex justify-center py-20">
+              <div className="w-8 h-8 border-2 border-slime-accent border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+
+          {error && !loading && (
+            <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">
+              {error}
+            </div>
+          )}
+
+          {!loading && !error && filtered.length === 0 && <EmptyState />}
+
+          {!loading && !error && filtered.length > 0 && (
+            <div className="flex flex-col gap-4">
+              {filtered.map((log) => (
+                <SlimeCard key={log.id} log={log} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

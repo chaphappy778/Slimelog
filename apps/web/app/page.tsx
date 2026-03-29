@@ -1,23 +1,13 @@
-// ============================================================
-// File: apps/web/app/page.tsx
-// Home feed — Community tab (all public logs, unchanged) +
-//             Following tab (activity_feed + profiles join).
-//
-// Following feed query strategy:
-//   1. Get current user session
-//   2. Fetch following_ids from follows table
-//   3. Query activity_feed WHERE actor_id = ANY(following_ids)
-//      AND activity_type = 'log_created', ordered desc, limit 20
-//   4. Slime display fields (name, type, brand, rating) come
-//      directly from the metadata jsonb column — no extra join
-//   5. Join profiles on actor_id to get username for the card
-// ============================================================
+// apps/web/app/page.tsx
+// Home feed — Community tab (all public logs) + Following tab (activity_feed).
+// PageHeader replaces the inline hero header.
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import FeedTabs from "@/components/FeedTabs";
+import PageHeader from "@/components/PageHeader";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,7 +22,6 @@ type FeedLog = {
   brands: { name: string | null }[] | null;
 };
 
-// Shape of an activity_feed row with the profiles join included
 type ActivityFeedRow = {
   id: string;
   created_at: string;
@@ -48,7 +37,7 @@ type ActivityFeedRow = {
   profiles: { username: string | null } | { username: string | null }[] | null;
 };
 
-// ─── Type badge palette (all 16 types) ───────────────────────────────────────
+// ─── Type badge palette ───────────────────────────────────────────────────────
 
 const TYPE_STYLE: Record<string, { bg: string; text: string; label: string }> =
   {
@@ -113,7 +102,7 @@ function Stars({ rating }: { rating: number | null }) {
   );
 }
 
-// ─── Feed card — username tappable ───────────────────────────────────────────
+// ─── Feed card ────────────────────────────────────────────────────────────────
 
 function FeedCard({ log }: { log: FeedLog }) {
   const typeStyle =
@@ -136,7 +125,6 @@ function FeedCard({ log }: { log: FeedLog }) {
         />
 
         <div className="p-4 flex flex-col gap-2.5">
-          {/* Header row */}
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-gray-900 text-sm leading-tight truncate">
@@ -153,10 +141,8 @@ function FeedCard({ log }: { log: FeedLog }) {
             </span>
           </div>
 
-          {/* Rating */}
           <Stars rating={log.rating_overall} />
 
-          {/* Footer — username links to profile */}
           <div className="flex items-center justify-between pt-1 border-t border-pink-50">
             {username ? (
               <Link
@@ -288,7 +274,6 @@ export default async function HomePage({
   } = await supabase.auth.getUser();
   const isLoggedIn = !!user;
 
-  // ── Community feed (all public logs — unchanged) ──────────────────────────
   let communityLogs: FeedLog[] = [];
   let communityError = false;
 
@@ -308,12 +293,10 @@ export default async function HomePage({
     communityError = !!error;
   }
 
-  // ── Following feed ────────────────────────────────────────────────────────
   let followingLogs: FeedLog[] = [];
   let followingError = false;
 
   if (activeTab === "following" && isLoggedIn && user) {
-    // Step 1 — resolve the set of user IDs the current user follows
     const { data: followRows, error: followsErr } = await supabase
       .from("follows")
       .select("following_id")
@@ -327,10 +310,6 @@ export default async function HomePage({
       );
 
       if (followingIds.length > 0) {
-        // Step 2 — fetch activity_feed rows for log_created events from those users.
-        //   · metadata jsonb already holds slime_name, slime_type, brand_name_raw,
-        //     rating_overall written by the trigger — no join to collection_logs needed.
-        //   · Join profiles on actor_id to get the poster's username for the card.
         const { data: activityRows, error: activityErr } = await supabase
           .from("activity_feed")
           .select(
@@ -349,20 +328,15 @@ export default async function HomePage({
         if (activityErr) {
           followingError = true;
         } else {
-          // Step 3 — normalise ActivityFeedRow → FeedLog for the shared FeedCard
           followingLogs = (
             (activityRows ?? []) as unknown as ActivityFeedRow[]
           ).map((row): FeedLog => {
             const meta = row.metadata ?? {};
-
-            // Supabase returns single-object joins as a plain object, not an array.
-            // Guard for both shapes.
             const profileObj = Array.isArray(row.profiles)
               ? ((row.profiles as { username: string | null }[])[0] ?? null)
               : (row.profiles as { username: string | null } | null);
 
             return {
-              // Use log_id so the card href correctly links to the slime detail page
               id: row.log_id ?? row.id,
               created_at: row.created_at,
               slime_name: meta.slime_name ?? null,
@@ -373,14 +347,11 @@ export default async function HomePage({
                   ? Number(meta.rating_overall)
                   : null,
               profiles: profileObj ? [{ username: profileObj.username }] : null,
-              // brand display name is not stored in metadata; brand_name_raw is the
-              // fallback used by FeedCard when brands is null.
               brands: null,
             };
           });
         }
       }
-      // followingIds.length === 0 → followingLogs stays [] → EmptyFollowingFeed shown
     }
   }
 
@@ -395,69 +366,75 @@ export default async function HomePage({
         background: "linear-gradient(160deg, #fdf2f8 0%, #faf5ff 100%)",
       }}
     >
-      {/* ── Hero header ─────────────────────────────────────────────────── */}
-      <header className="px-4 pt-10 pb-4">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-2xl" aria-hidden="true">
-            🫧
-          </span>
-          <h1
-            className="text-2xl font-black tracking-tight"
-            style={{
-              background: "linear-gradient(90deg, #ec4899, #a855f7)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-            }}
-          >
-            SlimeLog
-          </h1>
+      {/* Fixed page header */}
+      <PageHeader />
+
+      {/* Content — push below fixed header */}
+      <div className="pt-14">
+        {/* ── Hero header ─────────────────────────────────────────────────── */}
+        <header className="px-4 pt-10 pb-4">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-2xl" aria-hidden="true">
+              🫧
+            </span>
+            <h1
+              className="text-2xl font-black tracking-tight"
+              style={{
+                background: "linear-gradient(90deg, #ec4899, #a855f7)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              }}
+            >
+              SlimeLog
+            </h1>
+          </div>
+          <p className="text-sm text-gray-500 pl-9">
+            What the community is logging
+          </p>
+        </header>
+
+        {/* ── Tab toggle ──────────────────────────────────────────────────── */}
+        <div className="px-4 pb-4">
+          <FeedTabs activeTab={activeTab} isLoggedIn={isLoggedIn} />
         </div>
-        <p className="text-sm text-gray-500 pl-9">
-          What the community is logging
-        </p>
-      </header>
 
-      {/* ── Tab toggle ──────────────────────────────────────────────────── */}
-      <div className="px-4 pb-4">
-        <FeedTabs activeTab={activeTab} isLoggedIn={isLoggedIn} />
-      </div>
-
-      {/* ── Feed ────────────────────────────────────────────────────────── */}
-      <section className="px-4 pb-24">
-        {activeTab === "following" && !isLoggedIn ? (
-          <LoginPrompt />
-        ) : (
-          <>
-            {displayError && (
-              <div className="mb-4 px-4 py-3 rounded-2xl bg-red-50 border border-red-100 text-xs text-red-500">
-                Couldn't load the feed right now — try refreshing.
-              </div>
-            )}
-
-            {displayLogs.length === 0 && !displayError ? (
-              activeTab === "following" ? (
-                <EmptyFollowingFeed />
-              ) : (
-                <EmptyFeed />
-              )
-            ) : (
-              <>
-                <p className="text-xs text-gray-400 mb-4 font-medium uppercase tracking-wider">
-                  {activeTab === "following"
-                    ? "From people you follow"
-                    : "Recent logs"}{" "}
-                  · {displayLogs.length} shown
-                </p>
-                <div className="flex flex-col gap-3">
-                  {displayLogs.map((log) => (
-                    <FeedCard key={log.id} log={log} />
-                  ))}
+        {/* ── Feed ────────────────────────────────────────────────────────── */}
+        <section className="px-4 pb-24">
+          {activeTab === "following" && !isLoggedIn ? (
+            <LoginPrompt />
+          ) : (
+            <>
+              {displayError && (
+                <div className="mb-4 px-4 py-3 rounded-2xl bg-red-50 border border-red-100 text-xs text-red-500">
+                  Couldn't load the feed right now — try refreshing.
                 </div>
-              </>
-            )}
-          </>
-        )}
-      </section>
+              )}
+
+              {displayLogs.length === 0 && !displayError ? (
+                activeTab === "following" ? (
+                  <EmptyFollowingFeed />
+                ) : (
+                  <EmptyFeed />
+                )
+              ) : (
+                <>
+                  <p className="text-xs text-gray-400 mb-4 font-medium uppercase tracking-wider">
+                    {activeTab === "following"
+                      ? "From people you follow"
+                      : "Recent logs"}{" "}
+                    · {displayLogs.length} shown
+                  </p>
+                  <div className="flex flex-col gap-3">
+                    {displayLogs.map((log) => (
+                      <FeedCard key={log.id} log={log} />
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
