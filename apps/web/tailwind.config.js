@@ -7,18 +7,56 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        "slime-bg": "hsl(150 10% 97%)",
-        "slime-card": "hsl(0 0% 100%)",
-        "slime-surface": "hsl(150 8% 95%)",
-        "slime-border": "hsl(150 10% 88%)",
-        "slime-text": "hsl(155 20% 12%)",
-        "slime-muted": "hsl(155 10% 52%)",
-        "slime-accent": "hsl(152 60% 38%)",
-        "slime-accent-hover": "hsl(152 60% 32%)",
+        "slime-bg": "#0A0A0A",
+        "slime-card": "#111111",
+        "slime-surface": "#1A1A1A",
+        "slime-border": "#2A2A2A",
+        "slime-text": "#F5F5F5",
+        "slime-muted": "#888888",
+        "slime-accent": "#39FF14",
+        "slime-cyan": "#00F0FF",
+        "slime-magenta": "#FF00E5",
+        "slime-purple": "#2D0A4E",
+        "slime-lime": "#7FFF00",
+        "slime-violet": "#8B00FF",
+        "slime-accent-hover": "#2DDC10",
+      },
+      fontFamily: {
+        display: ["Montserrat", "sans-serif"],
+        body: ["Inter", "sans-serif"],
+      },
+      backgroundImage: {
+        "gradient-holo": "linear-gradient(135deg, #00F0FF, #39FF14, #FF00E5)",
+        "gradient-holo-radial":
+          "radial-gradient(ellipse at center, #39FF14 0%, #00F0FF 50%, #FF00E5 100%)",
+        "gradient-dark": "linear-gradient(180deg, #111111 0%, #0A0A0A 100%)",
+        "gradient-surface": "linear-gradient(135deg, #1A1A1A 0%, #111111 100%)",
       },
       boxShadow: {
-        slime: "0 4px 24px 0 hsl(152 40% 50% / 0.12)",
-        "slime-sm": "0 2px 8px 0 hsl(152 40% 50% / 0.08)",
+        slime: "0 4px 24px 0 rgba(57, 255, 20, 0.12)",
+        "slime-sm": "0 2px 8px 0 rgba(57, 255, 20, 0.08)",
+        "glow-green": "0 0 20px rgba(57, 255, 20, 0.3)",
+        "glow-green-lg":
+          "0 0 40px rgba(57, 255, 20, 0.4), 0 0 80px rgba(57, 255, 20, 0.15)",
+        "glow-cyan": "0 0 20px rgba(0, 240, 255, 0.3)",
+        "glow-cyan-lg":
+          "0 0 40px rgba(0, 240, 255, 0.4), 0 0 80px rgba(0, 240, 255, 0.15)",
+        "glow-magenta": "0 0 20px rgba(255, 0, 229, 0.3)",
+        card: "0 1px 3px rgba(0,0,0,0.6), 0 4px 16px rgba(0,0,0,0.4)",
+      },
+      animation: {
+        "holo-shift": "holoShift 4s ease infinite",
+        "pulse-glow": "pulseGlow 2s ease-in-out infinite",
+      },
+      keyframes: {
+        holoShift: {
+          "0%, 100%": { backgroundPosition: "0% 50%" },
+          "50%": { backgroundPosition: "100% 50%" },
+        },
+        pulseGlow: {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.6" },
+        },
       },
     },
   },

@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Inter:wght@400;500;600&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -15,8 +17,8 @@ html {
 }
 
 body {
-  background: #fdf2f8;
-  color: #111827;
+  background: #0a0a0a;
+  color: #f5f5f5;
   font-family: "Inter", sans-serif;
   line-height: 1.5;
   min-height: 100vh;
@@ -27,17 +29,113 @@ a {
   text-decoration: none;
 }
 
+/* ── Scrollbar ──────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #111111;
 }
 ::-webkit-scrollbar-thumb {
-  background: #f9a8d4;
+  background: #2a2a2a;
   border-radius: 3px;
 }
+::-webkit-scrollbar-thumb:hover {
+  background: #39ff14;
+}
 
+/* ── CSS Custom Properties ──────────────────────────────── */
+:root {
+  --gradient-holo: linear-gradient(135deg, #00f0ff, #39ff14, #ff00e5);
+  --gradient-holo-subtle: linear-gradient(
+    135deg,
+    rgba(0, 240, 255, 0.15),
+    rgba(57, 255, 20, 0.15),
+    rgba(255, 0, 229, 0.15)
+  );
+  --gradient-holo-border: linear-gradient(135deg, #00f0ff, #39ff14, #ff00e5);
+
+  --color-bg: #0a0a0a;
+  --color-card: #111111;
+  --color-surface: #1a1a1a;
+  --color-border: #2a2a2a;
+  --color-text: #f5f5f5;
+  --color-muted: #888888;
+  --color-accent: #39ff14;
+  --color-cyan: #00f0ff;
+  --color-magenta: #ff00e5;
+  --color-purple: #2d0a4e;
+  --color-lime: #7fff00;
+  --color-violet: #8b00ff;
+}
+
+/* ── Typography ─────────────────────────────────────────── */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Montserrat", sans-serif;
+  font-weight: 700;
+  color: #f5f5f5;
+}
+
+/* ── Glow Utilities ─────────────────────────────────────── */
+.glow-green {
+  box-shadow: 0 0 20px rgba(57, 255, 20, 0.3);
+}
+
+.glow-cyan {
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+}
+
+.glow-magenta {
+  box-shadow: 0 0 20px rgba(255, 0, 229, 0.3);
+}
+
+.glow-green-lg {
+  box-shadow:
+    0 0 40px rgba(57, 255, 20, 0.4),
+    0 0 80px rgba(57, 255, 20, 0.15);
+}
+
+.glow-cyan-lg {
+  box-shadow:
+    0 0 40px rgba(0, 240, 255, 0.4),
+    0 0 80px rgba(0, 240, 255, 0.15);
+}
+
+/* ── Holographic Gradient Text ──────────────────────────── */
+.text-holo {
+  background: var(--gradient-holo);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Holographic Border Utility ─────────────────────────── */
+.border-holo {
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  position: relative;
+}
+.border-holo::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--gradient-holo);
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ── Page Layout ────────────────────────────────────────── */
 .page-enter {
   min-height: 100vh;
 }
