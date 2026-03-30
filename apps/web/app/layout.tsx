@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import BottomNav from "@/components/BottomNav";
+import BottomNavWrapper from "@/components/BottomNavWrapper";
 
 export const metadata: Metadata = {
   title: "SlimeLog",
@@ -34,7 +34,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased">
         <main className="page-enter">{children}</main>
-        <BottomNav />
+        <BottomNavWrapper />
       </body>
     </html>
   );

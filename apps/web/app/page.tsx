@@ -5,6 +5,7 @@ import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import FeedTabs from "@/components/FeedTabs";
 import PageHeader from "@/components/PageHeader";
+import LandingPage from "@/components/LandingPage";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -169,7 +170,6 @@ function FeedCard({ log }: { log: FeedLog }) {
                 >
                   {username.charAt(0).toUpperCase()}
                 </div>
-                {/* handle — magenta (social/people semantic role) */}
                 <span className="text-xs text-slime-magenta group-hover/user:text-slime-accent transition-colors">
                   @{username}
                 </span>
@@ -185,7 +185,6 @@ function FeedCard({ log }: { log: FeedLog }) {
                 >
                   ?
                 </div>
-                {/* anonymous handle — magenta */}
                 <span className="text-xs text-slime-magenta">@anonymous</span>
               </div>
             )}
@@ -277,6 +276,13 @@ export default async function HomePage({
   } = await supabase.auth.getUser();
   const isLoggedIn = !!user;
 
+  // ── Smart routing: show landing page for logged-out users ──────────────────
+  if (!isLoggedIn) {
+    return <LandingPage />;
+  }
+
+  // ── Logged-in: show existing feed ──────────────────────────────────────────
+
   let communityLogs: FeedLog[] = [];
   let communityError = false;
 
@@ -299,7 +305,7 @@ export default async function HomePage({
   let followingLogs: FeedLog[] = [];
   let followingError = false;
 
-  if (activeTab === "following" && isLoggedIn && user) {
+  if (activeTab === "following" && user) {
     const { data: followRows, error: followsErr } = await supabase
       .from("follows")
       .select("following_id")
@@ -369,12 +375,6 @@ export default async function HomePage({
         </div>
 
         <div className="px-4 pb-4">
-          {/*
-            FeedTabs receives activeTab — the tab component itself should render:
-            - "Community" active: green (text-slime-accent) — community semantic role
-            - "Following" active: magenta (text-slime-magenta) — social/people semantic role
-            Pass activeTab down; FeedTabs handles the color logic internally.
-          */}
           <FeedTabs activeTab={activeTab} isLoggedIn={isLoggedIn} />
         </div>
 
