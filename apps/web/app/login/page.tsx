@@ -52,32 +52,37 @@ function LoginPageInner() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0f0a1e] flex flex-col items-center justify-center px-5 py-12">
-      {/* Background blobs */}
+    /* Brand dark background instead of old #0f0a1e */
+    <div className="min-h-screen bg-slime-bg flex flex-col items-center justify-center px-5 py-12">
+      {/* Background blobs — brand accent colors */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-pink-500/20 blur-3xl" />
-        <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-purple-600/20 blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-fuchsia-500/10 blur-3xl" />
+        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-slime-cyan/10 blur-3xl" />
+        <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-slime-violet/15 blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-slime-magenta/8 blur-3xl" />
       </div>
 
       <div className="relative w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-pink-500 to-purple-600 shadow-lg shadow-pink-500/30 mb-4">
+          <div
+            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 shadow-glow-green"
+            style={{ background: "linear-gradient(135deg, #39FF14, #00F0FF)" }}
+          >
             <span className="text-3xl" role="img" aria-label="slime">
               🫧
             </span>
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">
+          {/* Headline — cyan */}
+          <h1 className="text-2xl font-bold text-slime-cyan tracking-tight">
             Welcome back
           </h1>
-          <p className="mt-1 text-sm text-purple-300/70">
+          <p className="mt-1 text-sm text-slime-muted">
             Sign in to your Slimelog account
           </p>
         </div>
 
         {/* Card */}
-        <div className="rounded-3xl bg-white/5 border border-white/10 backdrop-blur-sm p-6 shadow-2xl space-y-5">
+        <div className="rounded-3xl bg-slime-card border border-slime-border backdrop-blur-sm p-6 shadow-2xl space-y-5">
           {/* Error */}
           {error && (
             <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-300">
@@ -90,7 +95,7 @@ function LoginPageInner() {
             type="button"
             onClick={handleGoogleLogin}
             disabled={isPending}
-            className="w-full flex items-center justify-center gap-3 rounded-2xl border border-white/15 bg-white/8 px-4 py-3 text-sm font-medium text-white hover:bg-white/15 active:scale-[0.98] transition-all duration-150 disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-3 rounded-2xl border border-slime-border bg-slime-surface px-4 py-3 text-sm font-medium text-slime-text hover:bg-slime-surface/80 active:scale-[0.98] transition-all duration-150 disabled:opacity-50"
           >
             <svg
               viewBox="0 0 24 24"
@@ -119,11 +124,11 @@ function LoginPageInner() {
 
           {/* Divider */}
           <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-white/10" />
-            <span className="text-xs text-purple-300/50 uppercase tracking-widest">
+            <div className="flex-1 h-px bg-slime-border" />
+            <span className="text-xs text-slime-muted uppercase tracking-widest">
               or
             </span>
-            <div className="flex-1 h-px bg-white/10" />
+            <div className="flex-1 h-px bg-slime-border" />
           </div>
 
           {/* Email / password */}
@@ -131,7 +136,7 @@ function LoginPageInner() {
             <div>
               <label
                 htmlFor="email"
-                className="block text-xs font-semibold text-purple-300/70 uppercase tracking-widest mb-2"
+                className="block text-xs font-semibold text-slime-muted uppercase tracking-widest mb-2"
               >
                 Email
               </label>
@@ -143,7 +148,7 @@ function LoginPageInner() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="w-full rounded-xl bg-white/8 border border-white/12 px-4 py-3 text-sm text-white placeholder-purple-300/30 focus:border-pink-500/60 focus:outline-none focus:ring-1 focus:ring-pink-500/40 transition"
+                className="w-full rounded-xl bg-slime-surface border border-slime-border px-4 py-3 text-sm text-slime-text placeholder-slime-muted focus:border-slime-accent/60 focus:outline-none focus:ring-1 focus:ring-slime-accent/40 transition"
               />
             </div>
 
@@ -151,13 +156,13 @@ function LoginPageInner() {
               <div className="flex items-center justify-between mb-2">
                 <label
                   htmlFor="password"
-                  className="block text-xs font-semibold text-purple-300/70 uppercase tracking-widest"
+                  className="block text-xs font-semibold text-slime-muted uppercase tracking-widest"
                 >
                   Password
                 </label>
                 <Link
                   href="/forgot-password"
-                  className="text-xs text-pink-400 hover:text-pink-300 transition-colors"
+                  className="text-xs text-slime-cyan hover:text-slime-accent transition-colors"
                 >
                   Forgot?
                 </Link>
@@ -170,14 +175,18 @@ function LoginPageInner() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full rounded-xl bg-white/8 border border-white/12 px-4 py-3 text-sm text-white placeholder-purple-300/30 focus:border-pink-500/60 focus:outline-none focus:ring-1 focus:ring-pink-500/40 transition"
+                className="w-full rounded-xl bg-slime-surface border border-slime-border px-4 py-3 text-sm text-slime-text placeholder-slime-muted focus:border-slime-accent/60 focus:outline-none focus:ring-1 focus:ring-slime-accent/40 transition"
               />
             </div>
 
+            {/* Submit button — keep green */}
             <button
               type="submit"
               disabled={isPending}
-              className="w-full rounded-2xl bg-gradient-to-r from-pink-500 to-purple-600 px-4 py-3.5 text-sm font-bold text-white shadow-lg shadow-pink-500/25 hover:shadow-pink-500/40 hover:brightness-110 active:scale-[0.98] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full rounded-2xl px-4 py-3.5 text-sm font-bold text-slime-bg shadow-glow-green hover:shadow-glow-green-lg active:scale-[0.98] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+              }}
             >
               {isPending ? (
                 <span className="flex items-center justify-center gap-2">
@@ -209,12 +218,12 @@ function LoginPageInner() {
           </form>
         </div>
 
-        {/* Footer */}
-        <p className="mt-6 text-center text-sm text-purple-300/50">
+        {/* Footer — link text magenta */}
+        <p className="mt-6 text-center text-sm text-slime-muted">
           New to Slimelog?{" "}
           <Link
             href="/signup"
-            className="font-semibold text-pink-400 hover:text-pink-300 transition-colors"
+            className="font-semibold text-slime-magenta hover:text-slime-accent transition-colors"
           >
             Create an account
           </Link>
@@ -226,7 +235,7 @@ function LoginPageInner() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#0f0a1e]" />}>
+    <Suspense fallback={<div className="min-h-screen bg-slime-bg" />}>
       <LoginPageInner />
     </Suspense>
   );

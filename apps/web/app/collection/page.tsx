@@ -69,11 +69,11 @@ function SlimeCard({ log }: { log: CollectionLog }) {
             className="w-full h-40 object-cover"
           />
         ) : (
+          /* Photo placeholder — dark purple gradient (brand palette) */
           <div
             className="w-full h-32 flex items-center justify-center text-3xl"
             style={{
-              background:
-                "linear-gradient(135deg, #fce7f3 0%, #f3e8ff 50%, #e0f2fe 100%)",
+              background: "linear-gradient(135deg, #2D0A4E, #1A1A1A)",
             }}
             aria-hidden="true"
           >
@@ -108,8 +108,9 @@ function SlimeCard({ log }: { log: CollectionLog }) {
           </div>
 
           <div className="flex flex-wrap gap-1.5">
+            {/* Slime type badge — global rule: bg-slime-purple text-slime-cyan */}
             {typeLabel && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-slime-surface border border-slime-border text-slime-muted">
+              <span className="bg-slime-purple text-slime-cyan text-xs font-bold px-2 py-0.5 rounded-full">
                 {typeLabel}
               </span>
             )}
@@ -243,10 +244,10 @@ export default function CollectionPage() {
       {/* Content — push below fixed header */}
       <div className="pt-14 px-4 py-8">
         <div className="max-w-md mx-auto">
-          {/* Page title row */}
+          {/* Page title row — headline cyan */}
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-extrabold text-slime-text tracking-tight">
+              <h1 className="text-2xl font-extrabold text-slime-cyan tracking-tight">
                 My Slimes <span className="text-slime-accent">✦</span>
               </h1>
               {!loading && (

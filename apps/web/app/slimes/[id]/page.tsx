@@ -180,6 +180,7 @@ function ShippingStat({
 }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-2xl bg-slime-surface border border-slime-border p-3 gap-0.5">
+      {/* Shipping stat numbers — cyan */}
       <span className="text-2xl font-black text-slime-cyan leading-none">
         {value ?? "—"}
       </span>
@@ -315,7 +316,10 @@ export default async function SlimeDetailPage({
             />
           ) : (
             <div
-              className="w-full h-40 flex items-center justify-center text-4xl bg-slime-surface"
+              className="w-full h-40 flex items-center justify-center text-4xl"
+              style={{
+                background: "linear-gradient(135deg, #2D0A4E, #1A1A1A)",
+              }}
               aria-hidden="true"
             >
               🫧
@@ -323,20 +327,22 @@ export default async function SlimeDetailPage({
           )}
 
           <div className="px-5 pb-5 pt-4 flex flex-col gap-3 relative z-10">
-            <h1 className="text-2xl font-black text-slime-text leading-tight tracking-tight pr-4">
+            {/* Slime name headline — cyan */}
+            <h1 className="text-2xl font-black text-slime-cyan leading-tight tracking-tight pr-4">
               {log.slime_name ?? "Untitled Slime"}
             </h1>
             <div className="flex items-center gap-1.5 text-sm text-slime-muted">
               <span>by</span>
+              {/* Brand name — magenta */}
               {brandHref ? (
                 <Link
                   href={brandHref}
-                  className="font-semibold text-slime-accent hover:text-slime-cyan underline underline-offset-2 transition"
+                  className="font-semibold text-slime-magenta hover:text-slime-accent underline underline-offset-2 transition"
                 >
                   {brandName}
                 </Link>
               ) : (
-                <span className="font-semibold text-slime-text">
+                <span className="font-semibold text-slime-magenta">
                   {brandName}
                 </span>
               )}
@@ -363,8 +369,9 @@ export default async function SlimeDetailPage({
               </p>
               <StarRating rating={log.rating_overall} size="lg" />
             </div>
+            {/* Rating number — cyan */}
             {log.rating_overall != null && (
-              <span className="text-4xl font-black text-slime-accent">
+              <span className="text-4xl font-black text-slime-cyan">
                 {log.rating_overall}
                 <span className="text-xl text-slime-border">/5</span>
               </span>

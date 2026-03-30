@@ -1,8 +1,14 @@
 // apps/web/components/PageHeader.tsx
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import SlimeMenu from "@/components/SlimeMenu";
 
 export default function PageHeader() {
+  const pathname = usePathname();
+  const profileActive = pathname === "/profile";
+
   return (
     <header
       className="fixed top-0 left-0 right-0 z-30 h-14 flex items-center justify-between px-4"
@@ -31,7 +37,11 @@ export default function PageHeader() {
         <Link
           href="/profile"
           aria-label="Profile"
-          className="rounded-full border border-slime-border p-2 text-slime-muted hover:text-slime-accent hover:border-slime-accent transition-colors"
+          className={`rounded-full border p-2 transition-colors ${
+            profileActive
+              ? "text-slime-accent border-slime-accent"
+              : "text-slime-muted border-slime-border hover:text-slime-accent hover:border-slime-accent"
+          }`}
         >
           <svg
             viewBox="0 0 24 24"

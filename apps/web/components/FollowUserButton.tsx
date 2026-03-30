@@ -1,5 +1,5 @@
-"use client";
 // apps/web/components/FollowUserButton.tsx
+"use client";
 
 import { useState, useTransition } from "react";
 import { createBrowserClient } from "@supabase/ssr";
@@ -53,8 +53,10 @@ export default function FollowUserButton({
         "transition-all duration-150 select-none",
         "disabled:opacity-60 disabled:cursor-not-allowed",
         isFollowing
-          ? "bg-slime-accent/10 text-slime-accent border border-slime-accent/30 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30"
-          : "text-slime-bg shadow-glow-green hover:scale-[1.02] active:scale-[0.98]",
+          ? /* Following state — magenta (social/community) */
+            "bg-slime-magenta/10 text-slime-magenta border border-slime-magenta/30 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30"
+          : /* Follow state — keep green */
+            "text-slime-bg shadow-glow-green hover:scale-[1.02] active:scale-[0.98]",
       ].join(" ")}
       style={
         !isFollowing

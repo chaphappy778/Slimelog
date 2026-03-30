@@ -169,7 +169,8 @@ function FeedCard({ log }: { log: FeedLog }) {
                 >
                   {username.charAt(0).toUpperCase()}
                 </div>
-                <span className="text-xs text-slime-muted group-hover/user:text-slime-accent transition-colors">
+                {/* handle — magenta (social/people semantic role) */}
+                <span className="text-xs text-slime-magenta group-hover/user:text-slime-accent transition-colors">
                   @{username}
                 </span>
               </Link>
@@ -184,7 +185,8 @@ function FeedCard({ log }: { log: FeedLog }) {
                 >
                   ?
                 </div>
-                <span className="text-xs text-slime-muted">@anonymous</span>
+                {/* anonymous handle — magenta */}
+                <span className="text-xs text-slime-magenta">@anonymous</span>
               </div>
             )}
             <time
@@ -367,6 +369,12 @@ export default async function HomePage({
         </div>
 
         <div className="px-4 pb-4">
+          {/*
+            FeedTabs receives activeTab — the tab component itself should render:
+            - "Community" active: green (text-slime-accent) — community semantic role
+            - "Following" active: magenta (text-slime-magenta) — social/people semantic role
+            Pass activeTab down; FeedTabs handles the color logic internally.
+          */}
           <FeedTabs activeTab={activeTab} isLoggedIn={isLoggedIn} />
         </div>
 

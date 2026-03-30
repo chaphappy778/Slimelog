@@ -67,17 +67,21 @@ function StatPill({
   value,
   unit,
   icon,
+  valueColor = "text-slime-text",
 }: {
   label: string;
   value: string | number | null;
   unit?: string;
   icon: string;
+  valueColor?: string;
 }) {
   return (
     <div className="flex flex-col items-center bg-slime-card rounded-2xl border border-slime-border p-3 gap-0.5 min-w-0">
       <span className="text-xl leading-none">{icon}</span>
       {value != null ? (
-        <span className="text-base font-black text-slime-text mt-1 leading-none">
+        <span
+          className={`text-base font-black mt-1 leading-none ${valueColor}`}
+        >
           {value}
           {unit && (
             <span className="text-xs font-medium text-slime-muted ml-0.5">
@@ -272,7 +276,8 @@ export default async function BrandPage({ params }: PageProps) {
               )}
               {brand.follower_count != null && (
                 <span className="text-xs text-slime-muted">
-                  <span className="font-bold text-slime-text">
+                  {/* Follower count number — cyan */}
+                  <span className="font-bold text-slime-cyan">
                     {brand.follower_count.toLocaleString()}
                   </span>{" "}
                   followers
@@ -332,9 +337,9 @@ export default async function BrandPage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Restock Schedule */}
+        {/* Restock Schedule — bg-slime-purple card */}
         {brand.restock_schedule ? (
-          <div className="bg-slime-surface border border-slime-accent/20 rounded-2xl p-4 flex items-center gap-3">
+          <div className="bg-slime-purple border border-slime-accent/20 rounded-2xl p-4 flex items-center gap-3">
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm text-slime-bg"
               style={{
@@ -355,7 +360,7 @@ export default async function BrandPage({ params }: PageProps) {
             </div>
           </div>
         ) : (
-          <div className="bg-slime-surface border border-slime-border rounded-2xl p-4 flex items-center gap-3">
+          <div className="bg-slime-purple border border-slime-border rounded-2xl p-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-slime-border flex items-center justify-center shrink-0">
               <svg viewBox="0 0 20 20" className="w-5 h-5 fill-slime-muted">
                 <path d="M10 2a8 8 0 1 0 0 16A8 8 0 0 0 10 2zm1 8.41V6a1 1 0 0 0-2 0v4.59l3.71 3.7 1.41-1.41L11 10.41z" />
@@ -372,7 +377,7 @@ export default async function BrandPage({ params }: PageProps) {
           </div>
         )}
 
-        {/* Community Stats */}
+        {/* Community Stats — numbers cyan */}
         <div>
           <h2 className="text-xs font-black text-slime-muted uppercase tracking-widest mb-3 px-1">
             Community Stats
@@ -382,23 +387,27 @@ export default async function BrandPage({ params }: PageProps) {
               label="Total Logs"
               value={brand.total_logs ?? 0}
               icon="📋"
+              valueColor="text-slime-cyan"
             />
             <StatPill
               label="Avg Ship"
               value={brand.avg_days_to_ship}
               unit="d"
               icon="📦"
+              valueColor="text-slime-cyan"
             />
             <StatPill
               label="Avg Receive"
               value={brand.avg_days_to_receive}
               unit="d"
               icon="📬"
+              valueColor="text-slime-cyan"
             />
             <StatPill
               label="Ship Logs"
               value={brand.shipping_log_count ?? 0}
               icon="🚚"
+              valueColor="text-slime-cyan"
             />
           </div>
 
@@ -479,7 +488,8 @@ export default async function BrandPage({ params }: PageProps) {
                           <p className="text-xs font-bold text-slime-text truncate">
                             {slimeName}
                           </p>
-                          <p className="text-[11px] text-slime-muted">
+                          {/* username handle — magenta */}
+                          <p className="text-[11px] text-slime-magenta">
                             @{username}
                           </p>
                         </div>

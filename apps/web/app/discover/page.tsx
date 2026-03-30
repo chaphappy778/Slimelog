@@ -2,6 +2,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import Link from "next/link";
+import { Trophy, CalendarDays } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -28,20 +29,37 @@ type UpcomingDrop = {
 const DROP_STATUS = {
   announced: {
     label: "Announced",
-    bg: "bg-violet-900/40",
-    text: "text-violet-300",
+    bg: "bg-slime-purple",
+    text: "text-white",
+    dot: "bg-slime-magenta",
   },
-  live: { label: "🔴 Live", bg: "bg-green-900/40", text: "text-green-300" },
+  live: {
+    label: "Live",
+    bg: "bg-green-900/40",
+    text: "text-green-300",
+    dot: "bg-green-400",
+  },
   sold_out: {
     label: "Sold Out",
     bg: "bg-slime-surface",
     text: "text-slime-muted",
+    dot: "bg-slime-muted",
   },
-  restocked: { label: "Restocked", bg: "bg-sky-900/40", text: "text-sky-300" },
-  cancelled: { label: "Cancelled", bg: "bg-red-900/40", text: "text-red-400" },
+  restocked: {
+    label: "Restocked",
+    bg: "bg-sky-900/40",
+    text: "text-sky-300",
+    dot: "bg-sky-400",
+  },
+  cancelled: {
+    label: "Cancelled",
+    bg: "bg-red-900/40",
+    text: "text-red-400",
+    dot: "bg-red-400",
+  },
 } as const;
 
-type StatusBadge = { label: string; bg: string; text: string };
+type StatusBadge = { label: string; bg: string; text: string; dot?: string };
 
 function getStatusBadge(status: string | null): StatusBadge {
   if (status && status in DROP_STATUS)
@@ -50,6 +68,7 @@ function getStatusBadge(status: string | null): StatusBadge {
     label: status ?? "Unknown",
     bg: "bg-slime-surface",
     text: "text-slime-muted",
+    dot: "bg-slime-muted",
   };
 }
 
@@ -83,21 +102,21 @@ function RatingBar({ avg }: { avg: number | null }) {
 }
 
 function SectionHeader({
-  emoji,
+  icon,
   title,
   subtitle,
 }: {
-  emoji: string;
+  icon: React.ReactNode;
   title: string;
   subtitle: string;
 }) {
   return (
     <div className="flex items-center gap-3 mb-4">
       <div
-        className="w-9 h-9 rounded-2xl flex items-center justify-center text-lg shrink-0 bg-slime-surface border border-slime-border"
+        className="w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 bg-slime-surface border border-slime-border text-slime-accent"
         aria-hidden="true"
       >
-        {emoji}
+        {icon}
       </div>
       <div>
         <h2 className="text-base font-bold text-slime-text leading-tight">
@@ -122,9 +141,7 @@ function TopRatedCard({ slime, rank }: { slime: TopRatedSlime; rank: number }) {
   return (
     <article className="bg-slime-card rounded-2xl border border-slime-border p-4 flex items-center gap-3 hover:border-slime-accent/30 transition-colors">
       <div
-        className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-sm font-black ${
-          isTop3 ? "text-slime-bg" : "bg-slime-surface text-slime-muted"
-        }`}
+        className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-sm font-black ${isTop3 ? "text-slime-bg" : "bg-slime-surface text-slime-muted"}`}
         style={
           isTop3
             ? { background: "linear-gradient(135deg, #39FF14, #00F0FF)" }
@@ -139,7 +156,7 @@ function TopRatedCard({ slime, rank }: { slime: TopRatedSlime; rank: number }) {
         <p className="text-sm font-semibold text-slime-text truncate leading-tight">
           {slime.name ?? "Unnamed slime"}
         </p>
-        <p className="text-xs text-slime-muted truncate">
+        <p className="text-xs text-slime-magenta truncate">
           {slime.brand_name ?? "Unknown brand"}
         </p>
         <RatingBar avg={slime.avg_overall} />
@@ -173,7 +190,7 @@ function DropCard({ drop }: { drop: UpcomingDrop }) {
           <p className="text-sm font-semibold text-slime-text truncate leading-tight group-hover:text-slime-accent transition-colors">
             {drop.name ?? "Unnamed drop"}
           </p>
-          <p className="text-xs text-slime-muted truncate mt-0.5">
+          <p className="text-xs text-slime-magenta truncate mt-0.5">
             {drop.brand_name ?? "Unknown brand"}
           </p>
           <p className="text-xs text-slime-muted mt-1 font-medium">
@@ -183,8 +200,13 @@ function DropCard({ drop }: { drop: UpcomingDrop }) {
 
         <div className="flex items-center gap-2 shrink-0">
           <span
-            className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${statusBadge.bg} ${statusBadge.text}`}
+            className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${statusBadge.bg} ${statusBadge.text}`}
           >
+            {statusBadge.dot && (
+              <span
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusBadge.dot}`}
+              />
+            )}
             {statusBadge.label}
           </span>
           <span
@@ -203,7 +225,6 @@ function DropCard({ drop }: { drop: UpcomingDrop }) {
 
 export default async function DiscoverPage() {
   const cookieStore = await cookies();
-
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -216,7 +237,6 @@ export default async function DiscoverPage() {
       .select("id, name, brand_name, slime_type, avg_overall, total_ratings")
       .order("avg_overall", { ascending: false })
       .limit(10),
-
     supabase
       .from("upcoming_drops")
       .select("id, name, drop_at, status, brand_name")
@@ -255,7 +275,7 @@ export default async function DiscoverPage() {
 
         <section className="px-4 mb-8">
           <SectionHeader
-            emoji="🏆"
+            icon={<Trophy className="w-4 h-4" />}
             title="Top Rated Slimes"
             subtitle="Minimum 3 community ratings"
           />
@@ -272,7 +292,7 @@ export default async function DiscoverPage() {
 
         <section className="px-4">
           <SectionHeader
-            emoji="📅"
+            icon={<CalendarDays className="w-4 h-4" />}
             title="Upcoming Drops"
             subtitle="Tap a drop to see what's included"
           />

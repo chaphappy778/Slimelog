@@ -1,3 +1,4 @@
+// apps/web/app/drops/[id]/page.tsx
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import Link from "next/link";
@@ -40,9 +41,9 @@ type DropSlime = {
 const DROP_STATUS = {
   announced: {
     label: "Announced",
-    bg: "bg-violet-900/40",
-    text: "text-violet-300",
-    dot: "bg-violet-400",
+    bg: "bg-slime-purple",
+    text: "text-white",
+    dot: "bg-slime-magenta",
   },
   live: {
     label: "Live Now",
@@ -87,25 +88,6 @@ const SLIME_TYPE_LABELS: Record<string, string> = {
   thermochromic: "Thermochromic",
   avalanche: "Avalanche",
   slay: "Slay",
-};
-
-const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
-  butter: { bg: "bg-yellow-900/40", text: "text-yellow-300" },
-  clear: { bg: "bg-sky-900/40", text: "text-sky-300" },
-  cloud: { bg: "bg-blue-900/40", text: "text-blue-300" },
-  cloud_cream: { bg: "bg-purple-900/40", text: "text-purple-300" },
-  fluffy: { bg: "bg-pink-900/40", text: "text-pink-300" },
-  floam: { bg: "bg-lime-900/40", text: "text-lime-300" },
-  jelly: { bg: "bg-violet-900/40", text: "text-violet-300" },
-  thick_and_glossy: { bg: "bg-slime-surface", text: "text-slime-muted" },
-  icee: { bg: "bg-cyan-900/40", text: "text-cyan-300" },
-  beaded: { bg: "bg-orange-900/40", text: "text-orange-300" },
-  clay: { bg: "bg-amber-900/40", text: "text-amber-300" },
-  magnetic: { bg: "bg-zinc-800", text: "text-zinc-300" },
-  thermochromic: { bg: "bg-rose-900/40", text: "text-rose-300" },
-  snow_fizz: { bg: "bg-indigo-900/40", text: "text-indigo-300" },
-  avalanche: { bg: "bg-teal-900/40", text: "text-teal-300" },
-  slay: { bg: "bg-fuchsia-900/40", text: "text-fuchsia-300" },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -190,14 +172,9 @@ function StatusBadge({ status }: { status: string | null }) {
 function SlimeTypeBadge({ slimeType }: { slimeType: string | null }) {
   if (!slimeType) return null;
   const label = SLIME_TYPE_LABELS[slimeType] ?? slimeType;
-  const colors = TYPE_COLORS[slimeType] ?? {
-    bg: "bg-slime-surface",
-    text: "text-slime-muted",
-  };
   return (
-    <span
-      className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${colors.bg} ${colors.text}`}
-    >
+    /* Global type badge rule: bg-slime-purple text-slime-cyan */
+    <span className="bg-slime-purple text-slime-cyan text-xs font-bold px-2 py-0.5 rounded-full">
       {label}
     </span>
   );
@@ -242,6 +219,7 @@ function SlimeCard({
           <h3 className="text-sm font-bold text-slime-text leading-snug">
             {s?.name ?? "Unnamed Slime"}
           </h3>
+          {/* Price — keep green */}
           {s?.retail_price != null && (
             <span className="text-sm font-bold text-slime-accent shrink-0">
               {formatPrice(s.retail_price)}
@@ -395,21 +373,23 @@ function DropView({ drop, slimes }: { drop: DropDetail; slimes: DropSlime[] }) {
       <header className="px-4 pt-2 pb-5">
         <div className="flex items-center gap-2 mb-3 flex-wrap">
           <StatusBadge status={drop.status} />
+          {/* Brand name — magenta */}
           {drop.brand_slug ? (
             <Link
               href={`/brands/${drop.brand_slug}`}
-              className="text-xs font-semibold text-slime-accent hover:text-slime-cyan transition-colors"
+              className="text-xs font-semibold text-slime-magenta hover:text-slime-accent transition-colors"
             >
               {drop.brand_name ?? "Unknown Brand"}
             </Link>
           ) : (
-            <span className="text-xs text-slime-muted">
+            <span className="text-xs font-semibold text-slime-magenta">
               {drop.brand_name ?? "Unknown Brand"}
             </span>
           )}
         </div>
 
-        <h1 className="text-3xl font-black tracking-tight mb-2 leading-tight text-holo">
+        {/* Drop name headline — cyan */}
+        <h1 className="text-3xl font-black tracking-tight mb-2 leading-tight text-slime-cyan">
           {drop.name ?? "Unnamed Drop"}
         </h1>
 

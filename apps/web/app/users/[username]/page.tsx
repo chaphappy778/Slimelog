@@ -204,8 +204,9 @@ export default async function UserProfilePage({
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="font-black text-lg text-slime-text tracking-tight">
-                  @{profile.username}
+                {/* Username — cyan */}
+                <h1 className="font-black text-lg text-slime-cyan tracking-tight">
+                  {profile.username}
                 </h1>
                 {profile.is_verified && (
                   <span className="text-[10px] font-semibold bg-slime-accent/20 text-slime-accent px-2 py-0.5 rounded-full">
@@ -278,9 +279,15 @@ export default async function UserProfilePage({
         </div>
       </header>
 
-      {/* Stats row */}
+      {/*
+        Stats row — same pattern as profile/page.tsx:
+        slimes logged = green
+        avg rating = cyan
+        fav type = green (shown as type badge)
+      */}
       <section className="px-4 pb-4">
         <div className="grid grid-cols-3 gap-2">
+          {/* Slimes logged — green */}
           <div className="bg-slime-card rounded-2xl border border-slime-border p-3 text-center">
             <p className="text-2xl font-black text-slime-accent">
               {totalLogged}
@@ -289,6 +296,7 @@ export default async function UserProfilePage({
               Slimes logged
             </p>
           </div>
+          {/* Avg rating — cyan */}
           <div className="bg-slime-card rounded-2xl border border-slime-border p-3 text-center">
             <p className="text-2xl font-black text-slime-cyan">
               {avgRating ?? "—"}
@@ -297,11 +305,10 @@ export default async function UserProfilePage({
               Avg rating
             </p>
           </div>
+          {/* Fav type — type badge with bg-slime-purple text-slime-cyan (global rule) */}
           <div className="bg-slime-card rounded-2xl border border-slime-border p-3 text-center flex flex-col items-center justify-center gap-1">
-            {favoriteType && favoriteTypeStyle ? (
-              <span
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${favoriteTypeStyle.bg} ${favoriteTypeStyle.text}`}
-              >
+            {favoriteType ? (
+              <span className="bg-slime-purple text-slime-cyan text-xs font-bold px-2 py-0.5 rounded-full">
                 {TYPE_LABELS[favoriteType] ?? favoriteType}
               </span>
             ) : (
@@ -363,10 +370,9 @@ export default async function UserProfilePage({
                           {brandName}
                         </p>
                       </div>
+                      {/* Type badge — global rule: bg-slime-purple text-slime-cyan */}
                       {typeStyle && log.slime_type && (
-                        <span
-                          className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${typeStyle.bg} ${typeStyle.text}`}
-                        >
+                        <span className="shrink-0 bg-slime-purple text-slime-cyan text-xs font-bold px-2 py-0.5 rounded-full">
                           {TYPE_LABELS[log.slime_type] ?? log.slime_type}
                         </span>
                       )}

@@ -107,12 +107,13 @@ export default function FollowBrandButton({
 
   if (isFollowing) {
     return (
+      /* Following state — magenta outline (social/community semantic role) */
       <button
         onClick={handleToggle}
         disabled={pending}
         aria-label="Unfollow this brand"
         aria-pressed={true}
-        className="group flex items-center gap-1.5 min-h-[44px] px-4 py-2 rounded-xl bg-slime-accent/10 border border-slime-accent/30 text-slime-accent text-xs font-bold active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-150 hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400"
+        className="group flex items-center gap-1.5 min-h-[44px] px-4 py-2 rounded-xl bg-slime-magenta/10 border border-slime-magenta/30 text-slime-magenta text-xs font-bold active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-150 hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400"
       >
         {pending ? (
           <Spinner className="text-current" />
@@ -139,6 +140,7 @@ export default function FollowBrandButton({
   }
 
   return (
+    /* Follow state — keep green */
     <button
       onClick={handleToggle}
       disabled={pending}

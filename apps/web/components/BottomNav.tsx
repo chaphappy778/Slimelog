@@ -1,3 +1,4 @@
+// apps/web/components/BottomNav.tsx
 "use client";
 
 import Link from "next/link";
@@ -9,6 +10,7 @@ const NAV_ITEMS = [
   {
     label: "Feed",
     href: "/",
+    colorActive: "text-slime-accent", // green — keep
     icon: (active: boolean) => (
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -35,6 +37,7 @@ const NAV_ITEMS = [
   {
     label: "Collection",
     href: "/collection",
+    colorActive: "text-slime-accent", // green — keep
     icon: (active: boolean) => (
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -66,6 +69,7 @@ const NAV_ITEMS = [
   {
     label: "Discover",
     href: "/discover",
+    colorActive: "text-slime-cyan", // cyan — discovery
     icon: (active: boolean) => (
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -96,6 +100,7 @@ const NAV_ITEMS = [
   {
     label: "Brands",
     href: "/brands",
+    colorActive: "text-slime-cyan", // cyan — discovery/navigation
     icon: (active: boolean) => (
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -126,6 +131,7 @@ const NAV_ITEMS = [
   {
     label: "Profile",
     href: "/profile",
+    colorActive: "text-slime-accent", // green — keep
     icon: (active: boolean) => (
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -234,12 +240,12 @@ function NavItem({
       className="flex flex-col items-center gap-0.5 flex-1 py-1 active:scale-95 transition-transform"
       aria-current={active ? "page" : undefined}
     >
-      <span className={active ? "text-slime-accent" : "text-slime-muted"}>
+      <span className={active ? item.colorActive : "text-slime-muted"}>
         {item.icon(active)}
       </span>
       <span
         className={`text-[10px] font-semibold ${
-          active ? "text-slime-accent" : "text-slime-muted"
+          active ? item.colorActive : "text-slime-muted"
         }`}
       >
         {item.label}

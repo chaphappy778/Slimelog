@@ -3,6 +3,7 @@
 
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
+import { Globe, Heart, Lock } from "lucide-react";
 
 interface FeedTabsProps {
   activeTab: "community" | "following";
@@ -29,22 +30,24 @@ export default function FeedTabs({ activeTab, isLoggedIn }: FeedTabsProps) {
       role="tablist"
       aria-label="Feed tabs"
     >
+      {/* Community — active: green */}
       <button
         role="tab"
         aria-selected={activeTab === "community"}
         onClick={() => navigate("community")}
         disabled={isPending}
         className={[
-          "flex-1 py-2 px-3 rounded-xl text-sm font-semibold transition-all duration-150",
-          "disabled:opacity-60",
+          "flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-sm font-semibold transition-all duration-150 disabled:opacity-60",
           activeTab === "community"
             ? "bg-slime-surface text-slime-accent shadow-sm border border-slime-accent/20"
             : "text-slime-muted hover:text-slime-text",
         ].join(" ")}
       >
-        🌍 Community
+        <Globe className="w-4 h-4" />
+        Community
       </button>
 
+      {/* Following (logged in) — active: magenta */}
       {isLoggedIn && (
         <button
           role="tab"
@@ -52,26 +55,28 @@ export default function FeedTabs({ activeTab, isLoggedIn }: FeedTabsProps) {
           onClick={() => navigate("following")}
           disabled={isPending}
           className={[
-            "flex-1 py-2 px-3 rounded-xl text-sm font-semibold transition-all duration-150",
-            "disabled:opacity-60",
+            "flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-sm font-semibold transition-all duration-150 disabled:opacity-60",
             activeTab === "following"
-              ? "bg-slime-surface text-slime-accent shadow-sm border border-slime-accent/20"
+              ? "bg-slime-surface text-slime-magenta shadow-sm border border-slime-magenta/20"
               : "text-slime-muted hover:text-slime-text",
           ].join(" ")}
         >
-          💚 Following
+          <Heart className="w-4 h-4" />
+          Following
         </button>
       )}
 
+      {/* Following (logged out) — locked */}
       {!isLoggedIn && (
         <button
           role="tab"
           aria-disabled="true"
           onClick={() => navigate("following")}
-          className="flex-1 py-2 px-3 rounded-xl text-sm font-semibold text-slime-muted/50 cursor-pointer hover:text-slime-muted transition-colors"
+          className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-sm font-semibold text-slime-muted/50 cursor-pointer hover:text-slime-muted transition-colors"
           title="Sign in to see your Following feed"
         >
-          🔒 Following
+          <Lock className="w-4 h-4" />
+          Following
         </button>
       )}
     </div>
