@@ -5,7 +5,7 @@ import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import FeedTabs from "@/components/FeedTabs";
 import PageHeader from "@/components/PageHeader";
-import LandingPage from "@/components/LandingPage";
+import { redirect } from "next/navigation";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -278,7 +278,7 @@ export default async function HomePage({
 
   // ── Smart routing: show landing page for logged-out users ──────────────────
   if (!isLoggedIn) {
-    return <LandingPage />;
+    redirect("/landing");
   }
 
   // ── Logged-in: show existing feed ──────────────────────────────────────────

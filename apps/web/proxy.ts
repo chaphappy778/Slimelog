@@ -3,7 +3,7 @@
 // IMPORTANT: The exported function must be named `proxy`, not `middleware`.
 //
 // Responsibilities:
-//   1. Refresh the Supabase session cookie on every matched request
+//   1. Refresh the Supabase session cookie on every request
 //   2. Redirect unauthenticated users away from protected routes
 //   3. Redirect authenticated users away from /login and /signup
 
@@ -11,14 +11,12 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Routes that require an active session.
-const PROTECTED_PREFIXES = ["/log", "/collection", "/profile"];
+const PROTECTED_PREFIXES = ["/logs", "/collection", "/profile"];
 
 // Auth-only routes — bounce already-authenticated users back to home.
 const AUTH_ONLY_PATHS = ["/login", "/signup"];
 
 export async function proxy(request: NextRequest) {
-  // Start with a passthrough response; setAll below will replace it if
-  // Supabase needs to write refreshed session cookies.
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -30,8 +28,6 @@ export async function proxy(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          // Mirror cookies onto both the mutated request and the response so
-          // every downstream Server Component sees the refreshed session.
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value),
           );
@@ -45,7 +41,6 @@ export async function proxy(request: NextRequest) {
   );
 
   // Do NOT await anything between createServerClient and getUser().
-  // The cookie refresh is tightly coupled to this call sequence.
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -60,10 +55,15 @@ export async function proxy(request: NextRequest) {
   }
 
   // ── Unauthenticated users → redirect away from protected routes ──────────
-  if (!user && PROTECTED_PREFIXES.some((p) => pathname.startsWith(p))) {
+  if (
+    !user &&
+    PROTECTED_PREFIXES.some(
+      (p) => pathname === p || pathname.startsWith(p + "/"),
+    )
+  ) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.searchParams.set("next", pathname); // preserve destination
+    url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
 
@@ -72,7 +72,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Run on every path except Next.js internals and static assets.
     "/((?!_next/static|_next/image|favicon.ico|auth|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
