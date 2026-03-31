@@ -9,6 +9,8 @@ import { SLIME_TYPE_LABELS } from "@/lib/types";
 import type { SlimeType } from "@/lib/types";
 import { ImageUpload } from "@/components/ImageUpload";
 import { createBrowserClient } from "@supabase/ssr";
+import PageWrapper from "@/components/PageWrapper";
+import FloatingPills from "@/components/FloatingPills";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -24,11 +26,7 @@ type RatingKey =
   | "rating_sensory_fit"
   | "rating_overall";
 
-const RATING_FIELDS: {
-  key: RatingKey;
-  label: string;
-  emoji: string;
-}[] = [
+const RATING_FIELDS: { key: RatingKey; label: string; emoji: string }[] = [
   { key: "rating_texture", label: "Texture", emoji: "🤲" },
   { key: "rating_scent", label: "Scent", emoji: "🌸" },
   { key: "rating_sound", label: "Sound", emoji: "🔊" },
@@ -37,8 +35,6 @@ const RATING_FIELDS: {
   { key: "rating_sensory_fit", label: "Sensory Fit", emoji: "🧠" },
   { key: "rating_overall", label: "Overall", emoji: "⭐" },
 ];
-
-// ─── Color presets ────────────────────────────────────────────────────────────
 
 interface ColorSwatch {
   label: string;
@@ -68,8 +64,6 @@ const COLOR_SWATCHES: ColorSwatch[] = [
   },
 ];
 
-// ─── Local form state ─────────────────────────────────────────────────────────
-
 interface FormState {
   slime_name: string;
   brand_name_raw: string;
@@ -95,8 +89,6 @@ interface FormState {
   in_collection: boolean;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function buildColorsArray(
   selectedValues: string[],
   description: string,
@@ -106,7 +98,7 @@ function buildColorsArray(
   return parts.length > 0 ? parts : undefined;
 }
 
-// ─── Star Rating Component ────────────────────────────────────────────────────
+// ─── Star Rating ──────────────────────────────────────────────────────────────
 
 function StarRating({
   value,
@@ -120,9 +112,11 @@ function StarRating({
   emoji: string;
 }) {
   const [hovered, setHovered] = useState<number | null>(null);
-
   return (
-    <div className="flex items-center justify-between py-3 border-b border-slime-border last:border-0">
+    <div
+      className="flex items-center justify-between py-3 border-b last:border-0"
+      style={{ borderColor: "rgba(45,10,78,0.5)" }}
+    >
       <span className="flex items-center gap-2 text-sm font-medium text-slime-text">
         <span>{emoji}</span>
         {label}
@@ -138,11 +132,7 @@ function StarRating({
               onClick={() => onChange(star)}
               onMouseEnter={() => setHovered(star)}
               onMouseLeave={() => setHovered(null)}
-              className={`w-8 h-8 rounded-full text-lg transition-all duration-100 ${
-                filled
-                  ? "text-slime-accent scale-110"
-                  : "text-slime-muted hover:text-slime-accent"
-              }`}
+              className={`w-8 h-8 rounded-full text-lg transition-all duration-100 ${filled ? "text-slime-accent scale-110" : "text-slime-muted hover:text-slime-accent"}`}
               aria-label={`${star} star`}
             >
               {filled ? "●" : "○"}
@@ -164,19 +154,22 @@ function StepIndicator({ step }: { step: Step }) {
           <div
             className={`w-7 h-7 rounded-full text-xs font-bold flex items-center justify-center transition-all duration-200 ${
               i < step
-                ? "bg-slime-accent text-white"
+                ? "text-slime-bg shadow-glow-green"
                 : i === step
-                  ? "bg-slime-accent text-white ring-4 ring-slime-accent/30"
+                  ? "text-slime-bg ring-4 ring-slime-accent/30"
                   : "bg-slime-surface text-slime-muted border border-slime-border"
             }`}
+            style={
+              i <= step
+                ? { background: "linear-gradient(135deg, #39FF14, #00F0FF)" }
+                : undefined
+            }
           >
             {i < step ? "✓" : i + 1}
           </div>
           {i < STEPS.length - 1 && (
             <div
-              className={`h-0.5 w-6 rounded transition-all duration-300 ${
-                i < step ? "bg-slime-accent" : "bg-slime-border"
-              }`}
+              className={`h-0.5 w-6 rounded transition-all duration-300 ${i < step ? "bg-slime-accent" : "bg-slime-border"}`}
             />
           )}
         </div>
@@ -185,7 +178,7 @@ function StepIndicator({ step }: { step: Step }) {
   );
 }
 
-// ─── Field Component ──────────────────────────────────────────────────────────
+// ─── Field ────────────────────────────────────────────────────────────────────
 
 function Field({
   label,
@@ -201,9 +194,7 @@ function Field({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-2">
-        <label className="text-xs font-semibold uppercase tracking-wider text-slime-muted">
-          {label}
-        </label>
+        <label className="section-label">{label}</label>
         {optional && (
           <span className="text-xs text-slime-muted/60 normal-case tracking-normal font-normal">
             optional
@@ -217,9 +208,9 @@ function Field({
 }
 
 const inputCls =
-  "w-full rounded-xl bg-slime-surface border border-slime-border px-4 py-3 text-sm text-slime-text placeholder:text-slime-muted focus:outline-none focus:ring-2 focus:ring-slime-accent/50 transition";
+  "w-full rounded-xl bg-slime-surface border border-slime-border px-4 py-3 text-sm text-slime-text placeholder:text-slime-muted focus:outline-none focus:ring-1 focus:ring-slime-accent/40 focus:border-slime-accent/50 transition";
 
-// ─── Color Picker Component ───────────────────────────────────────────────────
+// ─── Color Picker ─────────────────────────────────────────────────────────────
 
 function ColorPicker({
   selectedValues,
@@ -238,7 +229,6 @@ function ColorPicker({
         {COLOR_SWATCHES.map((swatch) => {
           const isSelected = selectedValues.includes(swatch.value);
           const isGradient = swatch.hex.startsWith("conic-gradient");
-
           return (
             <button
               key={swatch.value}
@@ -280,7 +270,6 @@ function ColorPicker({
           );
         })}
       </div>
-
       {selectedValues.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {selectedValues.map((val) => (
@@ -301,7 +290,6 @@ function ColorPicker({
           ))}
         </div>
       )}
-
       <input
         className={inputCls}
         placeholder='e.g. "galaxy swirl" or "mint chocolate chip"'
@@ -312,7 +300,7 @@ function ColorPicker({
   );
 }
 
-// ─── Shipping Dates Section ───────────────────────────────────────────────────
+// ─── Shipping Dates ───────────────────────────────────────────────────────────
 
 function ShippingDates({
   orderDate,
@@ -330,13 +318,18 @@ function ShippingDates({
 }) {
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-start gap-2.5 rounded-xl bg-slime-surface border border-slime-border px-3.5 py-3">
+      <div
+        className="flex items-start gap-2.5 rounded-xl px-3.5 py-3"
+        style={{
+          background: "rgba(45,10,78,0.3)",
+          border: "1px solid rgba(45,10,78,0.6)",
+        }}
+      >
         <span className="text-base mt-0.5">📦</span>
         <p className="text-xs text-slime-muted leading-relaxed">
           Shipping data helps the community rate brands accurately.
         </p>
       </div>
-
       <Field label="Order Date" optional>
         <input
           type="date"
@@ -345,7 +338,6 @@ function ShippingDates({
           onChange={(e) => onChange("order_date", e.target.value)}
         />
       </Field>
-
       <Field
         label="Ship Date"
         optional
@@ -358,7 +350,6 @@ function ShippingDates({
           onChange={(e) => onChange("ship_date", e.target.value)}
         />
       </Field>
-
       <Field
         label="Received Date"
         optional
@@ -375,7 +366,15 @@ function ShippingDates({
   );
 }
 
-// ─── Inner Page (uses useSearchParams) ───────────────────────────────────────
+// ─── Step card style ──────────────────────────────────────────────────────────
+
+const cardStyle = {
+  background: "rgba(45,10,78,0.3)",
+  border: "1px solid rgba(45,10,78,0.8)",
+  boxShadow: "inset 0 0 30px rgba(45,10,78,0.2), 0 8px 32px rgba(0,0,0,0.4)",
+};
+
+// ─── Inner Page ───────────────────────────────────────────────────────────────
 
 function LogPageInner() {
   const router = useRouter();
@@ -445,16 +444,13 @@ function LogPageInner() {
       setSaveError("Please select a slime type.");
       return;
     }
-
     setSaving(true);
     setSaveError(null);
-
     try {
       const colors = buildColorsArray(
         form.selected_color_values,
         form.color_description,
       );
-
       const input: LogSlimeInput = {
         slime_name: form.slime_name.trim() || undefined,
         brand_name_raw: form.brand_name_raw.trim() || undefined,
@@ -480,7 +476,6 @@ function LogPageInner() {
         rating_overall: form.rating_overall ?? undefined,
         notes: form.notes.trim() || undefined,
       };
-
       await logSlime(input);
       router.push("/collection");
     } catch (err) {
@@ -493,269 +488,329 @@ function LogPageInner() {
   }
 
   return (
-    <div className="min-h-screen bg-slime-bg px-4 py-8 flex flex-col items-center">
-      {/* Header */}
-      <div className="w-full max-w-md mb-6">
-        <h1 className="text-2xl font-extrabold text-slime-text tracking-tight">
-          Log a Slime <span className="text-slime-accent">✦</span>
-        </h1>
-        <p className="text-sm text-slime-muted mt-1">
-          {form.in_wishlist ? "Adding to wishlist" : "Adding to collection"}
-        </p>
-      </div>
+    <PageWrapper dots glow="cyan">
+      <div className="px-4 py-8 flex flex-col items-center">
+        {/* Header with floating pills */}
+        <div
+          className="relative w-full max-w-md mb-6 overflow-hidden rounded-2xl px-5 py-5"
+          style={{
+            background: "rgba(45,10,78,0.2)",
+            border: "1px solid rgba(45,10,78,0.5)",
+          }}
+        >
+          <FloatingPills area="section" density="low" zIndex={0} />
+          <div className="relative z-10">
+            <h1
+              className="text-2xl font-extrabold tracking-tight"
+              style={{
+                background:
+                  "linear-gradient(90deg, #00F0FF 0%, #39FF14 50%, #FF00E5 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              }}
+            >
+              Log a Slime ✦
+            </h1>
+            <p className="text-sm text-slime-muted mt-1">
+              {form.in_wishlist ? "Adding to wishlist" : "Adding to collection"}
+            </p>
+          </div>
+        </div>
 
-      {/* Card */}
-      <div className="w-full max-w-md bg-slime-card rounded-2xl shadow-slime p-6">
-        <StepIndicator step={step} />
+        {/* Step card */}
+        <div className="w-full max-w-md rounded-2xl p-6" style={cardStyle}>
+          <StepIndicator step={step} />
 
-        {/* ── Step 0: Identity ── */}
-        {step === 0 && (
-          <div className="flex flex-col gap-5">
-            <h2 className="text-lg font-bold text-slime-text">
-              What slime is this?
-            </h2>
+          {/* ── Step 0: Identity ── */}
+          {step === 0 && (
+            <div className="flex flex-col gap-5">
+              <h2 className="text-lg font-bold text-slime-cyan">
+                What slime is this?
+              </h2>
 
-            <Field label="Slime Name *">
-              <input
-                className={inputCls}
-                placeholder="e.g. Honeydew Dreams"
-                value={form.slime_name}
-                onChange={(e) => set("slime_name", e.target.value)}
-              />
-            </Field>
+              <Field label="Slime Name *">
+                <input
+                  className={inputCls}
+                  placeholder="e.g. Honeydew Dreams"
+                  value={form.slime_name}
+                  onChange={(e) => set("slime_name", e.target.value)}
+                />
+              </Field>
+              <Field label="Brand / Shop Name" optional>
+                <input
+                  className={inputCls}
+                  placeholder="e.g. Peachybbies"
+                  value={form.brand_name_raw}
+                  onChange={(e) => set("brand_name_raw", e.target.value)}
+                />
+              </Field>
+              <Field label="Collection" optional>
+                <input
+                  className={inputCls}
+                  placeholder="e.g. Sundae Funday"
+                  value={form.collection_name}
+                  onChange={(e) => set("collection_name", e.target.value)}
+                />
+              </Field>
+              <Field label="Slime Type *">
+                <select
+                  className={inputCls}
+                  value={form.slime_type}
+                  onChange={(e) =>
+                    set("slime_type", e.target.value as SlimeType | "")
+                  }
+                >
+                  <option value="">— Pick a type —</option>
+                  {(
+                    Object.entries(SLIME_TYPE_LABELS) as [SlimeType, string][]
+                  ).map(([val, label]) => (
+                    <option key={val} value={val}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
 
-            <Field label="Brand / Shop Name" optional>
-              <input
-                className={inputCls}
-                placeholder="e.g. Peachybbies"
-                value={form.brand_name_raw}
-                onChange={(e) => set("brand_name_raw", e.target.value)}
-              />
-            </Field>
-
-            <Field label="Collection" optional>
-              <input
-                className={inputCls}
-                placeholder="e.g. Sundae Funday"
-                value={form.collection_name}
-                onChange={(e) => set("collection_name", e.target.value)}
-              />
-            </Field>
-
-            <Field label="Slime Type *">
-              <select
-                className={inputCls}
-                value={form.slime_type}
-                onChange={(e) =>
-                  set("slime_type", e.target.value as SlimeType | "")
+              {/* Wishlist toggle */}
+              <button
+                type="button"
+                onClick={() => {
+                  set("in_wishlist", !form.in_wishlist);
+                  set("in_collection", form.in_wishlist);
+                }}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-sm font-medium"
+                style={
+                  form.in_wishlist
+                    ? {
+                        borderColor: "rgba(57,255,20,0.4)",
+                        background: "rgba(57,255,20,0.08)",
+                        color: "#39FF14",
+                      }
+                    : {
+                        borderColor: "rgba(45,10,78,0.6)",
+                        background: "rgba(45,10,78,0.2)",
+                        color: "#888888",
+                      }
                 }
               >
-                <option value="">— Pick a type —</option>
-                {(
-                  Object.entries(SLIME_TYPE_LABELS) as [SlimeType, string][]
-                ).map(([val, label]) => (
-                  <option key={val} value={val}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <button
-              type="button"
-              onClick={() => {
-                set("in_wishlist", !form.in_wishlist);
-                set("in_collection", form.in_wishlist);
-              }}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-sm font-medium ${
-                form.in_wishlist
-                  ? "border-slime-accent bg-slime-accent/10 text-slime-accent"
-                  : "border-slime-border text-slime-muted hover:border-slime-accent/50"
-              }`}
-            >
-              <span className="text-xl">{form.in_wishlist ? "💜" : "🤍"}</span>
-              {form.in_wishlist ? "Wishlist item" : "Add to wishlist instead"}
-            </button>
-          </div>
-        )}
-
-        {/* ── Step 1: Details ── */}
-        {step === 1 && (
-          <div className="flex flex-col gap-5">
-            <h2 className="text-lg font-bold text-slime-text">Tell us more</h2>
-
-            <Field label="Photo" optional>
-              {userId ? (
-                <ImageUpload
-                  bucket="slime-photos"
-                  userId={userId}
-                  existingUrl={form.image_url}
-                  onUploadComplete={(url) => set("image_url", url)}
-                  onRemove={() => set("image_url", null)}
-                  label="Add a photo (optional)"
-                  aspectRatio="4:3"
-                />
-              ) : (
-                <div className="w-full aspect-[4/3] rounded-2xl bg-slime-surface border border-slime-border animate-pulse" />
-              )}
-            </Field>
-
-            <Field label="Scent" optional>
-              <input
-                className={inputCls}
-                placeholder="e.g. Watermelon candy"
-                value={form.scent}
-                onChange={(e) => set("scent", e.target.value)}
-              />
-            </Field>
-
-            <Field label="Purchase Price ($)" optional>
-              <input
-                className={inputCls}
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                value={form.purchase_price}
-                onChange={(e) => set("purchase_price", e.target.value)}
-              />
-            </Field>
-
-            <Field label="Colors" optional>
-              <ColorPicker
-                selectedValues={form.selected_color_values}
-                onToggle={toggleColor}
-                description={form.color_description}
-                onDescriptionChange={(v) => set("color_description", v)}
-              />
-            </Field>
-
-            <div className="pt-1">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slime-muted mb-3">
-                Shipping Dates
-              </p>
-              <ShippingDates
-                orderDate={form.order_date}
-                shipDate={form.ship_date}
-                receivedDate={form.received_date}
-                onChange={(field, value) => set(field, value)}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* ── Step 2: Ratings ── */}
-        {step === 2 && (
-          <div className="flex flex-col gap-1">
-            <h2 className="text-lg font-bold text-slime-text mb-3">Rate it</h2>
-            {RATING_FIELDS.map(({ key, label, emoji }) => (
-              <StarRating
-                key={key}
-                value={form[key] as number | null}
-                onChange={(v) => set(key, v)}
-                label={label}
-                emoji={emoji}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* ── Step 3: Notes ── */}
-        {step === 3 && (
-          <div className="flex flex-col gap-5">
-            <h2 className="text-lg font-bold text-slime-text">Any notes?</h2>
-
-            <Field label="Notes" optional>
-              <textarea
-                className={`${inputCls} resize-none h-36`}
-                placeholder="Texture thoughts, storage tips, first impressions…"
-                value={form.notes}
-                onChange={(e) => set("notes", e.target.value)}
-              />
-            </Field>
-
-            <div className="rounded-xl bg-slime-surface border border-slime-border p-4 text-sm text-slime-muted space-y-1">
-              {form.image_url && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={form.image_url}
-                  alt="Slime photo"
-                  className="w-full aspect-[4/3] object-cover rounded-xl mb-2"
-                />
-              )}
-              <p>
-                <span className="font-semibold text-slime-text">
-                  {form.slime_name || "Unnamed slime"}
+                <span className="text-xl">
+                  {form.in_wishlist ? "💜" : "🤍"}
                 </span>
-                {form.brand_name_raw ? ` by ${form.brand_name_raw}` : ""}
-              </p>
-              {form.collection_name && (
-                <p>Collection: {form.collection_name}</p>
-              )}
-              {form.slime_type && (
-                <p>Type: {SLIME_TYPE_LABELS[form.slime_type as SlimeType]}</p>
-              )}
-              {form.selected_color_values.length > 0 ||
-              form.color_description.trim() ? (
+                {form.in_wishlist ? "Wishlist item" : "Add to wishlist instead"}
+              </button>
+            </div>
+          )}
+
+          {/* ── Step 1: Details ── */}
+          {step === 1 && (
+            <div className="flex flex-col gap-5">
+              <h2 className="text-lg font-bold text-slime-cyan">
+                Tell us more
+              </h2>
+
+              <Field label="Photo" optional>
+                {userId ? (
+                  <ImageUpload
+                    bucket="slime-photos"
+                    userId={userId}
+                    existingUrl={form.image_url}
+                    onUploadComplete={(url) => set("image_url", url)}
+                    onRemove={() => set("image_url", null)}
+                    label="Add a photo (optional)"
+                    aspectRatio="4:3"
+                  />
+                ) : (
+                  <div className="w-full aspect-[4/3] rounded-2xl bg-slime-surface border border-slime-border animate-pulse" />
+                )}
+              </Field>
+              <Field label="Scent" optional>
+                <input
+                  className={inputCls}
+                  placeholder="e.g. Watermelon candy"
+                  value={form.scent}
+                  onChange={(e) => set("scent", e.target.value)}
+                />
+              </Field>
+              <Field label="Purchase Price ($)" optional>
+                <input
+                  className={inputCls}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={form.purchase_price}
+                  onChange={(e) => set("purchase_price", e.target.value)}
+                />
+              </Field>
+              <Field label="Colors" optional>
+                <ColorPicker
+                  selectedValues={form.selected_color_values}
+                  onToggle={toggleColor}
+                  description={form.color_description}
+                  onDescriptionChange={(v) => set("color_description", v)}
+                />
+              </Field>
+              <div className="pt-1">
+                <p className="section-label mb-3">Shipping Dates</p>
+                <ShippingDates
+                  orderDate={form.order_date}
+                  shipDate={form.ship_date}
+                  receivedDate={form.received_date}
+                  onChange={(field, value) => set(field, value)}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ── Step 2: Ratings ── */}
+          {step === 2 && (
+            <div className="flex flex-col gap-1">
+              <h2 className="text-lg font-bold text-slime-cyan mb-3">
+                Rate it
+              </h2>
+              {RATING_FIELDS.map(({ key, label, emoji }) => (
+                <StarRating
+                  key={key}
+                  value={form[key] as number | null}
+                  onChange={(v) => set(key, v)}
+                  label={label}
+                  emoji={emoji}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* ── Step 3: Notes ── */}
+          {step === 3 && (
+            <div className="flex flex-col gap-5">
+              <h2 className="text-lg font-bold text-slime-cyan">Any notes?</h2>
+
+              <Field label="Notes" optional>
+                <textarea
+                  className={`${inputCls} resize-none h-36`}
+                  placeholder="Texture thoughts, storage tips, first impressions…"
+                  value={form.notes}
+                  onChange={(e) => set("notes", e.target.value)}
+                />
+              </Field>
+
+              {/* Summary card */}
+              <div
+                className="rounded-xl px-4 py-4 text-sm text-slime-muted space-y-1"
+                style={{
+                  background: "rgba(45,10,78,0.3)",
+                  border: "1px solid rgba(45,10,78,0.6)",
+                }}
+              >
+                {form.image_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={form.image_url}
+                    alt="Slime photo"
+                    className="w-full aspect-[4/3] object-cover rounded-xl mb-3"
+                  />
+                )}
                 <p>
-                  Colors:{" "}
-                  {buildColorsArray(
-                    form.selected_color_values,
-                    form.color_description,
-                  )?.join(", ")}
+                  <span className="font-semibold text-slime-cyan">
+                    {form.slime_name || "Unnamed slime"}
+                  </span>
+                  {form.brand_name_raw ? (
+                    <span className="text-slime-magenta">
+                      {" "}
+                      by {form.brand_name_raw}
+                    </span>
+                  ) : (
+                    ""
+                  )}
                 </p>
-              ) : null}
-              {form.rating_overall && (
-                <p>Overall rating: {form.rating_overall}/5</p>
+                {form.collection_name && (
+                  <p>Collection: {form.collection_name}</p>
+                )}
+                {form.slime_type && (
+                  <p>
+                    Type:{" "}
+                    <span className="text-slime-accent">
+                      {SLIME_TYPE_LABELS[form.slime_type as SlimeType]}
+                    </span>
+                  </p>
+                )}
+                {(form.selected_color_values.length > 0 ||
+                  form.color_description.trim()) && (
+                  <p>
+                    Colors:{" "}
+                    {buildColorsArray(
+                      form.selected_color_values,
+                      form.color_description,
+                    )?.join(", ")}
+                  </p>
+                )}
+                {form.rating_overall && (
+                  <p>
+                    Overall:{" "}
+                    <span className="text-slime-accent font-bold">
+                      {form.rating_overall}/5
+                    </span>
+                  </p>
+                )}
+              </div>
+
+              {saveError && (
+                <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">
+                  {saveError}
+                </div>
               )}
             </div>
+          )}
 
-            {saveError && (
-              <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">
-                {saveError}
-              </div>
+          {/* Navigation */}
+          <div className="flex gap-3 mt-8">
+            {step > 0 && (
+              <button
+                type="button"
+                onClick={() => setStep((s) => (s - 1) as Step)}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold text-slime-muted transition"
+                style={{
+                  border: "1px solid rgba(45,10,78,0.6)",
+                  background: "rgba(45,10,78,0.2)",
+                }}
+              >
+                Back
+              </button>
+            )}
+
+            {step < 3 ? (
+              <button
+                type="button"
+                onClick={() => setStep((s) => (s + 1) as Step)}
+                disabled={step === 0 && !form.slime_name.trim()}
+                className="flex-1 py-3 rounded-xl text-sm font-bold text-slime-bg shadow-glow-green transition disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]"
+                style={{
+                  background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                }}
+              >
+                Next →
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={saving}
+                className="flex-1 py-3 rounded-xl text-sm font-bold text-slime-bg shadow-glow-green transition disabled:opacity-60 active:scale-[0.98]"
+                style={{
+                  background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                }}
+              >
+                {saving
+                  ? "Saving…"
+                  : form.in_wishlist
+                    ? "Add to Wishlist 💜"
+                    : "Save to Collection ✨"}
+              </button>
             )}
           </div>
-        )}
-
-        {/* Navigation */}
-        <div className="flex gap-3 mt-8">
-          {step > 0 && (
-            <button
-              type="button"
-              onClick={() => setStep((s) => (s - 1) as Step)}
-              className="flex-1 py-3 rounded-xl border border-slime-border text-sm font-semibold text-slime-muted hover:border-slime-accent/50 transition"
-            >
-              Back
-            </button>
-          )}
-
-          {step < 3 ? (
-            <button
-              type="button"
-              onClick={() => setStep((s) => (s + 1) as Step)}
-              disabled={step === 0 && !form.slime_name.trim()}
-              className="flex-1 py-3 rounded-xl bg-slime-accent text-white text-sm font-bold hover:bg-slime-accent-hover transition disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Next →
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={saving}
-              className="flex-1 py-3 rounded-xl bg-slime-accent text-white text-sm font-bold hover:bg-slime-accent-hover transition disabled:opacity-60"
-            >
-              {saving
-                ? "Saving…"
-                : form.in_wishlist
-                  ? "Add to Wishlist 💜"
-                  : "Save to Collection ✨"}
-            </button>
-          )}
         </div>
       </div>
-    </div>
+    </PageWrapper>
   );
 }
 
@@ -763,18 +818,21 @@ function LogPageInner() {
 
 function LogPageLoading() {
   return (
-    <div className="min-h-screen bg-slime-bg flex items-center justify-center">
-      <div className="text-pink-400 text-sm font-medium animate-pulse">
+    <div
+      className="min-h-screen flex items-center justify-center"
+      style={{
+        background:
+          "radial-gradient(ellipse 100% 60% at 50% 0%, #2D0A4E 0%, #100020 35%, #0A0A0A 65%)",
+      }}
+    >
+      <div className="text-slime-accent text-sm font-medium animate-pulse">
         Loading…
       </div>
     </div>
   );
 }
 
-// ─── Default export with Suspense boundary ────────────────────────────────────
-// Required by Next.js when useSearchParams() is used in a client component.
-// Without this, static generation throws:
-//   "useSearchParams() should be wrapped in a suspense boundary"
+// ─── Default export ───────────────────────────────────────────────────────────
 
 export default function LogPage() {
   return (

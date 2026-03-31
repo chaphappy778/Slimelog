@@ -54,6 +54,13 @@ a {
     rgba(255, 0, 229, 0.15)
   );
   --gradient-holo-border: linear-gradient(135deg, #00f0ff, #39ff14, #ff00e5);
+  --gradient-cta: linear-gradient(135deg, #39ff14, #00f0ff);
+  --gradient-page-bg: radial-gradient(
+    ellipse 100% 60% at 50% 0%,
+    #2d0a4e 0%,
+    #100020 35%,
+    #0a0a0a 65%
+  );
 
   --color-bg: #0a0a0a;
   --color-card: #111111;
@@ -85,21 +92,17 @@ h6 {
 .glow-green {
   box-shadow: 0 0 20px rgba(57, 255, 20, 0.3);
 }
-
 .glow-cyan {
   box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
 }
-
 .glow-magenta {
   box-shadow: 0 0 20px rgba(255, 0, 229, 0.3);
 }
-
 .glow-green-lg {
   box-shadow:
     0 0 40px rgba(57, 255, 20, 0.4),
     0 0 80px rgba(57, 255, 20, 0.15);
 }
-
 .glow-cyan-lg {
   box-shadow:
     0 0 40px rgba(0, 240, 255, 0.4),
@@ -133,6 +136,57 @@ h6 {
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
+}
+
+/* ── Deep Purple Card ───────────────────────────────────── */
+/* Apply to cards that should feel "atmospheric" — like feature cards */
+.card-purple {
+  background: rgba(45, 10, 78, 0.35);
+  border: 1px solid rgba(45, 10, 78, 0.8);
+  backdrop-filter: blur(8px);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.6),
+    0 4px 16px rgba(45, 10, 78, 0.3),
+    inset 0 0 20px rgba(45, 10, 78, 0.15);
+}
+
+/* ── Dot Texture Overlay ────────────────────────────────── */
+/* Apply to a position:absolute overlay within a relative container */
+.dot-texture {
+  background-image: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.25) 1px,
+    transparent 1px
+  );
+  background-size: 40px 40px;
+  opacity: 0.18;
+}
+
+/* ── Section Label (cyan small-caps) ────────────────────── */
+.section-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #00f0ff;
+}
+
+/* ── CTA Button Base ────────────────────────────────────── */
+.btn-cta {
+  background: var(--gradient-cta);
+  color: #0a0a0a;
+  font-weight: 700;
+  border-radius: 9999px;
+  box-shadow: 0 0 20px rgba(57, 255, 20, 0.35);
+  transition:
+    transform 150ms,
+    box-shadow 150ms;
+}
+.btn-cta:active {
+  transform: scale(0.97);
+}
+.btn-cta:hover {
+  box-shadow: 0 0 32px rgba(57, 255, 20, 0.5);
 }
 
 /* ── Page Layout ────────────────────────────────────────── */

@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import FollowBrandButton from "@/components/FollowBrandButton";
+import PageWrapper from "@/components/PageWrapper";
+import FloatingPills from "@/components/FloatingPills";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -43,7 +45,7 @@ function StarRow({ value, label }: { value: number | null; label: string }) {
   if (value == null) return null;
   const filled = Math.round(value);
   return (
-    <div className="flex items-center justify-between py-2 border-b border-slime-border last:border-0">
+    <div className="flex items-center justify-between py-2 border-b border-slime-border/50 last:border-0">
       <span className="text-xs text-slime-muted">{label}</span>
       <div className="flex items-center gap-1">
         {Array.from({ length: 5 }).map((_, i) => (
@@ -76,7 +78,13 @@ function StatPill({
   valueColor?: string;
 }) {
   return (
-    <div className="flex flex-col items-center bg-slime-card rounded-2xl border border-slime-border p-3 gap-0.5 min-w-0">
+    <div
+      className="flex flex-col items-center rounded-2xl p-3 gap-0.5 min-w-0"
+      style={{
+        background: "rgba(45,10,78,0.3)",
+        border: "1px solid rgba(45,10,78,0.7)",
+      }}
+    >
       <span className="text-xl leading-none">{icon}</span>
       {value != null ? (
         <span
@@ -140,11 +148,7 @@ export default async function BrandPage({ params }: PageProps) {
   const { data: logs } = await supabase
     .from("collection_logs")
     .select(
-      `
-      id, slime_name, slime_type, rating_overall, created_at, brand_name_raw,
-      slimes ( name ),
-      profiles ( username, avatar_url )
-    `,
+      `id, slime_name, slime_type, rating_overall, created_at, brand_name_raw, slimes ( name ), profiles ( username, avatar_url )`,
     )
     .eq("brand_id", brand.id)
     .order("created_at", { ascending: false })
@@ -154,7 +158,7 @@ export default async function BrandPage({ params }: PageProps) {
   const initials = brand.name.slice(0, 2).toUpperCase();
 
   return (
-    <div className="min-h-screen bg-slime-bg pb-28">
+    <PageWrapper dots>
       {/* Sticky back nav */}
       <div
         className="sticky top-0 z-20 px-4"
@@ -185,41 +189,63 @@ export default async function BrandPage({ params }: PageProps) {
         </div>
       </div>
 
-      <div className="max-w-[390px] mx-auto px-4 space-y-4 pt-5">
+      <div className="max-w-[390px] mx-auto px-4 space-y-4 pt-5 pb-28">
         {/* Brand Header Card */}
-        <div className="relative bg-slime-card rounded-3xl border border-slime-border">
-          {/* Hero banner */}
-          <div
-            className="h-28 rounded-t-3xl overflow-hidden relative"
-            style={{
-              background: "linear-gradient(135deg, #39FF14, #00F0FF, #FF00E5)",
-            }}
-          >
+        <div
+          className="relative rounded-3xl overflow-hidden"
+          style={{
+            background: "rgba(45,10,78,0.3)",
+            border: "1px solid rgba(45,10,78,0.8)",
+            boxShadow: "inset 0 0 30px rgba(45,10,78,0.2)",
+          }}
+        >
+          {/* Holographic hero banner */}
+          <div className="h-28 relative overflow-hidden">
             <div
-              className="absolute inset-0 opacity-10"
+              className="absolute inset-0"
               style={{
-                backgroundImage:
-                  "radial-gradient(circle at 20% 50%, white 1px, transparent 1px), radial-gradient(circle at 80% 20%, white 1px, transparent 1px)",
-                backgroundSize: "24px 24px",
+                background:
+                  "linear-gradient(135deg, #00F0FF 0%, #39FF14 35%, #FF00E5 70%, #2D0A4E 100%)",
               }}
             />
+            {/* Dot texture on banner */}
+            <div
+              className="absolute inset-0 opacity-20"
+              style={{
+                backgroundImage:
+                  "radial-gradient(circle, rgba(255,255,255,0.4) 1px, transparent 1px)",
+                backgroundSize: "20px 20px",
+              }}
+            />
+            {/* Floating pills in banner */}
+            <div className="absolute inset-0 overflow-hidden">
+              <FloatingPills area="section" density="low" zIndex={1} />
+            </div>
           </div>
 
-          {/* Avatar */}
+          {/* Avatar overlapping banner */}
           <div className="absolute top-16 left-4 z-10">
-            <div className="w-16 h-16 rounded-2xl border-4 border-slime-bg shadow-md bg-slime-surface flex items-center justify-center overflow-hidden">
-              {brand.logo_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={brand.logo_url}
-                  alt={brand.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <span className="text-xl font-black text-slime-accent select-none">
-                  {initials}
-                </span>
-              )}
+            <div
+              className="p-0.5 rounded-2xl shadow-md"
+              style={{
+                background:
+                  "linear-gradient(135deg, #39FF14, #00F0FF, #FF00E5)",
+              }}
+            >
+              <div className="w-16 h-16 rounded-2xl bg-slime-bg overflow-hidden flex items-center justify-center">
+                {brand.logo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={brand.logo_url}
+                    alt={brand.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-xl font-black text-slime-accent select-none">
+                    {initials}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -276,7 +302,6 @@ export default async function BrandPage({ params }: PageProps) {
               )}
               {brand.follower_count != null && (
                 <span className="text-xs text-slime-muted">
-                  {/* Follower count number — cyan */}
                   <span className="font-bold text-slime-cyan">
                     {brand.follower_count.toLocaleString()}
                   </span>{" "}
@@ -337,9 +362,15 @@ export default async function BrandPage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Restock Schedule — bg-slime-purple card */}
+        {/* Restock Schedule */}
         {brand.restock_schedule ? (
-          <div className="bg-slime-purple border border-slime-accent/20 rounded-2xl p-4 flex items-center gap-3">
+          <div
+            className="rounded-2xl p-4 flex items-center gap-3"
+            style={{
+              background: "rgba(45,10,78,0.4)",
+              border: "1px solid rgba(57,255,20,0.2)",
+            }}
+          >
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm text-slime-bg"
               style={{
@@ -360,7 +391,13 @@ export default async function BrandPage({ params }: PageProps) {
             </div>
           </div>
         ) : (
-          <div className="bg-slime-purple border border-slime-border rounded-2xl p-4 flex items-center gap-3">
+          <div
+            className="rounded-2xl p-4 flex items-center gap-3"
+            style={{
+              background: "rgba(45,10,78,0.2)",
+              border: "1px solid rgba(45,10,78,0.5)",
+            }}
+          >
             <div className="w-10 h-10 rounded-xl bg-slime-border flex items-center justify-center shrink-0">
               <svg viewBox="0 0 20 20" className="w-5 h-5 fill-slime-muted">
                 <path d="M10 2a8 8 0 1 0 0 16A8 8 0 0 0 10 2zm1 8.41V6a1 1 0 0 0-2 0v4.59l3.71 3.7 1.41-1.41L11 10.41z" />
@@ -377,11 +414,9 @@ export default async function BrandPage({ params }: PageProps) {
           </div>
         )}
 
-        {/* Community Stats — numbers cyan */}
+        {/* Community Stats */}
         <div>
-          <h2 className="text-xs font-black text-slime-muted uppercase tracking-widest mb-3 px-1">
-            Community Stats
-          </h2>
+          <p className="section-label mb-3 px-1">Community Stats</p>
           <div className="grid grid-cols-4 gap-2 mb-3">
             <StatPill
               label="Total Logs"
@@ -412,7 +447,13 @@ export default async function BrandPage({ params }: PageProps) {
           </div>
 
           {brand.avg_shipping != null || brand.avg_customer_service != null ? (
-            <div className="bg-slime-card rounded-2xl border border-slime-border px-4 py-2">
+            <div
+              className="rounded-2xl px-4 py-2"
+              style={{
+                background: "rgba(45,10,78,0.2)",
+                border: "1px solid rgba(45,10,78,0.6)",
+              }}
+            >
               <StarRow value={brand.avg_shipping} label="Shipping Rating" />
               <StarRow
                 value={brand.avg_customer_service}
@@ -427,7 +468,13 @@ export default async function BrandPage({ params }: PageProps) {
                 )}
             </div>
           ) : (
-            <div className="bg-slime-card rounded-2xl border border-slime-border px-4 py-4 text-center">
+            <div
+              className="rounded-2xl px-4 py-4 text-center"
+              style={{
+                background: "rgba(45,10,78,0.2)",
+                border: "1px solid rgba(45,10,78,0.5)",
+              }}
+            >
               <p className="text-xs text-slime-muted">
                 No ratings yet — be the first to rate this brand!
               </p>
@@ -435,12 +482,10 @@ export default async function BrandPage({ params }: PageProps) {
           )}
         </div>
 
-        {/* Recent Community Logs */}
+        {/* Community Logs */}
         <div>
           <div className="flex items-center justify-between mb-3 px-1">
-            <h2 className="text-xs font-black text-slime-muted uppercase tracking-widest">
-              Community Logs
-            </h2>
+            <p className="section-label">Community Logs</p>
             <span className="text-[11px] text-slime-accent font-semibold">
               {recentLogs.length} recent
             </span>
@@ -465,7 +510,11 @@ export default async function BrandPage({ params }: PageProps) {
                 return (
                   <div
                     key={log.id}
-                    className="bg-slime-card rounded-2xl border border-slime-border p-3 flex items-start gap-3"
+                    className="rounded-2xl p-3 flex items-start gap-3"
+                    style={{
+                      background: "rgba(45,10,78,0.2)",
+                      border: "1px solid rgba(45,10,78,0.6)",
+                    }}
                   >
                     <div className="w-8 h-8 rounded-full bg-slime-surface border border-slime-border flex items-center justify-center shrink-0 overflow-hidden">
                       {avatarUrl ? (
@@ -481,14 +530,12 @@ export default async function BrandPage({ params }: PageProps) {
                         </span>
                       )}
                     </div>
-
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-slime-text truncate">
                             {slimeName}
                           </p>
-                          {/* username handle — magenta */}
                           <p className="text-[11px] text-slime-magenta">
                             @{username}
                           </p>
@@ -504,7 +551,7 @@ export default async function BrandPage({ params }: PageProps) {
                                 <polygon
                                   points="5,1 6.2,3.8 9,3.8 7,5.8 7.8,9 5,7.5 2.2,9 3,5.8 1,3.8 3.8,3.8"
                                   className={
-                                    i < log.rating_overall
+                                    i < log.rating_overall!
                                       ? "fill-slime-accent"
                                       : "fill-slime-border"
                                   }
@@ -534,13 +581,19 @@ export default async function BrandPage({ params }: PageProps) {
           )}
         </div>
       </div>
-    </div>
+    </PageWrapper>
   );
 }
 
 function NoLogsEmpty({ brandName }: { brandName: string }) {
   return (
-    <div className="bg-slime-card rounded-2xl border border-slime-border p-8 flex flex-col items-center text-center">
+    <div
+      className="rounded-2xl p-8 flex flex-col items-center text-center"
+      style={{
+        background: "rgba(45,10,78,0.2)",
+        border: "1px solid rgba(45,10,78,0.6)",
+      }}
+    >
       <div className="text-4xl mb-3">🫧</div>
       <h3 className="text-sm font-bold text-slime-text mb-1">No logs yet</h3>
       <p className="text-xs text-slime-muted leading-relaxed">

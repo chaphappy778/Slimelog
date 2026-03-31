@@ -4,8 +4,8 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { Trophy, CalendarDays } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import PageWrapper from "@/components/PageWrapper";
+import FloatingPills from "@/components/FloatingPills";
 
 type TopRatedSlime = {
   id: string;
@@ -23,8 +23,6 @@ type UpcomingDrop = {
   status: string | null;
   brand_name: string | null;
 };
-
-// ─── Drop status config ───────────────────────────────────────────────────────
 
 const DROP_STATUS = {
   announced: {
@@ -101,45 +99,19 @@ function RatingBar({ avg }: { avg: number | null }) {
   );
 }
 
-function SectionHeader({
-  icon,
-  title,
-  subtitle,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-}) {
-  return (
-    <div className="flex items-center gap-3 mb-4">
-      <div
-        className="w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 bg-slime-surface border border-slime-border text-slime-accent"
-        aria-hidden="true"
-      >
-        {icon}
-      </div>
-      <div>
-        <h2 className="text-base font-bold text-slime-text leading-tight">
-          {title}
-        </h2>
-        <p className="text-xs text-slime-muted">{subtitle}</p>
-      </div>
-    </div>
-  );
-}
-
-function EmptySection({ message }: { message: string }) {
-  return (
-    <div className="text-center py-10 text-slime-muted text-sm">{message}</div>
-  );
-}
-
 function TopRatedCard({ slime, rank }: { slime: TopRatedSlime; rank: number }) {
   const isTop3 = rank <= 3;
   const rankEmoji = ["🥇", "🥈", "🥉"][rank - 1] ?? null;
 
   return (
-    <article className="bg-slime-card rounded-2xl border border-slime-border p-4 flex items-center gap-3 hover:border-slime-accent/30 transition-colors">
+    <article
+      className="rounded-2xl p-4 flex items-center gap-3 transition-all duration-150 hover:scale-[1.01] active:scale-[0.98]"
+      style={{
+        background: "rgba(45,10,78,0.25)",
+        border: "1px solid rgba(45,10,78,0.7)",
+        boxShadow: "inset 0 0 16px rgba(45,10,78,0.1)",
+      }}
+    >
       <div
         className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-sm font-black ${isTop3 ? "text-slime-bg" : "bg-slime-surface text-slime-muted"}`}
         style={
@@ -181,9 +153,12 @@ function DropCard({ drop }: { drop: UpcomingDrop }) {
       aria-label={`View drop: ${drop.name ?? "Unnamed drop"}`}
     >
       <article
-        className="bg-slime-card rounded-2xl border p-4 flex items-center justify-between gap-3 transition-all duration-150 group-active:scale-[0.98] group-hover:border-slime-accent/30"
+        className="rounded-2xl p-4 flex items-center justify-between gap-3 transition-all duration-150 group-active:scale-[0.98]"
         style={{
-          borderColor: isLive ? "rgba(57,255,20,0.3)" : "rgba(42,42,42,1)",
+          background: isLive ? "rgba(57,255,20,0.06)" : "rgba(45,10,78,0.2)",
+          border: isLive
+            ? "1px solid rgba(57,255,20,0.3)"
+            : "1px solid rgba(45,10,78,0.6)",
         }}
       >
         <div className="flex-1 min-w-0">
@@ -197,7 +172,6 @@ function DropCard({ drop }: { drop: UpcomingDrop }) {
             {formatDropDate(drop.drop_at)}
           </p>
         </div>
-
         <div className="flex items-center gap-2 shrink-0">
           <span
             className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${statusBadge.bg} ${statusBadge.text}`}
@@ -220,8 +194,6 @@ function DropCard({ drop }: { drop: UpcomingDrop }) {
     </Link>
   );
 }
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function DiscoverPage() {
   const cookieStore = await cookies();
@@ -254,17 +226,29 @@ export default async function DiscoverPage() {
   const hasErrors = topRatedResult.error || dropsResult.error;
 
   return (
-    <main className="min-h-screen pb-24 bg-slime-bg">
+    <PageWrapper dots glow="cyan">
       <PageHeader />
 
       <div className="pt-14">
-        <div className="px-4 pt-6 pb-6">
-          <h1 className="text-2xl font-black tracking-tight text-holo">
-            Discover
-          </h1>
-          <p className="text-sm text-slime-muted mt-0.5">
-            Top-rated slimes & upcoming drops
-          </p>
+        {/* Hero with floating pills */}
+        <div className="relative px-4 pt-6 pb-6 overflow-hidden">
+          <FloatingPills area="section" density="low" zIndex={0} />
+          <div className="relative z-10">
+            <h1
+              className="text-2xl font-black tracking-tight"
+              style={{
+                background:
+                  "linear-gradient(90deg, #39FF14 0%, #00F0FF 40%, #FF00E5 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              }}
+            >
+              Discover
+            </h1>
+            <p className="text-sm text-slime-muted mt-0.5">
+              Top-rated slimes &amp; upcoming drops
+            </p>
+          </div>
         </div>
 
         {hasErrors && (
@@ -273,14 +257,29 @@ export default async function DiscoverPage() {
           </div>
         )}
 
+        {/* Top Rated */}
         <section className="px-4 mb-8">
-          <SectionHeader
-            icon={<Trophy className="w-4 h-4" />}
-            title="Top Rated Slimes"
-            subtitle="Minimum 3 community ratings"
-          />
+          <div className="flex items-center gap-3 mb-4">
+            <div
+              className="w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 text-slime-bg"
+              style={{
+                background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+              }}
+              aria-hidden="true"
+            >
+              <Trophy className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="section-label">Top Rated Slimes</p>
+              <p className="text-xs text-slime-muted">
+                Minimum 3 community ratings
+              </p>
+            </div>
+          </div>
           {topSlimes.length === 0 ? (
-            <EmptySection message="No highly-rated slimes yet — go log some!" />
+            <div className="text-center py-10 text-slime-muted text-sm">
+              No highly-rated slimes yet — go log some!
+            </div>
           ) : (
             <div className="flex flex-col gap-3">
               {topSlimes.map((slime, i) => (
@@ -290,14 +289,31 @@ export default async function DiscoverPage() {
           )}
         </section>
 
-        <section className="px-4">
-          <SectionHeader
-            icon={<CalendarDays className="w-4 h-4" />}
-            title="Upcoming Drops"
-            subtitle="Tap a drop to see what's included"
-          />
+        {/* Upcoming Drops */}
+        <section className="px-4 pb-24">
+          <div className="flex items-center gap-3 mb-4">
+            <div
+              className="w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 text-slime-bg"
+              style={{
+                background: "linear-gradient(135deg, #FF00E5, #00F0FF)",
+              }}
+              aria-hidden="true"
+            >
+              <CalendarDays className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="section-label" style={{ color: "#FF00E5" }}>
+                Upcoming Drops
+              </p>
+              <p className="text-xs text-slime-muted">
+                Tap a drop to see what's included
+              </p>
+            </div>
+          </div>
           {drops.length === 0 ? (
-            <EmptySection message="No drops announced yet — check back soon." />
+            <div className="text-center py-10 text-slime-muted text-sm">
+              No drops announced yet — check back soon.
+            </div>
           ) : (
             <div className="flex flex-col gap-3">
               {drops.map((drop) => (
@@ -307,6 +323,6 @@ export default async function DiscoverPage() {
           )}
         </section>
       </div>
-    </main>
+    </PageWrapper>
   );
 }

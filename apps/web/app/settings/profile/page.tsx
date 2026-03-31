@@ -7,8 +7,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { updateProfile, checkUsernameAvailable } from "@/lib/profile-actions";
 import { ImageUpload } from "@/components/ImageUpload";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import PageWrapper from "@/components/PageWrapper";
 
 type FormState = {
   username: string;
@@ -21,12 +20,9 @@ type FormState = {
 type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid";
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
-
 function validateUsername(value: string): "invalid" | "valid" {
   return USERNAME_RE.test(value) ? "valid" : "invalid";
 }
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function UsernameStatusIcon({ status }: { status: UsernameStatus }) {
   if (status === "idle") return null;
@@ -136,7 +132,12 @@ function UsernameHint({
 const inputCls =
   "w-full px-3 py-2.5 rounded-xl border border-slime-border bg-slime-surface text-sm text-slime-text placeholder:text-slime-muted outline-none focus:border-slime-accent/50 focus:ring-1 focus:ring-slime-accent/30 transition-colors";
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// Deep purple section card style
+const sectionStyle = {
+  background: "rgba(45,10,78,0.25)",
+  border: "1px solid rgba(45,10,78,0.7)",
+  boxShadow: "inset 0 0 16px rgba(45,10,78,0.1)",
+};
 
 export default function ProfileSettingsPage() {
   const router = useRouter();
@@ -244,7 +245,6 @@ export default function ProfileSettingsPage() {
     form.location !== originalForm.location ||
     form.website_url !== originalForm.website_url ||
     form.avatar_url !== originalForm.avatar_url;
-
   const isFormValid =
     hasChanges &&
     form.username.length >= 3 &&
@@ -277,20 +277,20 @@ export default function ProfileSettingsPage() {
 
   if (!authChecked || profileLoading) {
     return (
-      <main className="min-h-screen pb-24 bg-slime-bg">
+      <PageWrapper>
         <div className="px-4 pt-10 space-y-4 animate-pulse">
           <div className="h-6 w-32 bg-slime-surface rounded-xl" />
           <div className="h-28 w-28 bg-slime-surface rounded-2xl" />
-          <div className="h-12 bg-slime-card rounded-2xl border border-slime-border" />
-          <div className="h-24 bg-slime-card rounded-2xl border border-slime-border" />
-          <div className="h-12 bg-slime-card rounded-2xl border border-slime-border" />
+          <div className="h-12 rounded-2xl" style={sectionStyle} />
+          <div className="h-24 rounded-2xl" style={sectionStyle} />
+          <div className="h-12 rounded-2xl" style={sectionStyle} />
         </div>
-      </main>
+      </PageWrapper>
     );
   }
 
   return (
-    <main className="min-h-screen pb-28 bg-slime-bg">
+    <PageWrapper dots>
       <header className="px-4 pt-10 pb-6 flex items-center gap-3">
         <Link
           href="/profile"
@@ -313,7 +313,7 @@ export default function ProfileSettingsPage() {
           </svg>
         </Link>
         <div>
-          <h1 className="text-xl font-black text-slime-text leading-tight">
+          <h1 className="text-xl font-black text-slime-cyan leading-tight">
             Edit Profile
           </h1>
           <p className="text-xs text-slime-muted mt-0.5">
@@ -322,14 +322,12 @@ export default function ProfileSettingsPage() {
         </div>
       </header>
 
-      <div className="px-4 space-y-5">
+      <div className="px-4 pb-28 space-y-5">
         {/* Avatar */}
-        <section className="bg-slime-card rounded-2xl border border-slime-border p-4 space-y-2">
-          <p className="text-xs text-slime-muted font-semibold uppercase tracking-wider">
-            Profile Photo
-          </p>
+        <section className="rounded-2xl p-4 space-y-2" style={sectionStyle}>
+          <p className="section-label">Profile Photo</p>
           {userId ? (
-            <div className="flex items-start gap-4">
+            <div className="flex items-start gap-4 mt-2">
               <div className="w-24 shrink-0">
                 <ImageUpload
                   bucket="avatars"
@@ -367,11 +365,8 @@ export default function ProfileSettingsPage() {
         </section>
 
         {/* Username */}
-        <section className="bg-slime-card rounded-2xl border border-slime-border p-4 space-y-1">
-          <label
-            htmlFor="username"
-            className="text-xs text-slime-muted font-semibold uppercase tracking-wider"
-          >
+        <section className="rounded-2xl p-4 space-y-1" style={sectionStyle}>
+          <label htmlFor="username" className="section-label">
             Username
           </label>
           <div className="relative flex items-center mt-1">
@@ -404,22 +399,13 @@ export default function ProfileSettingsPage() {
         </section>
 
         {/* Bio */}
-        <section className="bg-slime-card rounded-2xl border border-slime-border p-4 space-y-1">
+        <section className="rounded-2xl p-4 space-y-1" style={sectionStyle}>
           <div className="flex items-center justify-between">
-            <label
-              htmlFor="bio"
-              className="text-xs text-slime-muted font-semibold uppercase tracking-wider"
-            >
+            <label htmlFor="bio" className="section-label">
               Bio
             </label>
             <span
-              className={`text-xs font-medium tabular-nums transition-colors ${
-                form.bio.length > 140
-                  ? form.bio.length > 150
-                    ? "text-red-400"
-                    : "text-amber-400"
-                  : "text-slime-muted"
-              }`}
+              className={`text-xs font-medium tabular-nums transition-colors ${form.bio.length > 140 ? (form.bio.length > 150 ? "text-red-400" : "text-amber-400") : "text-slime-muted"}`}
             >
               {form.bio.length}/150
             </span>
@@ -436,11 +422,8 @@ export default function ProfileSettingsPage() {
         </section>
 
         {/* Location */}
-        <section className="bg-slime-card rounded-2xl border border-slime-border p-4 space-y-1">
-          <label
-            htmlFor="location"
-            className="text-xs text-slime-muted font-semibold uppercase tracking-wider"
-          >
+        <section className="rounded-2xl p-4 space-y-1" style={sectionStyle}>
+          <label htmlFor="location" className="section-label">
             Location
           </label>
           <input
@@ -457,11 +440,8 @@ export default function ProfileSettingsPage() {
         </section>
 
         {/* Website */}
-        <section className="bg-slime-card rounded-2xl border border-slime-border p-4 space-y-1">
-          <label
-            htmlFor="website_url"
-            className="text-xs text-slime-muted font-semibold uppercase tracking-wider"
-          >
+        <section className="rounded-2xl p-4 space-y-1" style={sectionStyle}>
+          <label htmlFor="website_url" className="section-label">
             Website
           </label>
           <input
@@ -478,7 +458,6 @@ export default function ProfileSettingsPage() {
           />
         </section>
 
-        {/* Feedback */}
         {saveError && (
           <div className="px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-xs text-red-400">
             {saveError}
@@ -503,15 +482,10 @@ export default function ProfileSettingsPage() {
           </div>
         )}
 
-        {/* Save button */}
         <button
           onClick={handleSave}
           disabled={!isFormValid || saving}
-          className={`w-full py-3.5 rounded-2xl text-sm font-black tracking-wide transition-all active:scale-95 ${
-            isFormValid && !saving
-              ? "text-slime-bg shadow-glow-green"
-              : "bg-slime-surface text-slime-muted cursor-not-allowed"
-          }`}
+          className={`w-full py-3.5 rounded-2xl text-sm font-black tracking-wide transition-all active:scale-95 ${isFormValid && !saving ? "text-slime-bg shadow-glow-green" : "bg-slime-surface text-slime-muted cursor-not-allowed"}`}
           style={
             isFormValid && !saving
               ? { background: "linear-gradient(135deg, #39FF14, #00F0FF)" }
@@ -521,6 +495,6 @@ export default function ProfileSettingsPage() {
           {saving ? "Saving…" : "Save Profile"}
         </button>
       </div>
-    </main>
+    </PageWrapper>
   );
 }

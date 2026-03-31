@@ -5,6 +5,7 @@ import { useState, useTransition, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import FloatingPills from "@/components/FloatingPills";
 
 function LoginPageInner() {
   const router = useRouter();
@@ -26,12 +27,10 @@ function LoginPageInner() {
         email,
         password,
       });
-
       if (error) {
         setError(error.message);
         return;
       }
-
       router.push(next);
       router.refresh();
     });
@@ -40,28 +39,27 @@ function LoginPageInner() {
   async function handleGoogleLogin() {
     setError(null);
     const supabase = createClient();
-
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
-
     if (error) setError(error.message);
   }
 
   return (
-    /* Brand dark background instead of old #0f0a1e */
-    <div className="min-h-screen bg-slime-bg flex flex-col items-center justify-center px-5 py-12">
-      {/* Background blobs — brand accent colors */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-slime-cyan/10 blur-3xl" />
-        <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-slime-violet/15 blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-slime-magenta/8 blur-3xl" />
-      </div>
+    <div
+      className="relative min-h-screen flex flex-col items-center justify-center px-5 py-12 overflow-hidden"
+      style={{
+        background:
+          "radial-gradient(ellipse 100% 60% at 50% 0%, #2D0A4E 0%, #100020 35%, #0A0A0A 65%)",
+      }}
+    >
+      {/* Floating pill decorations replacing old blobs */}
+      <FloatingPills area="hero" density="medium" zIndex={0} />
 
-      <div className="relative w-full max-w-sm">
+      <div className="relative z-10 w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 text-center">
           <div
@@ -72,7 +70,6 @@ function LoginPageInner() {
               🫧
             </span>
           </div>
-          {/* Headline — cyan */}
           <h1 className="text-2xl font-bold text-slime-cyan tracking-tight">
             Welcome back
           </h1>
@@ -82,15 +79,22 @@ function LoginPageInner() {
         </div>
 
         {/* Card */}
-        <div className="rounded-3xl bg-slime-card border border-slime-border backdrop-blur-sm p-6 shadow-2xl space-y-5">
-          {/* Error */}
+        <div
+          className="rounded-3xl backdrop-blur-sm p-6 shadow-2xl space-y-5"
+          style={{
+            background: "rgba(45,10,78,0.3)",
+            border: "1px solid rgba(45,10,78,0.8)",
+            boxShadow:
+              "inset 0 0 30px rgba(45,10,78,0.2), 0 8px 32px rgba(0,0,0,0.6)",
+          }}
+        >
           {error && (
             <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-300">
               {error}
             </div>
           )}
 
-          {/* Google button */}
+          {/* Google */}
           <button
             type="button"
             onClick={handleGoogleLogin}
@@ -122,7 +126,6 @@ function LoginPageInner() {
             Continue with Google
           </button>
 
-          {/* Divider */}
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-slime-border" />
             <span className="text-xs text-slime-muted uppercase tracking-widest">
@@ -131,7 +134,6 @@ function LoginPageInner() {
             <div className="flex-1 h-px bg-slime-border" />
           </div>
 
-          {/* Email / password */}
           <form onSubmit={handleEmailLogin} className="space-y-4">
             <div>
               <label
@@ -151,7 +153,6 @@ function LoginPageInner() {
                 className="w-full rounded-xl bg-slime-surface border border-slime-border px-4 py-3 text-sm text-slime-text placeholder-slime-muted focus:border-slime-accent/60 focus:outline-none focus:ring-1 focus:ring-slime-accent/40 transition"
               />
             </div>
-
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label
@@ -178,8 +179,6 @@ function LoginPageInner() {
                 className="w-full rounded-xl bg-slime-surface border border-slime-border px-4 py-3 text-sm text-slime-text placeholder-slime-muted focus:border-slime-accent/60 focus:outline-none focus:ring-1 focus:ring-slime-accent/40 transition"
               />
             </div>
-
-            {/* Submit button — keep green */}
             <button
               type="submit"
               disabled={isPending}
@@ -218,7 +217,6 @@ function LoginPageInner() {
           </form>
         </div>
 
-        {/* Footer — link text magenta */}
         <p className="mt-6 text-center text-sm text-slime-muted">
           New to Slimelog?{" "}
           <Link

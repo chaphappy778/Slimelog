@@ -1,6 +1,4 @@
 // apps/web/app/collection/page.tsx
-// Updated: uses PageHeader, adds pt-14 to push content below fixed header.
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -9,8 +7,7 @@ import { getUserCollectionLogs } from "@/lib/slime-actions";
 import { SLIME_TYPE_LABELS } from "@/lib/types";
 import type { CollectionLog, SlimeType } from "@/lib/types";
 import PageHeader from "@/components/PageHeader";
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+import PageWrapper from "@/components/PageWrapper";
 
 function formatDate(iso: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -27,40 +24,39 @@ function RatingDots({ value }: { value: number | null }) {
       {[1, 2, 3, 4, 5].map((i) => (
         <span
           key={i}
-          className={`w-1.5 h-1.5 rounded-full ${
-            i <= value ? "bg-slime-accent" : "bg-slime-border"
-          }`}
+          className={`w-1.5 h-1.5 rounded-full ${i <= value ? "bg-slime-accent" : "bg-slime-border"}`}
         />
       ))}
     </span>
   );
 }
 
-// ─── Slime Card ───────────────────────────────────────────────────────────────
-
 function SlimeCard({ log }: { log: CollectionLog }) {
   const typeLabel =
     log.slime_type && SLIME_TYPE_LABELS[log.slime_type as SlimeType]
       ? SLIME_TYPE_LABELS[log.slime_type as SlimeType]
       : null;
-
   const hasRatings =
     log.rating_overall !== null ||
     log.rating_texture !== null ||
     log.rating_scent !== null;
-
   const primaryColor = log.colors?.[0] ?? null;
-
   const displayPrice =
     (log as any).purchase_price != null
       ? (log as any).purchase_price
       : log.cost_paid;
-
   const imageUrl = (log as any).image_url ?? null;
 
   return (
     <Link href={`/slimes/${log.id}`} className="block group">
-      <div className="bg-slime-card rounded-2xl border border-slime-border overflow-hidden shadow-slime-sm group-hover:shadow-slime group-active:scale-[0.98] transition-all duration-200">
+      <div
+        className="rounded-2xl overflow-hidden group-active:scale-[0.98] transition-all duration-200"
+        style={{
+          background: "rgba(45,10,78,0.25)",
+          border: "1px solid rgba(45,10,78,0.7)",
+          boxShadow: "inset 0 0 20px rgba(45,10,78,0.1)",
+        }}
+      >
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -69,12 +65,9 @@ function SlimeCard({ log }: { log: CollectionLog }) {
             className="w-full h-40 object-cover"
           />
         ) : (
-          /* Photo placeholder — dark purple gradient (brand palette) */
           <div
             className="w-full h-32 flex items-center justify-center text-3xl"
-            style={{
-              background: "linear-gradient(135deg, #2D0A4E, #1A1A1A)",
-            }}
+            style={{ background: "linear-gradient(135deg, #2D0A4E, #1A1A1A)" }}
             aria-hidden="true"
           >
             🫧
@@ -93,7 +86,6 @@ function SlimeCard({ log }: { log: CollectionLog }) {
                 </span>
               )}
             </div>
-
             <div className="flex flex-col items-end gap-1 shrink-0">
               {log.in_wishlist ? (
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 border border-violet-500/25">
@@ -108,7 +100,6 @@ function SlimeCard({ log }: { log: CollectionLog }) {
           </div>
 
           <div className="flex flex-wrap gap-1.5">
-            {/* Slime type badge — global rule: bg-slime-purple text-slime-cyan */}
             {typeLabel && (
               <span className="bg-slime-purple text-slime-cyan text-xs font-bold px-2 py-0.5 rounded-full">
                 {typeLabel}
@@ -132,7 +123,7 @@ function SlimeCard({ log }: { log: CollectionLog }) {
           </div>
 
           {hasRatings && (
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 pt-1 border-t border-slime-border">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 pt-1 border-t border-slime-border/50">
               {log.rating_overall !== null && (
                 <div className="flex items-center justify-between col-span-2">
                   <span className="text-xs text-slime-muted font-medium">
@@ -140,7 +131,7 @@ function SlimeCard({ log }: { log: CollectionLog }) {
                   </span>
                   <div className="flex items-center gap-1.5">
                     <RatingDots value={log.rating_overall} />
-                    <span className="text-xs font-bold text-slime-text">
+                    <span className="text-xs font-bold text-slime-cyan">
                       {log.rating_overall}/5
                     </span>
                   </div>
@@ -167,7 +158,7 @@ function SlimeCard({ log }: { log: CollectionLog }) {
           )}
 
           {log.notes && (
-            <p className="text-xs text-slime-muted line-clamp-2 italic border-t border-slime-border pt-2">
+            <p className="text-xs text-slime-muted line-clamp-2 italic border-t border-slime-border/50 pt-2">
               "{log.notes}"
             </p>
           )}
@@ -181,12 +172,19 @@ function SlimeCard({ log }: { log: CollectionLog }) {
   );
 }
 
-// ─── Empty State ──────────────────────────────────────────────────────────────
-
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center text-center py-20 gap-4">
-      <span className="text-5xl">🫙</span>
+      {/* Holographic pill icon instead of emoji */}
+      <div
+        className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-glow-green"
+        style={{
+          background: "linear-gradient(135deg, #39FF14, #00F0FF, #FF00E5)",
+        }}
+        aria-hidden="true"
+      >
+        <span className="text-2xl">🫧</span>
+      </div>
       <div>
         <p className="font-bold text-slime-text">Your collection is empty</p>
         <p className="text-sm text-slime-muted mt-1">
@@ -195,15 +193,14 @@ function EmptyState() {
       </div>
       <Link
         href="/log"
-        className="mt-2 px-6 py-2.5 rounded-xl bg-slime-accent text-white text-sm font-bold hover:bg-slime-accent-hover transition"
+        className="mt-2 px-6 py-2.5 rounded-xl text-slime-bg text-sm font-bold shadow-glow-green transition active:scale-95"
+        style={{ background: "linear-gradient(135deg, #39FF14, #00F0FF)" }}
       >
         Log a slime ✦
       </Link>
     </div>
   );
 }
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CollectionPage() {
   const [logs, setLogs] = useState<CollectionLog[]>([]);
@@ -237,18 +234,24 @@ export default function CollectionPage() {
   const wishlistCount = logs.filter((l) => l.in_wishlist).length;
 
   return (
-    <div className="min-h-screen bg-slime-bg">
-      {/* Fixed page header */}
+    <PageWrapper dots glow="cyan">
       <PageHeader />
 
-      {/* Content — push below fixed header */}
       <div className="pt-14 px-4 py-8">
         <div className="max-w-md mx-auto">
-          {/* Page title row — headline cyan */}
+          {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-extrabold text-slime-cyan tracking-tight">
-                My Slimes <span className="text-slime-accent">✦</span>
+              <h1
+                className="text-2xl font-extrabold tracking-tight"
+                style={{
+                  background: "linear-gradient(90deg, #00F0FF, #39FF14)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                }}
+              >
+                My Slimes{" "}
+                <span style={{ WebkitTextFillColor: "#39FF14" }}>✦</span>
               </h1>
               {!loading && (
                 <p className="text-sm text-slime-muted mt-0.5">
@@ -258,7 +261,10 @@ export default function CollectionPage() {
             </div>
             <Link
               href="/log"
-              className="px-4 py-2 rounded-xl bg-slime-accent text-white text-xs font-bold hover:bg-slime-accent-hover transition"
+              className="px-4 py-2 rounded-xl text-slime-bg text-xs font-bold shadow-glow-green transition active:scale-95"
+              style={{
+                background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+              }}
             >
               + Log
             </Link>
@@ -273,9 +279,16 @@ export default function CollectionPage() {
                 onClick={() => setFilter(f)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition capitalize ${
                   filter === f
-                    ? "bg-slime-accent text-white"
+                    ? "text-slime-bg shadow-glow-green"
                     : "bg-slime-surface border border-slime-border text-slime-muted hover:border-slime-accent/50"
                 }`}
+                style={
+                  filter === f
+                    ? {
+                        background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                      }
+                    : undefined
+                }
               >
                 {f === "all"
                   ? `All (${logs.length})`
@@ -309,6 +322,6 @@ export default function CollectionPage() {
           )}
         </div>
       </div>
-    </div>
+    </PageWrapper>
   );
 }

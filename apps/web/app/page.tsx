@@ -1,11 +1,12 @@
 // apps/web/app/page.tsx
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import FeedTabs from "@/components/FeedTabs";
 import PageHeader from "@/components/PageHeader";
-import { redirect } from "next/navigation";
+import PageWrapper from "@/components/PageWrapper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -128,7 +129,16 @@ function FeedCard({ log }: { log: FeedLog }) {
 
   return (
     <Link href={`/slimes/${log.id}`} className="block group">
-      <article className="relative bg-slime-card rounded-2xl border border-slime-border overflow-hidden transition-all duration-100 group-hover:border-slime-accent/30 group-hover:shadow-slime-sm group-active:scale-[0.98]">
+      <article
+        className="relative rounded-2xl overflow-hidden transition-all duration-150 group-hover:shadow-card-purple group-active:scale-[0.98]"
+        style={{
+          background: "rgba(45,10,78,0.25)",
+          border: "1px solid rgba(45,10,78,0.7)",
+          backdropFilter: "blur(8px)",
+          boxShadow: "inset 0 0 20px rgba(45,10,78,0.1)",
+        }}
+      >
+        {/* inner glow orb */}
         <div
           className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-10 blur-2xl pointer-events-none"
           style={{ background: "radial-gradient(circle, #39FF14, #00F0FF)" }}
@@ -154,7 +164,7 @@ function FeedCard({ log }: { log: FeedLog }) {
 
           <Stars rating={log.rating_overall} />
 
-          <div className="flex items-center justify-between pt-1 border-t border-slime-border">
+          <div className="flex items-center justify-between pt-1 border-t border-slime-border/50">
             {username ? (
               <Link
                 href={`/users/${username}`}
@@ -276,12 +286,9 @@ export default async function HomePage({
   } = await supabase.auth.getUser();
   const isLoggedIn = !!user;
 
-  // ── Smart routing: show landing page for logged-out users ──────────────────
   if (!isLoggedIn) {
     redirect("/landing");
   }
-
-  // ── Logged-in: show existing feed ──────────────────────────────────────────
 
   let communityLogs: FeedLog[] = [];
   let communityError = false;
@@ -364,12 +371,14 @@ export default async function HomePage({
     activeTab === "following" ? followingError : communityError;
 
   return (
-    <div className="min-h-screen bg-slime-bg">
+    <PageWrapper dots glow="cyan">
       <PageHeader />
 
       <div className="pt-14">
+        {/* Feed hero label */}
         <div className="px-4 pt-6 pb-2">
-          <p className="text-sm text-slime-muted">
+          <p className="section-label">Community Feed</p>
+          <p className="text-sm text-slime-muted mt-1">
             What the community is logging
           </p>
         </div>
@@ -413,6 +422,6 @@ export default async function HomePage({
           )}
         </section>
       </div>
-    </div>
+    </PageWrapper>
   );
 }

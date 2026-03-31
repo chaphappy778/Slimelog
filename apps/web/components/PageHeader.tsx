@@ -14,11 +14,13 @@ export default function PageHeader() {
       className="fixed top-0 left-0 right-0 z-30 h-14 flex items-center justify-between px-4"
       style={{
         background: "rgba(10, 10, 10, 0.92)",
-        borderBottom: "1px solid rgba(57, 255, 20, 0.12)",
-        boxShadow: "0 1px 12px 0 rgba(57, 255, 20, 0.06)",
+        borderBottom: "1px solid transparent",
+        backgroundClip: "padding-box",
+        boxShadow:
+          "0 1px 0 0 rgba(0,240,255,0.15), 0 2px 0 0 rgba(57,255,20,0.08), 0 1px 16px 0 rgba(45,10,78,0.3)",
       }}
     >
-      {/* Wordmark */}
+      {/* Wordmark — full green-cyan-magenta holo gradient */}
       <Link href="/" className="flex items-center gap-2 group">
         <img
           src="/logo.svg"
@@ -27,7 +29,17 @@ export default function PageHeader() {
           height={32}
           className="rounded-lg"
         />
-        <span className="text-lg font-black tracking-tight text-holo">
+        <span
+          className="text-lg font-black tracking-tight"
+          style={{
+            background:
+              "linear-gradient(90deg, #39FF14 0%, #00F0FF 40%, #FF00E5 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            backgroundClip: "text",
+            fontFamily: "'Montserrat', sans-serif",
+          }}
+        >
           SlimeLog
         </span>
       </Link>
@@ -37,10 +49,10 @@ export default function PageHeader() {
         <Link
           href="/profile"
           aria-label="Profile"
-          className={`rounded-full border p-2 transition-colors ${
+          className={`rounded-full border p-2 transition-all duration-150 ${
             profileActive
-              ? "text-slime-accent border-slime-accent"
-              : "text-slime-muted border-slime-border hover:text-slime-accent hover:border-slime-accent"
+              ? "text-slime-accent border-slime-accent shadow-glow-green"
+              : "text-slime-muted border-slime-border hover:text-slime-accent hover:border-slime-accent/50"
           }`}
         >
           <svg

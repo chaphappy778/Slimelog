@@ -3,8 +3,8 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import PageWrapper from "@/components/PageWrapper";
+import FloatingPills from "@/components/FloatingPills";
 
 type DropDetail = {
   id: string;
@@ -35,8 +35,6 @@ type DropSlime = {
     image_url: string | null;
   } | null;
 };
-
-// ─── Constants ────────────────────────────────────────────────────────────────
 
 const DROP_STATUS = {
   announced: {
@@ -89,8 +87,6 @@ const SLIME_TYPE_LABELS: Record<string, string> = {
   avalanche: "Avalanche",
   slay: "Slay",
 };
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 type StatusConfig = { label: string; bg: string; text: string; dot: string };
 
@@ -152,8 +148,6 @@ function buildLogUrl(
   return `/log?${params.toString()}`;
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
 function StatusBadge({ status }: { status: string | null }) {
   const cfg = getStatusConfig(status);
   const isLive = status === "live";
@@ -169,17 +163,6 @@ function StatusBadge({ status }: { status: string | null }) {
   );
 }
 
-function SlimeTypeBadge({ slimeType }: { slimeType: string | null }) {
-  if (!slimeType) return null;
-  const label = SLIME_TYPE_LABELS[slimeType] ?? slimeType;
-  return (
-    /* Global type badge rule: bg-slime-purple text-slime-cyan */
-    <span className="bg-slime-purple text-slime-cyan text-xs font-bold px-2 py-0.5 rounded-full">
-      {label}
-    </span>
-  );
-}
-
 function SlimeCard({
   slime,
   dropName,
@@ -191,9 +174,18 @@ function SlimeCard({
 }) {
   const s = slime.slimes;
   const logUrl = buildLogUrl(slime, dropName, brandName);
+  const typeLabel = s?.slime_type
+    ? (SLIME_TYPE_LABELS[s.slime_type] ?? s.slime_type)
+    : null;
 
   return (
-    <article className="bg-slime-card rounded-2xl border border-slime-border overflow-hidden hover:border-slime-accent/30 transition-colors">
+    <article
+      className="rounded-2xl overflow-hidden"
+      style={{
+        background: "rgba(45,10,78,0.25)",
+        border: "1px solid rgba(45,10,78,0.7)",
+      }}
+    >
       {s?.image_url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -203,7 +195,8 @@ function SlimeCard({
         />
       ) : (
         <div
-          className="w-full h-32 flex items-center justify-center text-4xl bg-slime-surface"
+          className="w-full h-32 flex items-center justify-center text-4xl"
+          style={{ background: "linear-gradient(135deg, #2D0A4E, #1A1A1A)" }}
           aria-hidden="true"
         >
           🫧
@@ -211,28 +204,28 @@ function SlimeCard({
       )}
 
       <div className="p-4">
-        <div className="mb-2">
-          <SlimeTypeBadge slimeType={s?.slime_type ?? null} />
-        </div>
-
+        {typeLabel && (
+          <div className="mb-2">
+            <span className="bg-slime-purple text-slime-cyan text-xs font-bold px-2 py-0.5 rounded-full">
+              {typeLabel}
+            </span>
+          </div>
+        )}
         <div className="flex items-start justify-between gap-2 mb-1.5">
           <h3 className="text-sm font-bold text-slime-text leading-snug">
             {s?.name ?? "Unnamed Slime"}
           </h3>
-          {/* Price — keep green */}
           {s?.retail_price != null && (
             <span className="text-sm font-bold text-slime-accent shrink-0">
               {formatPrice(s.retail_price)}
             </span>
           )}
         </div>
-
         {s?.description && (
           <p className="text-xs text-slime-muted leading-relaxed mb-3 line-clamp-2">
             {s.description}
           </p>
         )}
-
         <Link
           href={logUrl}
           className="flex items-center justify-center gap-1.5 w-full text-xs font-bold py-2 rounded-xl transition-opacity active:opacity-70 text-slime-bg"
@@ -246,8 +239,6 @@ function SlimeCard({
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export default async function DropDetailPage({
   params,
 }: {
@@ -255,7 +246,6 @@ export default async function DropDetailPage({
 }) {
   const { id } = await params;
   const cookieStore = await cookies();
-
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -270,7 +260,6 @@ export default async function DropDetailPage({
       )
       .eq("id", id)
       .single(),
-
     supabase
       .from("drop_slimes")
       .select(
@@ -287,15 +276,12 @@ export default async function DropDetailPage({
       )
       .eq("id", id)
       .single();
-
     if (rawError || !rawDrop) notFound();
-
     const { data: brand } = await supabase
       .from("brands")
       .select("id, slug, name:owner_name, brand_name:slug")
       .eq("id", rawDrop.brand_id)
       .single();
-
     const fallbackDrop: DropDetail = {
       ...rawDrop,
       brand_name: brand
@@ -305,7 +291,6 @@ export default async function DropDetailPage({
       logo_url: null,
       follower_count: null,
     };
-
     return (
       <DropView
         drop={fallbackDrop}
@@ -322,13 +307,12 @@ export default async function DropDetailPage({
   );
 }
 
-// ─── View ─────────────────────────────────────────────────────────────────────
-
 function DropView({ drop, slimes }: { drop: DropDetail; slimes: DropSlime[] }) {
   const isLive = drop.status === "live";
 
   return (
-    <main className="min-h-screen pb-28 bg-slime-bg">
+    <PageWrapper dots glow="cyan">
+      {/* Hero cover */}
       {drop.cover_image_url ? (
         <div className="relative w-full h-52 overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -337,26 +321,20 @@ function DropView({ drop, slimes }: { drop: DropDetail; slimes: DropSlime[] }) {
             alt={drop.name ?? "Drop cover"}
             className="w-full h-full object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-slime-bg/80 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-slime-bg/90 to-transparent" />
         </div>
       ) : (
         <div
-          className="w-full h-44 flex items-center justify-center text-6xl relative overflow-hidden bg-slime-surface"
+          className="relative w-full h-44 flex items-center justify-center text-6xl overflow-hidden"
           aria-hidden="true"
+          style={{
+            background: "linear-gradient(135deg, #2D0A4E, #100020, #0A0A0A)",
+          }}
         >
-          <span className="drop-shadow-lg">{isLive ? "🔴" : "🫧"}</span>
-          <div
-            className="absolute -top-8 -right-8 w-32 h-32 rounded-full opacity-20"
-            style={{
-              background: "radial-gradient(circle, #39FF14, transparent)",
-            }}
-          />
-          <div
-            className="absolute -bottom-8 -left-8 w-40 h-40 rounded-full opacity-15"
-            style={{
-              background: "radial-gradient(circle, #00F0FF, transparent)",
-            }}
-          />
+          <FloatingPills area="hero" density="medium" zIndex={0} />
+          <span className="relative z-10 drop-shadow-lg">
+            {isLive ? "🔴" : "🫧"}
+          </span>
         </div>
       )}
 
@@ -365,15 +343,13 @@ function DropView({ drop, slimes }: { drop: DropDetail; slimes: DropSlime[] }) {
           href="/discover"
           className="inline-flex items-center gap-1.5 text-xs font-medium text-slime-muted hover:text-slime-accent transition-colors"
         >
-          <span aria-hidden="true">←</span>
-          Discover
+          <span aria-hidden="true">←</span> Discover
         </Link>
       </div>
 
       <header className="px-4 pt-2 pb-5">
         <div className="flex items-center gap-2 mb-3 flex-wrap">
           <StatusBadge status={drop.status} />
-          {/* Brand name — magenta */}
           {drop.brand_slug ? (
             <Link
               href={`/brands/${drop.brand_slug}`}
@@ -388,7 +364,6 @@ function DropView({ drop, slimes }: { drop: DropDetail; slimes: DropSlime[] }) {
           )}
         </div>
 
-        {/* Drop name headline — cyan */}
         <h1 className="text-3xl font-black tracking-tight mb-2 leading-tight text-slime-cyan">
           {drop.name ?? "Unnamed Drop"}
         </h1>
@@ -426,20 +401,28 @@ function DropView({ drop, slimes }: { drop: DropDetail; slimes: DropSlime[] }) {
         )}
       </header>
 
-      <div className="mx-4 mb-5 h-px bg-gradient-to-r from-transparent via-slime-border to-transparent" />
+      <div
+        className="mx-4 mb-5 h-px"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent, rgba(45,10,78,0.8), transparent)",
+        }}
+      />
 
-      <section className="px-4">
+      <section className="px-4 pb-28">
         <div className="flex items-center gap-3 mb-4">
           <div
-            className="w-9 h-9 rounded-2xl flex items-center justify-center text-lg shrink-0 bg-slime-surface border border-slime-border"
+            className="w-9 h-9 rounded-2xl flex items-center justify-center text-lg shrink-0"
+            style={{
+              background: "rgba(45,10,78,0.4)",
+              border: "1px solid rgba(45,10,78,0.7)",
+            }}
             aria-hidden="true"
           >
             🫧
           </div>
           <div>
-            <h2 className="text-base font-bold text-slime-text leading-tight">
-              Slimes in This Drop
-            </h2>
+            <p className="section-label">Slimes in This Drop</p>
             <p className="text-xs text-slime-muted">
               {slimes.length} {slimes.length === 1 ? "slime" : "slimes"}{" "}
               included
@@ -454,21 +437,24 @@ function DropView({ drop, slimes }: { drop: DropDetail; slimes: DropSlime[] }) {
         ) : (
           <div className="grid grid-cols-1 gap-4">
             {slimes.map((slime) => (
-              <div key={`${slime.drop_id}-${slime.slime_id}`}>
-                <SlimeCard
-                  slime={slime}
-                  dropName={drop.name}
-                  brandName={drop.brand_name}
-                />
-              </div>
+              <SlimeCard
+                key={`${slime.drop_id}-${slime.slime_id}`}
+                slime={slime}
+                dropName={drop.name}
+                brandName={drop.brand_name}
+              />
             ))}
           </div>
         )}
-      </section>
 
-      {slimes.length > 0 && (
-        <div className="px-4 mt-8">
-          <div className="rounded-2xl p-4 text-center bg-slime-surface border border-slime-border">
+        {slimes.length > 0 && (
+          <div
+            className="mt-8 rounded-2xl p-4 text-center"
+            style={{
+              background: "rgba(45,10,78,0.2)",
+              border: "1px solid rgba(45,10,78,0.5)",
+            }}
+          >
             <p className="text-sm font-semibold text-slime-text mb-1">
               Already tried {slimes.length > 1 ? "these slimes" : "this slime"}?
             </p>
@@ -477,8 +463,8 @@ function DropView({ drop, slimes }: { drop: DropDetail; slimes: DropSlime[] }) {
               collection.
             </p>
           </div>
-        </div>
-      )}
-    </main>
+        )}
+      </section>
+    </PageWrapper>
   );
 }
