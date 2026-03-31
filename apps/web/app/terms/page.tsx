@@ -91,7 +91,7 @@ export default function TermsPage() {
 
       <h2 style={{ color: "#00F0FF", marginTop: "1.5rem" }}>Contact</h2>
       <p style={{ color: "rgba(245,245,245,0.7)", lineHeight: 1.7 }}>
-        hello@slimelog.com
+        support@slimelog.com
       </p>
 
       <p style={{ marginTop: "2rem" }}>
