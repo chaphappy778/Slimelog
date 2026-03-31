@@ -4,12 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 export async function POST(request: NextRequest) {
   const { email, marketing_consent } = await request.json();
 
-  // Validate email
   if (!email || !email.includes("@")) {
     return NextResponse.json({ error: "Invalid email" }, { status: 400 });
   }
 
-  // Service role client — bypasses RLS
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!,
@@ -20,12 +18,13 @@ export async function POST(request: NextRequest) {
     .insert({ email, marketing_consent: marketing_consent ?? false });
 
   if (error) {
-    // Postgres unique violation = duplicate email
+    // Log the full error so we can see it in Vercel logs
+    console.error("Supabase error:", JSON.stringify(error));
     if (error.code === "23505") {
       return NextResponse.json({ already: true }, { status: 200 });
     }
     return NextResponse.json(
-      { error: "Something went wrong" },
+      { error: "Something went wrong", detail: error.message },
       { status: 500 },
     );
   }

@@ -1,33 +1,54 @@
-import { createClient } from "@supabase/supabase-js";
-import { NextRequest, NextResponse } from "next/server";
+// apps/web/app/auth/callback/route.ts
+// Handles the redirect back from:
+//   • Google OAuth (after Supabase exchanges the Google code)
+//   • Email confirmation link clicks
+//
+// Next.js 16 note: This is a Route Handler — no async params needed here
+// since we read from searchParams, not dynamic segments.
 
-export async function POST(request: NextRequest) {
-  const { email, marketing_consent } = await request.json();
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import { NextResponse, type NextRequest } from "next/server";
 
-  if (!email || !email.includes("@")) {
-    return NextResponse.json({ error: "Invalid email" }, { status: 400 });
-  }
+export async function GET(request: NextRequest) {
+  const { searchParams, origin } = new URL(request.url);
+  const code = searchParams.get("code");
+  const next = searchParams.get("next") ?? "/";
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!,
-  );
+  if (code) {
+    // cookies() must be awaited in Next.js 16
+    const cookieStore = await cookies();
 
-  const { error } = await supabase
-    .from("waitlist")
-    .insert({ email, marketing_consent: marketing_consent ?? false });
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          },
+        },
+      },
+    );
 
-  if (error) {
-    // Log the full error so we can see it in Vercel logs
-    console.error("Supabase error:", JSON.stringify(error));
-    if (error.code === "23505") {
-      return NextResponse.json({ already: true }, { status: 200 });
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (!error) {
+      // Redirect to the intended destination — always scoped to our origin.
+      return NextResponse.redirect(`${origin}${next}`);
     }
-    return NextResponse.json(
-      { error: "Something went wrong", detail: error.message },
-      { status: 500 },
+
+    console.error(
+      "[auth/callback] exchangeCodeForSession error:",
+      error.message,
     );
   }
 
-  return NextResponse.json({ success: true }, { status: 200 });
+  // Fallback: something went wrong — send to login with an error hint.
+  return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`);
 }
