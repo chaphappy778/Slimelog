@@ -182,13 +182,11 @@ function FeatureCard({ icon, title, body }: FeatureCardProps) {
 
 function WaitlistForm() {
   const [email, setEmail] = useState("");
-  // Change 4: replace submitted state with loading + status
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<
     "idle" | "success" | "duplicate" | "error"
   >("idle");
 
-  // Change 4: wire up to /api/waitlist
   const handleSubmit = async () => {
     if (!email.includes("@")) return;
     setLoading(true);
@@ -209,7 +207,6 @@ function WaitlistForm() {
     }
   };
 
-  // Change 4: success state
   if (status === "success") {
     return (
       <div
@@ -233,7 +230,6 @@ function WaitlistForm() {
     );
   }
 
-  // Change 4: duplicate state
   if (status === "duplicate") {
     return (
       <div
@@ -291,10 +287,8 @@ function WaitlistForm() {
           letterSpacing: "0.02em",
         }}
       >
-        {/* Change 4: button text reflects loading state */}
         {loading ? "Joining..." : "Join Waitlist"}
       </button>
-      {/* Change 4: inline error message, form stays visible */}
       {status === "error" && (
         <p
           className="text-center text-xs"
@@ -303,7 +297,6 @@ function WaitlistForm() {
           Something went wrong — DM us @SlimeLogApp
         </p>
       )}
-      {/* Change 6: removed "Already have an account? Sign In" */}
     </div>
   );
 }
@@ -329,7 +322,6 @@ export default function LandingPage() {
         }}
       >
         <Wordmark size="sm" />
-        {/* Change 1: removed Sign In button from nav */}
       </nav>
 
       {/* ══════════════════════════════════════════════════════
@@ -435,10 +427,10 @@ export default function LandingPage() {
           The ultimate slime rating &amp; discovery app
         </p>
 
-        {/* Change 2: single CTA scrolling to #waitlist */}
+        {/* CTA — navigates to /waitlist page */}
         <div className="flex gap-3 z-10">
-          <a
-            href="#waitlist"
+          <Link
+            href="/waitlist"
             className="px-8 py-3 rounded-full text-sm font-bold transition-transform active:scale-[0.96]"
             style={{
               background: "linear-gradient(135deg, #39FF14, #00F0FF)",
@@ -447,7 +439,7 @@ export default function LandingPage() {
             }}
           >
             Join Waitlist
-          </a>
+          </Link>
         </div>
 
         {/* Scroll hint */}
@@ -661,7 +653,6 @@ export default function LandingPage() {
       {/* ══════════════════════════════════════════════════════
           WAITLIST SECTION
       ══════════════════════════════════════════════════════ */}
-      {/* Change 3: added id="waitlist" */}
       <section id="waitlist" className="relative px-5 py-14 overflow-hidden">
         <div
           aria-hidden="true"
@@ -729,7 +720,7 @@ export default function LandingPage() {
           © {new Date().getFullYear()} SlimeLog. All rights reserved.
         </p>
 
-        {/* Change 7: legal links */}
+        {/* Legal links */}
         <div className="flex gap-3 justify-center mt-1">
           <Link
             href="/privacy"
