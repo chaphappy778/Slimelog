@@ -182,15 +182,35 @@ function FeatureCard({ icon, title, body }: FeatureCardProps) {
 
 function WaitlistForm() {
   const [email, setEmail] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  // Change 4: replace submitted state with loading + status
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<
+    "idle" | "success" | "duplicate" | "error"
+  >("idle");
 
-  const handleSubmit = () => {
+  // Change 4: wire up to /api/waitlist
+  const handleSubmit = async () => {
     if (!email.includes("@")) return;
-    // TODO: wire up actual waitlist endpoint
-    setSubmitted(true);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, marketing_consent: false }),
+      });
+      const data = await res.json();
+      if (data.already) setStatus("duplicate");
+      else if (res.ok) setStatus("success");
+      else setStatus("error");
+    } catch {
+      setStatus("error");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (submitted) {
+  // Change 4: success state
+  if (status === "success") {
     return (
       <div
         className="rounded-2xl p-5 text-center"
@@ -208,6 +228,30 @@ function WaitlistForm() {
         </p>
         <p className="text-sm mt-1" style={{ color: "rgba(245,245,245,0.6)" }}>
           We'll hit your inbox the moment we launch.
+        </p>
+      </div>
+    );
+  }
+
+  // Change 4: duplicate state
+  if (status === "duplicate") {
+    return (
+      <div
+        className="rounded-2xl p-5 text-center"
+        style={{
+          background: "rgba(57,255,20,0.08)",
+          border: "1px solid rgba(57,255,20,0.3)",
+        }}
+      >
+        <p className="text-2xl mb-1">💚</p>
+        <p
+          className="font-bold text-base"
+          style={{ color: "#39FF14", fontFamily: "'Montserrat', sans-serif" }}
+        >
+          You're already on the list!
+        </p>
+        <p className="text-sm mt-1" style={{ color: "rgba(245,245,245,0.6)" }}>
+          We'll be in touch soon. Follow @SlimeLogApp for updates.
         </p>
       </div>
     );
@@ -238,7 +282,8 @@ function WaitlistForm() {
       />
       <button
         onClick={handleSubmit}
-        className="w-full rounded-xl py-3.5 text-sm font-bold transition-transform active:scale-[0.97]"
+        disabled={loading}
+        className="w-full rounded-xl py-3.5 text-sm font-bold transition-transform active:scale-[0.97] disabled:opacity-70 disabled:cursor-not-allowed"
         style={{
           background: "linear-gradient(135deg, #39FF14 0%, #00F0FF 100%)",
           color: "#0A0A0A",
@@ -246,21 +291,19 @@ function WaitlistForm() {
           letterSpacing: "0.02em",
         }}
       >
-        Join Waitlist
+        {/* Change 4: button text reflects loading state */}
+        {loading ? "Joining..." : "Join Waitlist"}
       </button>
-      <p
-        className="text-center text-xs"
-        style={{ color: "rgba(245,245,245,0.4)" }}
-      >
-        Already have an account?{" "}
-        <Link
-          href="/login"
-          style={{ color: "#FF00E5" }}
-          className="font-semibold"
+      {/* Change 4: inline error message, form stays visible */}
+      {status === "error" && (
+        <p
+          className="text-center text-xs"
+          style={{ color: "rgba(255,80,80,0.9)" }}
         >
-          Sign In
-        </Link>
-      </p>
+          Something went wrong — DM us @SlimeLogApp
+        </p>
+      )}
+      {/* Change 6: removed "Already have an account? Sign In" */}
     </div>
   );
 }
@@ -286,16 +329,7 @@ export default function LandingPage() {
         }}
       >
         <Wordmark size="sm" />
-        <Link
-          href="/login"
-          className="text-sm font-bold px-4 py-2 rounded-full transition-colors"
-          style={{
-            border: "1px solid rgba(245,245,245,0.25)",
-            color: "#F5F5F5",
-          }}
-        >
-          Sign In
-        </Link>
+        {/* Change 1: removed Sign In button from nav */}
       </nav>
 
       {/* ══════════════════════════════════════════════════════
@@ -401,11 +435,11 @@ export default function LandingPage() {
           The ultimate slime rating &amp; discovery app
         </p>
 
-        {/* CTAs */}
+        {/* Change 2: single CTA scrolling to #waitlist */}
         <div className="flex gap-3 z-10">
-          <Link
-            href="/signup"
-            className="px-6 py-3 rounded-full text-sm font-bold transition-transform active:scale-[0.96]"
+          <a
+            href="#waitlist"
+            className="px-8 py-3 rounded-full text-sm font-bold transition-transform active:scale-[0.96]"
             style={{
               background: "linear-gradient(135deg, #39FF14, #00F0FF)",
               color: "#0A0A0A",
@@ -413,18 +447,7 @@ export default function LandingPage() {
             }}
           >
             Join Waitlist
-          </Link>
-          <Link
-            href="/login"
-            className="px-6 py-3 rounded-full text-sm font-bold transition-colors"
-            style={{
-              border: "1px solid rgba(245,245,245,0.3)",
-              color: "#F5F5F5",
-              background: "rgba(255,255,255,0.04)",
-            }}
-          >
-            Sign In
-          </Link>
+          </a>
         </div>
 
         {/* Scroll hint */}
@@ -638,7 +661,8 @@ export default function LandingPage() {
       {/* ══════════════════════════════════════════════════════
           WAITLIST SECTION
       ══════════════════════════════════════════════════════ */}
-      <section className="relative px-5 py-14 overflow-hidden">
+      {/* Change 3: added id="waitlist" */}
+      <section id="waitlist" className="relative px-5 py-14 overflow-hidden">
         <div
           aria-hidden="true"
           className="absolute inset-0 pointer-events-none"
@@ -704,6 +728,30 @@ export default function LandingPage() {
         >
           © {new Date().getFullYear()} SlimeLog. All rights reserved.
         </p>
+
+        {/* Change 7: legal links */}
+        <div className="flex gap-3 justify-center mt-1">
+          <Link
+            href="/privacy"
+            className="text-[11px]"
+            style={{ color: "rgba(245,245,245,0.25)" }}
+          >
+            Privacy Policy
+          </Link>
+          <span
+            className="text-[11px]"
+            style={{ color: "rgba(245,245,245,0.15)" }}
+          >
+            ·
+          </span>
+          <Link
+            href="/terms"
+            className="text-[11px]"
+            style={{ color: "rgba(245,245,245,0.25)" }}
+          >
+            Terms of Service
+          </Link>
+        </div>
       </footer>
     </div>
   );
