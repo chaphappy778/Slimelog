@@ -21,8 +21,9 @@ export default function BottomNavWrapper() {
 
   const hideRoutes = ["/login", "/signup", "/landing", "/waitlist"];
   if (hideRoutes.includes(pathname)) return null;
+  if (pathname.startsWith("/brand-dashboard")) return null;
   if (pathname === "/" && isLoggedIn === false) return null;
-  if (isLoggedIn === null) return null; // loading — don't flash nav
+  if (isLoggedIn === null) return null;
 
   return <BottomNav />;
 }
