@@ -75,8 +75,16 @@ function VerificationBadge({ tier }: { tier: string }) {
       className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full tracking-wide uppercase ${
         isVerified
           ? "bg-slime-accent/20 text-slime-accent border border-slime-accent/30"
-          : "bg-slime-surface text-slime-muted border border-slime-border"
+          : "border text-slime-muted"
       }`}
+      style={
+        !isVerified
+          ? {
+              background: "rgba(45,10,78,0.4)",
+              borderColor: "rgba(45,10,78,0.8)",
+            }
+          : undefined
+      }
     >
       {isVerified && (
         <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 fill-current">
@@ -100,11 +108,24 @@ export function BrandCard({
   ownerName,
 }: BrandCardProps) {
   const initials = name.slice(0, 2).toUpperCase();
+  const isVerified = verificationTier === "verified";
 
   return (
     <Link href={`/brands/${slug}`} className="block group">
-      <div className="relative bg-slime-card rounded-2xl border border-slime-border hover:border-slime-accent/40 transition-all duration-200 overflow-hidden p-4 active:scale-[0.98]">
-        {/* Top accent on hover */}
+      <div
+        className="relative rounded-2xl transition-all duration-200 overflow-hidden p-4 active:scale-[0.98]"
+        style={{
+          background: "rgba(45,10,78,0.35)",
+          border: "1px solid rgba(45,10,78,0.9)",
+          // Tier-based left accent border
+          borderLeft: isVerified
+            ? "3px solid #39FF14"
+            : "3px solid rgba(45,10,78,0.8)",
+          boxShadow:
+            "0 2px 12px rgba(0,0,0,0.4), inset 0 0 20px rgba(45,10,78,0.1)",
+        }}
+      >
+        {/* Top holo accent on hover */}
         <div
           className="absolute inset-x-0 top-0 h-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
           style={{
@@ -114,7 +135,13 @@ export function BrandCard({
 
         <div className="flex items-start gap-3">
           {/* Logo / Avatar */}
-          <div className="shrink-0 w-12 h-12 rounded-xl overflow-hidden bg-slime-surface border border-slime-border flex items-center justify-center">
+          <div
+            className="shrink-0 w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center"
+            style={{
+              background: "rgba(45,10,78,0.4)",
+              border: "1px solid rgba(45,10,78,0.6)",
+            }}
+          >
             {logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -172,7 +199,10 @@ export function BrandCard({
         </div>
 
         {/* Stats row */}
-        <div className="mt-3 pt-3 border-t border-slime-border flex items-center justify-between flex-wrap gap-2">
+        <div
+          className="mt-3 pt-3 flex items-center justify-between flex-wrap gap-2"
+          style={{ borderTop: "1px solid rgba(45,10,78,0.5)" }}
+        >
           {restockSchedule ? (
             <span className="inline-flex items-center gap-1 text-[11px] bg-slime-accent/10 text-slime-accent font-medium px-2 py-1 rounded-lg border border-slime-accent/20">
               <svg viewBox="0 0 12 12" className="w-3 h-3 fill-current">
