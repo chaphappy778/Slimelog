@@ -17,6 +17,9 @@ import {
   LogOut,
   Menu,
   ChevronRight,
+  Trash2,
+  Shield,
+  FileText,
 } from "lucide-react";
 
 type UserProfile = {
@@ -139,6 +142,9 @@ export default function SlimeMenu() {
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const pathname = usePathname();
   const router = useRouter();
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -175,8 +181,11 @@ export default function SlimeMenu() {
     setIsAnimatingOut(false);
     setIsOpen(true);
   }
+
   function handleClose() {
     setIsAnimatingOut(true);
+    setShowDeleteConfirm(false);
+    setDeleteError(null);
     setTimeout(() => {
       setIsOpen(false);
       setIsAnimatingOut(false);
@@ -194,9 +203,33 @@ export default function SlimeMenu() {
     router.refresh();
   }
 
+  async function handleDeleteAccount() {
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch("/api/account/delete", { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json();
+        setDeleteError(body.error ?? "Something went wrong. Please try again.");
+        setDeleteLoading(false);
+        return;
+      }
+      // Sign out client-side and redirect
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      );
+      await supabase.auth.signOut();
+      router.push("/");
+      router.refresh();
+    } catch {
+      setDeleteError("Something went wrong. Please try again.");
+      setDeleteLoading(false);
+    }
+  }
+
   return (
     <>
-      {/* ── Clean hamburger trigger — no blob ── */}
       <button
         onClick={handleOpen}
         aria-label="Open navigation menu"
@@ -329,6 +362,23 @@ export default function SlimeMenu() {
 
             <Divider />
 
+            <NavSection title="Legal">
+              <NavItem
+                href="/privacy"
+                icon={<Shield className="w-5 h-5" />}
+                label="Privacy Policy"
+                onClose={handleClose}
+              />
+              <NavItem
+                href="/terms"
+                icon={<FileText className="w-5 h-5" />}
+                label="Terms of Service"
+                onClose={handleClose}
+              />
+            </NavSection>
+
+            <Divider />
+
             <NavSection title="Account">
               <button
                 onClick={handleSignOut}
@@ -339,6 +389,55 @@ export default function SlimeMenu() {
                 </span>
                 Sign Out
               </button>
+
+              {!showDeleteConfirm ? (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-500/70 hover:bg-red-500/10 hover:text-red-400 transition-all duration-100 active:scale-[0.97] w-full text-left"
+                >
+                  <span className="w-5 flex items-center justify-center shrink-0">
+                    <Trash2 className="w-5 h-5" />
+                  </span>
+                  Delete Account
+                </button>
+              ) : (
+                <div
+                  className="mx-1 mt-1 rounded-xl p-3 flex flex-col gap-2"
+                  style={{
+                    background: "rgba(239,68,68,0.08)",
+                    border: "1px solid rgba(239,68,68,0.25)",
+                  }}
+                >
+                  <p className="text-xs text-red-300 font-semibold leading-snug">
+                    This will permanently delete your account and all your slime
+                    logs. This cannot be undone.
+                  </p>
+                  {deleteError && (
+                    <p className="text-xs text-red-400">{deleteError}</p>
+                  )}
+                  <div className="flex gap-2 mt-1">
+                    <button
+                      onClick={() => {
+                        setShowDeleteConfirm(false);
+                        setDeleteError(null);
+                      }}
+                      disabled={deleteLoading}
+                      className="flex-1 py-2 rounded-lg text-xs font-bold text-slime-muted hover:text-slime-text transition-colors"
+                      style={{ background: "rgba(45,10,78,0.5)" }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleDeleteAccount}
+                      disabled={deleteLoading}
+                      className="flex-1 py-2 rounded-lg text-xs font-bold text-white transition-colors disabled:opacity-50"
+                      style={{ background: "rgba(239,68,68,0.7)" }}
+                    >
+                      {deleteLoading ? "Deleting..." : "Yes, Delete"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </NavSection>
 
             <div className="flex-1" />
