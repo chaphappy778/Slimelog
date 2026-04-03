@@ -115,7 +115,6 @@ const DAYS_OF_WEEK = [
   "Saturday",
 ];
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 1);
-const MINUTES = ["00", "15", "30", "45"];
 
 function formatDate(dateStr: string | null) {
   if (!dateStr) return "TBA";
@@ -180,32 +179,20 @@ function DateTimePicker({ value, onChange }: DateTimePickerProps) {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-  useEffect(() => {
-    const h24 =
-      ampm === "PM" ? (hour === 12 ? 12 : hour + 12) : hour === 12 ? 0 : hour;
-    const d = new Date(year, month, day, h24, minute);
-    onChange(d.toISOString());
-  }, [month, day, year, hour, minute, ampm]); // eslint-disable-line
-
-  const sel = (
-    val: string | number,
-    setter: (v: number) => void,
-    options: (string | number)[],
-    labels?: string[],
-  ) => (
-    <select
-      value={val}
-      onChange={(e) => setter(Number(e.target.value))}
-      className="rounded-lg px-2 py-2 text-sm text-white outline-none"
-      style={selectStyle}
-    >
-      {options.map((o, i) => (
-        <option key={o} value={o} style={{ background: "#0F0A1A" }}>
-          {labels ? labels[i] : o}
-        </option>
-      ))}
-    </select>
-  );
+  // Call onChange directly from each dropdown — no useEffect.
+  // useEffect caused an infinite loop because the inline onChange arrow in
+  // CreatePanel got a new reference on every render, re-triggering the effect.
+  const emit = (
+    m: number,
+    d: number,
+    y: number,
+    h: number,
+    min: number,
+    ap: "AM" | "PM",
+  ) => {
+    const h24 = ap === "PM" ? (h === 12 ? 12 : h + 12) : h === 12 ? 0 : h;
+    onChange(new Date(y, m, d, h24, min).toISOString());
+  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -213,7 +200,11 @@ function DateTimePicker({ value, onChange }: DateTimePickerProps) {
         <div className="flex-1">
           <select
             value={month}
-            onChange={(e) => setMonth(Number(e.target.value))}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setMonth(v);
+              emit(v, day, year, hour, minute, ampm);
+            }}
             className="w-full rounded-lg px-2 py-2 text-sm text-white outline-none"
             style={selectStyle}
           >
@@ -227,7 +218,11 @@ function DateTimePicker({ value, onChange }: DateTimePickerProps) {
         <div style={{ width: 72 }}>
           <select
             value={day}
-            onChange={(e) => setDay(Number(e.target.value))}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setDay(v);
+              emit(month, v, year, hour, minute, ampm);
+            }}
             className="w-full rounded-lg px-2 py-2 text-sm text-white outline-none"
             style={selectStyle}
           >
@@ -241,7 +236,11 @@ function DateTimePicker({ value, onChange }: DateTimePickerProps) {
         <div style={{ width: 88 }}>
           <select
             value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setYear(v);
+              emit(month, day, v, hour, minute, ampm);
+            }}
             className="w-full rounded-lg px-2 py-2 text-sm text-white outline-none"
             style={selectStyle}
           >
@@ -257,7 +256,11 @@ function DateTimePicker({ value, onChange }: DateTimePickerProps) {
         <div className="flex-1">
           <select
             value={hour}
-            onChange={(e) => setHour(Number(e.target.value))}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setHour(v);
+              emit(month, day, year, v, minute, ampm);
+            }}
             className="w-full rounded-lg px-2 py-2 text-sm text-white outline-none"
             style={selectStyle}
           >
@@ -271,7 +274,11 @@ function DateTimePicker({ value, onChange }: DateTimePickerProps) {
         <div className="flex-1">
           <select
             value={minute}
-            onChange={(e) => setMinute(Number(e.target.value))}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setMinute(v);
+              emit(month, day, year, hour, v, ampm);
+            }}
             className="w-full rounded-lg px-2 py-2 text-sm text-white outline-none"
             style={selectStyle}
           >
@@ -285,7 +292,11 @@ function DateTimePicker({ value, onChange }: DateTimePickerProps) {
         <div style={{ width: 80 }}>
           <select
             value={ampm}
-            onChange={(e) => setAmpm(e.target.value as "AM" | "PM")}
+            onChange={(e) => {
+              const v = e.target.value as "AM" | "PM";
+              setAmpm(v);
+              emit(month, day, year, hour, minute, v);
+            }}
             className="w-full rounded-lg px-2 py-2 text-sm text-white outline-none"
             style={selectStyle}
           >
@@ -536,7 +547,9 @@ function SlimePicker({
       .eq("brand_id", brandId)
       .eq("is_brand_official", true)
       .order("name")
-      .then(({ data }) => setBrandSlimes((data as BrandSlime[]) ?? []));
+      .then(({ data }: { data: Array<Record<string, unknown>> | null }) => setBrandSlimes((data as BrandSlime[]) ?? []));
+        setBrandSlimes(data ?? []),
+      );
   }, [brandId]); // eslint-disable-line
 
   const attachedIds = new Set(attached.map((s) => s.id));
@@ -563,7 +576,6 @@ function SlimePicker({
 
   return (
     <div className="space-y-3">
-      {/* Attached slimes */}
       {attached.length > 0 && (
         <div className="space-y-1.5">
           <p
@@ -606,7 +618,6 @@ function SlimePicker({
         </div>
       )}
 
-      {/* Search available */}
       <div>
         <p
           className="text-xs font-bold uppercase tracking-widest mb-2"
@@ -694,7 +705,6 @@ function SlimePicker({
         </p>
       )}
 
-      {/* Add new slime inline */}
       {!showAddNew ? (
         <button
           type="button"
@@ -777,7 +787,7 @@ function SlimePicker({
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Recurring drop generator ─────────────────────────────────────────────────
 
 function generateRecurringDrops(
   base: {
@@ -813,7 +823,6 @@ function generateRecurringDrops(
       ? new Date(pattern.end_date)
       : null;
 
-  // Advance to first occurrence after startDate
   const advance = (d: Date) => {
     const next = new Date(d);
     if (pattern.frequency === "weekly") next.setDate(next.getDate() + 7);
@@ -824,7 +833,6 @@ function generateRecurringDrops(
   };
 
   current = advance(current);
-
   while (count < maxOccurrences && current < maxDate) {
     if (endDate && current > endDate) break;
     results.push({
@@ -839,9 +847,10 @@ function generateRecurringDrops(
     current = advance(current);
     count++;
   }
-
   return results;
 }
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function DropsSplitPanel({
   brandId,
@@ -879,14 +888,13 @@ export default function DropsSplitPanel({
   const displayed = tab === "upcoming" ? upcoming : past;
   const selected = drops.find((d) => d.id === selectedId) ?? null;
 
-  // Load attached slimes when selecting a drop
   useEffect(() => {
     if (!selectedId || mode !== "detail") return;
     supabase
       .from("drop_slimes")
-      .select("slime_id, slimes(id, name, slime_type, colors, image_url)")
+      .then(({ data }: { data: BrandSlime[] | null }) => {
       .eq("drop_id", selectedId)
-      .then(({ data }) => {
+      .then(({ data }: { data: Array<Record<string, unknown>> | null }) => {
         const slimes = (data ?? [])
           .map((r: Record<string, unknown>) => r.slimes as BrandSlime)
           .filter(Boolean);
@@ -935,8 +943,6 @@ export default function DropsSplitPanel({
     }
 
     const newDrop = data as Drop;
-
-    // Attach slimes
     if (attachedSlimes.length > 0) {
       await supabase
         .from("drop_slimes")
@@ -944,8 +950,6 @@ export default function DropsSplitPanel({
           attachedSlimes.map((s) => ({ drop_id: newDrop.id, slime_id: s.id })),
         );
     }
-
-    // Generate recurring instances
     if (recurringEnabled && form.drop_at) {
       const futureDrops = generateRecurringDrops(
         {
@@ -968,7 +972,6 @@ export default function DropsSplitPanel({
           setDrops((prev) => [...prev, ...(futureData as Drop[])]);
       }
     }
-
     setDrops((prev) => [newDrop, ...prev]);
     setSelectedId(newDrop.id);
     setMode("detail");
@@ -1012,13 +1015,12 @@ export default function DropsSplitPanel({
   };
 
   const handleDetachSlime = async (slimeId: string) => {
-    if (selectedId) {
+    if (selectedId)
       await supabase
         .from("drop_slimes")
         .delete()
         .eq("drop_id", selectedId)
         .eq("slime_id", slimeId);
-    }
     setAttachedSlimes((prev) => prev.filter((s) => s.id !== slimeId));
   };
 
@@ -1039,11 +1041,10 @@ export default function DropsSplitPanel({
       .single();
     if (err || !data) return null;
     const newSlime = data as BrandSlime;
-    if (selectedId) {
+    if (selectedId)
       await supabase
         .from("drop_slimes")
         .insert({ drop_id: selectedId, slime_id: newSlime.id });
-    }
     setAttachedSlimes((prev) => [...prev, newSlime]);
     return newSlime;
   };
@@ -1075,7 +1076,6 @@ export default function DropsSplitPanel({
             {styles.label.toUpperCase()}
           </span>
         </div>
-
         <p
           className="text-sm"
           style={{
@@ -1085,7 +1085,6 @@ export default function DropsSplitPanel({
         >
           {formatDate(selected.drop_at)}
         </p>
-
         {selected.recurrence_pattern && (
           <div
             className="px-3 py-2 rounded-lg text-xs"
@@ -1100,7 +1099,6 @@ export default function DropsSplitPanel({
               selected.recurrence_pattern.frequency.slice(1)}
           </div>
         )}
-
         {selected.description && (
           <p
             className="text-sm"
@@ -1113,7 +1111,6 @@ export default function DropsSplitPanel({
             {selected.description}
           </p>
         )}
-
         {selected.shop_url && (
           <a
             href={selected.shop_url}
@@ -1133,7 +1130,6 @@ export default function DropsSplitPanel({
             </svg>
           </a>
         )}
-
         {NEXT_STATUS[selected.status] && (
           <div>
             <p
@@ -1170,7 +1166,6 @@ export default function DropsSplitPanel({
             </div>
           </div>
         )}
-
         <div
           style={{ borderTop: "1px solid rgba(45,10,78,0.4)", paddingTop: 16 }}
         >
@@ -1188,7 +1183,6 @@ export default function DropsSplitPanel({
             onAddNew={handleAddNewSlime}
           />
         </div>
-
         <div
           style={{ borderTop: "1px solid rgba(45,10,78,0.4)", paddingTop: 16 }}
         >
@@ -1255,7 +1249,6 @@ export default function DropsSplitPanel({
           Cancel
         </button>
       </div>
-
       <div className="space-y-4 max-w-xl">
         <div>
           <FormLabel>Drop Name *</FormLabel>
@@ -1268,15 +1261,14 @@ export default function DropsSplitPanel({
             style={inputStyle}
           />
         </div>
-
         <div>
           <FormLabel>Date & Time</FormLabel>
+          {/* Use functional updater to avoid stale closure — this prevents the infinite loop */}
           <DateTimePicker
             value={form.drop_at}
-            onChange={(iso) => setForm({ ...form, drop_at: iso })}
+            onChange={(iso) => setForm((f) => ({ ...f, drop_at: iso }))}
           />
         </div>
-
         <div>
           <FormLabel>Status</FormLabel>
           <select
@@ -1302,7 +1294,6 @@ export default function DropsSplitPanel({
             ))}
           </select>
         </div>
-
         <div>
           <FormLabel>Description</FormLabel>
           <textarea
@@ -1314,7 +1305,6 @@ export default function DropsSplitPanel({
             style={inputStyle}
           />
         </div>
-
         <div>
           <FormLabel>Shop URL</FormLabel>
           <input
@@ -1326,7 +1316,6 @@ export default function DropsSplitPanel({
             style={inputStyle}
           />
         </div>
-
         <div
           style={{ borderTop: "1px solid rgba(45,10,78,0.4)", paddingTop: 16 }}
         >
@@ -1339,16 +1328,13 @@ export default function DropsSplitPanel({
             onAddNew={handleAddNewSlime}
           />
         </div>
-
         <RecurrenceBuilder
           enabled={recurringEnabled}
           onToggle={setRecurringEnabled}
           pattern={recurrencePattern}
           onChange={setRecurrencePattern}
         />
-
         {error && <p className="text-xs text-red-400">{error}</p>}
-
         <button
           onClick={handleCreate}
           disabled={saving}
@@ -1402,7 +1388,6 @@ export default function DropsSplitPanel({
             </button>
           ))}
         </div>
-
         <div className="flex-1 overflow-y-auto">
           {displayed.length === 0 ? (
             <div className="p-6 text-center">
@@ -1485,7 +1470,6 @@ export default function DropsSplitPanel({
             })
           )}
         </div>
-
         <div
           className="p-3"
           style={{ borderTop: "1px solid rgba(45,10,78,0.5)" }}
