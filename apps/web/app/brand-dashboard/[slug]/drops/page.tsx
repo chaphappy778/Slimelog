@@ -27,7 +27,7 @@ export default async function DropsPage({ params }: PageProps) {
 
   const { data: drops } = await supabase
     .from("drops")
-    .select("id, name, description, drop_at, status, shop_url, cover_image_url")
+    .select("id, name, description, drop_at, status, shop_url, cover_image_url, recurrence_pattern, parent_drop_id")
     .eq("brand_id", brand.id)
     .order("drop_at", { ascending: false, nullsFirst: false });
 
