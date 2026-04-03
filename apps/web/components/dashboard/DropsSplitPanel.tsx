@@ -179,9 +179,7 @@ function DateTimePicker({ value, onChange }: DateTimePickerProps) {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-  // Call onChange directly from each dropdown — no useEffect.
-  // useEffect caused an infinite loop because the inline onChange arrow in
-  // CreatePanel got a new reference on every render, re-triggering the effect.
+  // No useEffect — call onChange directly to avoid infinite re-render loop
   const emit = (
     m: number,
     d: number,
@@ -375,7 +373,6 @@ function RecurrenceBuilder({
           />
         </div>
       </button>
-
       {enabled && (
         <div
           className="px-4 py-4 space-y-4"
@@ -408,7 +405,6 @@ function RecurrenceBuilder({
               ))}
             </div>
           </div>
-
           {(pattern.frequency === "weekly" ||
             pattern.frequency === "biweekly") && (
             <div>
@@ -427,7 +423,6 @@ function RecurrenceBuilder({
               </select>
             </div>
           )}
-
           {pattern.frequency === "monthly" && (
             <div>
               <FormLabel>Day of Month</FormLabel>
@@ -445,7 +440,6 @@ function RecurrenceBuilder({
               </select>
             </div>
           )}
-
           <div>
             <FormLabel>Ends</FormLabel>
             <div className="flex gap-2 mb-3">
@@ -547,9 +541,9 @@ function SlimePicker({
       .eq("brand_id", brandId)
       .eq("is_brand_official", true)
       .order("name")
-      .then(({ data }: { data: Array<Record<string, unknown>> | null }) => setBrandSlimes((data as BrandSlime[]) ?? []));
-        setBrandSlimes(data ?? []),
-      );
+      .then(({ data }: { data: BrandSlime[] | null }) => {
+        setBrandSlimes(data ?? []);
+      });
   }, [brandId]); // eslint-disable-line
 
   const attachedIds = new Set(attached.map((s) => s.id));
@@ -617,7 +611,6 @@ function SlimePicker({
           ))}
         </div>
       )}
-
       <div>
         <p
           className="text-xs font-bold uppercase tracking-widest mb-2"
@@ -636,7 +629,6 @@ function SlimePicker({
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
-
       {available.length > 0 && (
         <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
           {available.map((slime) => (
@@ -695,7 +687,6 @@ function SlimePicker({
           ))}
         </div>
       )}
-
       {available.length === 0 && search && (
         <p
           className="text-xs text-center py-2"
@@ -704,7 +695,6 @@ function SlimePicker({
           No slimes match
         </p>
       )}
-
       {!showAddNew ? (
         <button
           type="button"
@@ -892,11 +882,11 @@ export default function DropsSplitPanel({
     if (!selectedId || mode !== "detail") return;
     supabase
       .from("drop_slimes")
-      .then(({ data }: { data: BrandSlime[] | null }) => {
+      .select("slime_id, slimes(id, name, slime_type, colors, image_url)")
       .eq("drop_id", selectedId)
       .then(({ data }: { data: Array<Record<string, unknown>> | null }) => {
         const slimes = (data ?? [])
-          .map((r: Record<string, unknown>) => r.slimes as BrandSlime)
+          .map((r) => r.slimes as BrandSlime)
           .filter(Boolean);
         setAttachedSlimes(slimes);
       });
@@ -920,7 +910,6 @@ export default function DropsSplitPanel({
     }
     setSaving(true);
     setError(null);
-
     const { data, error: err } = await supabase
       .from("drops")
       .insert({
@@ -935,13 +924,11 @@ export default function DropsSplitPanel({
       })
       .select()
       .single();
-
     if (err || !data) {
       setError(err?.message ?? "Failed to create drop.");
       setSaving(false);
       return;
     }
-
     const newDrop = data as Drop;
     if (attachedSlimes.length > 0) {
       await supabase
@@ -1263,7 +1250,6 @@ export default function DropsSplitPanel({
         </div>
         <div>
           <FormLabel>Date & Time</FormLabel>
-          {/* Use functional updater to avoid stale closure — this prevents the infinite loop */}
           <DateTimePicker
             value={form.drop_at}
             onChange={(iso) => setForm((f) => ({ ...f, drop_at: iso }))}
