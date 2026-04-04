@@ -622,7 +622,7 @@ export default function GalaxyView({ logs, likeData, currentUserId }: Props) {
       {/* [Change 3] Added imageUrl, brandSlug, onImageOpen; removed brandColor (replaced by brandSlug). */}
       <SlimeDetailCard
         log={selectedLog}
-        imageUrl={selectedLog.image_url ?? null}
+        imageUrl={null}
         brandSlug={null}
         onClose={() => setSelectedLog(null)}
         onImageOpen={() => {}}

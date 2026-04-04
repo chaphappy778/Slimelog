@@ -527,7 +527,7 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
       {/* [Change 3] Added imageUrl, brandSlug, onImageOpen to match updated SlimeDetailCard props. */}
       <SlimeDetailCard
         log={selectedLog}
-        imageUrl={selectedLog.image_url ?? null}
+        imageUrl={null}
         brandSlug={null}
         onClose={() => setSelectedLog(null)}
         onImageOpen={() => {}}

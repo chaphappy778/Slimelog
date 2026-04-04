@@ -379,7 +379,7 @@ export default function TimelineView({ logs, likeData, currentUserId }: Props) {
         >
           <SlimeDetailCard
             log={selectedLog}
-            imageUrl={selectedLog.image_url ?? null}
+            imageUrl={null}
             brandSlug={null}
             onClose={() => setSelectedLog(null)}
             onImageOpen={() => {}}
