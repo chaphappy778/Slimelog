@@ -7,6 +7,7 @@ import Image from "next/image";
 import { formatDistanceToNow } from "date-fns";
 import type { CollectionLog } from "@/lib/types";
 import SlimeDetailCard from "@/components/collection/SlimeDetailCard";
+import LikeButton from "@/components/collection/LikeButton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -193,6 +194,7 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
       onClick={onClose}
     >
       <button
+        type="button"
         onClick={onClose}
         aria-label="Close image"
         className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors"
@@ -276,10 +278,10 @@ export default function FeedCard({
   const closeDetail = useCallback(() => setShowDetail(false), []);
   const closeLightbox = useCallback(() => setShowLightbox(false), []);
 
-  // Lightbox is triggered from inside SlimeDetailCard via onImageOpen.
-  // Closes the detail overlay first; user returns to feed on lightbox close.
+  // [Bug 5 fix] Do NOT close detail when opening lightbox — keep it mounted
+  // underneath at z-[100]. Lightbox renders at z-[200] above it. When the
+  // lightbox closes, the detail overlay is still open underneath.
   const handleImageOpen = useCallback(() => {
-    setShowDetail(false);
     setShowLightbox(true);
   }, []);
 
@@ -296,20 +298,24 @@ export default function FeedCard({
   return (
     <>
       {/* ── Card ──
-          min-h-[90vh]: card dominates the viewport; ~60-80px of next card peeks below.
-          flex flex-col: image has fixed height, body/footer shrink-0 fill the rest.
+          [Bug 1 fix] minHeight and image area height conditional on hasImage.
+          Cards without an image use auto height + 180px image placeholder
+          instead of 90vh + calc(90vh * 0.58), preventing a large empty void.
       */}
       <article
         className="relative w-full max-w-lg mx-auto rounded-2xl overflow-hidden cursor-pointer flex flex-col"
         style={{
-          minHeight: "90vh",
+          minHeight: hasImage ? "90vh" : "auto",
           background: "rgba(45,10,78,0.25)",
           border: "1px solid rgba(45,10,78,0.7)",
         }}
         onClick={openDetail}
       >
-        {/* ── Image area — fixed height ~58% of card, leaves body fully visible ── */}
-        <div className="relative" style={{ height: "calc(90vh * 0.58)" }}>
+        {/* ── Image area ── */}
+        <div
+          className="relative"
+          style={{ height: hasImage ? "calc(90vh * 0.58)" : "180px" }}
+        >
           {hasImage ? (
             <>
               <Image
@@ -371,7 +377,7 @@ export default function FeedCard({
           </time>
         </div>
 
-        {/* ── Card body — shrink-0 so it stays fixed height ── */}
+        {/* ── Card body — shrink-0 ── */}
         <div className="px-4 pt-3 pb-2 flex flex-col gap-2.5 shrink-0">
           <h2
             className="text-lg font-extrabold text-white leading-tight"
@@ -445,22 +451,17 @@ export default function FeedCard({
 
           <Stars rating={log.rating_overall} />
 
+          {/* [Bug 2 fix] Interactive LikeButton replaces passive heart display.
+              stopPropagation wrapper prevents card tap from opening detail overlay
+              when the like button is tapped. Comment count remains passive. */}
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="rgba(255,255,255,0.35)"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-              </svg>
-              <span className="text-xs text-slime-muted">{log.like_count}</span>
+            <div onClick={(e) => e.stopPropagation()}>
+              <LikeButton
+                logId={log.id}
+                initialCount={log.like_count}
+                initialLiked={log.is_liked_by_current_user}
+                currentUserId={currentUserId}
+              />
             </div>
             <div className="flex items-center gap-1.5">
               <svg
@@ -512,7 +513,7 @@ export default function FeedCard({
         />
       )}
 
-      {/* ── Lightbox (z-[200], above detail overlay z-[100]) ── */}
+      {/* ── Lightbox — z-[200] renders above detail overlay z-[100] ── */}
       {showLightbox && log.image_url && (
         <Lightbox src={log.image_url} onClose={closeLightbox} />
       )}

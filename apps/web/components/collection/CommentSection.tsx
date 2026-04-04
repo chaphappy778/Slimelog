@@ -1,4 +1,5 @@
 "use client";
+// apps/web/components/collection/CommentSection.tsx
 
 import { useState, useEffect, useRef } from "react";
 import { createBrowserClient } from "@supabase/ssr";
@@ -187,7 +188,9 @@ export default function CommentSection({ logId, currentUserId }: Props) {
                       {formatRelativeTime(c.created_at)}
                     </span>
                     {isOwn && (
+                      // [Bug 3 fix] type="button" prevents implicit form submission
                       <button
+                        type="button"
                         onClick={() => handleDelete(c.id)}
                         aria-label="Delete comment"
                         style={{
@@ -260,7 +263,10 @@ export default function CommentSection({ logId, currentUserId }: Props) {
               lineHeight: 1.5,
             }}
           />
+          {/* [Bug 3 fix] type="button" prevents Enter in textarea from
+              triggering this button via implicit form submission */}
           <button
+            type="button"
             onClick={handleSubmit}
             disabled={!body.trim() || submitting}
             style={{

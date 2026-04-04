@@ -1,4 +1,5 @@
 "use client";
+// apps/web/components/collection/LikeButton.tsx
 
 import { useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
@@ -28,9 +29,9 @@ export default function LikeButton({
   async function handleToggle() {
     if (!currentUserId || pending) return;
 
-    // Optimistic update
     const wasLiked = liked;
     const prevCount = count;
+    // Optimistic update
     setLiked(!wasLiked);
     setCount(wasLiked ? count - 1 : count + 1);
     setPending(true);
@@ -61,7 +62,10 @@ export default function LikeButton({
   }
 
   return (
+    // [Bug 3 fix] type="button" prevents implicit form submission that could
+    // trigger this handler when Enter is pressed in an adjacent textarea.
     <button
+      type="button"
       onClick={handleToggle}
       disabled={!currentUserId || pending}
       aria-label={liked ? "Unlike" : "Like"}
@@ -77,7 +81,6 @@ export default function LikeButton({
         transition: "opacity 0.15s",
       }}
     >
-      {/* Heart SVG — filled when liked */}
       <svg
         width="18"
         height="18"

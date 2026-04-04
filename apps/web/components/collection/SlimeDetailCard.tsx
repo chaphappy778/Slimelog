@@ -120,11 +120,11 @@ function StarRow({ rating }: { rating: number }) {
 
 interface Props {
   log: CollectionLog;
-  imageUrl: string | null; // separate from CollectionLog — passed by parent
-  brandSlug: string | null; // for brand page link; null in canvas views
-  brandLogoUrl: string | null; // brand thumbnail; null until brand overhaul — shows initial fallback
+  imageUrl: string | null;
+  brandSlug: string | null;
+  brandLogoUrl: string | null;
   onClose: () => void;
-  onImageOpen: () => void; // triggers lightbox in parent
+  onImageOpen: () => void;
   likeCount: number;
   commentCount: number;
   isLikedByCurrentUser: boolean;
@@ -155,7 +155,6 @@ export default function SlimeDetailCard({
     ({ key }) => typeof log[key] === "number",
   );
 
-  // Brand initial for thumbnail fallback
   const brandInitial = log.brand_name_raw
     ? log.brand_name_raw.charAt(0).toUpperCase()
     : "?";
@@ -164,13 +163,10 @@ export default function SlimeDetailCard({
     commentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  // Image area height: ~50vh so info card starts mid-screen
   const IMAGE_HEIGHT = "50vh";
-  // Info card overlaps image by this amount
   const OVERLAP = 56;
 
   return (
-    // Full-screen overlay — scroll container
     <div
       style={{
         position: "fixed",
@@ -181,7 +177,7 @@ export default function SlimeDetailCard({
         WebkitOverflowScrolling: "touch",
       }}
     >
-      {/* ── Image region — full bleed, behind transparent header ── */}
+      {/* ── Image region ── */}
       <div
         style={{
           position: "relative",
@@ -202,7 +198,6 @@ export default function SlimeDetailCard({
               sizes="100vw"
               priority
             />
-            {/* Gradient: transparent top (header readable), dark at bottom (info card overlap) */}
             <div
               style={{
                 position: "absolute",
@@ -212,7 +207,6 @@ export default function SlimeDetailCard({
                 pointerEvents: "none",
               }}
             />
-            {/* Tap-to-enlarge hint */}
             <div
               style={{
                 position: "absolute",
@@ -240,7 +234,7 @@ export default function SlimeDetailCard({
           />
         )}
 
-        {/* ── Transparent floating header — overlaid on image ── */}
+        {/* Transparent floating header */}
         <div
           style={{
             position: "absolute",
@@ -252,11 +246,10 @@ export default function SlimeDetailCard({
             alignItems: "center",
             gap: 12,
             padding: "14px 16px",
-            // No background — truly transparent over image
           }}
         >
-          {/* Back arrow */}
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               onClose();
@@ -294,7 +287,6 @@ export default function SlimeDetailCard({
             </svg>
           </button>
 
-          {/* Title */}
           <h1
             style={{
               flex: 1,
@@ -315,7 +307,7 @@ export default function SlimeDetailCard({
         </div>
       </div>
 
-      {/* ── Info card — overlaps image bottom by OVERLAP px ── */}
+      {/* ── Info card ── */}
       <div
         style={{
           position: "relative",
@@ -323,10 +315,10 @@ export default function SlimeDetailCard({
           background: "#0F0018",
           borderRadius: "24px 24px 0 0",
           minHeight: `calc(100vh - ${IMAGE_HEIGHT} + ${OVERLAP}px)`,
-          paddingTop: OVERLAP + 12, // space for the brand logo that sticks out
+          paddingTop: OVERLAP + 12,
         }}
       >
-        {/* ── Brand logo thumbnail — absolutely positioned, overlaps card top edge into image ── */}
+        {/* Brand logo thumbnail */}
         <div
           style={{
             position: "absolute",
@@ -350,7 +342,6 @@ export default function SlimeDetailCard({
               className="object-cover w-full h-full"
             />
           ) : (
-            // Fallback: brand initial with gradient background
             <div
               style={{
                 width: "100%",
@@ -371,7 +362,7 @@ export default function SlimeDetailCard({
           )}
         </div>
 
-        {/* ── Info card body ── */}
+        {/* Info card body */}
         <div
           style={{
             padding: "0 16px",
@@ -380,7 +371,6 @@ export default function SlimeDetailCard({
             gap: 14,
           }}
         >
-          {/* Slime name */}
           <h2
             style={{
               margin: 0,
@@ -394,7 +384,11 @@ export default function SlimeDetailCard({
             {log.slime_name ?? "Unnamed Slime"}
           </h2>
 
-          {/* Brand row */}
+          {/* Brand row
+              [Bug 6 fix] Brand links open in new tab to preserve overlay state.
+              Using <a> with target="_blank" instead of Next.js <Link> so navigation
+              doesn't destroy the client-side overlay. User closes the brand tab
+              and returns to the feed with the detail overlay still mounted. */}
           {log.brand_name_raw && (
             <div
               style={{
@@ -407,8 +401,10 @@ export default function SlimeDetailCard({
             >
               {brandSlug ? (
                 <>
-                  <Link
+                  <a
                     href={`/brands/${brandSlug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     style={{
                       fontSize: 15,
                       fontWeight: 600,
@@ -417,9 +413,11 @@ export default function SlimeDetailCard({
                     }}
                   >
                     {log.brand_name_raw}
-                  </Link>
-                  <Link
+                  </a>
+                  <a
                     href={`/brands/${brandSlug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     aria-label={`Visit ${log.brand_name_raw}`}
                     style={{ color: "rgba(255,255,255,0.3)", lineHeight: 0 }}
                   >
@@ -438,7 +436,7 @@ export default function SlimeDetailCard({
                       <circle cx="19" cy="12" r="1" />
                       <circle cx="5" cy="12" r="1" />
                     </svg>
-                  </Link>
+                  </a>
                 </>
               ) : (
                 <span
@@ -564,7 +562,7 @@ export default function SlimeDetailCard({
 
           {/* Achievement placeholder — renders when badge system is built */}
 
-          {/* ── Like + Comment action bar ── */}
+          {/* Like + Comment action bar */}
           <div
             style={{
               display: "flex",
@@ -573,7 +571,6 @@ export default function SlimeDetailCard({
               margin: "2px 0",
             }}
           >
-            {/* Like side */}
             <div
               style={{
                 flex: 1,
@@ -591,7 +588,6 @@ export default function SlimeDetailCard({
               />
             </div>
 
-            {/* Vertical divider */}
             <div
               style={{
                 width: 1,
@@ -600,8 +596,8 @@ export default function SlimeDetailCard({
               }}
             />
 
-            {/* Comment side */}
             <button
+              type="button"
               onClick={scrollToComments}
               style={{
                 flex: 1,
@@ -644,7 +640,7 @@ export default function SlimeDetailCard({
             </button>
           </div>
 
-          {/* ── Dimension rating grid ── */}
+          {/* Dimension rating grid */}
           {activeDimensions.length > 0 && (
             <div
               style={{
@@ -660,11 +656,7 @@ export default function SlimeDetailCard({
               {activeDimensions.map(({ key, label }) => (
                 <div
                   key={key}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 5,
-                  }}
+                  style={{ display: "flex", flexDirection: "column", gap: 5 }}
                 >
                   <span
                     style={{
@@ -803,8 +795,9 @@ export default function SlimeDetailCard({
             View Full Review
           </Link>
 
-          {/* Bottom safe area */}
-          <div style={{ height: 40 }} />
+          {/* [Bug 4 fix] Bottom safe area increased from 40 to 100 to clear the
+              ~64px bottom nav bar with room to spare. */}
+          <div style={{ height: 100 }} />
         </div>
       </div>
     </div>
