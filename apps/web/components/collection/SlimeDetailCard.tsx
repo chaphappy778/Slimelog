@@ -384,11 +384,7 @@ export default function SlimeDetailCard({
             {log.slime_name ?? "Unnamed Slime"}
           </h2>
 
-          {/* Brand row
-              [Bug 6 fix] Brand links open in new tab to preserve overlay state.
-              Using <a> with target="_blank" instead of Next.js <Link> so navigation
-              doesn't destroy the client-side overlay. User closes the brand tab
-              and returns to the feed with the detail overlay still mounted. */}
+          {/* Brand row */}
           {log.brand_name_raw && (
             <div
               style={{
@@ -401,10 +397,8 @@ export default function SlimeDetailCard({
             >
               {brandSlug ? (
                 <>
-                  <a
+                  <Link
                     href={`/brands/${brandSlug}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     style={{
                       fontSize: 15,
                       fontWeight: 600,
@@ -413,11 +407,9 @@ export default function SlimeDetailCard({
                     }}
                   >
                     {log.brand_name_raw}
-                  </a>
-                  <a
+                  </Link>
+                  <Link
                     href={`/brands/${brandSlug}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     aria-label={`Visit ${log.brand_name_raw}`}
                     style={{ color: "rgba(255,255,255,0.3)", lineHeight: 0 }}
                   >
@@ -436,7 +428,7 @@ export default function SlimeDetailCard({
                       <circle cx="19" cy="12" r="1" />
                       <circle cx="5" cy="12" r="1" />
                     </svg>
-                  </a>
+                  </Link>
                 </>
               ) : (
                 <span
