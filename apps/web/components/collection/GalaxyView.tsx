@@ -3,9 +3,13 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { CollectionLog } from "@/lib/types";
 import SlimeDetailCard from "@/components/collection/SlimeDetailCard";
+import type { LikeDataMap } from "@/app/collection/page";
 
+// [Change 1] Added likeData and currentUserId to Props.
 interface Props {
   logs: CollectionLog[];
+  likeData: LikeDataMap;
+  currentUserId: string | null;
 }
 
 const DEFAULT_PALETTE = [
@@ -87,7 +91,7 @@ interface HubData {
 
 type CanvasNode = NodeData | HubData;
 
-export default function GalaxyView({ logs }: Props) {
+export default function GalaxyView({ logs, likeData, currentUserId }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [brandColors, setBrandColors] = useState<Record<string, string>>({});
   const [transform, setTransform] = useState<Transform>({
@@ -597,7 +601,16 @@ export default function GalaxyView({ logs }: Props) {
     </div>
   );
 
-  const detailCard = selectedLog && (
+  // [Change 2] Look up likeData for the selected log; fall back to zeros if not found.
+  const selectedLikeEntry = selectedLog
+    ? (likeData[selectedLog.id] ?? {
+        likeCount: 0,
+        commentCount: 0,
+        isLiked: false,
+      })
+    : null;
+
+  const detailCard = selectedLog && selectedLikeEntry && (
     <div
       style={{
         background: "rgba(45,10,78,0.5)",
@@ -614,6 +627,10 @@ export default function GalaxyView({ logs }: Props) {
             : undefined
         }
         onClose={() => setSelectedLog(null)}
+        likeCount={selectedLikeEntry.likeCount}
+        commentCount={selectedLikeEntry.commentCount}
+        isLikedByCurrentUser={selectedLikeEntry.isLiked}
+        currentUserId={currentUserId}
       />
     </div>
   );

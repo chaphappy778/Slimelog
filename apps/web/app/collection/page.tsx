@@ -3,11 +3,24 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { createBrowserClient } from "@supabase/ssr";
 import { getUserCollectionLogs } from "@/lib/slime-actions";
 import { SLIME_TYPE_LABELS } from "@/lib/types";
 import type { CollectionLog, SlimeType } from "@/lib/types";
 import PageHeader from "@/components/PageHeader";
 import PageWrapper from "@/components/PageWrapper";
+import CollectionSummaryChart from "@/components/collection/CollectionSummaryChart";
+import ViewToggle from "@/components/collection/ViewToggle";
+import SpiralView from "@/components/collection/SpiralView";
+import GalaxyView from "@/components/collection/GalaxyView";
+
+type View = "cards" | "spiral" | "galaxy";
+
+// [Change 1] Type for like/comment data map keyed by log id.
+export type LikeDataMap = Record<
+  string,
+  { likeCount: number; commentCount: number; isLiked: boolean }
+>;
 
 function formatDate(iso: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -66,11 +79,21 @@ function SlimeCard({ log }: { log: CollectionLog }) {
           />
         ) : (
           <div
-            className="w-full h-32 flex items-center justify-center text-3xl"
+            className="w-full h-32 flex items-center justify-center"
             style={{ background: "linear-gradient(135deg, #2D0A4E, #1A1A1A)" }}
             aria-hidden="true"
           >
-            🫧
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+              <circle
+                cx="12"
+                cy="12"
+                r="9"
+                stroke="#39FF14"
+                strokeWidth="1.5"
+              />
+              <circle cx="9" cy="9" r="2" stroke="#39FF14" strokeWidth="1" />
+              <circle cx="14" cy="8" r="1" stroke="#39FF14" strokeWidth="1" />
+            </svg>
           </div>
         )}
 
@@ -112,7 +135,7 @@ function SlimeCard({ log }: { log: CollectionLog }) {
             )}
             {log.scent && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-slime-surface border border-slime-border text-slime-muted">
-                🌸 {log.scent}
+                {log.scent}
               </span>
             )}
             {displayPrice != null && (
@@ -159,7 +182,7 @@ function SlimeCard({ log }: { log: CollectionLog }) {
 
           {log.notes && (
             <p className="text-xs text-slime-muted line-clamp-2 italic border-t border-slime-border/50 pt-2">
-              "{log.notes}"
+              &quot;{log.notes}&quot;
             </p>
           )}
 
@@ -175,28 +198,31 @@ function SlimeCard({ log }: { log: CollectionLog }) {
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center text-center py-20 gap-4">
-      {/* Holographic pill icon instead of emoji */}
       <div
-        className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-glow-green"
+        className="w-16 h-16 rounded-2xl flex items-center justify-center"
         style={{
           background: "linear-gradient(135deg, #39FF14, #00F0FF, #FF00E5)",
         }}
         aria-hidden="true"
       >
-        <span className="text-2xl">🫧</span>
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="9" stroke="#0A0A0A" strokeWidth="1.5" />
+          <circle cx="9" cy="9" r="2" stroke="#0A0A0A" strokeWidth="1" />
+          <circle cx="14" cy="8" r="1" stroke="#0A0A0A" strokeWidth="1" />
+        </svg>
       </div>
       <div>
         <p className="font-bold text-slime-text">Your collection is empty</p>
         <p className="text-sm text-slime-muted mt-1">
-          Log your first slime to get started!
+          Log your first slime to get started
         </p>
       </div>
       <Link
         href="/log"
-        className="mt-2 px-6 py-2.5 rounded-xl text-slime-bg text-sm font-bold shadow-glow-green transition active:scale-95"
+        className="mt-2 px-6 py-2.5 rounded-xl text-slime-bg text-sm font-bold transition active:scale-95"
         style={{ background: "linear-gradient(135deg, #39FF14, #00F0FF)" }}
       >
-        Log a slime ✦
+        Log a slime
       </Link>
     </div>
   );
@@ -209,12 +235,85 @@ export default function CollectionPage() {
   const [filter, setFilter] = useState<"all" | "collection" | "wishlist">(
     "all",
   );
+  const [view, setView] = useState<View>("cards");
+
+  // [Change 2] Like/comment data map and current user id for canvas views.
+  const [likeData, setLikeData] = useState<LikeDataMap>({});
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
     getUserCollectionLogs()
       .then((data) => {
-        setLogs((data ?? []) as unknown as CollectionLog[]);
+        const fetched = (data ?? []) as unknown as CollectionLog[];
+        setLogs(fetched);
         setLoading(false);
+
+        // [Change 3] After logs are fetched, bulk-fetch like/comment counts
+        // and current user's liked set using the browser Supabase client.
+        if (fetched.length === 0) return;
+
+        const supabase = createBrowserClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        );
+
+        const logIds = fetched.map((l) => l.id);
+
+        Promise.all([
+          supabase.auth.getUser(),
+          supabase.from("likes").select("log_id").in("log_id", logIds),
+          supabase.from("comments").select("log_id").in("log_id", logIds),
+        ]).then(([userResult, likesResult, commentsResult]) => {
+          const uid = userResult.data.user?.id ?? null;
+          setCurrentUserId(uid);
+
+          // [Change 4] Fetch user's own likes separately now that we have uid.
+          const likeRows = likesResult.data ?? [];
+          const commentRows = commentsResult.data ?? [];
+
+          const likeCountMap: Record<string, number> = {};
+          const commentCountMap: Record<string, number> = {};
+
+          for (const row of likeRows) {
+            likeCountMap[row.log_id] = (likeCountMap[row.log_id] ?? 0) + 1;
+          }
+          for (const row of commentRows) {
+            commentCountMap[row.log_id] =
+              (commentCountMap[row.log_id] ?? 0) + 1;
+          }
+
+          if (uid) {
+            supabase
+              .from("likes")
+              .select("log_id")
+              .eq("user_id", uid)
+              .in("log_id", logIds)
+              .then(({ data: userLikeRows }) => {
+                const userLikedSet = new Set(
+                  (userLikeRows ?? []).map((r) => r.log_id as string),
+                );
+                const map: LikeDataMap = {};
+                for (const id of logIds) {
+                  map[id] = {
+                    likeCount: likeCountMap[id] ?? 0,
+                    commentCount: commentCountMap[id] ?? 0,
+                    isLiked: userLikedSet.has(id),
+                  };
+                }
+                setLikeData(map);
+              });
+          } else {
+            const map: LikeDataMap = {};
+            for (const id of logIds) {
+              map[id] = {
+                likeCount: likeCountMap[id] ?? 0,
+                commentCount: commentCountMap[id] ?? 0,
+                isLiked: false,
+              };
+            }
+            setLikeData(map);
+          }
+        });
       })
       .catch((err) => {
         setError(
@@ -240,7 +339,7 @@ export default function CollectionPage() {
       <div className="pt-14 px-4 py-8">
         <div className="max-w-md mx-auto">
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4">
             <div>
               <h1
                 className="text-2xl font-extrabold tracking-tight"
@@ -250,8 +349,7 @@ export default function CollectionPage() {
                   WebkitTextFillColor: "transparent",
                 }}
               >
-                My Slimes{" "}
-                <span style={{ WebkitTextFillColor: "#39FF14" }}>✦</span>
+                My Slimes
               </h1>
               {!loading && (
                 <p className="text-sm text-slime-muted mt-0.5">
@@ -261,7 +359,7 @@ export default function CollectionPage() {
             </div>
             <Link
               href="/log"
-              className="px-4 py-2 rounded-xl text-slime-bg text-xs font-bold shadow-glow-green transition active:scale-95"
+              className="px-4 py-2 rounded-xl text-slime-bg text-xs font-bold transition active:scale-95"
               style={{
                 background: "linear-gradient(135deg, #39FF14, #00F0FF)",
               }}
@@ -270,55 +368,95 @@ export default function CollectionPage() {
             </Link>
           </div>
 
-          {/* Filter tabs */}
-          <div className="flex gap-2 mb-6">
-            {(["all", "collection", "wishlist"] as const).map((f) => (
-              <button
-                key={f}
-                type="button"
-                onClick={() => setFilter(f)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition capitalize ${
-                  filter === f
-                    ? "text-slime-bg shadow-glow-green"
-                    : "bg-slime-surface border border-slime-border text-slime-muted hover:border-slime-accent/50"
-                }`}
-                style={
-                  filter === f
-                    ? {
-                        background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-                      }
-                    : undefined
-                }
-              >
-                {f === "all"
-                  ? `All (${logs.length})`
-                  : f === "collection"
-                    ? `Collection (${collectionCount})`
-                    : `Wishlist (${wishlistCount})`}
-              </button>
-            ))}
-          </div>
+          {/* View toggle — always visible, never moves */}
+          {!loading && !error && logs.length > 0 && (
+            <div className="mb-4">
+              <ViewToggle active={view} onChange={setView} />
+            </div>
+          )}
 
+          {/* Donut summary chart — only on Cards view */}
+          {!loading && !error && logs.length > 0 && view === "cards" && (
+            <CollectionSummaryChart logs={filtered} />
+          )}
+
+          {/* Filter tabs — only on Cards view, sits below donut */}
+          {!loading && !error && logs.length > 0 && view === "cards" && (
+            <div className="flex gap-2 mb-6">
+              {(["all", "collection", "wishlist"] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFilter(f)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition capitalize ${
+                    filter === f
+                      ? "text-slime-bg"
+                      : "bg-slime-surface border border-slime-border text-slime-muted hover:border-slime-accent/50"
+                  }`}
+                  style={
+                    filter === f
+                      ? {
+                          background:
+                            "linear-gradient(135deg, #39FF14, #00F0FF)",
+                        }
+                      : undefined
+                  }
+                >
+                  {f === "all"
+                    ? `All (${logs.length})`
+                    : f === "collection"
+                      ? `Collection (${collectionCount})`
+                      : `Wishlist (${wishlistCount})`}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Loading */}
           {loading && (
             <div className="flex justify-center py-20">
               <div className="w-8 h-8 border-2 border-slime-accent border-t-transparent rounded-full animate-spin" />
             </div>
           )}
 
+          {/* Error */}
           {error && !loading && (
             <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">
               {error}
             </div>
           )}
 
-          {!loading && !error && filtered.length === 0 && <EmptyState />}
+          {/* Empty state */}
+          {!loading && !error && filtered.length === 0 && view === "cards" && (
+            <EmptyState />
+          )}
 
-          {!loading && !error && filtered.length > 0 && (
-            <div className="flex flex-col gap-4">
-              {filtered.map((log) => (
-                <SlimeCard key={log.id} log={log} />
-              ))}
-            </div>
+          {/* Views */}
+          {!loading && !error && logs.length > 0 && (
+            <>
+              {view === "cards" && filtered.length > 0 && (
+                <div className="flex flex-col gap-4">
+                  {filtered.map((log) => (
+                    <SlimeCard key={log.id} log={log} />
+                  ))}
+                </div>
+              )}
+              {/* [Change 5] Pass likeData and currentUserId to canvas views. */}
+              {view === "spiral" && (
+                <SpiralView
+                  logs={logs}
+                  likeData={likeData}
+                  currentUserId={currentUserId}
+                />
+              )}
+              {view === "galaxy" && (
+                <GalaxyView
+                  logs={logs}
+                  likeData={likeData}
+                  currentUserId={currentUserId}
+                />
+              )}
+            </>
           )}
         </div>
       </div>

@@ -4,9 +4,13 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import type { CollectionLog } from "@/lib/types";
 import SlimeDetailCard from "@/components/collection/SlimeDetailCard";
 import TimelineView from "@/components/collection/TimelineView";
+import type { LikeDataMap } from "@/app/collection/page";
 
+// [Change 1] Added likeData and currentUserId to Props.
 interface Props {
   logs: CollectionLog[];
+  likeData: LikeDataMap;
+  currentUserId: string | null;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -72,7 +76,7 @@ interface Transform {
   scale: number;
 }
 
-export default function SpiralView({ logs }: Props) {
+export default function SpiralView({ logs, likeData, currentUserId }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [selectedLog, setSelectedLog] = useState<CollectionLog | null>(null);
@@ -502,7 +506,16 @@ export default function SpiralView({ logs }: Props) {
     </div>
   );
 
-  const detailCard = selectedLog && (
+  // [Change 2] Look up likeData for the selected log; fall back to zeros if not found.
+  const selectedLikeEntry = selectedLog
+    ? (likeData[selectedLog.id] ?? {
+        likeCount: 0,
+        commentCount: 0,
+        isLiked: false,
+      })
+    : null;
+
+  const detailCard = selectedLog && selectedLikeEntry && (
     <div
       style={{
         background: "rgba(45,10,78,0.5)",
@@ -511,7 +524,14 @@ export default function SpiralView({ logs }: Props) {
         padding: "14px 16px",
       }}
     >
-      <SlimeDetailCard log={selectedLog} onClose={() => setSelectedLog(null)} />
+      <SlimeDetailCard
+        log={selectedLog}
+        onClose={() => setSelectedLog(null)}
+        likeCount={selectedLikeEntry.likeCount}
+        commentCount={selectedLikeEntry.commentCount}
+        isLikedByCurrentUser={selectedLikeEntry.isLiked}
+        currentUserId={currentUserId}
+      />
     </div>
   );
 
@@ -533,7 +553,14 @@ export default function SpiralView({ logs }: Props) {
           No slimes match the selected filters
         </div>
       )}
-      {tab === "timeline" && <TimelineView logs={logs} />}
+      {/* [Change 3] Pass likeData and currentUserId down to TimelineView. */}
+      {tab === "timeline" && (
+        <TimelineView
+          logs={logs}
+          likeData={likeData}
+          currentUserId={currentUserId}
+        />
+      )}
     </div>
   );
 }

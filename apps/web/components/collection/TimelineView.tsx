@@ -3,9 +3,13 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import SlimeDetailCard from "./SlimeDetailCard";
 import type { CollectionLog } from "@/lib/types";
+import type { LikeDataMap } from "@/app/collection/page";
 
+// [Change 1] Added likeData and currentUserId to Props.
 interface Props {
   logs: CollectionLog[];
+  likeData: LikeDataMap;
+  currentUserId: string | null;
 }
 
 const CANVAS_SIZE = 600;
@@ -66,7 +70,7 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-export default function TimelineView({ logs }: Props) {
+export default function TimelineView({ logs, likeData, currentUserId }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [visibleCount, setVisibleCount] = useState(0);
   const [selectedLog, setSelectedLog] = useState<CollectionLog | null>(null);
@@ -316,6 +320,15 @@ export default function TimelineView({ logs }: Props) {
     [visibleCount],
   );
 
+  // [Change 2] Look up likeData for the selected log; fall back to zeros if not found.
+  const selectedLikeEntry = selectedLog
+    ? (likeData[selectedLog.id] ?? {
+        likeCount: 0,
+        commentCount: 0,
+        isLiked: false,
+      })
+    : null;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* Canvas */}
@@ -354,8 +367,8 @@ export default function TimelineView({ logs }: Props) {
         )}
       </div>
 
-      {/* Detail card */}
-      {selectedLog && (
+      {/* [Change 3] Detail card now passes like/comment props. */}
+      {selectedLog && selectedLikeEntry && (
         <div
           style={{
             background: "rgba(45,10,78,0.5)",
@@ -367,6 +380,10 @@ export default function TimelineView({ logs }: Props) {
           <SlimeDetailCard
             log={selectedLog}
             onClose={() => setSelectedLog(null)}
+            likeCount={selectedLikeEntry.likeCount}
+            commentCount={selectedLikeEntry.commentCount}
+            isLikedByCurrentUser={selectedLikeEntry.isLiked}
+            currentUserId={currentUserId}
           />
         </div>
       )}
