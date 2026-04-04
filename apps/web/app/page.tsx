@@ -2,28 +2,36 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import FeedTabs from "@/components/FeedTabs";
+import FeedCard, { type FeedCardLog } from "@/components/FeedCard";
 import PageHeader from "@/components/PageHeader";
 import PageWrapper from "@/components/PageWrapper";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Internal query row types ──────────────────────────────────────────────────
+// These are only used to type raw Supabase responses before normalisation.
+// They are NOT exported — all consumer-facing data uses FeedCardLog from FeedCard.
 
-type FeedLog = {
+type CommunityQueryRow = {
   id: string;
+  user_id: string;
   created_at: string;
+  updated_at: string;
   slime_name: string | null;
   brand_name_raw: string | null;
   slime_type: string | null;
+  colors: string[] | null;
   rating_overall: number | null;
-  like_count: number;
-  comment_count: number;
-  profiles: { username: string | null }[] | null;
-  brands: { name: string | null }[] | null;
+  image_url: string | null;
+  // PostgREST returns a to-one join as a plain object, not an array.
+  // We normalise this below so the rest of the code never has to branch.
+  profiles:
+    | { username: string | null; avatar_url: string | null }
+    | { username: string | null; avatar_url: string | null }[]
+    | null;
 };
 
-type ActivityFeedRow = {
+type ActivityFeedQueryRow = {
   id: string;
   created_at: string;
   actor_id: string;
@@ -34,238 +42,69 @@ type ActivityFeedRow = {
     slime_type?: string | null;
     brand_name_raw?: string | null;
     rating_overall?: number | null;
+    colors?: string[] | null;
+    image_url?: string | null;
   } | null;
-  profiles: { username: string | null } | { username: string | null }[] | null;
+  profiles:
+    | { username: string | null; avatar_url: string | null }
+    | { username: string | null; avatar_url: string | null }[]
+    | null;
 };
 
-// ─── Type badge palette ───────────────────────────────────────────────────────
+// ─── Profile normaliser ────────────────────────────────────────────────────────
+// PostgREST can return a to-one relation as either an object or a single-item
+// array depending on the join hint used. Always normalise to the object form.
 
-const TYPE_STYLE: Record<string, { bg: string; text: string; label: string }> =
-  {
-    butter: {
-      bg: "bg-yellow-900/40",
-      text: "text-yellow-300",
-      label: "Butter",
-    },
-    clear: { bg: "bg-sky-900/40", text: "text-sky-300", label: "Clear" },
-    cloud: { bg: "bg-slate-800", text: "text-slate-300", label: "Cloud" },
-    icee: { bg: "bg-cyan-900/40", text: "text-cyan-300", label: "Icee" },
-    fluffy: { bg: "bg-pink-900/40", text: "text-pink-300", label: "Fluffy" },
-    floam: { bg: "bg-lime-900/40", text: "text-lime-300", label: "Floam" },
-    snow_fizz: {
-      bg: "bg-blue-900/40",
-      text: "text-blue-300",
-      label: "Snow Fizz",
-    },
-    thick_and_glossy: {
-      bg: "bg-fuchsia-900/40",
-      text: "text-fuchsia-300",
-      label: "Thick & Glossy",
-    },
-    jelly: { bg: "bg-violet-900/40", text: "text-violet-300", label: "Jelly" },
-    beaded: {
-      bg: "bg-orange-900/40",
-      text: "text-orange-300",
-      label: "Beaded",
-    },
-    clay: { bg: "bg-amber-900/40", text: "text-amber-300", label: "Clay" },
-    cloud_cream: {
-      bg: "bg-rose-900/40",
-      text: "text-rose-300",
-      label: "Cloud Cream",
-    },
-    magnetic: { bg: "bg-zinc-800", text: "text-zinc-300", label: "Magnetic" },
-    thermochromic: {
-      bg: "bg-purple-900/40",
-      text: "text-purple-300",
-      label: "Thermochromic",
-    },
-    avalanche: {
-      bg: "bg-indigo-900/40",
-      text: "text-indigo-300",
-      label: "Avalanche",
-    },
-    slay: { bg: "bg-red-900/40", text: "text-red-300", label: "Slay" },
-  };
-
-const fallbackType = {
-  bg: "bg-slime-surface",
-  text: "text-slime-muted",
-  label: "Unknown",
-};
-
-// ─── Stars ────────────────────────────────────────────────────────────────────
-
-function Stars({ rating }: { rating: number | null }) {
-  if (!rating)
-    return <span className="text-xs text-slime-muted">No rating</span>;
-  return (
-    <span
-      className="flex items-center gap-0.5"
-      aria-label={`${rating} out of 5`}
-    >
-      {[1, 2, 3, 4, 5].map((n) => (
-        <span
-          key={n}
-          className={`text-sm leading-none ${n <= rating ? "text-slime-accent" : "text-slime-border"}`}
-        >
-          ★
-        </span>
-      ))}
-    </span>
-  );
+function normaliseProfile(
+  raw:
+    | { username: string | null; avatar_url: string | null }
+    | { username: string | null; avatar_url: string | null }[]
+    | null,
+): { username: string | null; avatar_url: string | null } | null {
+  if (!raw) return null;
+  if (Array.isArray(raw)) return raw[0] ?? null;
+  return raw;
 }
 
-// ─── Feed card ────────────────────────────────────────────────────────────────
-
-function FeedCard({ log }: { log: FeedLog }) {
-  const typeStyle =
-    (log.slime_type && TYPE_STYLE[log.slime_type]) || fallbackType;
-  const brandName =
-    log.brands?.[0]?.name ?? log.brand_name_raw ?? "Unknown brand";
-  const slimeName = log.slime_name ?? "Untitled slime";
-  const username = log.profiles?.[0]?.username ?? null;
-  const timeAgo = formatDistanceToNow(new Date(log.created_at), {
-    addSuffix: true,
-  });
-
-  return (
-    <Link href={`/slimes/${log.id}`} className="block group">
-      <article
-        className="relative rounded-2xl overflow-hidden transition-all duration-150 group-hover:shadow-card-purple group-active:scale-[0.98]"
-        style={{
-          background: "rgba(45,10,78,0.25)",
-          border: "1px solid rgba(45,10,78,0.7)",
-          backdropFilter: "blur(8px)",
-          boxShadow: "inset 0 0 20px rgba(45,10,78,0.1)",
-        }}
-      >
-        {/* inner glow orb */}
-        <div
-          className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-10 blur-2xl pointer-events-none"
-          style={{ background: "radial-gradient(circle, #39FF14, #00F0FF)" }}
-          aria-hidden="true"
-        />
-
-        <div className="p-4 flex flex-col gap-2.5">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-slime-text text-sm leading-tight truncate">
-                {slimeName}
-              </p>
-              <p className="text-xs text-slime-muted truncate mt-0.5">
-                {brandName}
-              </p>
-            </div>
-            <span
-              className={`shrink-0 text-[10px] font-semibold px-2 py-1 rounded-full ${typeStyle.bg} ${typeStyle.text}`}
-            >
-              {typeStyle.label}
-            </span>
-          </div>
-
-          <Stars rating={log.rating_overall} />
-
-          {/* Like + comment counts — passive read-only indicators */}
-          <div className="flex items-center gap-4">
-            {/* Like count */}
-            <div className="flex items-center gap-1.5">
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="rgba(255,255,255,0.35)"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-              </svg>
-              <span className="text-[11px] text-slime-muted">
-                {log.like_count}
-              </span>
-            </div>
-            {/* Comment count */}
-            <div className="flex items-center gap-1.5">
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="rgba(255,255,255,0.35)"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-              <span className="text-[11px] text-slime-muted">
-                {log.comment_count}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between pt-1 border-t border-slime-border/50">
-            {username ? (
-              <Link
-                href={`/users/${username}`}
-                onClick={(e) => e.stopPropagation()}
-                className="flex items-center gap-1.5 group/user"
-              >
-                <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-slime-bg text-[9px] font-bold shrink-0"
-                  style={{
-                    background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-                  }}
-                  aria-hidden="true"
-                >
-                  {username.charAt(0).toUpperCase()}
-                </div>
-                <span className="text-xs text-slime-magenta group-hover/user:text-slime-accent transition-colors">
-                  @{username}
-                </span>
-              </Link>
-            ) : (
-              <div className="flex items-center gap-1.5">
-                <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-slime-bg text-[9px] font-bold"
-                  style={{
-                    background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-                  }}
-                  aria-hidden="true"
-                >
-                  ?
-                </div>
-                <span className="text-xs text-slime-magenta">@anonymous</span>
-              </div>
-            )}
-            <time
-              className="text-[11px] text-slime-muted"
-              dateTime={log.created_at}
-            >
-              {timeAgo}
-            </time>
-          </div>
-        </div>
-      </article>
-    </Link>
-  );
-}
-
-// ─── Empty states ─────────────────────────────────────────────────────────────
+// ─── Empty states ──────────────────────────────────────────────────────────────
 
 function EmptyFeed() {
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-      <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl bg-slime-surface border border-slime-border">
-        🫧
+      <div
+        className="w-20 h-20 rounded-full flex items-center justify-center bg-slime-surface border border-slime-border"
+        aria-hidden="true"
+      >
+        {/* Bubble SVG */}
+        <svg
+          width="36"
+          height="36"
+          viewBox="0 0 36 36"
+          fill="none"
+          aria-hidden="true"
+        >
+          <circle
+            cx="18"
+            cy="18"
+            r="14"
+            stroke="#39FF14"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+            opacity="0.4"
+          />
+          <circle
+            cx="18"
+            cy="18"
+            r="7"
+            fill="rgba(57,255,20,0.12)"
+            stroke="#39FF14"
+            strokeWidth="1"
+          />
+        </svg>
       </div>
       <p className="text-slime-text font-semibold">No logs yet</p>
       <p className="text-sm text-slime-muted max-w-xs">
-        Be the first to log a slime and get this feed poppin'.
+        Be the first to log a slime and get this feed poppin&apos;.
       </p>
     </div>
   );
@@ -274,8 +113,24 @@ function EmptyFeed() {
 function EmptyFollowingFeed() {
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
-      <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl bg-slime-surface border border-slime-border">
-        👀
+      <div
+        className="w-20 h-20 rounded-full flex items-center justify-center bg-slime-surface border border-slime-border"
+        aria-hidden="true"
+      >
+        <svg
+          width="32"
+          height="32"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="rgba(255,255,255,0.25)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
       </div>
       <p className="text-slime-text font-semibold">Nothing here yet</p>
       <p className="text-sm text-slime-muted max-w-xs">
@@ -288,8 +143,24 @@ function EmptyFollowingFeed() {
 function LoginPrompt() {
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-4 text-center px-6">
-      <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl bg-slime-surface border border-slime-border">
-        🔒
+      <div
+        className="w-20 h-20 rounded-full flex items-center justify-center bg-slime-surface border border-slime-border"
+        aria-hidden="true"
+      >
+        <svg
+          width="32"
+          height="32"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="rgba(255,255,255,0.25)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </svg>
       </div>
       <p className="text-slime-text font-semibold">
         Sign in to see your Following feed
@@ -308,7 +179,7 @@ function LoginPrompt() {
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function HomePage({
   searchParams,
@@ -334,21 +205,31 @@ export default async function HomePage({
     redirect("/landing");
   }
 
-  // ─── Community feed ──────────────────────────────────────────────────────
+  // ─── Community feed ────────────────────────────────────────────────────────
 
-  let communityLogs: FeedLog[] = [];
+  let communityLogs: FeedCardLog[] = [];
   let communityError = false;
 
   if (activeTab === "community") {
-    // [Change 1] Added like_count and comment_count via Postgres aggregate subqueries.
-    // Supabase PostgREST does not support inline aggregates in select strings,
-    // so we fetch the base logs first, then fetch counts in two bulk queries.
+    // [Change 1] Extended profile select to include avatar_url.
+    // [Change 2] Added user_id and image_url to base select.
+    // [Change 3] FK hint profiles!collection_logs_user_id_fkey ensures the join
+    //            resolves to the correct FK and returns a real profile row
+    //            instead of null — this fixes the @anonymous bug.
     const { data: baseData, error: baseError } = await supabase
       .from("collection_logs")
       .select(
-        `id, created_at, slime_name, brand_name_raw, slime_type, rating_overall,
-         profiles!collection_logs_user_id_fkey ( username ),
-         brands ( name )`,
+        `id,
+         user_id,
+         created_at,
+         updated_at,
+         slime_name,
+         brand_name_raw,
+         slime_type,
+         colors,
+         rating_overall,
+         image_url,
+         profiles!collection_logs_user_id_fkey ( username, avatar_url )`,
       )
       .eq("is_public", true)
       .order("created_at", { ascending: false })
@@ -357,45 +238,72 @@ export default async function HomePage({
     if (baseError) {
       communityError = true;
     } else {
-      const rows = (baseData ?? []) as unknown as Omit<
-        FeedLog,
-        "like_count" | "comment_count"
-      >[];
+      const rows = (baseData ?? []) as unknown as CommunityQueryRow[];
       const ids = rows.map((r) => r.id);
 
-      // [Change 2] Bulk-fetch like counts for all returned log ids.
+      // [Change 4] Bulk like counts.
       const { data: likesData } = await supabase
         .from("likes")
         .select("log_id")
         .in("log_id", ids);
 
-      // [Change 3] Bulk-fetch comment counts for all returned log ids.
+      // [Change 5] Bulk comment counts.
       const { data: commentsData } = await supabase
         .from("comments")
         .select("log_id")
         .in("log_id", ids);
 
-      // Build count maps from the bulk results.
+      // [Change 6] is_liked_by_current_user check for the authed user.
+      const { data: userLikesData } = user
+        ? await supabase
+            .from("likes")
+            .select("log_id")
+            .eq("user_id", user.id)
+            .in("log_id", ids)
+        : { data: [] };
+
       const likeCountMap: Record<string, number> = {};
       const commentCountMap: Record<string, number> = {};
+      const userLikedSet = new Set<string>();
+
       for (const row of likesData ?? []) {
         likeCountMap[row.log_id] = (likeCountMap[row.log_id] ?? 0) + 1;
       }
       for (const row of commentsData ?? []) {
         commentCountMap[row.log_id] = (commentCountMap[row.log_id] ?? 0) + 1;
       }
+      for (const row of userLikesData ?? []) {
+        userLikedSet.add(row.log_id);
+      }
 
-      communityLogs = rows.map((r) => ({
-        ...r,
-        like_count: likeCountMap[r.id] ?? 0,
-        comment_count: commentCountMap[r.id] ?? 0,
-      }));
+      // [Change 7] Normalise profile shape — fixes @anonymous bug.
+      // PostgREST may return a plain object or array; normaliseProfile handles both.
+      communityLogs = rows.map((r): FeedCardLog => {
+        const profile = normaliseProfile(r.profiles);
+        return {
+          id: r.id,
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+          slime_name: r.slime_name,
+          brand_name_raw: r.brand_name_raw,
+          slime_type: r.slime_type,
+          colors: r.colors,
+          rating_overall: r.rating_overall,
+          image_url: r.image_url,
+          actor_id: r.user_id,
+          username: profile?.username ?? null,
+          avatar_url: profile?.avatar_url ?? null,
+          like_count: likeCountMap[r.id] ?? 0,
+          comment_count: commentCountMap[r.id] ?? 0,
+          is_liked_by_current_user: userLikedSet.has(r.id),
+        };
+      });
     }
   }
 
-  // ─── Following feed ──────────────────────────────────────────────────────
+  // ─── Following feed ────────────────────────────────────────────────────────
 
-  let followingLogs: FeedLog[] = [];
+  let followingLogs: FeedCardLog[] = [];
   let followingError = false;
 
   if (activeTab === "following" && user) {
@@ -412,10 +320,12 @@ export default async function HomePage({
       );
 
       if (followingIds.length > 0) {
+        // [Change 8] Extended profile select on activity_feed to include avatar_url.
         const { data: activityRows, error: activityErr } = await supabase
           .from("activity_feed")
           .select(
-            `id, created_at, actor_id, log_id, metadata, profiles!activity_feed_actor_id_fkey ( username )`,
+            `id, created_at, actor_id, log_id, metadata,
+             profiles!activity_feed_actor_id_fkey ( username, avatar_url )`,
           )
           .eq("activity_type", "log_created")
           .in("actor_id", followingIds)
@@ -426,13 +336,12 @@ export default async function HomePage({
           followingError = true;
         } else {
           const typedRows = (activityRows ??
-            []) as unknown as ActivityFeedRow[];
-
-          // [Change 4] Bulk-fetch like and comment counts for following-feed log ids.
+            []) as unknown as ActivityFeedQueryRow[];
           const followingLogIds = typedRows
             .map((r) => r.log_id)
             .filter((id): id is string => id != null);
 
+          // [Change 9] Bulk like + comment counts for following feed.
           const { data: fLikesData } = await supabase
             .from("likes")
             .select("log_id")
@@ -443,8 +352,29 @@ export default async function HomePage({
             .select("log_id")
             .in("log_id", followingLogIds);
 
+          const { data: fUserLikesData } = await supabase
+            .from("likes")
+            .select("log_id")
+            .eq("user_id", user.id)
+            .in("log_id", followingLogIds);
+
+          // [Change 12] Bulk-fetch updated_at from collection_logs for following
+          // feed rows. activity_feed.metadata does not carry updated_at, so we
+          // need a secondary lookup keyed by log_id.
+          const { data: updatedAtData } = await supabase
+            .from("collection_logs")
+            .select("id, updated_at")
+            .in("id", followingLogIds);
+
+          const updatedAtMap: Record<string, string> = {};
+          for (const row of updatedAtData ?? []) {
+            updatedAtMap[row.id] = row.updated_at;
+          }
+
           const fLikeCountMap: Record<string, number> = {};
           const fCommentCountMap: Record<string, number> = {};
+          const fUserLikedSet = new Set<string>();
+
           for (const row of fLikesData ?? []) {
             fLikeCountMap[row.log_id] = (fLikeCountMap[row.log_id] ?? 0) + 1;
           }
@@ -452,28 +382,35 @@ export default async function HomePage({
             fCommentCountMap[row.log_id] =
               (fCommentCountMap[row.log_id] ?? 0) + 1;
           }
+          for (const row of fUserLikesData ?? []) {
+            fUserLikedSet.add(row.log_id);
+          }
 
-          followingLogs = typedRows.map((row): FeedLog => {
+          // [Change 10] Normalise following-feed profiles — same fix applied.
+          followingLogs = typedRows.map((row): FeedCardLog => {
             const meta = row.metadata ?? {};
-            const profileObj = Array.isArray(row.profiles)
-              ? ((row.profiles as { username: string | null }[])[0] ?? null)
-              : (row.profiles as { username: string | null } | null);
+            const profile = normaliseProfile(row.profiles);
             const logId = row.log_id ?? row.id;
 
             return {
               id: logId,
               created_at: row.created_at,
+              updated_at: updatedAtMap[logId] ?? row.created_at,
               slime_name: meta.slime_name ?? null,
               brand_name_raw: meta.brand_name_raw ?? null,
               slime_type: meta.slime_type ?? null,
+              colors: meta.colors ?? null,
               rating_overall:
                 meta.rating_overall != null
                   ? Number(meta.rating_overall)
                   : null,
-              profiles: profileObj ? [{ username: profileObj.username }] : null,
-              brands: null,
+              image_url: meta.image_url ?? null,
+              actor_id: row.actor_id,
+              username: profile?.username ?? null,
+              avatar_url: profile?.avatar_url ?? null,
               like_count: fLikeCountMap[logId] ?? 0,
               comment_count: fCommentCountMap[logId] ?? 0,
+              is_liked_by_current_user: fUserLikedSet.has(logId),
             };
           });
         }
@@ -481,16 +418,45 @@ export default async function HomePage({
     }
   }
 
+  // ─── Brand slug lookup ─────────────────────────────────────────────────────
+
+  // [Change 11] Collect all unique brand_name_raw values across the active feed,
+  // do a single bulk query, and build a name→slug map to pass to FeedCard.
   const displayLogs = activeTab === "following" ? followingLogs : communityLogs;
   const displayError =
     activeTab === "following" ? followingError : communityError;
+
+  const uniqueBrandNames = [
+    ...new Set(
+      displayLogs
+        .map((l) => l.brand_name_raw)
+        .filter((n): n is string => n != null && n.trim() !== ""),
+    ),
+  ];
+
+  let brandSlugMap: Record<string, string> = {};
+
+  if (uniqueBrandNames.length > 0) {
+    const { data: brandRows } = await supabase
+      .from("brands")
+      .select("name, slug")
+      .in("name", uniqueBrandNames);
+
+    for (const row of brandRows ?? []) {
+      if (row.name && row.slug) {
+        brandSlugMap[row.name] = row.slug;
+      }
+    }
+  }
+
+  // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
     <PageWrapper dots glow="cyan">
       <PageHeader />
 
       <div className="pt-14">
-        {/* Feed hero label */}
+        {/* Feed header */}
         <div className="px-4 pt-6 pb-2">
           <p className="section-label">Community Feed</p>
           <p className="text-sm text-slime-muted mt-1">
@@ -509,7 +475,7 @@ export default async function HomePage({
             <>
               {displayError && (
                 <div className="mb-4 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-xs text-red-400">
-                  Couldn't load the feed right now — try refreshing.
+                  Couldn&apos;t load the feed right now — try refreshing.
                 </div>
               )}
               {displayLogs.length === 0 && !displayError ? (
@@ -526,9 +492,14 @@ export default async function HomePage({
                       : "Recent logs"}{" "}
                     · {displayLogs.length} shown
                   </p>
-                  <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-4">
                     {displayLogs.map((log) => (
-                      <FeedCard key={log.id} log={log} />
+                      <FeedCard
+                        key={log.id}
+                        log={log}
+                        brandSlugMap={brandSlugMap}
+                        currentUserId={user?.id ?? null}
+                      />
                     ))}
                   </div>
                 </>

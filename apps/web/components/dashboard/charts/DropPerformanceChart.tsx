@@ -76,8 +76,9 @@ export default function DropPerformanceChart({
           </p>
         </div>
       ) : (
-        <div className="flex-1 min-h-0">
-          <ResponsiveContainer width="100%" height="100%">
+        // [FIX 1] Explicit minHeight wrapper prevents width(-1)/height(-1) warnings.
+        <div style={{ width: "100%", minHeight: 220 }}>
+          <ResponsiveContainer width="100%" height={220} minWidth={0}>
             <BarChart
               data={data}
               margin={{ top: 4, right: 4, bottom: 0, left: -20 }}

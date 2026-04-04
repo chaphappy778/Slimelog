@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { SLIME_TYPE_LABELS } from "@/lib/types";
 import type { SlimeType } from "@/lib/types";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type DropStatus = "announced" | "live" | "sold_out" | "restocked" | "cancelled";
 
@@ -43,6 +45,8 @@ interface DropsSplitPanelProps {
   userId: string;
   initialDrops: Drop[];
 }
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const STATUS_STYLES: Record<
   DropStatus,
@@ -116,16 +120,18 @@ const DAYS_OF_WEEK = [
 ];
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 1);
 
-function formatDate(dateStr: string | null) {
-  if (!dateStr) return "TBA";
-  return new Date(dateStr).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
+const DEFAULT_RECURRENCE: RecurrencePattern = {
+  frequency: "weekly",
+  day_of_week: 5,
+  day_of_month: null,
+  hour: 12,
+  minute: 0,
+  end_type: "never",
+  end_after: null,
+  end_date: null,
+};
+
+// ─── Shared style helpers ─────────────────────────────────────────────────────
 
 const inputClass =
   "w-full rounded-lg px-3 py-2.5 text-sm text-white outline-none transition-colors";
@@ -150,7 +156,18 @@ function FormLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ─── Custom Date/Time Picker ──────────────────────────────────────────────────
+function formatDate(dateStr: string | null) {
+  if (!dateStr) return "TBA";
+  return new Date(dateStr).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+// ─── DateTimePicker ───────────────────────────────────────────────────────────
 
 interface DateTimePickerProps {
   value: string;
@@ -179,7 +196,6 @@ function DateTimePicker({ value, onChange }: DateTimePickerProps) {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-  // No useEffect — call onChange directly to avoid infinite re-render loop
   const emit = (
     m: number,
     d: number,
@@ -311,7 +327,7 @@ function DateTimePicker({ value, onChange }: DateTimePickerProps) {
   );
 }
 
-// ─── Recurrence Builder ───────────────────────────────────────────────────────
+// ─── RecurrenceBuilder ────────────────────────────────────────────────────────
 
 interface RecurrenceBuilderProps {
   enabled: boolean;
@@ -319,17 +335,6 @@ interface RecurrenceBuilderProps {
   pattern: RecurrencePattern;
   onChange: (p: RecurrencePattern) => void;
 }
-
-const DEFAULT_RECURRENCE: RecurrencePattern = {
-  frequency: "weekly",
-  day_of_week: 5,
-  day_of_month: null,
-  hour: 12,
-  minute: 0,
-  end_type: "never",
-  end_after: null,
-  end_date: null,
-};
 
 function RecurrenceBuilder({
   enabled,
@@ -505,34 +510,36 @@ function RecurrenceBuilder({
   );
 }
 
-// ─── Slime Picker ─────────────────────────────────────────────────────────────
+// ─── CatalogPanel — RIGHT column ─────────────────────────────────────────────
+// Always-visible right panel. Shows brand slimes not yet in the drop.
+// "Create New Slime" form lives here.
 
-interface SlimePickerProps {
+interface CatalogPanelProps {
   brandId: string;
-  attached: BrandSlime[];
+  attachedIds: Set<string>;
   onAttach: (slime: BrandSlime) => void;
-  onDetach: (slimeId: string) => void;
-  onAddNew: (slime: {
+  onAddNew: (slimeData: {
     name: string;
     slime_type: SlimeType;
   }) => Promise<BrandSlime | null>;
+  isActive: boolean; // false = empty state, greys out panel
 }
 
-function SlimePicker({
+function CatalogPanel({
   brandId,
-  attached,
+  attachedIds,
   onAttach,
-  onDetach,
   onAddNew,
-}: SlimePickerProps) {
+  isActive,
+}: CatalogPanelProps) {
   const supabase = createClient();
   const [brandSlimes, setBrandSlimes] = useState<BrandSlime[]>([]);
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<SlimeType | "all">("all");
   const [showAddNew, setShowAddNew] = useState(false);
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState<SlimeType>("butter");
   const [addingNew, setAddingNew] = useState(false);
-  const dragItem = useRef<string | null>(null);
 
   useEffect(() => {
     supabase
@@ -546,12 +553,18 @@ function SlimePicker({
       });
   }, [brandId]); // eslint-disable-line
 
-  const attachedIds = new Set(attached.map((s) => s.id));
-  const available = brandSlimes.filter(
-    (s) =>
-      !attachedIds.has(s.id) &&
-      s.name.toLowerCase().includes(search.toLowerCase()),
+  // Unique types present in this brand's catalog for filter pills
+  const presentTypes = Array.from(
+    new Set(brandSlimes.map((s) => s.slime_type)),
   );
+
+  const available = brandSlimes.filter((s) => {
+    if (attachedIds.has(s.id)) return false;
+    if (typeFilter !== "all" && s.slime_type !== typeFilter) return false;
+    if (search && !s.name.toLowerCase().includes(search.toLowerCase()))
+      return false;
+    return true;
+  });
 
   const handleAddNew = async () => {
     if (!newName.trim()) return;
@@ -563,216 +576,231 @@ function SlimePicker({
     if (result) {
       setBrandSlimes((prev) => [...prev, result]);
       setNewName("");
+      setNewType("butter");
       setShowAddNew(false);
     }
     setAddingNew(false);
   };
 
+  const panelOpacity = isActive ? 1 : 0.4;
+
   return (
-    <div className="space-y-3">
-      {attached.length > 0 && (
-        <div className="space-y-1.5">
-          <p
-            className="text-xs font-bold uppercase tracking-widest"
-            style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
-          >
-            In This Drop ({attached.length})
-          </p>
-          {attached.map((slime) => (
-            <div
-              key={slime.id}
-              className="flex items-center justify-between px-3 py-2 rounded-lg"
-              style={{
-                background: "rgba(57,255,20,0.07)",
-                border: "1px solid rgba(57,255,20,0.2)",
-              }}
-            >
-              <div>
-                <p className="text-sm font-medium text-white">{slime.name}</p>
-                <p
-                  className="text-xs"
-                  style={{ color: "rgba(245,245,245,0.4)" }}
-                >
-                  {SLIME_TYPE_LABELS[slime.slime_type]}
-                </p>
-              </div>
-              <button
-                onClick={() => onDetach(slime.id)}
-                className="text-xs px-2 py-1 rounded-md transition-all"
-                style={{
-                  color: "#FF4444",
-                  background: "rgba(255,68,68,0.08)",
-                  border: "1px solid rgba(255,68,68,0.2)",
-                }}
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      <div>
+    <div
+      className="flex flex-col h-full transition-opacity duration-200"
+      style={{
+        opacity: panelOpacity,
+        borderLeft: "1px solid rgba(45,10,78,0.6)",
+        pointerEvents: isActive ? "auto" : "none",
+      }}
+    >
+      {/* Header */}
+      <div
+        className="px-4 pt-4 pb-3 flex-shrink-0"
+        style={{ borderBottom: "1px solid rgba(45,10,78,0.5)" }}
+      >
         <p
-          className="text-xs font-bold uppercase tracking-widest mb-2"
-          style={{
-            color: "rgba(245,245,245,0.4)",
-            fontFamily: "Montserrat, sans-serif",
-          }}
+          className="text-xs font-bold uppercase tracking-widest mb-3"
+          style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
         >
-          Add from Catalog
+          Brand Catalog
         </p>
+        {/* Search */}
         <input
           className={inputClass}
-          style={inputStyle}
+          style={{ ...inputStyle, marginBottom: 8 }}
           placeholder="Search slimes..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-      </div>
-      {available.length > 0 && (
-        <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-          {available.map((slime) => (
-            <div
-              key={slime.id}
-              draggable
-              onDragStart={() => {
-                dragItem.current = slime.id;
-              }}
-              onDragEnd={() => {
-                dragItem.current = null;
-              }}
-              className="flex items-center justify-between px-3 py-2 rounded-lg cursor-grab active:cursor-grabbing transition-all"
-              style={{
-                background: "rgba(45,10,78,0.3)",
-                border: "1px solid rgba(45,10,78,0.6)",
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 12 12"
-                  fill="none"
-                  style={{ color: "rgba(245,245,245,0.2)", flexShrink: 0 }}
-                >
-                  <circle cx="3" cy="3" r="1" fill="currentColor" />
-                  <circle cx="9" cy="3" r="1" fill="currentColor" />
-                  <circle cx="3" cy="9" r="1" fill="currentColor" />
-                  <circle cx="9" cy="9" r="1" fill="currentColor" />
-                  <circle cx="3" cy="6" r="1" fill="currentColor" />
-                  <circle cx="9" cy="6" r="1" fill="currentColor" />
-                </svg>
-                <div>
-                  <p className="text-sm font-medium text-white">{slime.name}</p>
-                  <p
-                    className="text-xs"
-                    style={{ color: "rgba(245,245,245,0.4)" }}
-                  >
-                    {SLIME_TYPE_LABELS[slime.slime_type]}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => onAttach(slime)}
-                className="text-xs px-2 py-1 rounded-md transition-all"
-                style={{
-                  color: "#39FF14",
-                  background: "rgba(57,255,20,0.08)",
-                  border: "1px solid rgba(57,255,20,0.2)",
-                }}
-              >
-                + Add
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      {available.length === 0 && search && (
-        <p
-          className="text-xs text-center py-2"
-          style={{ color: "rgba(245,245,245,0.3)" }}
-        >
-          No slimes match
-        </p>
-      )}
-      {!showAddNew ? (
-        <button
-          type="button"
-          onClick={() => setShowAddNew(true)}
-          className="w-full py-2.5 rounded-lg text-xs font-bold transition-all"
-          style={{
-            color: "#FF00E5",
-            background: "rgba(255,0,229,0.06)",
-            border: "1px solid rgba(255,0,229,0.2)",
-            fontFamily: "Montserrat, sans-serif",
-          }}
-        >
-          + Create New Slime
-        </button>
-      ) : (
-        <div
-          className="rounded-xl p-3 space-y-3"
-          style={{
-            background: "rgba(255,0,229,0.05)",
-            border: "1px solid rgba(255,0,229,0.2)",
-          }}
-        >
-          <p
-            className="text-xs font-bold uppercase tracking-widest"
-            style={{ color: "#FF00E5", fontFamily: "Montserrat, sans-serif" }}
-          >
-            New Slime
-          </p>
-          <input
-            className={inputClass}
-            style={inputStyle}
-            placeholder="Slime name"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-          />
-          <select
-            value={newType}
-            onChange={(e) => setNewType(e.target.value as SlimeType)}
-            className={inputClass}
-            style={selectStyle}
-          >
-            {(Object.entries(SLIME_TYPE_LABELS) as [SlimeType, string][]).map(
-              ([val, label]) => (
-                <option key={val} value={val} style={{ background: "#0F0A1A" }}>
-                  {label}
-                </option>
-              ),
-            )}
-          </select>
-          <div className="flex gap-2">
+        {/* Type filter pills — only show types that exist in catalog */}
+        {presentTypes.length > 1 && (
+          <div className="flex flex-wrap gap-1.5 mt-2">
             <button
-              type="button"
-              onClick={() => setShowAddNew(false)}
-              className="flex-1 py-2 rounded-lg text-xs font-semibold"
+              onClick={() => setTypeFilter("all")}
+              className="px-2.5 py-1 rounded-full text-[10px] font-bold transition-all"
               style={{
-                color: "rgba(245,245,245,0.4)",
-                background: "rgba(45,10,78,0.3)",
-                border: "1px solid rgba(45,10,78,0.6)",
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleAddNew}
-              disabled={addingNew || !newName.trim()}
-              className="flex-1 py-2 rounded-lg text-xs font-bold disabled:opacity-50 transition-all"
-              style={{
-                background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-                color: "#0A0A0A",
+                background:
+                  typeFilter === "all"
+                    ? "rgba(0,240,255,0.15)"
+                    : "rgba(45,10,78,0.3)",
+                border: `1px solid ${typeFilter === "all" ? "rgba(0,240,255,0.4)" : "rgba(45,10,78,0.5)"}`,
+                color:
+                  typeFilter === "all" ? "#00F0FF" : "rgba(245,245,245,0.4)",
                 fontFamily: "Montserrat, sans-serif",
               }}
             >
-              {addingNew ? "Adding..." : "Add to Drop"}
+              All
+            </button>
+            {presentTypes.map((t) => (
+              <button
+                key={t}
+                onClick={() => setTypeFilter(t === typeFilter ? "all" : t)}
+                className="px-2.5 py-1 rounded-full text-[10px] font-bold transition-all"
+                style={{
+                  background:
+                    typeFilter === t
+                      ? "rgba(0,240,255,0.15)"
+                      : "rgba(45,10,78,0.3)",
+                  border: `1px solid ${typeFilter === t ? "rgba(0,240,255,0.4)" : "rgba(45,10,78,0.5)"}`,
+                  color: typeFilter === t ? "#00F0FF" : "rgba(245,245,245,0.4)",
+                  fontFamily: "Montserrat, sans-serif",
+                }}
+              >
+                {SLIME_TYPE_LABELS[t]}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Catalog list */}
+      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1.5">
+        {available.length === 0 && !showAddNew && (
+          <p
+            className="text-xs text-center py-6"
+            style={{
+              color: "rgba(245,245,245,0.25)",
+              fontFamily: "Inter, sans-serif",
+            }}
+          >
+            {brandSlimes.length === 0
+              ? "No slimes in catalog yet"
+              : attachedIds.size > 0 && available.length === 0
+                ? "All catalog slimes are in this drop"
+                : "No slimes match"}
+          </p>
+        )}
+        {available.map((slime) => (
+          <div
+            key={slime.id}
+            className="flex items-center justify-between px-3 py-2.5 rounded-lg transition-all group"
+            style={{
+              background: "rgba(45,10,78,0.25)",
+              border: "1px solid rgba(45,10,78,0.55)",
+            }}
+          >
+            <div className="min-w-0 mr-2">
+              <p
+                className="text-sm font-medium text-white truncate"
+                style={{ fontFamily: "Inter, sans-serif" }}
+              >
+                {slime.name}
+              </p>
+              <p
+                className="text-[11px]"
+                style={{ color: "rgba(245,245,245,0.35)" }}
+              >
+                {SLIME_TYPE_LABELS[slime.slime_type]}
+              </p>
+            </div>
+            <button
+              onClick={() => onAttach(slime)}
+              className="flex-shrink-0 text-xs px-2.5 py-1 rounded-md transition-all"
+              style={{
+                color: "#39FF14",
+                background: "rgba(57,255,20,0.08)",
+                border: "1px solid rgba(57,255,20,0.25)",
+                fontFamily: "Montserrat, sans-serif",
+                fontWeight: 700,
+              }}
+            >
+              + Add
             </button>
           </div>
-        </div>
-      )}
+        ))}
+      </div>
+
+      {/* Create New Slime — bottom of right panel */}
+      <div
+        className="px-3 pb-4 pt-2 flex-shrink-0"
+        style={{ borderTop: "1px solid rgba(45,10,78,0.5)" }}
+      >
+        {!showAddNew ? (
+          <button
+            type="button"
+            onClick={() => setShowAddNew(true)}
+            className="w-full py-2.5 rounded-lg text-xs font-bold transition-all"
+            style={{
+              color: "#FF00E5",
+              background: "rgba(255,0,229,0.06)",
+              border: "1px solid rgba(255,0,229,0.2)",
+              fontFamily: "Montserrat, sans-serif",
+            }}
+          >
+            + Create New Slime
+          </button>
+        ) : (
+          <div
+            className="rounded-xl p-3 space-y-3"
+            style={{
+              background: "rgba(255,0,229,0.05)",
+              border: "1px solid rgba(255,0,229,0.2)",
+            }}
+          >
+            <p
+              className="text-xs font-bold uppercase tracking-widest"
+              style={{ color: "#FF00E5", fontFamily: "Montserrat, sans-serif" }}
+            >
+              New Slime
+            </p>
+            <input
+              className={inputClass}
+              style={inputStyle}
+              placeholder="Slime name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+            />
+            <select
+              value={newType}
+              onChange={(e) => setNewType(e.target.value as SlimeType)}
+              className={inputClass}
+              style={selectStyle}
+            >
+              {(Object.entries(SLIME_TYPE_LABELS) as [SlimeType, string][]).map(
+                ([val, label]) => (
+                  <option
+                    key={val}
+                    value={val}
+                    style={{ background: "#0F0A1A" }}
+                  >
+                    {label}
+                  </option>
+                ),
+              )}
+            </select>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddNew(false);
+                  setNewName("");
+                }}
+                className="flex-1 py-2 rounded-lg text-xs font-semibold"
+                style={{
+                  color: "rgba(245,245,245,0.4)",
+                  background: "rgba(45,10,78,0.3)",
+                  border: "1px solid rgba(45,10,78,0.6)",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAddNew}
+                disabled={addingNew || !newName.trim()}
+                className="flex-1 py-2 rounded-lg text-xs font-bold disabled:opacity-50 transition-all"
+                style={{
+                  background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                  color: "#0A0A0A",
+                  fontFamily: "Montserrat, sans-serif",
+                }}
+              >
+                {addingNew ? "Adding..." : "Add to Drop"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -790,18 +818,18 @@ function generateRecurringDrops(
   startDate: Date,
   pattern: RecurrencePattern,
   parentId: string,
-): Array<{
-  name: string;
-  description: string | null;
-  shop_url: string | null;
-  brand_id: string;
-  announced_by: string;
-  drop_at: string;
-  status: DropStatus;
-  recurrence_pattern: RecurrencePattern;
-  parent_drop_id: string;
-}> {
-  const results = [];
+) {
+  const results: Array<{
+    name: string;
+    description: string | null;
+    shop_url: string | null;
+    brand_id: string;
+    announced_by: string;
+    drop_at: string;
+    status: DropStatus;
+    recurrence_pattern: RecurrencePattern;
+    parent_drop_id: string;
+  }> = [];
   const maxDate = new Date(startDate);
   maxDate.setFullYear(maxDate.getFullYear() + 1);
   let current = new Date(startDate);
@@ -838,6 +866,486 @@ function generateRecurringDrops(
     count++;
   }
   return results;
+}
+
+// ─── DetailPanel — extracted, receives all state as props ─────────────────────
+// CRITICAL FIX: Defined OUTSIDE DropsSplitPanel to prevent remount on parent re-render.
+
+interface DetailPanelProps {
+  selected: Drop;
+  attachedSlimes: BrandSlime[];
+  confirmDelete: boolean;
+  setConfirmDelete: (v: boolean) => void;
+  onStatusChange: (dropId: string, newStatus: DropStatus) => void;
+  onDetach: (slimeId: string) => void;
+  onDelete: () => void;
+}
+
+function DetailPanel({
+  selected,
+  attachedSlimes,
+  confirmDelete,
+  setConfirmDelete,
+  onStatusChange,
+  onDetach,
+  onDelete,
+}: DetailPanelProps) {
+  const styles = STATUS_STYLES[selected.status];
+  return (
+    <div className="p-6 space-y-5 overflow-y-auto flex-1">
+      <div className="flex items-start justify-between">
+        <h2
+          className="text-xl font-bold text-white"
+          style={{ fontFamily: "Montserrat, sans-serif" }}
+        >
+          {selected.name}
+        </h2>
+        <span
+          className="text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5 flex-shrink-0"
+          style={{
+            color: styles.color,
+            background: styles.bg,
+            border: `1px solid ${styles.border}`,
+            fontFamily: "Montserrat, sans-serif",
+          }}
+        >
+          {selected.status === "live" && (
+            <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+          )}
+          {styles.label.toUpperCase()}
+        </span>
+      </div>
+      <p
+        className="text-sm"
+        style={{
+          color: "rgba(245,245,245,0.4)",
+          fontFamily: "Inter, sans-serif",
+        }}
+      >
+        {formatDate(selected.drop_at)}
+      </p>
+      {selected.recurrence_pattern && (
+        <div
+          className="px-3 py-2 rounded-lg text-xs"
+          style={{
+            background: "rgba(57,255,20,0.07)",
+            border: "1px solid rgba(57,255,20,0.2)",
+            color: "#39FF14",
+          }}
+        >
+          Recurring ·{" "}
+          {selected.recurrence_pattern.frequency.charAt(0).toUpperCase() +
+            selected.recurrence_pattern.frequency.slice(1)}
+        </div>
+      )}
+      {selected.description && (
+        <p
+          className="text-sm"
+          style={{
+            color: "rgba(245,245,245,0.6)",
+            fontFamily: "Inter, sans-serif",
+            lineHeight: 1.6,
+          }}
+        >
+          {selected.description}
+        </p>
+      )}
+      {selected.shop_url && (
+        <a
+          href={selected.shop_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 text-sm font-medium hover:opacity-80 transition-opacity"
+          style={{ color: "#00F0FF" }}
+        >
+          View Shop Link
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path
+              d="M2 10L10 2M10 2H5M10 2V7"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
+        </a>
+      )}
+      {NEXT_STATUS[selected.status] && (
+        <div>
+          <p
+            className="text-xs font-bold uppercase tracking-widest mb-3"
+            style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
+          >
+            Update Status
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            {NEXT_STATUS[selected.status]!.map((action) => (
+              <button
+                key={action.status}
+                onClick={() => onStatusChange(selected.id, action.status)}
+                className="px-4 py-2 rounded-lg text-sm font-semibold transition-all"
+                style={{
+                  background:
+                    action.status === "live"
+                      ? "linear-gradient(135deg, #39FF14, #00F0FF)"
+                      : "rgba(45,10,78,0.4)",
+                  color:
+                    action.status === "live"
+                      ? "#0A0A0A"
+                      : "rgba(245,245,245,0.7)",
+                  border:
+                    action.status !== "live"
+                      ? "1px solid rgba(45,10,78,0.7)"
+                      : "none",
+                  fontFamily: "Montserrat, sans-serif",
+                }}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Slimes in this drop — shown in center panel as removable rows */}
+      <div
+        style={{ borderTop: "1px solid rgba(45,10,78,0.4)", paddingTop: 16 }}
+      >
+        <p
+          className="text-xs font-bold uppercase tracking-widest mb-3"
+          style={{ color: "#FF00E5", fontFamily: "Montserrat, sans-serif" }}
+        >
+          Slimes in Drop{" "}
+          {attachedSlimes.length > 0 && `(${attachedSlimes.length})`}
+        </p>
+        {attachedSlimes.length === 0 ? (
+          <p className="text-xs" style={{ color: "rgba(245,245,245,0.25)" }}>
+            No slimes added yet. Use the catalog panel to add slimes.
+          </p>
+        ) : (
+          <div className="space-y-1.5">
+            {attachedSlimes.map((slime) => (
+              <div
+                key={slime.id}
+                className="flex items-center justify-between px-3 py-2 rounded-lg"
+                style={{
+                  background: "rgba(57,255,20,0.07)",
+                  border: "1px solid rgba(57,255,20,0.18)",
+                }}
+              >
+                <div>
+                  <p
+                    className="text-sm font-medium text-white"
+                    style={{ fontFamily: "Inter, sans-serif" }}
+                  >
+                    {slime.name}
+                  </p>
+                  <p
+                    className="text-[11px]"
+                    style={{ color: "rgba(245,245,245,0.35)" }}
+                  >
+                    {SLIME_TYPE_LABELS[slime.slime_type]}
+                  </p>
+                </div>
+                <button
+                  onClick={() => onDetach(slime.id)}
+                  className="w-6 h-6 flex items-center justify-center rounded-md transition-all flex-shrink-0"
+                  style={{
+                    color: "#FF4444",
+                    background: "rgba(255,68,68,0.08)",
+                    border: "1px solid rgba(255,68,68,0.2)",
+                  }}
+                  title="Remove from drop"
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                    <path
+                      d="M1 1l8 8M9 1L1 9"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Delete */}
+      <div
+        style={{ borderTop: "1px solid rgba(45,10,78,0.4)", paddingTop: 16 }}
+      >
+        {!confirmDelete ? (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-all"
+            style={{
+              color: "#FF4444",
+              background: "rgba(255,68,68,0.08)",
+              border: "1px solid rgba(255,68,68,0.2)",
+              fontFamily: "Inter, sans-serif",
+            }}
+          >
+            Delete Drop
+          </button>
+        ) : (
+          <div className="flex items-center gap-3">
+            <p className="text-xs" style={{ color: "rgba(245,245,245,0.5)" }}>
+              Are you sure?
+            </p>
+            <button
+              onClick={onDelete}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg"
+              style={{
+                color: "#FF4444",
+                background: "rgba(255,68,68,0.15)",
+                border: "1px solid rgba(255,68,68,0.3)",
+              }}
+            >
+              Confirm Delete
+            </button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="text-xs"
+              style={{ color: "rgba(245,245,245,0.4)" }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── CreatePanel — extracted, receives all state as props ─────────────────────
+// CRITICAL FIX: Defined OUTSIDE DropsSplitPanel to prevent remount on parent re-render.
+
+interface CreatePanelProps {
+  form: {
+    name: string;
+    description: string;
+    drop_at: string;
+    status: DropStatus;
+    shop_url: string;
+  };
+  setForm: React.Dispatch<
+    React.SetStateAction<{
+      name: string;
+      description: string;
+      drop_at: string;
+      status: DropStatus;
+      shop_url: string;
+    }>
+  >;
+  attachedSlimes: BrandSlime[];
+  onDetach: (slimeId: string) => void;
+  recurringEnabled: boolean;
+  setRecurringEnabled: (v: boolean) => void;
+  recurrencePattern: RecurrencePattern;
+  setRecurrencePattern: (p: RecurrencePattern) => void;
+  error: string | null;
+  saving: boolean;
+  onSubmit: () => void;
+  onCancel: () => void;
+}
+
+function CreatePanel({
+  form,
+  setForm,
+  attachedSlimes,
+  onDetach,
+  recurringEnabled,
+  setRecurringEnabled,
+  recurrencePattern,
+  setRecurrencePattern,
+  error,
+  saving,
+  onSubmit,
+  onCancel,
+}: CreatePanelProps) {
+  return (
+    <div className="p-6 overflow-y-auto flex-1">
+      <div className="flex items-center justify-between mb-6">
+        <h2
+          className="text-xl font-bold text-white"
+          style={{ fontFamily: "Montserrat, sans-serif" }}
+        >
+          New Drop
+        </h2>
+        <button
+          onClick={onCancel}
+          className="text-xs px-3 py-1.5 rounded-lg"
+          style={{
+            color: "rgba(245,245,245,0.4)",
+            background: "rgba(45,10,78,0.3)",
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+      <div className="space-y-4 max-w-xl">
+        <div>
+          <FormLabel>Drop Name *</FormLabel>
+          <input
+            type="text"
+            value={form.name}
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            placeholder="Summer Pastel Collection"
+            className={inputClass}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <FormLabel>Date & Time</FormLabel>
+          <DateTimePicker
+            value={form.drop_at}
+            onChange={(iso) => setForm((f) => ({ ...f, drop_at: iso }))}
+          />
+        </div>
+        <div>
+          <FormLabel>Status</FormLabel>
+          <select
+            value={form.status}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, status: e.target.value as DropStatus }))
+            }
+            className={inputClass}
+            style={selectStyle}
+          >
+            {(
+              [
+                "announced",
+                "live",
+                "sold_out",
+                "restocked",
+                "cancelled",
+              ] as DropStatus[]
+            ).map((s) => (
+              <option key={s} value={s} style={{ background: "#0F0A1A" }}>
+                {s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <FormLabel>Description</FormLabel>
+          <textarea
+            value={form.description}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, description: e.target.value }))
+            }
+            rows={3}
+            placeholder="Tell fans what to expect..."
+            className={`${inputClass} resize-none`}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <FormLabel>Shop URL</FormLabel>
+          <input
+            type="url"
+            value={form.shop_url}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, shop_url: e.target.value }))
+            }
+            placeholder="https://yourshop.com/drop"
+            className={inputClass}
+            style={inputStyle}
+          />
+        </div>
+
+        {/* Slimes added to this drop — shown inline in center, removable with X */}
+        <div
+          style={{ borderTop: "1px solid rgba(45,10,78,0.4)", paddingTop: 16 }}
+        >
+          <p
+            className="text-xs font-bold uppercase tracking-widest mb-3"
+            style={{ color: "#FF00E5", fontFamily: "Montserrat, sans-serif" }}
+          >
+            Slimes in Drop{" "}
+            {attachedSlimes.length > 0 && `(${attachedSlimes.length})`}
+          </p>
+          {attachedSlimes.length === 0 ? (
+            <p className="text-xs" style={{ color: "rgba(245,245,245,0.25)" }}>
+              No slimes added yet. Use the catalog panel on the right to add
+              slimes.
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {attachedSlimes.map((slime) => (
+                <div
+                  key={slime.id}
+                  className="flex items-center justify-between px-3 py-2 rounded-lg"
+                  style={{
+                    background: "rgba(57,255,20,0.07)",
+                    border: "1px solid rgba(57,255,20,0.18)",
+                  }}
+                >
+                  <div>
+                    <p
+                      className="text-sm font-medium text-white"
+                      style={{ fontFamily: "Inter, sans-serif" }}
+                    >
+                      {slime.name}
+                    </p>
+                    <p
+                      className="text-[11px]"
+                      style={{ color: "rgba(245,245,245,0.35)" }}
+                    >
+                      {SLIME_TYPE_LABELS[slime.slime_type]}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => onDetach(slime.id)}
+                    className="w-6 h-6 flex items-center justify-center rounded-md transition-all flex-shrink-0"
+                    style={{
+                      color: "#FF4444",
+                      background: "rgba(255,68,68,0.08)",
+                      border: "1px solid rgba(255,68,68,0.2)",
+                    }}
+                    title="Remove from drop"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                      <path
+                        d="M1 1l8 8M9 1L1 9"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <RecurrenceBuilder
+          enabled={recurringEnabled}
+          onToggle={setRecurringEnabled}
+          pattern={recurrencePattern}
+          onChange={setRecurrencePattern}
+        />
+        {error && <p className="text-xs text-red-400">{error}</p>}
+        <button
+          onClick={onSubmit}
+          disabled={saving}
+          className="px-6 py-2.5 rounded-lg text-sm font-bold text-[#0A0A0A] disabled:opacity-50 hover:opacity-90 transition-opacity"
+          style={{
+            background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+            fontFamily: "Montserrat, sans-serif",
+          }}
+        >
+          {saving
+            ? "Creating..."
+            : recurringEnabled
+              ? "Create Drop Series"
+              : "Create Drop"}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -878,6 +1386,7 @@ export default function DropsSplitPanel({
   const displayed = tab === "upcoming" ? upcoming : past;
   const selected = drops.find((d) => d.id === selectedId) ?? null;
 
+  // Fetch slimes attached to selected drop when entering detail mode
   useEffect(() => {
     if (!selectedId || mode !== "detail") return;
     supabase
@@ -991,23 +1500,22 @@ export default function DropsSplitPanel({
   };
 
   const handleAttachSlime = async (slime: BrandSlime) => {
-    if (!selectedId) {
-      setAttachedSlimes((prev) => [...prev, slime]);
-      return;
+    if (selectedId) {
+      await supabase
+        .from("drop_slimes")
+        .insert({ drop_id: selectedId, slime_id: slime.id });
     }
-    await supabase
-      .from("drop_slimes")
-      .insert({ drop_id: selectedId, slime_id: slime.id });
     setAttachedSlimes((prev) => [...prev, slime]);
   };
 
   const handleDetachSlime = async (slimeId: string) => {
-    if (selectedId)
+    if (selectedId) {
       await supabase
         .from("drop_slimes")
         .delete()
         .eq("drop_id", selectedId)
         .eq("slime_id", slimeId);
+    }
     setAttachedSlimes((prev) => prev.filter((s) => s.id !== slimeId));
   };
 
@@ -1028,317 +1536,17 @@ export default function DropsSplitPanel({
       .single();
     if (err || !data) return null;
     const newSlime = data as BrandSlime;
-    if (selectedId)
+    if (selectedId) {
       await supabase
         .from("drop_slimes")
         .insert({ drop_id: selectedId, slime_id: newSlime.id });
+    }
     setAttachedSlimes((prev) => [...prev, newSlime]);
     return newSlime;
   };
 
-  const DetailPanel = () => {
-    if (!selected) return null;
-    const styles = STATUS_STYLES[selected.status];
-    return (
-      <div className="p-6 space-y-5 overflow-y-auto flex-1">
-        <div className="flex items-start justify-between">
-          <h2
-            className="text-xl font-bold text-white"
-            style={{ fontFamily: "Montserrat, sans-serif" }}
-          >
-            {selected.name}
-          </h2>
-          <span
-            className="text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5 flex-shrink-0"
-            style={{
-              color: styles.color,
-              background: styles.bg,
-              border: `1px solid ${styles.border}`,
-              fontFamily: "Montserrat, sans-serif",
-            }}
-          >
-            {selected.status === "live" && (
-              <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
-            )}
-            {styles.label.toUpperCase()}
-          </span>
-        </div>
-        <p
-          className="text-sm"
-          style={{
-            color: "rgba(245,245,245,0.4)",
-            fontFamily: "Inter, sans-serif",
-          }}
-        >
-          {formatDate(selected.drop_at)}
-        </p>
-        {selected.recurrence_pattern && (
-          <div
-            className="px-3 py-2 rounded-lg text-xs"
-            style={{
-              background: "rgba(57,255,20,0.07)",
-              border: "1px solid rgba(57,255,20,0.2)",
-              color: "#39FF14",
-            }}
-          >
-            Recurring ·{" "}
-            {selected.recurrence_pattern.frequency.charAt(0).toUpperCase() +
-              selected.recurrence_pattern.frequency.slice(1)}
-          </div>
-        )}
-        {selected.description && (
-          <p
-            className="text-sm"
-            style={{
-              color: "rgba(245,245,245,0.6)",
-              fontFamily: "Inter, sans-serif",
-              lineHeight: 1.6,
-            }}
-          >
-            {selected.description}
-          </p>
-        )}
-        {selected.shop_url && (
-          <a
-            href={selected.shop_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-sm font-medium hover:opacity-80 transition-opacity"
-            style={{ color: "#00F0FF" }}
-          >
-            View Shop Link
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path
-                d="M2 10L10 2M10 2H5M10 2V7"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
-          </a>
-        )}
-        {NEXT_STATUS[selected.status] && (
-          <div>
-            <p
-              className="text-xs font-bold uppercase tracking-widest mb-3"
-              style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
-            >
-              Update Status
-            </p>
-            <div className="flex gap-2 flex-wrap">
-              {NEXT_STATUS[selected.status]!.map((action) => (
-                <button
-                  key={action.status}
-                  onClick={() => handleStatusChange(selected.id, action.status)}
-                  className="px-4 py-2 rounded-lg text-sm font-semibold transition-all"
-                  style={{
-                    background:
-                      action.status === "live"
-                        ? "linear-gradient(135deg, #39FF14, #00F0FF)"
-                        : "rgba(45,10,78,0.4)",
-                    color:
-                      action.status === "live"
-                        ? "#0A0A0A"
-                        : "rgba(245,245,245,0.7)",
-                    border:
-                      action.status !== "live"
-                        ? "1px solid rgba(45,10,78,0.7)"
-                        : "none",
-                    fontFamily: "Montserrat, sans-serif",
-                  }}
-                >
-                  {action.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        <div
-          style={{ borderTop: "1px solid rgba(45,10,78,0.4)", paddingTop: 16 }}
-        >
-          <p
-            className="text-xs font-bold uppercase tracking-widest mb-3"
-            style={{ color: "#FF00E5", fontFamily: "Montserrat, sans-serif" }}
-          >
-            Slimes in Drop
-          </p>
-          <SlimePicker
-            brandId={brandId}
-            attached={attachedSlimes}
-            onAttach={handleAttachSlime}
-            onDetach={handleDetachSlime}
-            onAddNew={handleAddNewSlime}
-          />
-        </div>
-        <div
-          style={{ borderTop: "1px solid rgba(45,10,78,0.4)", paddingTop: 16 }}
-        >
-          {!confirmDelete ? (
-            <button
-              onClick={() => setConfirmDelete(true)}
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-all"
-              style={{
-                color: "#FF4444",
-                background: "rgba(255,68,68,0.08)",
-                border: "1px solid rgba(255,68,68,0.2)",
-                fontFamily: "Inter, sans-serif",
-              }}
-            >
-              Delete Drop
-            </button>
-          ) : (
-            <div className="flex items-center gap-3">
-              <p className="text-xs" style={{ color: "rgba(245,245,245,0.5)" }}>
-                Are you sure?
-              </p>
-              <button
-                onClick={handleDelete}
-                className="text-xs font-semibold px-3 py-1.5 rounded-lg"
-                style={{
-                  color: "#FF4444",
-                  background: "rgba(255,68,68,0.15)",
-                  border: "1px solid rgba(255,68,68,0.3)",
-                }}
-              >
-                Confirm Delete
-              </button>
-              <button
-                onClick={() => setConfirmDelete(false)}
-                className="text-xs"
-                style={{ color: "rgba(245,245,245,0.4)" }}
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const CreatePanel = () => (
-    <div className="p-6 overflow-y-auto flex-1">
-      <div className="flex items-center justify-between mb-6">
-        <h2
-          className="text-xl font-bold text-white"
-          style={{ fontFamily: "Montserrat, sans-serif" }}
-        >
-          New Drop
-        </h2>
-        <button
-          onClick={() => setMode("empty")}
-          className="text-xs px-3 py-1.5 rounded-lg"
-          style={{
-            color: "rgba(245,245,245,0.4)",
-            background: "rgba(45,10,78,0.3)",
-          }}
-        >
-          Cancel
-        </button>
-      </div>
-      <div className="space-y-4 max-w-xl">
-        <div>
-          <FormLabel>Drop Name *</FormLabel>
-          <input
-            type="text"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="Summer Pastel Collection"
-            className={inputClass}
-            style={inputStyle}
-          />
-        </div>
-        <div>
-          <FormLabel>Date & Time</FormLabel>
-          <DateTimePicker
-            value={form.drop_at}
-            onChange={(iso) => setForm((f) => ({ ...f, drop_at: iso }))}
-          />
-        </div>
-        <div>
-          <FormLabel>Status</FormLabel>
-          <select
-            value={form.status}
-            onChange={(e) =>
-              setForm({ ...form, status: e.target.value as DropStatus })
-            }
-            className={inputClass}
-            style={selectStyle}
-          >
-            {(
-              [
-                "announced",
-                "live",
-                "sold_out",
-                "restocked",
-                "cancelled",
-              ] as DropStatus[]
-            ).map((s) => (
-              <option key={s} value={s} style={{ background: "#0F0A1A" }}>
-                {s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <FormLabel>Description</FormLabel>
-          <textarea
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            rows={3}
-            placeholder="Tell fans what to expect..."
-            className={`${inputClass} resize-none`}
-            style={inputStyle}
-          />
-        </div>
-        <div>
-          <FormLabel>Shop URL</FormLabel>
-          <input
-            type="url"
-            value={form.shop_url}
-            onChange={(e) => setForm({ ...form, shop_url: e.target.value })}
-            placeholder="https://yourshop.com/drop"
-            className={inputClass}
-            style={inputStyle}
-          />
-        </div>
-        <div
-          style={{ borderTop: "1px solid rgba(45,10,78,0.4)", paddingTop: 16 }}
-        >
-          <FormLabel>Slimes in Drop</FormLabel>
-          <SlimePicker
-            brandId={brandId}
-            attached={attachedSlimes}
-            onAttach={handleAttachSlime}
-            onDetach={handleDetachSlime}
-            onAddNew={handleAddNewSlime}
-          />
-        </div>
-        <RecurrenceBuilder
-          enabled={recurringEnabled}
-          onToggle={setRecurringEnabled}
-          pattern={recurrencePattern}
-          onChange={setRecurrencePattern}
-        />
-        {error && <p className="text-xs text-red-400">{error}</p>}
-        <button
-          onClick={handleCreate}
-          disabled={saving}
-          className="px-6 py-2.5 rounded-lg text-sm font-bold text-[#0A0A0A] disabled:opacity-50 hover:opacity-90 transition-opacity"
-          style={{
-            background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-            fontFamily: "Montserrat, sans-serif",
-          }}
-        >
-          {saving
-            ? "Creating..."
-            : recurringEnabled
-              ? "Create Drop Series"
-              : "Create Drop"}
-        </button>
-      </div>
-    </div>
-  );
+  const attachedIds = new Set(attachedSlimes.map((s) => s.id));
+  const catalogActive = mode === "create" || mode === "detail";
 
   return (
     <div
@@ -1350,10 +1558,10 @@ export default function DropsSplitPanel({
         minHeight: "520px",
       }}
     >
-      {/* ── Left panel ── */}
+      {/* ── LEFT PANEL: Drop list ── */}
       <div
-        className="flex flex-col flex-shrink-0 w-full md:w-80"
-        style={{ borderRight: "1px solid rgba(45,10,78,0.6)" }}
+        className="flex flex-col flex-shrink-0"
+        style={{ width: 280, borderRight: "1px solid rgba(45,10,78,0.6)" }}
       >
         <div
           className="flex gap-1 p-3"
@@ -1473,6 +1681,88 @@ export default function DropsSplitPanel({
         </div>
       </div>
 
+      {/* ── CENTER PANEL: Drop form / detail ── */}
+      <div className="hidden md:flex flex-1 flex-col overflow-hidden">
+        {mode === "empty" && (
+          <div className="flex-1 flex items-center justify-center p-8">
+            <div className="text-center">
+              <div
+                className="w-16 h-16 rounded-xl mx-auto mb-4 flex items-center justify-center"
+                style={{
+                  background: "rgba(45,10,78,0.4)",
+                  border: "1px solid rgba(45,10,78,0.7)",
+                }}
+              >
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  style={{ color: "rgba(245,245,245,0.2)" }}
+                >
+                  <path
+                    d="M12 3L15.5 10.5H20.5L16.5 15L18 21L12 17.5L6 21L7.5 15L3.5 10.5H8.5L12 3Z"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </div>
+              <p
+                className="text-sm"
+                style={{
+                  color: "rgba(245,245,245,0.3)",
+                  fontFamily: "Inter, sans-serif",
+                }}
+              >
+                Select a drop or create a new one
+              </p>
+            </div>
+          </div>
+        )}
+        {mode === "detail" && selected && (
+          <DetailPanel
+            selected={selected}
+            attachedSlimes={attachedSlimes}
+            confirmDelete={confirmDelete}
+            setConfirmDelete={setConfirmDelete}
+            onStatusChange={handleStatusChange}
+            onDetach={handleDetachSlime}
+            onDelete={handleDelete}
+          />
+        )}
+        {mode === "create" && (
+          <CreatePanel
+            form={form}
+            setForm={setForm}
+            attachedSlimes={attachedSlimes}
+            onDetach={handleDetachSlime}
+            recurringEnabled={recurringEnabled}
+            setRecurringEnabled={setRecurringEnabled}
+            recurrencePattern={recurrencePattern}
+            setRecurrencePattern={setRecurrencePattern}
+            error={error}
+            saving={saving}
+            onSubmit={handleCreate}
+            onCancel={() => setMode("empty")}
+          />
+        )}
+      </div>
+
+      {/* ── RIGHT PANEL: Brand catalog browser ── */}
+      <div
+        className="hidden md:flex flex-col flex-shrink-0"
+        style={{ width: 300 }}
+      >
+        <CatalogPanel
+          brandId={brandId}
+          attachedIds={attachedIds}
+          onAttach={handleAttachSlime}
+          onAddNew={handleAddNewSlime}
+          isActive={catalogActive}
+        />
+      </div>
+
       {/* ── Mobile bottom sheet ── */}
       {((mode === "detail" && selected !== null) || mode === "create") && (
         <div
@@ -1525,56 +1815,60 @@ export default function DropsSplitPanel({
                 </svg>
               </button>
             </div>
-            <div className="overflow-y-auto flex-1 px-5 py-4 pb-10">
-              {mode === "detail" && selected && <DetailPanel />}
-              {mode === "create" && <CreatePanel />}
+            <div className="overflow-y-auto flex-1 pb-10">
+              {mode === "detail" && selected && (
+                <DetailPanel
+                  selected={selected}
+                  attachedSlimes={attachedSlimes}
+                  confirmDelete={confirmDelete}
+                  setConfirmDelete={setConfirmDelete}
+                  onStatusChange={handleStatusChange}
+                  onDetach={handleDetachSlime}
+                  onDelete={handleDelete}
+                />
+              )}
+              {mode === "create" && (
+                <CreatePanel
+                  form={form}
+                  setForm={setForm}
+                  attachedSlimes={attachedSlimes}
+                  onDetach={handleDetachSlime}
+                  recurringEnabled={recurringEnabled}
+                  setRecurringEnabled={setRecurringEnabled}
+                  recurrencePattern={recurrencePattern}
+                  setRecurrencePattern={setRecurrencePattern}
+                  error={error}
+                  saving={saving}
+                  onSubmit={handleCreate}
+                  onCancel={() => setMode("empty")}
+                />
+              )}
+              {/* Mobile catalog — shown below the form */}
+              <div
+                className="px-5 pb-4 pt-2"
+                style={{ borderTop: "1px solid rgba(45,10,78,0.4)" }}
+              >
+                <p
+                  className="text-xs font-bold uppercase tracking-widest mb-3"
+                  style={{
+                    color: "#00F0FF",
+                    fontFamily: "Montserrat, sans-serif",
+                  }}
+                >
+                  Add from Catalog
+                </p>
+                <CatalogPanel
+                  brandId={brandId}
+                  attachedIds={attachedIds}
+                  onAttach={handleAttachSlime}
+                  onAddNew={handleAddNewSlime}
+                  isActive={true}
+                />
+              </div>
             </div>
           </div>
         </div>
       )}
-
-      {/* ── Desktop right panel ── */}
-      <div className="hidden md:flex flex-1 flex-col overflow-hidden">
-        {mode === "empty" && (
-          <div className="flex-1 flex items-center justify-center p-8">
-            <div className="text-center">
-              <div
-                className="w-16 h-16 rounded-xl mx-auto mb-4 flex items-center justify-center"
-                style={{
-                  background: "rgba(45,10,78,0.4)",
-                  border: "1px solid rgba(45,10,78,0.7)",
-                }}
-              >
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  style={{ color: "rgba(245,245,245,0.2)" }}
-                >
-                  <path
-                    d="M12 3L15.5 10.5H20.5L16.5 15L18 21L12 17.5L6 21L7.5 15L3.5 10.5H8.5L12 3Z"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-              <p
-                className="text-sm"
-                style={{
-                  color: "rgba(245,245,245,0.3)",
-                  fontFamily: "Inter, sans-serif",
-                }}
-              >
-                Select a drop to view details or create a new one
-              </p>
-            </div>
-          </div>
-        )}
-        {mode === "detail" && selected && <DetailPanel />}
-        {mode === "create" && <CreatePanel />}
-      </div>
     </div>
   );
 }

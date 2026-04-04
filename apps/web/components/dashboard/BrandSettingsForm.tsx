@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { ImageUpload } from "@/components/ImageUpload";
 
 interface Brand {
   id: string;
@@ -41,6 +42,7 @@ export default function BrandSettingsForm({
     founded_year: brand.founded_year?.toString() ?? "",
     restock_schedule: brand.restock_schedule ?? "",
   });
+  const [logoUrl, setLogoUrl] = useState<string | null>(brand.logo_url ?? null);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +74,7 @@ export default function BrandSettingsForm({
         location: form.location || null,
         founded_year: form.founded_year ? parseInt(form.founded_year) : null,
         restock_schedule: form.restock_schedule || null,
+        logo_url: logoUrl,
       })
       .eq("id", brand.id)
       .eq("owner_id", userId);
@@ -79,7 +82,9 @@ export default function BrandSettingsForm({
     setSaving(false);
     if (err) {
       setError(err.message);
-    } else showToast("✓ Brand profile saved!");
+    } else {
+      showToast("Brand profile saved");
+    }
   };
 
   const fields = [
@@ -142,7 +147,6 @@ export default function BrandSettingsForm({
 
   return (
     <div className="px-4 py-5 space-y-5">
-      {/* Header */}
       <div>
         <p className="text-xs font-bold uppercase tracking-widest text-[#00F0FF]">
           Brand Settings
@@ -151,7 +155,23 @@ export default function BrandSettingsForm({
       </div>
 
       <div className="space-y-4">
-        {/* Text fields */}
+        <div>
+          <label className="text-xs font-bold uppercase tracking-widest text-[#6B5A7E] block mb-3">
+            Brand Logo
+          </label>
+          <div className="w-32">
+            <ImageUpload
+              bucket="avatars"
+              userId={userId}
+              existingUrl={logoUrl}
+              onUploadComplete={(url: string) => setLogoUrl(url)}
+              onRemove={() => setLogoUrl(null)}
+              label="Upload Logo"
+              aspectRatio="square"
+            />
+          </div>
+        </div>
+
         {fields.map((field) => (
           <div key={field.key}>
             <label className="text-xs font-bold uppercase tracking-widest text-[#6B5A7E] block mb-1.5">
@@ -174,11 +194,18 @@ export default function BrandSettingsForm({
           </div>
         ))}
 
-        {/* Bio */}
         <div>
           <label className="text-xs font-bold uppercase tracking-widest text-[#6B5A7E] block mb-1.5">
             Bio{" "}
-            <span className="text-[#2D0A4E] font-normal normal-case tracking-normal">
+            <span
+              style={{
+                color: "rgba(245,245,245,0.3)",
+                fontWeight: 400,
+                textTransform: "none",
+                letterSpacing: 0,
+                fontSize: 11,
+              }}
+            >
               (max 280 chars)
             </span>
           </label>
@@ -200,7 +227,6 @@ export default function BrandSettingsForm({
           </p>
         </div>
 
-        {/* Description */}
         <div>
           <label className="text-xs font-bold uppercase tracking-widest text-[#6B5A7E] block mb-1.5">
             Full Description
@@ -240,7 +266,6 @@ export default function BrandSettingsForm({
         </button>
       </div>
 
-      {/* Toast */}
       {toast && (
         <div
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-full text-sm font-semibold text-[#0A0A0A] shadow-lg"

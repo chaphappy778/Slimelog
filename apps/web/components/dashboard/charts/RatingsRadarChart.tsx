@@ -99,8 +99,9 @@ export default function RatingsRadarChart({ data }: RatingsRadarChartProps) {
           </p>
         </div>
       ) : (
-        <div className="flex-1 min-h-0">
-          <ResponsiveContainer width="100%" height="100%">
+        // [FIX 1] Explicit minHeight wrapper prevents width(-1)/height(-1) warnings.
+        <div style={{ width: "100%", minHeight: 260 }}>
+          <ResponsiveContainer width="100%" height={260} minWidth={0}>
             <RadarChart
               data={chartData}
               margin={{ top: 10, right: 30, bottom: 10, left: 30 }}

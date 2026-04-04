@@ -23,10 +23,6 @@ const COMPRESS_QUALITY = 0.8;
 
 // ─── Canvas compression ───────────────────────────────────────────────────────
 
-/**
- * Resizes an image file to MAX_DIMENSION on its longest side and converts
- * it to WebP using the Canvas API. Returns a Blob.
- */
 async function compressImage(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -37,7 +33,6 @@ async function compressImage(file: File): Promise<Blob> {
 
       let { width, height } = img;
 
-      // Scale down if needed
       if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
         if (width >= height) {
           height = Math.round((height * MAX_DIMENSION) / width);
@@ -102,6 +97,119 @@ function aspectRatioClass(ar: ImageUploadProps["aspectRatio"]): string {
   }
 }
 
+// ─── SVG Icons ────────────────────────────────────────────────────────────────
+
+function CameraIcon({
+  size = 32,
+  color = "#39FF14",
+}: {
+  size?: number;
+  color?: string;
+}) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="13" r="4" stroke={color} strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <polyline
+        points="3 6 5 6 21 6"
+        stroke="#0A0A0A"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M19 6l-1 14H6L5 6"
+        stroke="#0A0A0A"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M10 11v6M14 11v6"
+        stroke="#0A0A0A"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"
+        stroke="#0A0A0A"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function ReplaceIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+        stroke="#0A0A0A"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="13" r="4" stroke="#0A0A0A" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function AlertIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <circle cx="12" cy="12" r="10" stroke="#f87171" strokeWidth="1.5" />
+      <line
+        x1="12"
+        y1="8"
+        x2="12"
+        y2="12"
+        stroke="#f87171"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <circle cx="12" cy="16" r="1" fill="#f87171" />
+    </svg>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function ImageUpload({
@@ -118,7 +226,7 @@ export function ImageUpload({
     existingUrl ?? null,
   );
   const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0); // 0–100
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const supabase = createBrowserClient(
@@ -131,27 +239,20 @@ export function ImageUpload({
       const file = e.target.files?.[0];
       if (!file) return;
 
-      // Reset state
       setError(null);
       setProgress(0);
 
-      // Show a local preview immediately so the UI feels snappy
       const localPreview = URL.createObjectURL(file);
       setPreviewUrl(localPreview);
-
       setUploading(true);
 
       try {
-        // ── 1. Compress ───────────────────────────────────────────────────────
         setProgress(20);
         const compressed = await compressImage(file);
         setProgress(40);
 
-        // ── 2. Build path ─────────────────────────────────────────────────────
-        // Path: {userId}/{timestamp}-{random}.webp
         const filePath = generateFilePath(userId);
 
-        // ── 3. Upload to Supabase Storage ─────────────────────────────────────
         setProgress(60);
         const { error: uploadError } = await supabase.storage
           .from(bucket)
@@ -160,16 +261,10 @@ export function ImageUpload({
             upsert: false,
           });
 
-        if (uploadError) {
-          // Common RLS error: "new row violates row-level security policy"
-          // This means the userId prop doesn't match auth.uid() — likely a
-          // server component passing a user id to an unauthenticated client.
-          throw new Error(uploadError.message);
-        }
+        if (uploadError) throw new Error(uploadError.message);
 
         setProgress(90);
 
-        // ── 4. Get public URL ─────────────────────────────────────────────────
         const {
           data: { publicUrl },
         } = supabase.storage.from(bucket).getPublicUrl(filePath);
@@ -181,12 +276,10 @@ export function ImageUpload({
         setError(
           err instanceof Error ? err.message : "Upload failed. Try again.",
         );
-        // Revert to existing URL on failure
         setPreviewUrl(existingUrl ?? null);
         URL.revokeObjectURL(localPreview);
       } finally {
         setUploading(false);
-        // Reset the file input so the same file can be re-selected
         if (inputRef.current) inputRef.current.value = "";
       }
     },
@@ -206,7 +299,6 @@ export function ImageUpload({
 
   return (
     <div className="flex flex-col gap-2">
-      {/* Hidden file input */}
       <input
         ref={inputRef}
         type="file"
@@ -216,10 +308,8 @@ export function ImageUpload({
         aria-label={label}
       />
 
-      {/* Upload area */}
       <div className={`relative w-full ${arClass} rounded-2xl overflow-hidden`}>
         {hasImage ? (
-          /* ── Image preview ─────────────────────────────────────────────── */
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -228,7 +318,6 @@ export function ImageUpload({
               className="absolute inset-0 w-full h-full object-cover"
             />
 
-            {/* Overlay on upload */}
             {uploading && (
               <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-3">
                 <div className="w-2/3 h-1.5 rounded-full bg-white/20 overflow-hidden">
@@ -238,39 +327,37 @@ export function ImageUpload({
                   />
                 </div>
                 <p className="text-white text-xs font-semibold tracking-wide">
-                  Uploading… {progress}%
+                  Uploading {progress}%
                 </p>
               </div>
             )}
 
-            {/* Controls: replace + remove */}
             {!uploading && (
               <div className="absolute bottom-2 right-2 flex gap-2">
                 <button
                   type="button"
                   onClick={() => inputRef.current?.click()}
-                  className="w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-md text-base active:scale-95 transition-transform"
+                  className="w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-md active:scale-95 transition-transform"
                   aria-label="Replace photo"
                   title="Replace photo"
                 >
-                  📷
+                  <ReplaceIcon />
                 </button>
                 {onRemove && (
                   <button
                     type="button"
                     onClick={handleRemove}
-                    className="w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-md text-base active:scale-95 transition-transform"
+                    className="w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-md active:scale-95 transition-transform"
                     aria-label="Remove photo"
                     title="Remove photo"
                   >
-                    🗑️
+                    <TrashIcon />
                   </button>
                 )}
               </div>
             )}
           </>
         ) : (
-          /* ── Empty tap-to-upload area ──────────────────────────────────── */
           <button
             type="button"
             onClick={() => !uploading && inputRef.current?.click()}
@@ -292,7 +379,7 @@ export function ImageUpload({
               </>
             ) : (
               <>
-                <span className="text-4xl">📷</span>
+                <CameraIcon size={32} color="#39FF14" />
                 <span className="text-sm font-semibold text-slime-accent">
                   {label}
                 </span>
@@ -305,10 +392,10 @@ export function ImageUpload({
         )}
       </div>
 
-      {/* Error message */}
       {error && (
-        <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-3 py-2 text-xs text-red-400 leading-snug">
-          ⚠️ {error}
+        <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-3 py-2 text-xs text-red-400 leading-snug flex items-center gap-2">
+          <AlertIcon />
+          {error}
         </div>
       )}
     </div>

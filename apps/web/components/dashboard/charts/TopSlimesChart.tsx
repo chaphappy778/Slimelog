@@ -43,6 +43,8 @@ const CustomTooltip = ({ active, payload }: any) => {
   );
 };
 
+// CustomBar uses plain SVG <defs> inside a <g> — this is not a Recharts import,
+// it is raw SVG and is valid here.
 const CustomBar = (props: any) => {
   const { x, y, width, height, index } = props;
   const gradientId = `slimeBarGrad-${index}`;
@@ -102,8 +104,9 @@ export default function TopSlimesChart({ data }: TopSlimesChartProps) {
           </p>
         </div>
       ) : (
-        <div className="flex-1 min-h-0">
-          <ResponsiveContainer width="100%" height="100%">
+        // [FIX 1] Explicit minHeight wrapper prevents width(-1)/height(-1) warnings.
+        <div style={{ width: "100%", minHeight: 200 }}>
+          <ResponsiveContainer width="100%" height={200} minWidth={0}>
             <BarChart
               data={top5}
               layout="vertical"
