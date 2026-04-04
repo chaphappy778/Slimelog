@@ -17,6 +17,8 @@ type FeedLog = {
   brand_name_raw: string | null;
   slime_type: string | null;
   rating_overall: number | null;
+  like_count: number;
+  comment_count: number;
   profiles: { username: string | null }[] | null;
   brands: { name: string | null }[] | null;
 };
@@ -164,6 +166,48 @@ function FeedCard({ log }: { log: FeedLog }) {
 
           <Stars rating={log.rating_overall} />
 
+          {/* Like + comment counts — passive read-only indicators */}
+          <div className="flex items-center gap-4">
+            {/* Like count */}
+            <div className="flex items-center gap-1.5">
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="rgba(255,255,255,0.35)"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+              </svg>
+              <span className="text-[11px] text-slime-muted">
+                {log.like_count}
+              </span>
+            </div>
+            {/* Comment count */}
+            <div className="flex items-center gap-1.5">
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="rgba(255,255,255,0.35)"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              <span className="text-[11px] text-slime-muted">
+                {log.comment_count}
+              </span>
+            </div>
+          </div>
+
           <div className="flex items-center justify-between pt-1 border-t border-slime-border/50">
             {username ? (
               <Link
@@ -290,11 +334,16 @@ export default async function HomePage({
     redirect("/landing");
   }
 
+  // ─── Community feed ──────────────────────────────────────────────────────
+
   let communityLogs: FeedLog[] = [];
   let communityError = false;
 
   if (activeTab === "community") {
-    const { data, error } = await supabase
+    // [Change 1] Added like_count and comment_count via Postgres aggregate subqueries.
+    // Supabase PostgREST does not support inline aggregates in select strings,
+    // so we fetch the base logs first, then fetch counts in two bulk queries.
+    const { data: baseData, error: baseError } = await supabase
       .from("collection_logs")
       .select(
         `id, created_at, slime_name, brand_name_raw, slime_type, rating_overall,
@@ -305,9 +354,46 @@ export default async function HomePage({
       .order("created_at", { ascending: false })
       .limit(20);
 
-    communityLogs = (error ? [] : (data ?? [])) as unknown as FeedLog[];
-    communityError = !!error;
+    if (baseError) {
+      communityError = true;
+    } else {
+      const rows = (baseData ?? []) as unknown as Omit<
+        FeedLog,
+        "like_count" | "comment_count"
+      >[];
+      const ids = rows.map((r) => r.id);
+
+      // [Change 2] Bulk-fetch like counts for all returned log ids.
+      const { data: likesData } = await supabase
+        .from("likes")
+        .select("log_id")
+        .in("log_id", ids);
+
+      // [Change 3] Bulk-fetch comment counts for all returned log ids.
+      const { data: commentsData } = await supabase
+        .from("comments")
+        .select("log_id")
+        .in("log_id", ids);
+
+      // Build count maps from the bulk results.
+      const likeCountMap: Record<string, number> = {};
+      const commentCountMap: Record<string, number> = {};
+      for (const row of likesData ?? []) {
+        likeCountMap[row.log_id] = (likeCountMap[row.log_id] ?? 0) + 1;
+      }
+      for (const row of commentsData ?? []) {
+        commentCountMap[row.log_id] = (commentCountMap[row.log_id] ?? 0) + 1;
+      }
+
+      communityLogs = rows.map((r) => ({
+        ...r,
+        like_count: likeCountMap[r.id] ?? 0,
+        comment_count: commentCountMap[r.id] ?? 0,
+      }));
+    }
   }
+
+  // ─── Following feed ──────────────────────────────────────────────────────
 
   let followingLogs: FeedLog[] = [];
   let followingError = false;
@@ -339,16 +425,43 @@ export default async function HomePage({
         if (activityErr) {
           followingError = true;
         } else {
-          followingLogs = (
-            (activityRows ?? []) as unknown as ActivityFeedRow[]
-          ).map((row): FeedLog => {
+          const typedRows = (activityRows ??
+            []) as unknown as ActivityFeedRow[];
+
+          // [Change 4] Bulk-fetch like and comment counts for following-feed log ids.
+          const followingLogIds = typedRows
+            .map((r) => r.log_id)
+            .filter((id): id is string => id != null);
+
+          const { data: fLikesData } = await supabase
+            .from("likes")
+            .select("log_id")
+            .in("log_id", followingLogIds);
+
+          const { data: fCommentsData } = await supabase
+            .from("comments")
+            .select("log_id")
+            .in("log_id", followingLogIds);
+
+          const fLikeCountMap: Record<string, number> = {};
+          const fCommentCountMap: Record<string, number> = {};
+          for (const row of fLikesData ?? []) {
+            fLikeCountMap[row.log_id] = (fLikeCountMap[row.log_id] ?? 0) + 1;
+          }
+          for (const row of fCommentsData ?? []) {
+            fCommentCountMap[row.log_id] =
+              (fCommentCountMap[row.log_id] ?? 0) + 1;
+          }
+
+          followingLogs = typedRows.map((row): FeedLog => {
             const meta = row.metadata ?? {};
             const profileObj = Array.isArray(row.profiles)
               ? ((row.profiles as { username: string | null }[])[0] ?? null)
               : (row.profiles as { username: string | null } | null);
+            const logId = row.log_id ?? row.id;
 
             return {
-              id: row.log_id ?? row.id,
+              id: logId,
               created_at: row.created_at,
               slime_name: meta.slime_name ?? null,
               brand_name_raw: meta.brand_name_raw ?? null,
@@ -359,6 +472,8 @@ export default async function HomePage({
                   : null,
               profiles: profileObj ? [{ username: profileObj.username }] : null,
               brands: null,
+              like_count: fLikeCountMap[logId] ?? 0,
+              comment_count: fCommentCountMap[logId] ?? 0,
             };
           });
         }

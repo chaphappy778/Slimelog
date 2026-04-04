@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import type { CollectionLog } from "@/lib/types";
+import LikeButton from "@/components/collection/LikeButton";
+import CommentSection from "@/components/collection/CommentSection";
 
 const TYPE_COLORS: Record<string, string> = {
   butter: "#FFB347",
@@ -85,9 +87,22 @@ interface Props {
   log: CollectionLog;
   brandColor?: string;
   onClose: () => void;
+  // Like + comment data passed in from the parent that fetched counts
+  likeCount: number;
+  commentCount: number;
+  isLikedByCurrentUser: boolean;
+  currentUserId: string | null;
 }
 
-export default function SlimeDetailCard({ log, brandColor, onClose }: Props) {
+export default function SlimeDetailCard({
+  log,
+  brandColor,
+  onClose,
+  likeCount,
+  commentCount,
+  isLikedByCurrentUser,
+  currentUserId,
+}: Props) {
   const activeDimensions = RATING_DIMENSIONS.filter(
     ({ key }) => typeof log[key] === "number",
   );
@@ -382,7 +397,45 @@ export default function SlimeDetailCard({ log, brandColor, onClose }: Props) {
         )}
       </div>
 
-      {/* Row 8: View full details */}
+      {/* Row 8: Like button */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <LikeButton
+          logId={log.id}
+          initialCount={likeCount}
+          initialLiked={isLikedByCurrentUser}
+          currentUserId={currentUserId}
+        />
+        {/* Comment count indicator — read-only, comments are below */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="rgba(255,255,255,0.4)"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          <span
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: "rgba(255,255,255,0.4)",
+            }}
+          >
+            {commentCount}
+          </span>
+        </div>
+      </div>
+
+      {/* Row 9: Comments */}
+      <CommentSection logId={log.id} currentUserId={currentUserId} />
+
+      {/* Row 10: View full details */}
       <Link
         href={`/slimes/${log.id}`}
         style={{
