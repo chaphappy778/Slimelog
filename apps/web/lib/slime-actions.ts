@@ -11,23 +11,7 @@ import { revalidatePath } from "next/cache";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 // Matches the slime_type enum defined in the schema.
-export type SlimeType =
-  | "butter"
-  | "clear"
-  | "cloud"
-  | "icee"
-  | "fluffy"
-  | "floam"
-  | "snow_fizz"
-  | "thick_and_glossy"
-  | "jelly"
-  | "beaded"
-  | "clay"
-  | "cloud_cream"
-  | "magnetic"
-  | "thermochromic"
-  | "avalanche"
-  | "slay";
+import type { SlimeType } from "@/lib/types";
 
 export interface LogSlimeInput {
   // Catalog references — both optional for free-form entry
