@@ -1,5 +1,6 @@
 // apps/web/lib/types.ts
 // Aligned to SlimeLog schema v1.0 — Migration 20260324000001
+// Updated: Migration 20260404000017_add_slime_types — 35 new types added
 
 export type SlimeType =
   | "butter"
@@ -17,7 +18,42 @@ export type SlimeType =
   | "magnetic"
   | "thermochromic"
   | "avalanche"
-  | "slay";
+  | "slay"
+  | "micro_dough"
+  | "sally_butter"
+  | "nougat"
+  | "jelly_cube"
+  | "hybrid"
+  | "fishbowl_beads"
+  | "bead_bomb"
+  | "bingsu"
+  | "cloud_dough"
+  | "float"
+  | "slushee"
+  | "wax_cracking"
+  | "glossy"
+  | "crunchy"
+  | "thicky"
+  | "water"
+  | "cream_cheese"
+  | "mochi"
+  | "jelly_puff"
+  | "cloud_fizz"
+  | "sugar_scrub"
+  | "glow_in_the_dark"
+  | "metallic"
+  | "glitter"
+  | "galaxy"
+  | "jiggly"
+  | "wax"
+  | "sand"
+  | "mousse_fizz"
+  | "chiffon_fizz"
+  | "putty_puff"
+  | "custard"
+  | "holographic"
+  | "pearl"
+  | "thiggly";
 
 export type ActivityType =
   | "log_created"
@@ -74,28 +110,100 @@ export const SLIME_TYPE_LABELS: Record<SlimeType, string> = {
   thermochromic: "Thermochromic",
   avalanche: "Avalanche",
   slay: "Slay",
+  micro_dough: "Micro Dough",
+  sally_butter: "Sally Butter",
+  nougat: "Nougat",
+  jelly_cube: "Jelly Cube",
+  hybrid: "Hybrid",
+  fishbowl_beads: "Fishbowl Beads",
+  bead_bomb: "Bead Bomb",
+  bingsu: "Bingsu",
+  cloud_dough: "Cloud Dough",
+  float: "Float",
+  slushee: "Slushee",
+  wax_cracking: "Wax Cracking",
+  glossy: "Glossy",
+  crunchy: "Crunchy",
+  thicky: "Thicky",
+  water: "Water",
+  cream_cheese: "Cream Cheese",
+  mochi: "Mochi",
+  jelly_puff: "Jelly Puff",
+  cloud_fizz: "Cloud Fizz",
+  sugar_scrub: "Sugar Scrub",
+  glow_in_the_dark: "Glow in the Dark",
+  metallic: "Metallic",
+  glitter: "Glitter",
+  galaxy: "Galaxy",
+  jiggly: "Jiggly",
+  wax: "Wax",
+  sand: "Sand",
+  mousse_fizz: "Mousse Fizz",
+  chiffon_fizz: "Chiffon Fizz",
+  putty_puff: "Putty Puff",
+  custard: "Custard",
+  holographic: "Holographic",
+  pearl: "Pearl",
+  thiggly: "Thiggly",
 };
 
 export const SLIME_TYPE_COLORS: Record<
   SlimeType,
   { bg: string; text: string }
 > = {
-  butter: { bg: "#FFF3CD", text: "#92660A" },
-  clear: { bg: "#E0F7FA", text: "#00696B" },
-  cloud: { bg: "#F3E8FF", text: "#6B21A8" },
-  icee: { bg: "#DBEAFE", text: "#1D4ED8" },
-  fluffy: { bg: "#FCE7F3", text: "#9D174D" },
-  floam: { bg: "#D1FAE5", text: "#065F46" },
-  snow_fizz: { bg: "#F0F9FF", text: "#075985" },
-  thick_and_glossy: { bg: "#EDE9FE", text: "#4C1D95" },
-  jelly: { bg: "#FEF3C7", text: "#92400E" },
-  beaded: { bg: "#FFE4E6", text: "#9F1239" },
-  clay: { bg: "#FEF9C3", text: "#713F12" },
-  cloud_cream: { bg: "#FDF4FF", text: "#701A75" },
-  magnetic: { bg: "#F1F5F9", text: "#334155" },
-  thermochromic: { bg: "#FFF1F2", text: "#BE123C" },
-  avalanche: { bg: "#F8FAFC", text: "#1E3A5F" },
-  slay: { bg: "#FDF2F8", text: "#86198F" },
+  // Original types — dark-theme aware
+  butter: { bg: "rgba(255,243,205,0.12)", text: "#fde68a" },
+  clear: { bg: "rgba(224,247,250,0.10)", text: "#67e8f9" },
+  cloud: { bg: "rgba(243,232,255,0.12)", text: "#d8b4fe" },
+  icee: { bg: "rgba(219,234,254,0.12)", text: "#93c5fd" },
+  fluffy: { bg: "rgba(252,231,243,0.12)", text: "#f9a8d4" },
+  floam: { bg: "rgba(209,250,229,0.12)", text: "#6ee7b7" },
+  snow_fizz: { bg: "rgba(240,249,255,0.10)", text: "#bae6fd" },
+  thick_and_glossy: { bg: "rgba(237,233,254,0.12)", text: "#c4b5fd" },
+  jelly: { bg: "rgba(254,243,199,0.12)", text: "#fcd34d" },
+  beaded: { bg: "rgba(254,228,230,0.12)", text: "#fda4af" },
+  clay: { bg: "rgba(254,249,195,0.12)", text: "#fef08a" },
+  cloud_cream: { bg: "rgba(253,244,255,0.12)", text: "#e879f9" },
+  magnetic: { bg: "rgba(241,245,249,0.10)", text: "#94a3b8" },
+  thermochromic: { bg: "rgba(255,241,242,0.12)", text: "#fda4af" },
+  avalanche: { bg: "rgba(248,250,252,0.08)", text: "#94a3b8" },
+  slay: { bg: "rgba(253,242,248,0.12)", text: "#f0abfc" },
+  // New types
+  micro_dough: { bg: "rgba(255,200,100,0.12)", text: "#fcd34d" },
+  sally_butter: { bg: "rgba(255,220,150,0.12)", text: "#fde68a" },
+  nougat: { bg: "rgba(210,170,120,0.12)", text: "#d4a96a" },
+  jelly_cube: { bg: "rgba(100,220,200,0.12)", text: "#6ee7b7" },
+  hybrid: { bg: "rgba(150,100,255,0.12)", text: "#c4b5fd" },
+  fishbowl_beads: { bg: "rgba(0,240,255,0.10)", text: "#67e8f9" },
+  bead_bomb: { bg: "rgba(255,150,50,0.12)", text: "#fdba74" },
+  bingsu: { bg: "rgba(200,230,255,0.12)", text: "#bae6fd" },
+  cloud_dough: { bg: "rgba(230,220,255,0.12)", text: "#ddd6fe" },
+  float: { bg: "rgba(200,255,200,0.10)", text: "#86efac" },
+  slushee: { bg: "rgba(100,200,255,0.12)", text: "#7dd3fc" },
+  wax_cracking: { bg: "rgba(255,240,200,0.12)", text: "#fef08a" },
+  glossy: { bg: "rgba(0,240,255,0.08)", text: "#a5f3fc" },
+  crunchy: { bg: "rgba(255,200,50,0.12)", text: "#fde047" },
+  thicky: { bg: "rgba(180,100,255,0.12)", text: "#d8b4fe" },
+  water: { bg: "rgba(50,150,255,0.12)", text: "#93c5fd" },
+  cream_cheese: { bg: "rgba(255,245,220,0.12)", text: "#fef3c7" },
+  mochi: { bg: "rgba(255,180,200,0.12)", text: "#fda4af" },
+  jelly_puff: { bg: "rgba(150,255,200,0.10)", text: "#6ee7b7" },
+  cloud_fizz: { bg: "rgba(200,240,255,0.12)", text: "#e0f2fe" },
+  sugar_scrub: { bg: "rgba(255,220,180,0.12)", text: "#fed7aa" },
+  glow_in_the_dark: { bg: "rgba(57,255,20,0.12)", text: "#86efac" },
+  metallic: { bg: "rgba(180,180,200,0.12)", text: "#e2e8f0" },
+  glitter: { bg: "rgba(255,150,255,0.12)", text: "#f0abfc" },
+  galaxy: { bg: "rgba(80,0,120,0.25)", text: "#c084fc" },
+  jiggly: { bg: "rgba(100,255,200,0.10)", text: "#5eead4" },
+  wax: { bg: "rgba(255,230,150,0.12)", text: "#fde68a" },
+  sand: { bg: "rgba(210,180,140,0.12)", text: "#d4a96a" },
+  mousse_fizz: { bg: "rgba(255,200,230,0.12)", text: "#fbcfe8" },
+  chiffon_fizz: { bg: "rgba(240,220,255,0.12)", text: "#e9d5ff" },
+  putty_puff: { bg: "rgba(200,255,220,0.10)", text: "#bbf7d0" },
+  custard: { bg: "rgba(255,240,150,0.12)", text: "#fef08a" },
+  holographic: { bg: "rgba(200,100,255,0.12)", text: "#e879f9" },
+  pearl: { bg: "rgba(230,230,255,0.12)", text: "#e0e7ff" },
+  thiggly: { bg: "rgba(100,200,150,0.12)", text: "#6ee7b7" },
 };
 
 export const RATING_DIMENSIONS: {
@@ -107,43 +215,43 @@ export const RATING_DIMENSIONS: {
   {
     key: "texture",
     label: "Texture",
-    emoji: "🤌",
+    emoji: "",
     description: "How does it feel?",
   },
   {
     key: "scent",
     label: "Scent Throw",
-    emoji: "🌸",
+    emoji: "",
     description: "Scent accuracy & strength",
   },
   {
     key: "sound",
     label: "Sound / ASMR",
-    emoji: "🎧",
+    emoji: "",
     description: "Click, crunch, bubble pop",
   },
   {
     key: "drizzle",
     label: "Drizzle",
-    emoji: "💧",
+    emoji: "",
     description: "Consistency & flow",
   },
   {
     key: "creativity",
     label: "Creativity",
-    emoji: "✨",
+    emoji: "",
     description: "Concept & execution",
   },
   {
     key: "sensory_fit",
     label: "Sensory Fit",
-    emoji: "🧠",
+    emoji: "",
     description: "Activation satisfaction",
   },
   {
     key: "overall",
     label: "Overall",
-    emoji: "⭐",
+    emoji: "",
     description: "Your final verdict",
   },
 ];

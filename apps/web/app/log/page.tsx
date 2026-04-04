@@ -26,14 +26,15 @@ type RatingKey =
   | "rating_sensory_fit"
   | "rating_overall";
 
-const RATING_FIELDS: { key: RatingKey; label: string; emoji: string }[] = [
-  { key: "rating_texture", label: "Texture", emoji: "🤲" },
-  { key: "rating_scent", label: "Scent", emoji: "🌸" },
-  { key: "rating_sound", label: "Sound", emoji: "🔊" },
-  { key: "rating_drizzle", label: "Drizzle", emoji: "💧" },
-  { key: "rating_creativity", label: "Creativity", emoji: "✨" },
-  { key: "rating_sensory_fit", label: "Sensory Fit", emoji: "🧠" },
-  { key: "rating_overall", label: "Overall", emoji: "⭐" },
+// [Change 4] Emojis removed from RATING_FIELDS — no-emoji rule
+const RATING_FIELDS: { key: RatingKey; label: string }[] = [
+  { key: "rating_texture", label: "Texture" },
+  { key: "rating_scent", label: "Scent" },
+  { key: "rating_sound", label: "Sound" },
+  { key: "rating_drizzle", label: "Drizzle" },
+  { key: "rating_creativity", label: "Creativity" },
+  { key: "rating_sensory_fit", label: "Sensory Fit" },
+  { key: "rating_overall", label: "Overall" },
 ];
 
 interface ColorSwatch {
@@ -43,6 +44,7 @@ interface ColorSwatch {
   dark?: boolean;
 }
 
+// [Change 1] Removed holographic. [Change 2] Added brown between Red and Black.
 const COLOR_SWATCHES: ColorSwatch[] = [
   { label: "White", hex: "#FFFFFF", value: "white", dark: true },
   { label: "Cream", hex: "#FFF5DC", value: "cream", dark: true },
@@ -56,12 +58,8 @@ const COLOR_SWATCHES: ColorSwatch[] = [
   { label: "Yellow", hex: "#FFE135", value: "yellow", dark: true },
   { label: "Orange", hex: "#FF8C42", value: "orange" },
   { label: "Red", hex: "#E94040", value: "red" },
+  { label: "Brown", hex: "#8B4513", value: "brown" },
   { label: "Black", hex: "#1A1A1A", value: "black" },
-  {
-    label: "Holographic",
-    hex: "conic-gradient(from 0deg, #ff6ec7, #a855f7, #3b82f6, #06b6d4, #22c55e, #eab308, #f97316, #ff6ec7)",
-    value: "holographic",
-  },
 ];
 
 interface FormState {
@@ -100,16 +98,15 @@ function buildColorsArray(
 
 // ─── Star Rating ──────────────────────────────────────────────────────────────
 
+// [Change 4] emoji prop removed — RATING_FIELDS no longer carries it
 function StarRating({
   value,
   onChange,
   label,
-  emoji,
 }: {
   value: number | null;
   onChange: (v: number) => void;
   label: string;
-  emoji: string;
 }) {
   const [hovered, setHovered] = useState<number | null>(null);
   return (
@@ -118,7 +115,6 @@ function StarRating({
       style={{ borderColor: "rgba(45,10,78,0.5)" }}
     >
       <span className="flex items-center gap-2 text-sm font-medium text-slime-text">
-        <span>{emoji}</span>
         {label}
       </span>
       <div className="flex gap-1">
@@ -228,7 +224,6 @@ function ColorPicker({
       <div className="grid grid-cols-7 gap-2">
         {COLOR_SWATCHES.map((swatch) => {
           const isSelected = selectedValues.includes(swatch.value);
-          const isGradient = swatch.hex.startsWith("conic-gradient");
           return (
             <button
               key={swatch.value}
@@ -243,25 +238,12 @@ function ColorPicker({
                     ? "ring-1 ring-slime-border hover:scale-105"
                     : "hover:scale-105"
               }`}
-              style={
-                isGradient
-                  ? { background: swatch.hex }
-                  : { backgroundColor: swatch.hex }
-              }
+              style={{ backgroundColor: swatch.hex }}
             >
               {isSelected && (
                 <span
                   className="absolute inset-0 flex items-center justify-center text-xs font-bold"
-                  style={{
-                    color:
-                      swatch.dark || swatch.value === "holographic"
-                        ? "#1A1A1A"
-                        : "#FFFFFF",
-                    textShadow:
-                      swatch.value === "holographic"
-                        ? "0 0 4px rgba(255,255,255,0.8)"
-                        : undefined,
-                  }}
+                  style={{ color: swatch.dark ? "#1A1A1A" : "#FFFFFF" }}
                 >
                   ✓
                 </span>
@@ -325,7 +307,6 @@ function ShippingDates({
           border: "1px solid rgba(45,10,78,0.6)",
         }}
       >
-        <span className="text-base mt-0.5">📦</span>
         <p className="text-xs text-slime-muted leading-relaxed">
           Shipping data helps the community rate brands accurately.
         </p>
@@ -447,10 +428,15 @@ function LogPageInner() {
     setSaving(true);
     setSaveError(null);
     try {
-      const colors = buildColorsArray(
-        form.selected_color_values,
-        form.color_description,
-      );
+      // [Change 3] If slime_type is "clear", override colors to ["clear"]
+      const finalColors =
+        form.slime_type === "clear"
+          ? ["clear"]
+          : buildColorsArray(
+              form.selected_color_values,
+              form.color_description,
+            );
+
       const input: LogSlimeInput = {
         slime_name: form.slime_name.trim() || undefined,
         brand_name_raw: form.brand_name_raw.trim() || undefined,
@@ -462,7 +448,7 @@ function LogPageInner() {
             : undefined,
         in_collection: form.in_collection,
         in_wishlist: form.in_wishlist,
-        colors,
+        colors: finalColors,
         image_url: form.image_url ?? undefined,
         order_date: form.order_date || undefined,
         ship_date: form.ship_date || undefined,
@@ -509,7 +495,7 @@ function LogPageInner() {
                 WebkitTextFillColor: "transparent",
               }}
             >
-              Log a Slime ✦
+              Log a Slime
             </h1>
             <p className="text-sm text-slime-muted mt-1">
               {form.in_wishlist ? "Adding to wishlist" : "Adding to collection"}
@@ -593,9 +579,6 @@ function LogPageInner() {
                       }
                 }
               >
-                <span className="text-xl">
-                  {form.in_wishlist ? "💜" : "🤍"}
-                </span>
                 {form.in_wishlist ? "Wishlist item" : "Add to wishlist instead"}
               </button>
             </div>
@@ -642,13 +625,26 @@ function LogPageInner() {
                   onChange={(e) => set("purchase_price", e.target.value)}
                 />
               </Field>
+              {/* [Change 3] Clear type hides color picker */}
               <Field label="Colors" optional>
-                <ColorPicker
-                  selectedValues={form.selected_color_values}
-                  onToggle={toggleColor}
-                  description={form.color_description}
-                  onDescriptionChange={(v) => set("color_description", v)}
-                />
+                {form.slime_type === "clear" ? (
+                  <p
+                    style={{
+                      fontSize: 13,
+                      color: "rgba(255,255,255,0.4)",
+                      fontStyle: "italic",
+                    }}
+                  >
+                    Color is automatically set to clear for this slime type.
+                  </p>
+                ) : (
+                  <ColorPicker
+                    selectedValues={form.selected_color_values}
+                    onToggle={toggleColor}
+                    description={form.color_description}
+                    onDescriptionChange={(v) => set("color_description", v)}
+                  />
+                )}
               </Field>
               <div className="pt-1">
                 <p className="section-label mb-3">Shipping Dates</p>
@@ -668,13 +664,13 @@ function LogPageInner() {
               <h2 className="text-lg font-bold text-slime-cyan mb-3">
                 Rate it
               </h2>
-              {RATING_FIELDS.map(({ key, label, emoji }) => (
+              {/* [Change 4] emoji prop removed from StarRating call */}
+              {RATING_FIELDS.map(({ key, label }) => (
                 <StarRating
                   key={key}
                   value={form[key] as number | null}
                   onChange={(v) => set(key, v)}
                   label={label}
-                  emoji={emoji}
                 />
               ))}
             </div>
@@ -734,15 +730,21 @@ function LogPageInner() {
                     </span>
                   </p>
                 )}
-                {(form.selected_color_values.length > 0 ||
-                  form.color_description.trim()) && (
+                {form.slime_type === "clear" ? (
                   <p>
-                    Colors:{" "}
-                    {buildColorsArray(
-                      form.selected_color_values,
-                      form.color_description,
-                    )?.join(", ")}
+                    Colors: <span className="text-slime-accent">clear</span>
                   </p>
+                ) : (
+                  (form.selected_color_values.length > 0 ||
+                    form.color_description.trim()) && (
+                    <p>
+                      Colors:{" "}
+                      {buildColorsArray(
+                        form.selected_color_values,
+                        form.color_description,
+                      )?.join(", ")}
+                    </p>
+                  )
                 )}
                 {form.rating_overall && (
                   <p>
@@ -803,8 +805,8 @@ function LogPageInner() {
                 {saving
                   ? "Saving…"
                   : form.in_wishlist
-                    ? "Add to Wishlist 💜"
-                    : "Save to Collection ✨"}
+                    ? "Add to Wishlist"
+                    : "Save to Collection"}
               </button>
             )}
           </div>
