@@ -297,7 +297,7 @@ export default function FeedCard({
     <>
       {/* ── Card ──
           min-h-[90vh]: card dominates the viewport; ~60-80px of next card peeks below.
-          flex flex-col: allows image area to flex-1 fill remaining height above body/footer.
+          flex flex-col: image has fixed height, body/footer shrink-0 fill the rest.
       */}
       <article
         className="relative w-full max-w-lg mx-auto rounded-2xl overflow-hidden cursor-pointer flex flex-col"
@@ -308,8 +308,8 @@ export default function FeedCard({
         }}
         onClick={openDetail}
       >
-        {/* ── Image area — flex-1 expands to fill space above card body ── */}
-        <div className="relative flex-1 min-h-0">
+        {/* ── Image area — fixed height ~58% of card, leaves body fully visible ── */}
+        <div className="relative" style={{ height: "calc(90vh * 0.58)" }}>
           {hasImage ? (
             <>
               <Image
@@ -502,6 +502,7 @@ export default function FeedCard({
           log={buildCollectionLog(log)}
           imageUrl={log.image_url}
           brandSlug={brandSlug}
+          brandLogoUrl={null}
           onClose={closeDetail}
           onImageOpen={handleImageOpen}
           likeCount={log.like_count}

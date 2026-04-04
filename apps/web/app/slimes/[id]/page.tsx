@@ -5,11 +5,14 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { TypeBadge } from "@/components/TypeBadge";
 import { DeleteLogButton } from "@/components/DeleteLogButton";
+import { BackButton } from "@/components/BackButton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type SlimeDetail = {
   id: string;
+  // [Fix 1] user_id added to type for ownership check
+  user_id: string | null;
   created_at: string;
   slime_name: string | null;
   brand_id: string | null;
@@ -103,19 +106,24 @@ function StarRating({
 }) {
   if (!rating)
     return <span className="text-xs text-slime-muted">No rating</span>;
-  const starSize = size === "lg" ? "text-2xl" : "text-base";
+  const dim = size === "lg" ? 24 : 16;
   return (
     <span
       className="flex items-center gap-0.5"
       aria-label={`${rating} out of 5`}
     >
       {[1, 2, 3, 4, 5].map((n) => (
-        <span
+        // [Fix 3] SVG star — replaces Unicode star character
+        <svg
           key={n}
-          className={`${starSize} leading-none ${n <= rating ? "text-slime-accent" : "text-slime-border"}`}
+          width={dim}
+          height={dim}
+          viewBox="0 0 24 24"
+          fill={n <= rating ? "#39FF14" : "rgba(57,255,20,0.15)"}
+          aria-hidden="true"
         >
-          ★
-        </span>
+          <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+        </svg>
       ))}
     </span>
   );
@@ -180,7 +188,6 @@ function ShippingStat({
 }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-2xl bg-slime-surface border border-slime-border p-3 gap-0.5">
-      {/* Shipping stat numbers — cyan */}
       <span className="text-2xl font-black text-slime-cyan leading-none">
         {value ?? "—"}
       </span>
@@ -223,7 +230,7 @@ export default async function SlimeDetailPage({
     .from("collection_logs")
     .select(
       `
-      id, created_at, slime_name, brand_id, brand_name_raw,
+      id, user_id, created_at, slime_name, brand_id, brand_name_raw,
       collection_name, slime_type, colors, scent, image_url,
       purchase_price, purchase_currency, cost_paid,
       purchased_from, purchased_at,
@@ -242,10 +249,13 @@ export default async function SlimeDetailPage({
   if (error || !data) notFound();
 
   const log = data as unknown as SlimeDetail;
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const isOwner = !!user;
+
+  // [Fix 1] Correct ownership check — compares authed user id against log.user_id
+  const isOwner = !!user && user.id === log.user_id;
 
   const brandName = log.brands?.name ?? log.brand_name_raw ?? "Unknown brand";
   const brandHref = log.brands?.slug ? `/brands/${log.brands.slug}` : null;
@@ -271,31 +281,49 @@ export default async function SlimeDetailPage({
   const hasNotes = log.likes || log.dislikes || log.notes;
 
   return (
-    <div className="min-h-screen pb-24 bg-slime-bg">
+    // [Fix 4] Radial gradient background matching app-wide design system
+    <div
+      className="min-h-screen pb-24"
+      style={{
+        background:
+          "radial-gradient(ellipse 100% 60% at 50% 0%, #2D0A4E 0%, #100020 35%, #0A0A0A 65%)",
+      }}
+    >
       {/* Sticky top bar */}
       <div
         className="sticky top-0 z-20 px-4 py-3 flex items-center justify-between gap-2"
         style={{
           background: "rgba(10,10,10,0.92)",
           borderBottom: "1px solid rgba(57,255,20,0.12)",
+          backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
         }}
       >
-        <Link
-          href="/collection"
-          className="flex items-center gap-1.5 text-sm font-semibold text-slime-accent hover:text-slime-cyan transition"
-        >
-          <span className="text-base leading-none">←</span>
-          <span>Back</span>
-        </Link>
-        <span
-          className={`text-xs font-bold px-3 py-1 rounded-full border ${
-            log.in_wishlist
-              ? "bg-violet-900/40 text-violet-300 border-violet-500/30"
-              : "bg-slime-accent/10 text-slime-accent border-slime-accent/30"
-          }`}
-        >
-          {log.in_wishlist ? "✦ Wishlist" : "✦ In Collection"}
-        </span>
+        {/* [Fix 2] BackButton uses router.back() instead of hard-coded /collection link */}
+        <BackButton />
+
+        {/* [Fix 1] Collection/Wishlist badge only renders for the log owner */}
+        {isOwner && (
+          <span
+            className={`flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full border ${
+              log.in_wishlist
+                ? "bg-violet-900/40 text-violet-300 border-violet-500/30"
+                : "bg-slime-accent/10 text-slime-accent border-slime-accent/30"
+            }`}
+          >
+            {/* [Fix 3] SVG star in badge — replaces Unicode symbol */}
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <polygon points="12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9" />
+            </svg>
+            {log.in_wishlist ? "Wishlist" : "In Collection"}
+          </span>
+        )}
       </div>
 
       <div className="px-4 pt-6 flex flex-col gap-5 max-w-lg mx-auto">
@@ -315,25 +343,47 @@ export default async function SlimeDetailPage({
               className="w-full h-56 object-cover"
             />
           ) : (
+            // [Fix 3] SVG bubble in no-image fallback — replaces emoji
             <div
-              className="w-full h-40 flex items-center justify-center text-4xl"
+              className="w-full h-40 flex items-center justify-center"
               style={{
                 background: "linear-gradient(135deg, #2D0A4E, #1A1A1A)",
               }}
               aria-hidden="true"
             >
-              🫧
+              <svg
+                width="40"
+                height="40"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="rgba(57,255,20,0.3)"
+                strokeWidth="1.5"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <circle
+                  cx="8"
+                  cy="9"
+                  r="1.5"
+                  fill="rgba(57,255,20,0.3)"
+                  stroke="none"
+                />
+                <circle
+                  cx="15"
+                  cy="7"
+                  r="1"
+                  fill="rgba(57,255,20,0.2)"
+                  stroke="none"
+                />
+              </svg>
             </div>
           )}
 
           <div className="px-5 pb-5 pt-4 flex flex-col gap-3 relative z-10">
-            {/* Slime name headline — cyan */}
             <h1 className="text-2xl font-black text-slime-cyan leading-tight tracking-tight pr-4">
               {log.slime_name ?? "Untitled Slime"}
             </h1>
             <div className="flex items-center gap-1.5 text-sm text-slime-muted">
               <span>by</span>
-              {/* Brand name — magenta */}
               {brandHref ? (
                 <Link
                   href={brandHref}
@@ -352,8 +402,23 @@ export default async function SlimeDetailPage({
               {log.colors?.map((c) => colorDot(c))}
             </div>
             {log.scent && (
-              <p className="text-sm text-slime-muted">
-                <span className="mr-1">🌸</span>
+              <p className="text-sm text-slime-muted flex items-center gap-1.5">
+                {/* [Fix 3] SVG flower next to scent — replaces emoji */}
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#FF00E5"
+                  strokeWidth="1.5"
+                  aria-hidden="true"
+                >
+                  <path d="M12 2C12 2 10 6 12 8C14 6 12 2 12 2Z" />
+                  <path d="M12 22C12 22 10 18 12 16C14 18 12 22 12 22Z" />
+                  <path d="M2 12C2 12 6 10 8 12C6 14 2 12 2 12Z" />
+                  <path d="M22 12C22 12 18 10 16 12C18 14 22 12 22 12Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
                 <span className="font-medium text-slime-text">{log.scent}</span>
               </p>
             )}
@@ -369,7 +434,6 @@ export default async function SlimeDetailPage({
               </p>
               <StarRating rating={log.rating_overall} size="lg" />
             </div>
-            {/* Rating number — cyan */}
             {log.rating_overall != null && (
               <span className="text-4xl font-black text-slime-cyan">
                 {log.rating_overall}
@@ -449,13 +513,29 @@ export default async function SlimeDetailPage({
           </Section>
         )}
 
+        {/* [Fix 1] Edit and Delete only render for the log owner */}
         {isOwner && (
           <div className="flex gap-3 pt-1">
             <Link
               href={`/log/edit/${id}`}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-slime-accent/40 text-slime-accent font-bold text-sm hover:bg-slime-accent/10 transition"
             >
-              ✎ Edit
+              {/* Edit pencil SVG */}
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+              Edit
             </Link>
             <DeleteLogButton logId={id} />
           </div>

@@ -381,6 +381,7 @@ export default function TimelineView({ logs, likeData, currentUserId }: Props) {
             log={selectedLog}
             imageUrl={null}
             brandSlug={null}
+            brandLogoUrl={null}
             onClose={() => setSelectedLog(null)}
             onImageOpen={() => {}}
             likeCount={selectedLikeEntry.likeCount}
