@@ -524,9 +524,13 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
         padding: "14px 16px",
       }}
     >
+      {/* [Change 3] Added imageUrl, brandSlug, onImageOpen to match updated SlimeDetailCard props. */}
       <SlimeDetailCard
         log={selectedLog}
+        imageUrl={selectedLog.image_url ?? null}
+        brandSlug={null}
         onClose={() => setSelectedLog(null)}
+        onImageOpen={() => {}}
         likeCount={selectedLikeEntry.likeCount}
         commentCount={selectedLikeEntry.commentCount}
         isLikedByCurrentUser={selectedLikeEntry.isLiked}

@@ -1,9 +1,14 @@
 "use client";
+// apps/web/components/collection/SlimeDetailCard.tsx
 
+import { useRef } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import type { CollectionLog } from "@/lib/types";
 import LikeButton from "@/components/collection/LikeButton";
 import CommentSection from "@/components/collection/CommentSection";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const TYPE_COLORS: Record<string, string> = {
   butter: "#FFB347",
@@ -47,6 +52,17 @@ const COLOR_SWATCHES: Record<string, string> = {
   silver: "#C0C0C0",
 };
 
+const RATING_DIMENSIONS: Array<{ key: keyof CollectionLog; label: string }> = [
+  { key: "rating_texture", label: "Texture" },
+  { key: "rating_scent", label: "Scent" },
+  { key: "rating_sound", label: "Sound" },
+  { key: "rating_drizzle", label: "Drizzle" },
+  { key: "rating_creativity", label: "Creativity" },
+  { key: "rating_sensory_fit", label: "Sensory Fit" },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function getSwatchColor(colorName: string): string {
   const lower = colorName.toLowerCase();
   for (const [key, val] of Object.entries(COLOR_SWATCHES)) {
@@ -55,7 +71,9 @@ function getSwatchColor(colorName: string): string {
   return "#666";
 }
 
-function RatingBar({ value }: { value: number | null | undefined }) {
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function RatingDots({ value }: { value: number | null | undefined }) {
   if (value == null) return null;
   return (
     <div style={{ display: "flex", gap: 3 }}>
@@ -74,386 +92,628 @@ function RatingBar({ value }: { value: number | null | undefined }) {
   );
 }
 
-const RATING_DIMENSIONS: Array<{ key: keyof CollectionLog; label: string }> = [
-  { key: "rating_texture", label: "Texture" },
-  { key: "rating_scent", label: "Scent" },
-  { key: "rating_sound", label: "Sound" },
-  { key: "rating_drizzle", label: "Drizzle" },
-  { key: "rating_creativity", label: "Creativity" },
-  { key: "rating_sensory_fit", label: "Sensory Fit" },
-];
+function StarRow({ rating }: { rating: number }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <svg
+          key={n}
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill={n <= rating ? "#39FF14" : "rgba(57,255,20,0.15)"}
+          aria-hidden="true"
+        >
+          <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+        </svg>
+      ))}
+      <span
+        style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginLeft: 4 }}
+      >
+        {rating}/5
+      </span>
+    </div>
+  );
+}
+
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
   log: CollectionLog;
-  brandColor?: string;
+  imageUrl: string | null; // separate from CollectionLog — passed by parent
+  brandSlug: string | null; // for brand page link; null in canvas views
   onClose: () => void;
-  // Like + comment data passed in from the parent that fetched counts
+  onImageOpen: () => void; // triggers lightbox in parent
   likeCount: number;
   commentCount: number;
   isLikedByCurrentUser: boolean;
   currentUserId: string | null;
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function SlimeDetailCard({
   log,
-  brandColor,
+  imageUrl,
+  brandSlug,
   onClose,
+  onImageOpen,
   likeCount,
   commentCount,
   isLikedByCurrentUser,
   currentUserId,
 }: Props) {
-  const activeDimensions = RATING_DIMENSIONS.filter(
-    ({ key }) => typeof log[key] === "number",
-  );
+  const commentRef = useRef<HTMLDivElement>(null);
 
-  const brandDisplayColor = brandColor ?? "#00F0FF";
   const typeColor = log.slime_type
     ? (TYPE_COLORS[log.slime_type] ?? "#39FF14")
     : "#39FF14";
 
+  const activeDimensions = RATING_DIMENSIONS.filter(
+    ({ key }) => typeof log[key] === "number",
+  );
+
+  function scrollToComments() {
+    commentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {/* Row 1: Name + close */}
+    // Full-screen overlay — no backdrop click to dismiss, use back arrow
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 100,
+        background: "#0A0A0A",
+        overflowY: "auto",
+        WebkitOverflowScrolling: "touch",
+      }}
+    >
+      {/* ── Sticky header ── */}
       <div
         style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
           display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
+          alignItems: "center",
           gap: 12,
+          padding: "12px 16px",
+          background: "rgba(16,0,32,0.97)",
+          borderBottom: "1px solid rgba(45,10,78,0.6)",
         }}
       >
-        <div
-          style={{
-            fontSize: 17,
-            fontWeight: 800,
-            color: "#fff",
-            lineHeight: 1.3,
-          }}
-        >
-          {log.slime_name ?? "Unnamed Slime"}
-        </div>
+        {/* Back arrow */}
         <button
           onClick={onClose}
+          aria-label="Go back"
           style={{
             flexShrink: 0,
-            width: 28,
-            height: 28,
-            borderRadius: 6,
-            background: "rgba(45,10,78,0.6)",
+            width: 36,
+            height: 36,
+            borderRadius: 10,
+            background: "rgba(45,10,78,0.5)",
             border: "1px solid rgba(45,10,78,0.8)",
-            color: "rgba(255,255,255,0.5)",
-            fontSize: 16,
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            lineHeight: 1,
+            color: "rgba(255,255,255,0.7)",
           }}
         >
-          ×
-        </button>
-      </div>
-
-      {/* Row 2: Brand + type + collection badge */}
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 6,
-          alignItems: "center",
-        }}
-      >
-        {log.brand_name_raw && (
-          <span
-            style={{ fontSize: 13, fontWeight: 600, color: brandDisplayColor }}
-          >
-            {log.brand_name_raw}
-          </span>
-        )}
-        {log.slime_type && (
-          <span
-            style={{
-              padding: "2px 9px",
-              borderRadius: 20,
-              fontSize: 12,
-              background: `${typeColor}18`,
-              color: typeColor,
-              border: `1px solid ${typeColor}40`,
-            }}
-          >
-            {log.slime_type.replace(/_/g, " ")}
-          </span>
-        )}
-        {log.in_wishlist ? (
-          <span
-            style={{
-              padding: "2px 9px",
-              borderRadius: 20,
-              fontSize: 12,
-              background: "rgba(148,0,211,0.15)",
-              color: "#CC44FF",
-              border: "1px solid rgba(148,0,211,0.35)",
-            }}
-          >
-            Wishlist
-          </span>
-        ) : log.in_collection ? (
-          <span
-            style={{
-              padding: "2px 9px",
-              borderRadius: 20,
-              fontSize: 12,
-              background: "rgba(57,255,20,0.12)",
-              color: "#39FF14",
-              border: "1px solid rgba(57,255,20,0.3)",
-            }}
-          >
-            In Collection
-          </span>
-        ) : null}
-      </div>
-
-      {/* Row 3: Color swatches */}
-      {log.colors && log.colors.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {log.colors.map((c: string, i: number) => (
-            <div
-              key={i}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                padding: "2px 8px",
-                borderRadius: 20,
-                background: "rgba(45,10,78,0.4)",
-                border: "1px solid rgba(45,10,78,0.6)",
-              }}
-            >
-              <div
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: "50%",
-                  background: getSwatchColor(c),
-                  flexShrink: 0,
-                  border: "1px solid rgba(255,255,255,0.15)",
-                }}
-              />
-              <span style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
-                {c}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Row 4: Overall rating */}
-      {typeof log.rating_overall === "number" && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span
-            style={{
-              fontSize: 32,
-              fontWeight: 900,
-              color: "#39FF14",
-              lineHeight: 1,
-            }}
-          >
-            {log.rating_overall}
-          </span>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <RatingBar value={log.rating_overall} />
-            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>
-              overall
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Row 5: Dimension rating grid */}
-      {activeDimensions.length > 0 && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "8px 12px",
-            padding: "10px 12px",
-            background: "rgba(45,10,78,0.3)",
-            borderRadius: 10,
-            border: "1px solid rgba(45,10,78,0.5)",
-          }}
-        >
-          {activeDimensions.map(({ key, label }) => (
-            <div
-              key={key}
-              style={{ display: "flex", flexDirection: "column", gap: 3 }}
-            >
-              <span
-                style={{
-                  fontSize: 11,
-                  color: "rgba(255,255,255,0.4)",
-                  letterSpacing: "0.04em",
-                }}
-              >
-                {label}
-              </span>
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <RatingBar value={log[key] as number} />
-                <span
-                  style={{ fontSize: 11, color: "#39FF14", fontWeight: 700 }}
-                >
-                  {log[key] as number}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Row 6: Notes */}
-      {log.notes && (
-        <p
-          style={{
-            margin: 0,
-            fontSize: 13,
-            color: "rgba(255,255,255,0.45)",
-            fontStyle: "italic",
-            display: "-webkit-box",
-            WebkitLineClamp: 3,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-            lineHeight: 1.5,
-          }}
-        >
-          {log.notes}
-        </p>
-      )}
-
-      {/* Row 7: Meta row */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-        {log.created_at && (
-          <span
-            style={{
-              padding: "3px 9px",
-              borderRadius: 20,
-              fontSize: 11,
-              background: "rgba(45,10,78,0.35)",
-              color: "rgba(255,255,255,0.35)",
-            }}
-          >
-            Logged{" "}
-            {new Intl.DateTimeFormat("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            }).format(new Date(log.created_at))}
-          </span>
-        )}
-        {typeof log.cost_paid === "number" && (
-          <span
-            style={{
-              padding: "3px 9px",
-              borderRadius: 20,
-              fontSize: 11,
-              background: "rgba(45,10,78,0.35)",
-              color: "rgba(255,255,255,0.45)",
-            }}
-          >
-            {new Intl.NumberFormat("en-US", {
-              style: "currency",
-              currency: "USD",
-            }).format(log.cost_paid as number)}
-          </span>
-        )}
-        {log.purchased_from && (
-          <span
-            style={{
-              padding: "3px 9px",
-              borderRadius: 20,
-              fontSize: 11,
-              background: "rgba(45,10,78,0.35)",
-              color: "rgba(255,255,255,0.45)",
-            }}
-          >
-            {log.purchased_from}
-          </span>
-        )}
-        {log.purchased_at && (
-          <span
-            style={{
-              padding: "3px 9px",
-              borderRadius: 20,
-              fontSize: 11,
-              background: "rgba(45,10,78,0.35)",
-              color: "rgba(255,255,255,0.35)",
-            }}
-          >
-            {new Intl.DateTimeFormat("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            }).format(new Date(log.purchased_at))}
-          </span>
-        )}
-      </div>
-
-      {/* Row 8: Like button */}
-      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <LikeButton
-          logId={log.id}
-          initialCount={likeCount}
-          initialLiked={isLikedByCurrentUser}
-          currentUserId={currentUserId}
-        />
-        {/* Comment count indicator — read-only, comments are below */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <svg
-            width="16"
-            height="16"
+            width="18"
+            height="18"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="rgba(255,255,255,0.4)"
-            strokeWidth="2"
+            stroke="currentColor"
+            strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
             aria-hidden="true"
           >
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            <path d="M19 12H5" />
+            <path d="M12 19l-7-7 7-7" />
           </svg>
-          <span
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: "rgba(255,255,255,0.4)",
-            }}
-          >
-            {commentCount}
-          </span>
-        </div>
+        </button>
+
+        {/* Slime name */}
+        <h1
+          style={{
+            flex: 1,
+            margin: 0,
+            fontSize: 16,
+            fontWeight: 800,
+            color: "#fff",
+            lineHeight: 1.3,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            fontFamily: "Montserrat, Inter, sans-serif",
+          }}
+        >
+          {log.slime_name ?? "Unnamed Slime"}
+        </h1>
       </div>
 
-      {/* Row 9: Comments */}
-      <CommentSection logId={log.id} currentUserId={currentUserId} />
-
-      {/* Row 10: View full details */}
-      <Link
-        href={`/slimes/${log.id}`}
+      {/* ── Image area — 280px fixed height ── */}
+      <div
         style={{
-          display: "block",
-          textAlign: "center",
-          padding: "9px 0",
-          borderRadius: 10,
-          background: "rgba(0,240,255,0.08)",
-          border: "1px solid rgba(0,240,255,0.25)",
-          color: "#00F0FF",
-          fontSize: 13,
-          fontWeight: 600,
-          textDecoration: "none",
-          letterSpacing: "0.02em",
+          position: "relative",
+          width: "100%",
+          height: 280,
+          flexShrink: 0,
+          cursor: imageUrl ? "zoom-in" : "default",
+        }}
+        onClick={imageUrl ? onImageOpen : undefined}
+      >
+        {imageUrl ? (
+          <>
+            <Image
+              src={imageUrl}
+              alt={log.slime_name ?? "Slime photo"}
+              fill
+              className="object-cover"
+              sizes="100vw"
+            />
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                background:
+                  "linear-gradient(to bottom, rgba(0,0,0,0) 50%, rgba(10,0,20,0.7) 100%)",
+                pointerEvents: "none",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                bottom: 10,
+                right: 12,
+                fontSize: 11,
+                color: "rgba(255,255,255,0.45)",
+                background: "rgba(0,0,0,0.4)",
+                padding: "3px 8px",
+                borderRadius: 6,
+                pointerEvents: "none",
+              }}
+            >
+              tap to enlarge
+            </div>
+          </>
+        ) : (
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              background:
+                "radial-gradient(ellipse 100% 60% at 50% 0%, #2D0A4E 0%, #100020 35%, #0A0A0A 65%)",
+            }}
+          />
+        )}
+      </div>
+
+      {/* ── Scrollable body ── */}
+      <div
+        style={{
+          padding: "20px 16px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 16,
         }}
       >
-        View Full Details
-      </Link>
+        {/* Slime name (large, cyan) */}
+        <h2
+          style={{
+            margin: 0,
+            fontSize: 24,
+            fontWeight: 900,
+            color: "#00F0FF",
+            lineHeight: 1.2,
+            fontFamily: "Montserrat, Inter, sans-serif",
+          }}
+        >
+          {log.slime_name ?? "Unnamed Slime"}
+        </h2>
+
+        {/* Brand row */}
+        {log.brand_name_raw && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+            }}
+          >
+            {brandSlug ? (
+              <>
+                <Link
+                  href={`/brands/${brandSlug}`}
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 600,
+                    color: "#00F0FF",
+                    textDecoration: "none",
+                  }}
+                >
+                  {log.brand_name_raw}
+                </Link>
+                <Link
+                  href={`/brands/${brandSlug}`}
+                  aria-label={`Visit ${log.brand_name_raw}`}
+                  style={{ color: "rgba(255,255,255,0.35)", lineHeight: 0 }}
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="1" />
+                    <circle cx="19" cy="12" r="1" />
+                    <circle cx="5" cy="12" r="1" />
+                  </svg>
+                </Link>
+              </>
+            ) : (
+              <span
+                style={{
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: "rgba(255,255,255,0.55)",
+                }}
+              >
+                {log.brand_name_raw}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Type badge + collection status + color swatches */}
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 8,
+            alignItems: "center",
+          }}
+        >
+          {log.slime_type && (
+            <span
+              style={{
+                padding: "3px 11px",
+                borderRadius: 20,
+                fontSize: 12,
+                background: `${typeColor}18`,
+                color: typeColor,
+                border: `1px solid ${typeColor}40`,
+                fontWeight: 600,
+              }}
+            >
+              {log.slime_type.replace(/_/g, " ")}
+            </span>
+          )}
+          {log.in_wishlist ? (
+            <span
+              style={{
+                padding: "3px 11px",
+                borderRadius: 20,
+                fontSize: 12,
+                background: "rgba(148,0,211,0.15)",
+                color: "#CC44FF",
+                border: "1px solid rgba(148,0,211,0.35)",
+              }}
+            >
+              Wishlist
+            </span>
+          ) : log.in_collection ? (
+            <span
+              style={{
+                padding: "3px 11px",
+                borderRadius: 20,
+                fontSize: 12,
+                background: "rgba(57,255,20,0.12)",
+                color: "#39FF14",
+                border: "1px solid rgba(57,255,20,0.3)",
+              }}
+            >
+              In Collection
+            </span>
+          ) : null}
+          {log.colors &&
+            log.colors.length > 0 &&
+            log.colors.map((c: string, i: number) => (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "3px 9px",
+                  borderRadius: 20,
+                  background: "rgba(45,10,78,0.4)",
+                  border: "1px solid rgba(45,10,78,0.6)",
+                }}
+              >
+                <div
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    background: getSwatchColor(c),
+                    flexShrink: 0,
+                    border: "1px solid rgba(255,255,255,0.15)",
+                  }}
+                />
+                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
+                  {c}
+                </span>
+              </div>
+            ))}
+        </div>
+
+        {/* Overall rating */}
+        {typeof log.rating_overall === "number" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span
+              style={{
+                fontSize: 48,
+                fontWeight: 900,
+                color: "#39FF14",
+                lineHeight: 1,
+                fontFamily: "Montserrat, Inter, sans-serif",
+              }}
+            >
+              {log.rating_overall}
+            </span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <StarRow rating={log.rating_overall} />
+              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>
+                overall rating
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Achievement placeholder — renders when badge system is built */}
+
+        {/* Like + Comment action bar */}
+        <div
+          style={{
+            display: "flex",
+            borderTop: "1px solid rgba(45,10,78,0.6)",
+            borderBottom: "1px solid rgba(45,10,78,0.6)",
+          }}
+        >
+          {/* Like side */}
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              padding: "12px 0",
+            }}
+          >
+            <LikeButton
+              logId={log.id}
+              initialCount={likeCount}
+              initialLiked={isLikedByCurrentUser}
+              currentUserId={currentUserId}
+            />
+          </div>
+
+          {/* Vertical divider */}
+          <div
+            style={{
+              width: 1,
+              background: "rgba(45,10,78,0.6)",
+              flexShrink: 0,
+            }}
+          />
+
+          {/* Comment side */}
+          <button
+            onClick={scrollToComments}
+            style={{
+              flex: 1,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              gap: 8,
+              padding: "12px 0",
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              color: "rgba(255,255,255,0.5)",
+            }}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>Comment</span>
+            {commentCount > 0 && (
+              <span
+                style={{
+                  fontSize: 12,
+                  color: "rgba(255,255,255,0.3)",
+                  fontWeight: 400,
+                }}
+              >
+                {commentCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Dimension rating grid */}
+        {activeDimensions.length > 0 && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "10px 16px",
+              padding: "12px 14px",
+              background: "rgba(45,10,78,0.3)",
+              borderRadius: 12,
+              border: "1px solid rgba(45,10,78,0.5)",
+            }}
+          >
+            {activeDimensions.map(({ key, label }) => (
+              <div
+                key={key}
+                style={{ display: "flex", flexDirection: "column", gap: 4 }}
+              >
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: "rgba(255,255,255,0.4)",
+                    letterSpacing: "0.04em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {label}
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <RatingDots value={log[key] as number} />
+                  <span
+                    style={{ fontSize: 12, color: "#39FF14", fontWeight: 700 }}
+                  >
+                    {log[key] as number}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Notes */}
+        {log.notes && (
+          <p
+            style={{
+              margin: 0,
+              fontSize: 14,
+              color: "rgba(255,255,255,0.5)",
+              fontStyle: "italic",
+              lineHeight: 1.6,
+            }}
+          >
+            {log.notes}
+          </p>
+        )}
+
+        {/* Meta row */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {log.created_at && (
+            <span
+              style={{
+                padding: "4px 10px",
+                borderRadius: 20,
+                fontSize: 11,
+                background: "rgba(45,10,78,0.35)",
+                color: "rgba(255,255,255,0.35)",
+              }}
+            >
+              Logged{" "}
+              {new Intl.DateTimeFormat("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              }).format(new Date(log.created_at))}
+            </span>
+          )}
+          {typeof log.cost_paid === "number" && (
+            <span
+              style={{
+                padding: "4px 10px",
+                borderRadius: 20,
+                fontSize: 11,
+                background: "rgba(45,10,78,0.35)",
+                color: "rgba(255,255,255,0.45)",
+              }}
+            >
+              {new Intl.NumberFormat("en-US", {
+                style: "currency",
+                currency: "USD",
+              }).format(log.cost_paid)}
+            </span>
+          )}
+          {log.purchased_from && (
+            <span
+              style={{
+                padding: "4px 10px",
+                borderRadius: 20,
+                fontSize: 11,
+                background: "rgba(45,10,78,0.35)",
+                color: "rgba(255,255,255,0.45)",
+              }}
+            >
+              {log.purchased_from}
+            </span>
+          )}
+          {log.purchased_at && (
+            <span
+              style={{
+                padding: "4px 10px",
+                borderRadius: 20,
+                fontSize: 11,
+                background: "rgba(45,10,78,0.35)",
+                color: "rgba(255,255,255,0.35)",
+              }}
+            >
+              {new Intl.DateTimeFormat("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              }).format(new Date(log.purchased_at))}
+            </span>
+          )}
+        </div>
+
+        {/* Comment section */}
+        <div ref={commentRef}>
+          <CommentSection logId={log.id} currentUserId={currentUserId} />
+        </div>
+
+        {/* View Full Review */}
+        <Link
+          href={`/slimes/${log.id}`}
+          style={{
+            display: "block",
+            textAlign: "center",
+            padding: "14px 0",
+            borderRadius: 14,
+            background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+            color: "#0A0A0A",
+            fontSize: 15,
+            fontWeight: 800,
+            textDecoration: "none",
+            letterSpacing: "0.02em",
+            fontFamily: "Montserrat, Inter, sans-serif",
+          }}
+        >
+          View Full Review
+        </Link>
+
+        {/* Bottom safe area */}
+        <div style={{ height: 32 }} />
+      </div>
     </div>
   );
 }

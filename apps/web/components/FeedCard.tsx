@@ -160,7 +160,6 @@ function Avatar({
   avatar_url: string | null;
 }) {
   const initial = username ? username.charAt(0).toUpperCase() : "?";
-
   if (avatar_url) {
     return (
       <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-white/10">
@@ -174,7 +173,6 @@ function Avatar({
       </div>
     );
   }
-
   return (
     <div
       className="w-8 h-8 rounded-full flex items-center justify-center text-slime-bg text-xs font-bold shrink-0"
@@ -197,17 +195,17 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
       <button
         onClick={onClose}
         aria-label="Close image"
-        className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 text-white text-xl hover:bg-white/20 transition-colors"
+        className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors"
       >
-        {/* × SVG */}
         <svg
           width="18"
           height="18"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="currentColor"
+          stroke="white"
           strokeWidth="2.5"
           strokeLinecap="round"
+          aria-hidden="true"
         >
           <line x1="18" y1="6" x2="6" y2="18" />
           <line x1="6" y1="6" x2="18" y2="18" />
@@ -229,17 +227,10 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
   );
 }
 
-// ─── SlimeDetailCard overlay ──────────────────────────────────────────────────
+// ─── CollectionLog builder ────────────────────────────────────────────────────
 
-function DetailOverlay({
-  log,
-  onClose,
-}: {
-  log: FeedCardLog;
-  onClose: () => void;
-}) {
-  // Build a minimal CollectionLog shape for SlimeDetailCard
-  const collectionLog: CollectionLog = {
+function buildCollectionLog(log: FeedCardLog): CollectionLog {
+  return {
     id: log.id,
     user_id: log.actor_id,
     slime_id: null,
@@ -269,35 +260,6 @@ function DetailOverlay({
     created_at: log.created_at,
     updated_at: log.updated_at,
   };
-
-  return (
-    <div
-      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center"
-      onClick={onClose}
-    >
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-
-      {/* Sheet */}
-      <div
-        className="relative w-full sm:max-w-lg mx-auto max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-5"
-        style={{
-          background: "rgba(16,0,32,0.97)",
-          border: "1px solid rgba(45,10,78,0.8)",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <SlimeDetailCard
-          log={collectionLog}
-          onClose={onClose}
-          likeCount={log.like_count}
-          commentCount={log.comment_count}
-          isLikedByCurrentUser={log.is_liked_by_current_user}
-          currentUserId={log.actor_id ?? null}
-        />
-      </div>
-    </div>
-  );
 }
 
 // ─── FeedCard ─────────────────────────────────────────────────────────────────
@@ -312,11 +274,14 @@ export default function FeedCard({
 
   const openDetail = useCallback(() => setShowDetail(true), []);
   const closeDetail = useCallback(() => setShowDetail(false), []);
-  const openLightbox = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
+  const closeLightbox = useCallback(() => setShowLightbox(false), []);
+
+  // Lightbox is triggered from inside SlimeDetailCard via onImageOpen.
+  // Closes the detail overlay first; user returns to feed on lightbox close.
+  const handleImageOpen = useCallback(() => {
+    setShowDetail(false);
     setShowLightbox(true);
   }, []);
-  const closeLightbox = useCallback(() => setShowLightbox(false), []);
 
   const typeStyle =
     (log.slime_type && TYPE_STYLE[log.slime_type]) || fallbackType;
@@ -330,17 +295,21 @@ export default function FeedCard({
 
   return (
     <>
-      {/* ── Card ── */}
+      {/* ── Card ──
+          min-h-[90vh]: card dominates the viewport; ~60-80px of next card peeks below.
+          flex flex-col: allows image area to flex-1 fill remaining height above body/footer.
+      */}
       <article
-        className="relative w-full max-w-lg mx-auto rounded-2xl overflow-hidden cursor-pointer"
+        className="relative w-full max-w-lg mx-auto rounded-2xl overflow-hidden cursor-pointer flex flex-col"
         style={{
+          minHeight: "90vh",
           background: "rgba(45,10,78,0.25)",
           border: "1px solid rgba(45,10,78,0.7)",
         }}
         onClick={openDetail}
       >
-        {/* ── Image area (top ~45%) ── */}
-        <div className="relative w-full" style={{ paddingBottom: "52%" }}>
+        {/* ── Image area — flex-1 expands to fill space above card body ── */}
+        <div className="relative flex-1 min-h-0">
           {hasImage ? (
             <>
               <Image
@@ -349,9 +318,7 @@ export default function FeedCard({
                 fill
                 className="object-cover"
                 sizes="(max-width: 512px) 100vw, 512px"
-                onClick={openLightbox}
               />
-              {/* Dark gradient overlay for text readability */}
               <div
                 className="absolute inset-0 pointer-events-none"
                 style={{
@@ -361,7 +328,6 @@ export default function FeedCard({
               />
             </>
           ) : (
-            /* No-image fallback: radial purple gradient */
             <div
               className="absolute inset-0"
               style={{
@@ -380,7 +346,7 @@ export default function FeedCard({
             {log.username ? (
               <Link
                 href={`/users/${log.username}`}
-                className="text-sm font-semibold text-slime-magenta hover:text-slime-accent transition-colors drop-shadow-sm"
+                className="text-sm font-semibold text-slime-magenta hover:text-slime-accent transition-colors"
                 style={{ textShadow: "0 1px 4px rgba(0,0,0,0.7)" }}
               >
                 @{log.username}
@@ -397,7 +363,7 @@ export default function FeedCard({
 
           {/* Timestamp — top right */}
           <time
-            className="absolute top-3 right-3 z-10 text-[11px] text-white/60 font-medium drop-shadow-sm"
+            className="absolute top-3 right-3 z-10 text-[11px] text-white/60 font-medium"
             dateTime={log.created_at}
             style={{ textShadow: "0 1px 3px rgba(0,0,0,0.8)" }}
           >
@@ -405,9 +371,8 @@ export default function FeedCard({
           </time>
         </div>
 
-        {/* ── Card body ── */}
-        <div className="px-4 pt-3 pb-2 flex flex-col gap-2.5">
-          {/* Slime name */}
+        {/* ── Card body — shrink-0 so it stays fixed height ── */}
+        <div className="px-4 pt-3 pb-2 flex flex-col gap-2.5 shrink-0">
           <h2
             className="text-lg font-extrabold text-white leading-tight"
             style={{ fontFamily: "Montserrat, Inter, sans-serif" }}
@@ -415,7 +380,6 @@ export default function FeedCard({
             {slimeName}
           </h2>
 
-          {/* Brand row */}
           {brandName && (
             <div className="flex items-center justify-between gap-2">
               {brandSlug ? (
@@ -458,7 +422,6 @@ export default function FeedCard({
             </div>
           )}
 
-          {/* Type badge + color swatches row */}
           <div className="flex items-center gap-2 flex-wrap">
             <span
               className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${typeStyle.bg} ${typeStyle.text}`}
@@ -480,10 +443,8 @@ export default function FeedCard({
                 ))}
           </div>
 
-          {/* Star rating */}
           <Stars rating={log.rating_overall} />
 
-          {/* Like + comment count */}
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1.5">
               <svg
@@ -522,8 +483,8 @@ export default function FeedCard({
           </div>
         </div>
 
-        {/* ── Card footer ── */}
-        <div className="px-4 pb-4 pt-1">
+        {/* ── Card footer — shrink-0 ── */}
+        <div className="px-4 pb-4 pt-1 shrink-0">
           <Link
             href={`/slimes/${log.id}`}
             onClick={(e) => e.stopPropagation()}
@@ -535,8 +496,22 @@ export default function FeedCard({
         </div>
       </article>
 
-      {/* ── Overlays ── */}
-      {showDetail && <DetailOverlay log={log} onClose={closeDetail} />}
+      {/* ── Level 2: Full-screen detail overlay ── */}
+      {showDetail && (
+        <SlimeDetailCard
+          log={buildCollectionLog(log)}
+          imageUrl={log.image_url}
+          brandSlug={brandSlug}
+          onClose={closeDetail}
+          onImageOpen={handleImageOpen}
+          likeCount={log.like_count}
+          commentCount={log.comment_count}
+          isLikedByCurrentUser={log.is_liked_by_current_user}
+          currentUserId={currentUserId}
+        />
+      )}
+
+      {/* ── Lightbox (z-[200], above detail overlay z-[100]) ── */}
       {showLightbox && log.image_url && (
         <Lightbox src={log.image_url} onClose={closeLightbox} />
       )}

@@ -492,7 +492,7 @@ export default async function HomePage({
                       : "Recent logs"}{" "}
                     · {displayLogs.length} shown
                   </p>
-                  <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-3">
                     {displayLogs.map((log) => (
                       <FeedCard
                         key={log.id}

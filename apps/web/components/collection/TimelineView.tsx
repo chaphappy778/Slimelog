@@ -367,7 +367,7 @@ export default function TimelineView({ logs, likeData, currentUserId }: Props) {
         )}
       </div>
 
-      {/* [Change 3] Detail card now passes like/comment props. */}
+      {/* [Change 3] Added imageUrl, brandSlug, onImageOpen to match updated SlimeDetailCard props. */}
       {selectedLog && selectedLikeEntry && (
         <div
           style={{
@@ -379,7 +379,10 @@ export default function TimelineView({ logs, likeData, currentUserId }: Props) {
         >
           <SlimeDetailCard
             log={selectedLog}
+            imageUrl={selectedLog.image_url ?? null}
+            brandSlug={null}
             onClose={() => setSelectedLog(null)}
+            onImageOpen={() => {}}
             likeCount={selectedLikeEntry.likeCount}
             commentCount={selectedLikeEntry.commentCount}
             isLikedByCurrentUser={selectedLikeEntry.isLiked}
