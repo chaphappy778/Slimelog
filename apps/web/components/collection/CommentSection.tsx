@@ -15,9 +15,15 @@ interface Comment {
 interface Props {
   logId: string;
   currentUserId: string | null;
+  // [Bug 1] Callback so SlimeDetailCard can track live comment count
+  onCountChange: (count: number) => void;
 }
 
-export default function CommentSection({ logId, currentUserId }: Props) {
+export default function CommentSection({
+  logId,
+  currentUserId,
+  onCountChange,
+}: Props) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [body, setBody] = useState("");
@@ -38,10 +44,14 @@ export default function CommentSection({ logId, currentUserId }: Props) {
         .from("comments")
         .select("id, user_id, body, created_at, profiles ( username )")
         .eq("log_id", logId)
-        .order("created_at", { ascending: true });
+        // [Bug 3] Newest first
+        .order("created_at", { ascending: false });
 
       if (!cancelled) {
-        setComments((data as unknown as Comment[]) ?? []);
+        const loaded = (data as unknown as Comment[]) ?? [];
+        setComments(loaded);
+        // [Bug 1] Sync count after initial fetch
+        onCountChange(loaded.length);
         setLoading(false);
       }
     }
@@ -65,7 +75,14 @@ export default function CommentSection({ logId, currentUserId }: Props) {
       .single();
 
     if (!error && data) {
-      setComments((prev) => [...prev, data as unknown as Comment]);
+      const newComment = data as unknown as Comment;
+      // [Bug 3] Prepend so newest appears at top
+      setComments((prev) => {
+        const updated = [newComment, ...prev];
+        // [Bug 1] Notify parent of new count
+        onCountChange(updated.length);
+        return updated;
+      });
       setBody("");
     }
 
@@ -80,7 +97,12 @@ export default function CommentSection({ logId, currentUserId }: Props) {
       .eq("user_id", currentUserId!);
 
     if (!error) {
-      setComments((prev) => prev.filter((c) => c.id !== commentId));
+      setComments((prev) => {
+        const updated = prev.filter((c) => c.id !== commentId);
+        // [Bug 1] Notify parent of new count
+        onCountChange(updated.length);
+        return updated;
+      });
     }
   }
 
@@ -109,9 +131,11 @@ export default function CommentSection({ logId, currentUserId }: Props) {
         }}
       />
 
-      {/* Comment list */}
+      {/* [Bug 2] Scrollable comment list — capped at 320px */}
       <div
         style={{
+          maxHeight: 320,
+          overflowY: "auto",
           display: "flex",
           flexDirection: "column",
           gap: 10,
@@ -188,7 +212,6 @@ export default function CommentSection({ logId, currentUserId }: Props) {
                       {formatRelativeTime(c.created_at)}
                     </span>
                     {isOwn && (
-                      // [Bug 3 fix] type="button" prevents implicit form submission
                       <button
                         type="button"
                         onClick={() => handleDelete(c.id)}
@@ -238,7 +261,7 @@ export default function CommentSection({ logId, currentUserId }: Props) {
         )}
       </div>
 
-      {/* Input — only shown when logged in */}
+      {/* Input — outside scroll container, always visible. Only shown when logged in. */}
       {currentUserId && (
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
           <textarea
@@ -263,8 +286,6 @@ export default function CommentSection({ logId, currentUserId }: Props) {
               lineHeight: 1.5,
             }}
           />
-          {/* [Bug 3 fix] type="button" prevents Enter in textarea from
-              triggering this button via implicit form submission */}
           <button
             type="button"
             onClick={handleSubmit}

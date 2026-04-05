@@ -10,7 +10,6 @@ import { revalidatePath } from "next/cache";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-// Matches the slime_type enum defined in the schema.
 import type { SlimeType } from "@/lib/types";
 
 export interface LogSlimeInput {
