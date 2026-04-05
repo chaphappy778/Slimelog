@@ -19,6 +19,8 @@ interface Props {
   onCountChange: (count: number) => void;
 }
 
+const COLLAPSED_COUNT = 2;
+
 export default function CommentSection({
   logId,
   currentUserId,
@@ -28,6 +30,8 @@ export default function CommentSection({
   const [loading, setLoading] = useState(true);
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // [Fix 1] Collapsed/expanded state — show 2 by default
+  const [expanded, setExpanded] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const supabase = createBrowserClient(
@@ -50,7 +54,7 @@ export default function CommentSection({
       if (!cancelled) {
         const loaded = (data as unknown as Comment[]) ?? [];
         setComments(loaded);
-        // [Bug 1] Sync count after initial fetch
+        // [Bug 1] Safe — called after setComments, not inside its updater
         onCountChange(loaded.length);
         setLoading(false);
       }
@@ -77,12 +81,9 @@ export default function CommentSection({
     if (!error && data) {
       const newComment = data as unknown as Comment;
       // [Bug 3] Prepend so newest appears at top
-      setComments((prev) => {
-        const updated = [newComment, ...prev];
-        // [Bug 1] Notify parent of new count
-        onCountChange(updated.length);
-        return updated;
-      });
+      // [Fix] onCountChange called after setComments, never inside the updater
+      setComments((prev) => [newComment, ...prev]);
+      onCountChange(comments.length + 1);
       setBody("");
     }
 
@@ -97,12 +98,9 @@ export default function CommentSection({
       .eq("user_id", currentUserId!);
 
     if (!error) {
-      setComments((prev) => {
-        const updated = prev.filter((c) => c.id !== commentId);
-        // [Bug 1] Notify parent of new count
-        onCountChange(updated.length);
-        return updated;
-      });
+      // [Fix] onCountChange called after setComments, never inside the updater
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
+      onCountChange(comments.length - 1);
     }
   }
 
@@ -120,6 +118,12 @@ export default function CommentSection({
     );
   }
 
+  // [Fix 1] Slice to COLLAPSED_COUNT unless expanded
+  const visibleComments = expanded
+    ? comments
+    : comments.slice(0, COLLAPSED_COUNT);
+  const hasMore = comments.length > COLLAPSED_COUNT;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
       {/* Divider */}
@@ -131,15 +135,14 @@ export default function CommentSection({
         }}
       />
 
-      {/* [Bug 2] Scrollable comment list — capped at 320px */}
+      {/* [Fix 1] No scroll container — overlay scrolls naturally.
+          Show only visibleComments; expand/collapse button below. */}
       <div
         style={{
-          maxHeight: 320,
-          overflowY: "auto",
           display: "flex",
           flexDirection: "column",
           gap: 10,
-          marginBottom: 14,
+          marginBottom: 8,
         }}
       >
         {loading ? (
@@ -165,7 +168,7 @@ export default function CommentSection({
             No comments yet. Be the first.
           </p>
         ) : (
-          comments.map((c) => {
+          visibleComments.map((c) => {
             const username =
               (c.profiles as { username: string | null } | null)?.username ??
               "unknown";
@@ -261,7 +264,29 @@ export default function CommentSection({
         )}
       </div>
 
-      {/* Input — outside scroll container, always visible. Only shown when logged in. */}
+      {/* [Fix 1] Expand / collapse toggle — only shown when there are more than 2 */}
+      {hasMore && (
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            fontSize: 12,
+            color: "#00F0FF",
+            fontWeight: 600,
+            padding: "4px 0",
+            fontFamily: "Montserrat, sans-serif",
+            marginBottom: 10,
+            textAlign: "left",
+          }}
+        >
+          {expanded ? "Show less" : `Show all ${comments.length} comments`}
+        </button>
+      )}
+
+      {/* Input — always visible below list. Only shown when logged in. */}
       {currentUserId && (
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
           <textarea

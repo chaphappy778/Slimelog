@@ -278,9 +278,8 @@ export default function FeedCard({
   const closeDetail = useCallback(() => setShowDetail(false), []);
   const closeLightbox = useCallback(() => setShowLightbox(false), []);
 
-  // [Bug 5 fix] Do NOT close detail when opening lightbox — keep it mounted
-  // underneath at z-[100]. Lightbox renders at z-[200] above it. When the
-  // lightbox closes, the detail overlay is still open underneath.
+  // Do NOT close detail when opening lightbox — keep it mounted
+  // underneath at z-[100]. Lightbox renders at z-[200] above it.
   const handleImageOpen = useCallback(() => {
     setShowLightbox(true);
   }, []);
@@ -293,91 +292,78 @@ export default function FeedCard({
   const timeAgo = formatDistanceToNow(new Date(log.created_at), {
     addSuffix: true,
   });
-  const hasImage = !!log.image_url;
 
   return (
     <>
       {/* ── Card ──
-          [Bug 1 fix] minHeight and image area height conditional on hasImage.
-          Cards without an image use auto height + 180px image placeholder
-          instead of 90vh + calc(90vh * 0.58), preventing a large empty void.
-      */}
+          [Change 2] minHeight: "auto" for all cards — no card dominates
+          the full viewport. Layout order: avatar row → image (if any) →
+          body → footer. */}
       <article
         className="relative w-full max-w-lg mx-auto rounded-2xl overflow-hidden cursor-pointer flex flex-col"
         style={{
-          minHeight: hasImage ? "90vh" : "auto",
+          minHeight: "auto",
           background: "rgba(45,10,78,0.25)",
           border: "1px solid rgba(45,10,78,0.7)",
         }}
         onClick={openDetail}
       >
-        {/* ── Image area ── */}
+        {/* ── Avatar + username + timestamp row ──
+            [Change 2] Moved OUTSIDE the image div so it always renders
+            regardless of whether an image exists. Sits directly on the
+            card surface with simple padding — no background needed. */}
         <div
-          className="relative"
-          style={{ height: hasImage ? "calc(90vh * 0.58)" : "180px" }}
+          className="flex items-center justify-between gap-2 shrink-0"
+          style={{ padding: "10px 14px 0" }}
+          onClick={(e) => e.stopPropagation()}
         >
-          {hasImage ? (
-            <>
-              <Image
-                src={log.image_url!}
-                alt={slimeName}
-                fill
-                className="object-cover"
-                sizes="(max-width: 512px) 100vw, 512px"
-              />
-              <div
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                  background:
-                    "linear-gradient(to bottom, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0) 40%, rgba(10,0,20,0.72) 100%)",
-                }}
-              />
-            </>
-          ) : (
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  "radial-gradient(ellipse 100% 60% at 50% 0%, #2D0A4E 0%, #100020 35%, #0A0A0A 65%)",
-              }}
-            />
-          )}
-
-          {/* Avatar + username — top left */}
-          <div
-            className="absolute top-3 left-3 flex items-center gap-2 z-10"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="flex items-center gap-2">
             <Avatar username={log.username} avatar_url={log.avatar_url} />
             {log.username ? (
               <Link
                 href={`/users/${log.username}`}
                 className="text-sm font-semibold text-slime-magenta hover:text-slime-accent transition-colors"
-                style={{ textShadow: "0 1px 4px rgba(0,0,0,0.7)" }}
               >
                 @{log.username}
               </Link>
             ) : (
-              <span
-                className="text-sm font-semibold text-slime-magenta"
-                style={{ textShadow: "0 1px 4px rgba(0,0,0,0.7)" }}
-              >
+              <span className="text-sm font-semibold text-slime-magenta">
                 @anonymous
               </span>
             )}
           </div>
-
-          {/* Timestamp — top right */}
           <time
-            className="absolute top-3 right-3 z-10 text-[11px] text-white/60 font-medium"
+            className="text-[11px] text-white/60 font-medium"
             dateTime={log.created_at}
-            style={{ textShadow: "0 1px 3px rgba(0,0,0,0.8)" }}
           >
             {timeAgo}
           </time>
         </div>
 
-        {/* ── Card body — shrink-0 ── */}
+        {/* ── Image area ──
+            [Change 2] Only rendered when log.image_url exists.
+            Purple gradient placeholder removed entirely.
+            Fixed height 220px for all cards with images. */}
+        {log.image_url && (
+          <div className="relative shrink-0 mt-2" style={{ height: "220px" }}>
+            <Image
+              src={log.image_url}
+              alt={slimeName}
+              fill
+              className="object-cover"
+              sizes="(max-width: 512px) 100vw, 512px"
+            />
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  "linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0) 40%, rgba(10,0,20,0.55) 100%)",
+              }}
+            />
+          </div>
+        )}
+
+        {/* ── Card body ── */}
         <div className="px-4 pt-3 pb-2 flex flex-col gap-2.5 shrink-0">
           <h2
             className="text-lg font-extrabold text-white leading-tight"
@@ -451,9 +437,6 @@ export default function FeedCard({
 
           <Stars rating={log.rating_overall} />
 
-          {/* [Bug 2 fix] Interactive LikeButton replaces passive heart display.
-              stopPropagation wrapper prevents card tap from opening detail overlay
-              when the like button is tapped. Comment count remains passive. */}
           <div className="flex items-center gap-4">
             <div onClick={(e) => e.stopPropagation()}>
               <LikeButton
@@ -484,7 +467,7 @@ export default function FeedCard({
           </div>
         </div>
 
-        {/* ── Card footer — shrink-0 ── */}
+        {/* ── Card footer ── */}
         <div className="px-4 pb-4 pt-1 shrink-0">
           <Link
             href={`/slimes/${log.id}`}
