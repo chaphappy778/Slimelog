@@ -23,6 +23,8 @@ type CommunityQueryRow = {
   colors: string[] | null;
   rating_overall: number | null;
   image_url: string | null;
+  // [Change 1] in_wishlist added to community query row type
+  in_wishlist: boolean | null;
   // PostgREST returns a to-one join as a plain object, not an array.
   // We normalise this below so the rest of the code never has to branch.
   profiles:
@@ -35,6 +37,7 @@ type ActivityFeedQueryRow = {
   id: string;
   created_at: string;
   actor_id: string;
+  // [Change 1] activity_type confirmed present on this type
   activity_type: string;
   log_id: string | null;
   metadata: {
@@ -44,6 +47,7 @@ type ActivityFeedQueryRow = {
     rating_overall?: number | null;
     colors?: string[] | null;
     image_url?: string | null;
+    in_wishlist?: boolean | null;
   } | null;
   profiles:
     | { username: string | null; avatar_url: string | null }
@@ -211,11 +215,6 @@ export default async function HomePage({
   let communityError = false;
 
   if (activeTab === "community") {
-    // [Change 1] Extended profile select to include avatar_url.
-    // [Change 2] Added user_id and image_url to base select.
-    // [Change 3] FK hint profiles!collection_logs_user_id_fkey ensures the join
-    //            resolves to the correct FK and returns a real profile row
-    //            instead of null — this fixes the @anonymous bug.
     const { data: baseData, error: baseError } = await supabase
       .from("collection_logs")
       .select(
@@ -229,7 +228,9 @@ export default async function HomePage({
          colors,
          rating_overall,
          image_url,
+         in_wishlist,
          profiles!collection_logs_user_id_fkey ( username, avatar_url )`,
+        // [Change 1] in_wishlist added to select
       )
       .eq("is_public", true)
       .order("created_at", { ascending: false })
@@ -241,19 +242,16 @@ export default async function HomePage({
       const rows = (baseData ?? []) as unknown as CommunityQueryRow[];
       const ids = rows.map((r) => r.id);
 
-      // [Change 4] Bulk like counts.
       const { data: likesData } = await supabase
         .from("likes")
         .select("log_id")
         .in("log_id", ids);
 
-      // [Change 5] Bulk comment counts.
       const { data: commentsData } = await supabase
         .from("comments")
         .select("log_id")
         .in("log_id", ids);
 
-      // [Change 6] is_liked_by_current_user check for the authed user.
       const { data: userLikesData } = user
         ? await supabase
             .from("likes")
@@ -276,8 +274,6 @@ export default async function HomePage({
         userLikedSet.add(row.log_id);
       }
 
-      // [Change 7] Normalise profile shape — fixes @anonymous bug.
-      // PostgREST may return a plain object or array; normaliseProfile handles both.
       communityLogs = rows.map((r): FeedCardLog => {
         const profile = normaliseProfile(r.profiles);
         return {
@@ -290,6 +286,9 @@ export default async function HomePage({
           colors: r.colors,
           rating_overall: r.rating_overall,
           image_url: r.image_url,
+          // [Change 1] in_wishlist and activity_type added to FeedCardLog build
+          in_wishlist: r.in_wishlist ?? false,
+          activity_type: "log_created",
           actor_id: r.user_id,
           username: profile?.username ?? null,
           avatar_url: profile?.avatar_url ?? null,
@@ -320,14 +319,14 @@ export default async function HomePage({
       );
 
       if (followingIds.length > 0) {
-        // [Change 8] Extended profile select on activity_feed to include avatar_url.
         const { data: activityRows, error: activityErr } = await supabase
           .from("activity_feed")
           .select(
-            `id, created_at, actor_id, log_id, metadata,
+            `id, created_at, actor_id, activity_type, log_id, metadata,
              profiles!activity_feed_actor_id_fkey ( username, avatar_url )`,
+            // [Change 1] activity_type added to select
           )
-          .eq("activity_type", "log_created")
+          .in("activity_type", ["log_created", "wishlist_added"])
           .in("actor_id", followingIds)
           .order("created_at", { ascending: false })
           .limit(20);
@@ -341,7 +340,6 @@ export default async function HomePage({
             .map((r) => r.log_id)
             .filter((id): id is string => id != null);
 
-          // [Change 9] Bulk like + comment counts for following feed.
           const { data: fLikesData } = await supabase
             .from("likes")
             .select("log_id")
@@ -358,17 +356,17 @@ export default async function HomePage({
             .eq("user_id", user.id)
             .in("log_id", followingLogIds);
 
-          // [Change 12] Bulk-fetch updated_at from collection_logs for following
-          // feed rows. activity_feed.metadata does not carry updated_at, so we
-          // need a secondary lookup keyed by log_id.
           const { data: updatedAtData } = await supabase
             .from("collection_logs")
-            .select("id, updated_at")
+            .select("id, updated_at, in_wishlist")
+            // [Change 1] in_wishlist fetched from collection_logs for following feed
             .in("id", followingLogIds);
 
           const updatedAtMap: Record<string, string> = {};
+          const wishlistMap: Record<string, boolean> = {};
           for (const row of updatedAtData ?? []) {
             updatedAtMap[row.id] = row.updated_at;
+            wishlistMap[row.id] = row.in_wishlist ?? false;
           }
 
           const fLikeCountMap: Record<string, number> = {};
@@ -386,7 +384,6 @@ export default async function HomePage({
             fUserLikedSet.add(row.log_id);
           }
 
-          // [Change 10] Normalise following-feed profiles — same fix applied.
           followingLogs = typedRows.map((row): FeedCardLog => {
             const meta = row.metadata ?? {};
             const profile = normaliseProfile(row.profiles);
@@ -405,6 +402,15 @@ export default async function HomePage({
                   ? Number(meta.rating_overall)
                   : null,
               image_url: meta.image_url ?? null,
+              // [Change 1] in_wishlist resolved from collection_logs bulk fetch;
+              // falls back to metadata.in_wishlist if row not found, then
+              // falls back to activity_type check.
+              in_wishlist:
+                wishlistMap[logId] ??
+                meta.in_wishlist ??
+                row.activity_type === "wishlist_added",
+              // [Change 1] activity_type passed through from activity_feed row
+              activity_type: row.activity_type,
               actor_id: row.actor_id,
               username: profile?.username ?? null,
               avatar_url: profile?.avatar_url ?? null,
@@ -420,8 +426,6 @@ export default async function HomePage({
 
   // ─── Brand slug lookup ─────────────────────────────────────────────────────
 
-  // [Change 11] Collect all unique brand_name_raw values across the active feed,
-  // do a single bulk query, and build a name→slug map to pass to FeedCard.
   const displayLogs = activeTab === "following" ? followingLogs : communityLogs;
   const displayError =
     activeTab === "following" ? followingError : communityError;

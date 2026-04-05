@@ -27,6 +27,9 @@ export type FeedCardLog = {
   like_count: number;
   comment_count: number;
   is_liked_by_current_user: boolean;
+  // [Change 1] in_wishlist and activity_type added to type
+  in_wishlist: boolean;
+  activity_type: string;
 };
 
 interface FeedCardProps {
@@ -249,8 +252,9 @@ function buildCollectionLog(log: FeedCardLog): CollectionLog {
     likes: null,
     dislikes: null,
     notes: null,
-    in_collection: true,
-    in_wishlist: false,
+    // [Change 1] in_wishlist sourced from log instead of hardcoded false
+    in_collection: !log.in_wishlist,
+    in_wishlist: log.in_wishlist,
     rating_texture: null,
     rating_scent: null,
     rating_sound: null,
@@ -278,11 +282,13 @@ export default function FeedCard({
   const closeDetail = useCallback(() => setShowDetail(false), []);
   const closeLightbox = useCallback(() => setShowLightbox(false), []);
 
-  // Do NOT close detail when opening lightbox — keep it mounted
-  // underneath at z-[100]. Lightbox renders at z-[200] above it.
   const handleImageOpen = useCallback(() => {
     setShowLightbox(true);
   }, []);
+
+  // [Change 2] Determine if this card represents a wishlist entry
+  const isWishlist =
+    log.activity_type === "wishlist_added" || log.in_wishlist === true;
 
   const typeStyle =
     (log.slime_type && TYPE_STYLE[log.slime_type]) || fallbackType;
@@ -296,22 +302,20 @@ export default function FeedCard({
   return (
     <>
       {/* ── Card ──
-          [Change 2] minHeight: "auto" for all cards — no card dominates
-          the full viewport. Layout order: avatar row → image (if any) →
-          body → footer. */}
+          [Change 2] onClick only wired when not a wishlist card.
+          Wishlist cards are display-only — no detail overlay. */}
       <article
-        className="relative w-full max-w-lg mx-auto rounded-2xl overflow-hidden cursor-pointer flex flex-col"
+        className="relative w-full max-w-lg mx-auto rounded-2xl overflow-hidden flex flex-col"
         style={{
           minHeight: "auto",
           background: "rgba(45,10,78,0.25)",
           border: "1px solid rgba(45,10,78,0.7)",
+          // [Change 2] cursor: default for wishlist cards, pointer for logged cards
+          cursor: isWishlist ? "default" : "pointer",
         }}
-        onClick={openDetail}
+        onClick={isWishlist ? undefined : openDetail}
       >
-        {/* ── Avatar + username + timestamp row ──
-            [Change 2] Moved OUTSIDE the image div so it always renders
-            regardless of whether an image exists. Sits directly on the
-            card surface with simple padding — no background needed. */}
+        {/* ── Avatar + username + timestamp row ── */}
         <div
           className="flex items-center justify-between gap-2 shrink-0"
           style={{ padding: "10px 14px 0" }}
@@ -322,12 +326,17 @@ export default function FeedCard({
             {log.username ? (
               <Link
                 href={`/users/${log.username}`}
-                className="text-sm font-semibold text-slime-magenta hover:text-slime-accent transition-colors"
+                className="text-sm font-semibold hover:text-slime-accent transition-colors"
+                // [Change 2] Wishlist cards use magenta-purple for username accent
+                style={{ color: isWishlist ? "#CC44FF" : "#FF00E5" }}
               >
                 @{log.username}
               </Link>
             ) : (
-              <span className="text-sm font-semibold text-slime-magenta">
+              <span
+                className="text-sm font-semibold"
+                style={{ color: isWishlist ? "#CC44FF" : "#FF00E5" }}
+              >
                 @anonymous
               </span>
             )}
@@ -340,10 +349,7 @@ export default function FeedCard({
           </time>
         </div>
 
-        {/* ── Image area ──
-            [Change 2] Only rendered when log.image_url exists.
-            Purple gradient placeholder removed entirely.
-            Fixed height 220px for all cards with images. */}
+        {/* ── Image area ── */}
         {log.image_url && (
           <div className="relative shrink-0 mt-2" style={{ height: "220px" }}>
             <Image
@@ -378,7 +384,9 @@ export default function FeedCard({
                 <>
                   <Link
                     href={`/brands/${brandSlug}`}
-                    className="text-sm text-slime-cyan hover:text-slime-accent transition-colors font-medium"
+                    className="text-sm font-medium hover:text-slime-accent transition-colors"
+                    // [Change 2] Brand name uses #CC44FF for wishlist cards, #00F0FF for logged
+                    style={{ color: isWishlist ? "#CC44FF" : "#00F0FF" }}
                     onClick={(e) => e.stopPropagation()}
                   >
                     {brandName}
@@ -407,7 +415,12 @@ export default function FeedCard({
                   </Link>
                 </>
               ) : (
-                <span className="text-sm text-slime-muted font-medium">
+                <span
+                  className="text-sm font-medium"
+                  style={{
+                    color: isWishlist ? "#CC44FF" : "rgba(255,255,255,0.4)",
+                  }}
+                >
                   {brandName}
                 </span>
               )}
@@ -435,7 +448,14 @@ export default function FeedCard({
                 ))}
           </div>
 
-          <Stars rating={log.rating_overall} />
+          {/* [Change 2] Wishlist cards show "Added to Wishlist" label instead of star rating */}
+          {isWishlist ? (
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#CC44FF" }}>
+              Added to Wishlist
+            </span>
+          ) : (
+            <Stars rating={log.rating_overall} />
+          )}
 
           <div className="flex items-center gap-4">
             <div onClick={(e) => e.stopPropagation()}>
@@ -467,21 +487,32 @@ export default function FeedCard({
           </div>
         </div>
 
-        {/* ── Card footer ── */}
+        {/* ── Card footer ──
+            [Change 2] Wishlist cards: no "View Full Review" button.
+            Show muted "No review yet" text instead. */}
         <div className="px-4 pb-4 pt-1 shrink-0">
-          <Link
-            href={`/slimes/${log.id}`}
-            onClick={(e) => e.stopPropagation()}
-            className="block w-full text-center py-2.5 rounded-xl text-sm font-bold text-slime-bg transition-opacity hover:opacity-90"
-            style={{ background: "linear-gradient(135deg, #39FF14, #00F0FF)" }}
-          >
-            View Full Review
-          </Link>
+          {isWishlist ? (
+            <p className="text-center text-xs text-slime-muted py-2">
+              No review yet
+            </p>
+          ) : (
+            <Link
+              href={`/slimes/${log.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="block w-full text-center py-2.5 rounded-xl text-sm font-bold text-slime-bg transition-opacity hover:opacity-90"
+              style={{
+                background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+              }}
+            >
+              View Full Review
+            </Link>
+          )}
         </div>
       </article>
 
-      {/* ── Level 2: Full-screen detail overlay ── */}
-      {showDetail && (
+      {/* ── Level 2: Full-screen detail overlay ──
+          [Change 2] Only mounted for non-wishlist cards */}
+      {showDetail && !isWishlist && (
         <SlimeDetailCard
           log={buildCollectionLog(log)}
           imageUrl={log.image_url}

@@ -1,9 +1,10 @@
 "use client";
 // apps/web/components/collection/SlimeDetailCard.tsx
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { createBrowserClient } from "@supabase/ssr";
 import type { CollectionLog } from "@/lib/types";
 import LikeButton from "@/components/collection/LikeButton";
 import CommentSection from "@/components/collection/CommentSection";
@@ -150,6 +151,67 @@ export default function SlimeDetailCard({
   // [Bug 1] Live comment count — initialized from prop, updated via onCountChange
   const [liveCommentCount, setLiveCommentCount] = useState(commentCount);
 
+  // [Change 3] Wishlist state — null means "checking", true/false means resolved
+  const [isWishlisted, setIsWishlisted] = useState<boolean | null>(null);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
+
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  );
+
+  // [Change 3] On mount, check if current user already has a wishlist entry
+  // matching this slime name. Only runs when currentUserId is non-null.
+  useEffect(() => {
+    if (!currentUserId || !log.slime_name) {
+      setIsWishlisted(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function checkWishlist() {
+      const { data } = await supabase
+        .from("collection_logs")
+        .select("id")
+        .eq("user_id", currentUserId!)
+        .eq("slime_name", log.slime_name!)
+        .eq("in_wishlist", true)
+        .limit(1)
+        .maybeSingle();
+
+      if (!cancelled) {
+        setIsWishlisted(!!data);
+      }
+    }
+
+    checkWishlist();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserId, log.slime_name]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // [Change 3] Insert a new collection_logs row with in_wishlist: true
+  async function handleAddToWishlist() {
+    if (!currentUserId || wishlistLoading || isWishlisted) return;
+    setWishlistLoading(true);
+
+    const { error } = await supabase.from("collection_logs").insert({
+      user_id: currentUserId,
+      slime_name: log.slime_name,
+      brand_name_raw: log.brand_name_raw,
+      slime_type: log.slime_type,
+      in_wishlist: true,
+      in_collection: false,
+      is_public: true,
+    });
+
+    setWishlistLoading(false);
+    if (!error) {
+      setIsWishlisted(true);
+    }
+  }
+
   const typeColor = log.slime_type
     ? (TYPE_COLORS[log.slime_type] ?? "#39FF14")
     : "#39FF14";
@@ -166,15 +228,10 @@ export default function SlimeDetailCard({
     commentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  // [Change 1] IMAGE_HEIGHT reduced from 50vh to 28vh
   const IMAGE_HEIGHT = "28vh";
-  // [Change 1] OVERLAP is conditional — 56 when image exists, 0 when no image
   const OVERLAP = imageUrl ? 56 : 0;
 
   return (
-    // Root overlay — position: fixed, full viewport, scrollable.
-    // overflowY: "auto" here breaks position: sticky on descendants, so the
-    // View Full Review footer uses position: fixed instead.
     <div
       style={{
         position: "fixed",
@@ -185,9 +242,7 @@ export default function SlimeDetailCard({
         WebkitOverflowScrolling: "touch",
       }}
     >
-      {/* [Change 1] Floating header — moved OUTSIDE the image region so it
-          always renders regardless of whether an image exists. When no image,
-          it sits at the top with a dark semi-transparent background. */}
+      {/* [Change 1] Floating header */}
       <div
         style={{
           position: "sticky",
@@ -200,7 +255,6 @@ export default function SlimeDetailCard({
           background: imageUrl ? "transparent" : "rgba(10,0,20,0.85)",
           backdropFilter: imageUrl ? "none" : "blur(8px)",
           WebkitBackdropFilter: imageUrl ? "none" : "blur(8px)",
-          // When image exists, absolute positioning overlaps the image below
           ...(imageUrl
             ? {
                 position: "absolute" as const,
@@ -267,8 +321,7 @@ export default function SlimeDetailCard({
         </h1>
       </div>
 
-      {/* [Change 1] Image region — only rendered when imageUrl exists.
-          Purple gradient placeholder removed entirely. */}
+      {/* Image region */}
       {imageUrl && (
         <div
           style={{
@@ -277,7 +330,6 @@ export default function SlimeDetailCard({
             height: IMAGE_HEIGHT,
             flexShrink: 0,
             cursor: "zoom-in",
-            // Pull up behind the absolute header
             marginTop: "-64px",
           }}
           onClick={onImageOpen}
@@ -321,7 +373,6 @@ export default function SlimeDetailCard({
       <div
         style={{
           position: "relative",
-          // [Change 1] marginTop and borderRadius conditional on imageUrl
           marginTop: imageUrl ? -OVERLAP : 0,
           background: "#0F0018",
           borderRadius: imageUrl ? "24px 24px 0 0" : 0,
@@ -331,7 +382,7 @@ export default function SlimeDetailCard({
           paddingTop: imageUrl ? OVERLAP + 12 : 16,
         }}
       >
-        {/* Brand logo thumbnail — only shown when image exists (sits in the overlap zone) */}
+        {/* Brand logo thumbnail */}
         {imageUrl && (
           <div
             style={{
@@ -377,8 +428,7 @@ export default function SlimeDetailCard({
           </div>
         )}
 
-        {/* Info card body
-            paddingBottom: 140 — clears the fixed footer */}
+        {/* Info card body — paddingBottom clears the fixed footer */}
         <div
           style={{
             padding: "0 16px",
@@ -569,8 +619,6 @@ export default function SlimeDetailCard({
             </div>
           )}
 
-          {/* Achievement placeholder — renders when badge system is built */}
-
           {/* Like + Comment action bar */}
           <div
             style={{
@@ -635,7 +683,7 @@ export default function SlimeDetailCard({
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
               <span style={{ fontSize: 14, fontWeight: 600 }}>Comment</span>
-              {/* [Bug 1] Live count from state, not static prop */}
+              {/* [Bug 1] Live count from state */}
               {liveCommentCount > 0 && (
                 <span
                   style={{
@@ -792,25 +840,71 @@ export default function SlimeDetailCard({
         </div>
       </div>
 
-      {/* View Full Review — position: fixed so it is always visible
-          regardless of scroll position. The root overlay has overflowY: "auto"
-          which breaks position: sticky on descendants.
-          padding: "12px 16px 36px" clears the ~64px bottom nav bar. */}
+      {/* ── [Change 3] Two-button fixed footer ──
+          Left: Add to Wishlist (hidden when not logged in)
+          Right: View Full Review
+          position: fixed so it's always visible regardless of scroll.
+          padding-bottom clears the ~64px bottom nav bar. */}
       <div
         style={{
           position: "fixed",
-          bottom: 20,
+          bottom: 0,
           left: 0,
           right: 0,
           zIndex: 101,
           background: "#0F0018",
           borderTop: "1px solid rgba(45,10,78,0.4)",
           padding: "12px 16px 80px",
+          display: "flex",
+          gap: 10,
         }}
       >
+        {/* Add to Wishlist — only shown when logged in */}
+        {currentUserId !== null && (
+          <button
+            type="button"
+            onClick={handleAddToWishlist}
+            disabled={wishlistLoading || isWishlisted === true}
+            style={{
+              flex: 1,
+              padding: "15px 0",
+              borderRadius: 14,
+              fontSize: 14,
+              fontWeight: 700,
+              fontFamily: "Montserrat, Inter, sans-serif",
+              cursor: isWishlisted || wishlistLoading ? "default" : "pointer",
+              transition: "opacity 0.15s",
+              border: "none",
+              // [Change 3] Muted style when already wishlisted, active purple when not
+              ...(isWishlisted
+                ? {
+                    background: "rgba(204,68,255,0.1)",
+                    color: "#CC44FF",
+                    border: "1px solid rgba(204,68,255,0.3)",
+                  }
+                : {
+                    background: wishlistLoading
+                      ? "rgba(204,68,255,0.5)"
+                      : "#CC44FF",
+                    color: "#0A0A0A",
+                  }),
+            }}
+          >
+            {isWishlisted === null
+              ? "..."
+              : isWishlisted
+                ? "In Wishlist"
+                : wishlistLoading
+                  ? "Saving..."
+                  : "Add to Wishlist"}
+          </button>
+        )}
+
+        {/* View Full Review */}
         <Link
           href={`/slimes/${log.id}`}
           style={{
+            flex: 1,
             display: "block",
             textAlign: "center",
             padding: "15px 0",
