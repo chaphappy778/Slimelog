@@ -357,14 +357,18 @@ export default function CollectionPage() {
                 </p>
               )}
             </div>
+            {/* [Change B2] Replaced Log button with Wishlist link */}
             <Link
-              href="/log"
-              className="px-4 py-2 rounded-xl text-slime-bg text-xs font-bold transition active:scale-95"
+              href="/wishlist"
+              className="text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
               style={{
-                background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                color: "#CC44FF",
+                background: "rgba(204,68,255,0.08)",
+                border: "1px solid rgba(204,68,255,0.25)",
+                fontFamily: "Montserrat, sans-serif",
               }}
             >
-              + Log
+              Wishlist
             </Link>
           </div>
 

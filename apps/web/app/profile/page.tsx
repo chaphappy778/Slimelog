@@ -4,7 +4,6 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { Pencil } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import PageWrapper from "@/components/PageWrapper";
 import FloatingPills from "@/components/FloatingPills";
@@ -104,11 +103,16 @@ function RecentLogRow({ log }: { log: RecentLog }) {
 
   return (
     <li className="flex items-center gap-3 py-3 border-b border-slime-border/50 last:border-0">
+      {/* [Change B3a] Replaced 🫧 emoji with SVG slime blob icon */}
       <div
-        className="w-9 h-9 rounded-2xl shrink-0 flex items-center justify-center text-lg bg-slime-surface border border-slime-border"
+        className="w-9 h-9 rounded-2xl shrink-0 flex items-center justify-center bg-slime-surface border border-slime-border"
         aria-hidden="true"
       >
-        🫧
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="9" stroke="#00F0FF" strokeWidth="1.5" />
+          <circle cx="9" cy="9" r="2" stroke="#00F0FF" strokeWidth="1" />
+          <circle cx="14" cy="8" r="1" stroke="#00F0FF" strokeWidth="1" />
+        </svg>
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-slime-text truncate leading-tight">
@@ -243,7 +247,20 @@ export default async function ProfilePage() {
                   href="/settings/profile"
                   className="inline-flex items-center gap-1 text-xs text-slime-accent mt-1 font-medium active:opacity-70 transition-opacity"
                 >
-                  <Pencil className="w-3 h-3" />
+                  {/* [Change B3b] Replaced Pencil lucide import with inline SVG */}
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
                   Tap to set a custom username
                 </Link>
               ) : (
@@ -251,7 +268,20 @@ export default async function ProfilePage() {
                   href="/settings/profile"
                   className="inline-flex items-center gap-1 text-xs text-slime-muted mt-1 font-medium active:opacity-70 transition-opacity hover:text-slime-accent"
                 >
-                  <Pencil className="w-3 h-3" />
+                  {/* [Change B3b] Replaced Pencil lucide import with inline SVG */}
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
                   Edit profile
                 </Link>
               )}
@@ -261,7 +291,7 @@ export default async function ProfilePage() {
 
         {hasErrors && (
           <div className="mx-4 mb-4 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-xs text-red-400">
-            Some stats couldn't load — try refreshing.
+            Some stats couldn&apos;t load — try refreshing.
           </div>
         )}
 
@@ -294,6 +324,31 @@ export default async function ProfilePage() {
               accent="#39FF14"
             />
           </div>
+
+          {/* [Change B3c] Wishlist count linking to /wishlist */}
+          {summary != null && (
+            <div className="mt-3">
+              <Link
+                href="/wishlist"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold transition-opacity active:opacity-70"
+                style={{ color: "#CC44FF", textDecoration: "none" }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                </svg>
+                {summary.total_in_wishlist ?? 0} wishlisted
+              </Link>
+            </div>
+          )}
         </section>
 
         {/* Recent activity */}

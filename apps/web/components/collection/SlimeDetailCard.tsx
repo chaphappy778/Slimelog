@@ -874,7 +874,6 @@ export default function SlimeDetailCard({
               fontFamily: "Montserrat, Inter, sans-serif",
               cursor: isWishlisted || wishlistLoading ? "default" : "pointer",
               transition: "opacity 0.15s",
-              border: "none",
               // [Change 3] Muted style when already wishlisted, active purple when not
               ...(isWishlisted
                 ? {
@@ -887,6 +886,7 @@ export default function SlimeDetailCard({
                       ? "rgba(204,68,255,0.5)"
                       : "#CC44FF",
                     color: "#0A0A0A",
+                    border: "none",
                   }),
             }}
           >
