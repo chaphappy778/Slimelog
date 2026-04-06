@@ -11,7 +11,6 @@ import { BackButton } from "@/components/BackButton";
 
 type SlimeDetail = {
   id: string;
-  // [Fix 1] user_id added to type for ownership check
   user_id: string | null;
   created_at: string;
   slime_name: string | null;
@@ -113,7 +112,6 @@ function StarRating({
       aria-label={`${rating} out of 5`}
     >
       {[1, 2, 3, 4, 5].map((n) => (
-        // [Fix 3] SVG star — replaces Unicode star character
         <svg
           key={n}
           width={dim}
@@ -254,7 +252,6 @@ export default async function SlimeDetailPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  // [Fix 1] Correct ownership check — compares authed user id against log.user_id
   const isOwner = !!user && user.id === log.user_id;
 
   const brandName = log.brands?.name ?? log.brand_name_raw ?? "Unknown brand";
@@ -262,13 +259,14 @@ export default async function SlimeDetailPage({
   const displayPrice = log.purchase_price ?? log.cost_paid;
   const currency = log.purchase_currency ?? "USD";
 
+  // [Change 1] Updated labels: Sound → Sound / ASMR, Drizzle → Aesthetic, Sensory Fit → Quality
   const SUB_RATINGS: { key: keyof SlimeDetail; label: string }[] = [
     { key: "rating_texture", label: "Texture" },
     { key: "rating_scent", label: "Scent" },
-    { key: "rating_sound", label: "Sound" },
-    { key: "rating_drizzle", label: "Drizzle" },
+    { key: "rating_sound", label: "Sound / ASMR" },
+    { key: "rating_drizzle", label: "Aesthetic" },
     { key: "rating_creativity", label: "Creativity" },
-    { key: "rating_sensory_fit", label: "Sensory Fit" },
+    { key: "rating_sensory_fit", label: "Quality" },
   ];
 
   const hasSubRatings = SUB_RATINGS.some((r) => log[r.key] != null);
@@ -281,7 +279,6 @@ export default async function SlimeDetailPage({
   const hasNotes = log.likes || log.dislikes || log.notes;
 
   return (
-    // [Fix 4] Radial gradient background matching app-wide design system
     <div
       className="min-h-screen pb-24"
       style={{
@@ -299,10 +296,8 @@ export default async function SlimeDetailPage({
           WebkitBackdropFilter: "blur(8px)",
         }}
       >
-        {/* [Fix 2] BackButton uses router.back() instead of hard-coded /collection link */}
         <BackButton />
 
-        {/* [Fix 1] Collection/Wishlist badge only renders for the log owner */}
         {isOwner && (
           <span
             className={`flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full border ${
@@ -311,7 +306,6 @@ export default async function SlimeDetailPage({
                 : "bg-slime-accent/10 text-slime-accent border-slime-accent/30"
             }`}
           >
-            {/* [Fix 3] SVG star in badge — replaces Unicode symbol */}
             <svg
               width="10"
               height="10"
@@ -343,7 +337,6 @@ export default async function SlimeDetailPage({
               className="w-full h-56 object-cover"
             />
           ) : (
-            // [Fix 3] SVG bubble in no-image fallback — replaces emoji
             <div
               className="w-full h-40 flex items-center justify-center"
               style={{
@@ -403,7 +396,6 @@ export default async function SlimeDetailPage({
             </div>
             {log.scent && (
               <p className="text-sm text-slime-muted flex items-center gap-1.5">
-                {/* [Fix 3] SVG flower next to scent — replaces emoji */}
                 <svg
                   width="14"
                   height="14"
@@ -513,14 +505,12 @@ export default async function SlimeDetailPage({
           </Section>
         )}
 
-        {/* [Fix 1] Edit and Delete only render for the log owner */}
         {isOwner && (
           <div className="flex gap-3 pt-1">
             <Link
               href={`/log/edit/${id}`}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-slime-accent/40 text-slime-accent font-bold text-sm hover:bg-slime-accent/10 transition"
             >
-              {/* Edit pencil SVG */}
               <svg
                 width="14"
                 height="14"

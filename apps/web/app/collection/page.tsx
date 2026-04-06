@@ -16,7 +16,6 @@ import GalaxyView from "@/components/collection/GalaxyView";
 
 type View = "cards" | "spiral" | "galaxy";
 
-// [Change 1] Type for like/comment data map keyed by log id.
 export type LikeDataMap = Record<
   string,
   { likeCount: number; commentCount: number; isLiked: boolean }
@@ -160,13 +159,14 @@ function SlimeCard({ log }: { log: CollectionLog }) {
                   </div>
                 </div>
               )}
+              {/* [Change 1] Updated labels: Sound → Sound / ASMR, Drizzle → Aesthetic, Sensory Fit → Quality */}
               {[
                 { key: "rating_texture", label: "Texture" },
                 { key: "rating_scent", label: "Scent" },
-                { key: "rating_sound", label: "Sound" },
-                { key: "rating_drizzle", label: "Drizzle" },
+                { key: "rating_sound", label: "Sound / ASMR" },
+                { key: "rating_drizzle", label: "Aesthetic" },
                 { key: "rating_creativity", label: "Creativity" },
-                { key: "rating_sensory_fit", label: "Sensory Fit" },
+                { key: "rating_sensory_fit", label: "Quality" },
               ]
                 .filter(({ key }) => log[key as keyof CollectionLog] !== null)
                 .map(({ key, label }) => (
@@ -237,7 +237,6 @@ export default function CollectionPage() {
   );
   const [view, setView] = useState<View>("cards");
 
-  // [Change 2] Like/comment data map and current user id for canvas views.
   const [likeData, setLikeData] = useState<LikeDataMap>({});
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
@@ -248,8 +247,6 @@ export default function CollectionPage() {
         setLogs(fetched);
         setLoading(false);
 
-        // [Change 3] After logs are fetched, bulk-fetch like/comment counts
-        // and current user's liked set using the browser Supabase client.
         if (fetched.length === 0) return;
 
         const supabase = createBrowserClient(
@@ -267,7 +264,6 @@ export default function CollectionPage() {
           const uid = userResult.data.user?.id ?? null;
           setCurrentUserId(uid);
 
-          // [Change 4] Fetch user's own likes separately now that we have uid.
           const likeRows = likesResult.data ?? [];
           const commentRows = commentsResult.data ?? [];
 
@@ -357,7 +353,6 @@ export default function CollectionPage() {
                 </p>
               )}
             </div>
-            {/* [Change B2] Replaced Log button with Wishlist link */}
             <Link
               href="/wishlist"
               className="text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
@@ -372,7 +367,7 @@ export default function CollectionPage() {
             </Link>
           </div>
 
-          {/* View toggle — always visible, never moves */}
+          {/* View toggle */}
           {!loading && !error && logs.length > 0 && (
             <div className="mb-4">
               <ViewToggle active={view} onChange={setView} />
@@ -384,7 +379,7 @@ export default function CollectionPage() {
             <CollectionSummaryChart logs={filtered} />
           )}
 
-          {/* Filter tabs — only on Cards view, sits below donut */}
+          {/* Filter tabs — only on Cards view */}
           {!loading && !error && logs.length > 0 && view === "cards" && (
             <div className="flex gap-2 mb-6">
               {(["all", "collection", "wishlist"] as const).map((f) => (
@@ -445,7 +440,6 @@ export default function CollectionPage() {
                   ))}
                 </div>
               )}
-              {/* [Change 5] Pass likeData and currentUserId to canvas views. */}
               {view === "spiral" && (
                 <SpiralView
                   logs={logs}

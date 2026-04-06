@@ -11,7 +11,6 @@ import { ImageUpload } from "@/components/ImageUpload";
 import { createBrowserClient } from "@supabase/ssr";
 import PageWrapper from "@/components/PageWrapper";
 import FloatingPills from "@/components/FloatingPills";
-// [Change 1] Import BrandSearchInput
 import BrandSearchInput from "@/components/BrandSearchInput";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -28,13 +27,14 @@ type RatingKey =
   | "rating_sensory_fit"
   | "rating_overall";
 
+// [Change 1] Updated labels: Sound → Sound / ASMR, Drizzle → Aesthetic, Sensory Fit → Quality
 const RATING_FIELDS: { key: RatingKey; label: string }[] = [
   { key: "rating_texture", label: "Texture" },
   { key: "rating_scent", label: "Scent" },
-  { key: "rating_sound", label: "Sound" },
-  { key: "rating_drizzle", label: "Drizzle" },
+  { key: "rating_sound", label: "Sound / ASMR" },
+  { key: "rating_drizzle", label: "Aesthetic" },
   { key: "rating_creativity", label: "Creativity" },
-  { key: "rating_sensory_fit", label: "Sensory Fit" },
+  { key: "rating_sensory_fit", label: "Quality" },
   { key: "rating_overall", label: "Overall" },
 ];
 
@@ -62,7 +62,7 @@ const COLOR_SWATCHES: ColorSwatch[] = [
   { label: "Black", hex: "#1A1A1A", value: "black" },
 ];
 
-// [Change 2] Added brand_id: string | null to FormState
+// [Change 2] Removed order_date, ship_date, received_date from FormState
 interface FormState {
   slime_name: string;
   brand_name_raw: string;
@@ -74,9 +74,6 @@ interface FormState {
   selected_color_values: string[];
   color_description: string;
   image_url: string | null;
-  order_date: string;
-  ship_date: string;
-  received_date: string;
   rating_texture: number | null;
   rating_scent: number | null;
   rating_sound: number | null;
@@ -283,71 +280,6 @@ function ColorPicker({
   );
 }
 
-// ─── Shipping Dates ───────────────────────────────────────────────────────────
-
-function ShippingDates({
-  orderDate,
-  shipDate,
-  receivedDate,
-  onChange,
-}: {
-  orderDate: string;
-  shipDate: string;
-  receivedDate: string;
-  onChange: (
-    field: "order_date" | "ship_date" | "received_date",
-    value: string,
-  ) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-4">
-      <div
-        className="flex items-start gap-2.5 rounded-xl px-3.5 py-3"
-        style={{
-          background: "rgba(45,10,78,0.3)",
-          border: "1px solid rgba(45,10,78,0.6)",
-        }}
-      >
-        <p className="text-xs text-slime-muted leading-relaxed">
-          Shipping data helps the community rate brands accurately.
-        </p>
-      </div>
-      <Field label="Order Date" optional>
-        <input
-          type="date"
-          className={inputCls}
-          value={orderDate}
-          onChange={(e) => onChange("order_date", e.target.value)}
-        />
-      </Field>
-      <Field
-        label="Ship Date"
-        optional
-        hint="When you received tracking/shipping notification"
-      >
-        <input
-          type="date"
-          className={inputCls}
-          value={shipDate}
-          onChange={(e) => onChange("ship_date", e.target.value)}
-        />
-      </Field>
-      <Field
-        label="Received Date"
-        optional
-        hint="When the slime physically arrived"
-      >
-        <input
-          type="date"
-          className={inputCls}
-          value={receivedDate}
-          onChange={(e) => onChange("received_date", e.target.value)}
-        />
-      </Field>
-    </div>
-  );
-}
-
 // ─── Step card style ──────────────────────────────────────────────────────────
 
 const cardStyle = {
@@ -377,7 +309,7 @@ function LogPageInner() {
     });
   }
 
-  // [Change 2] brand_id: null added to initial state
+  // [Change 2] Removed order_date, ship_date, received_date from initial state
   const [form, setForm] = useState<FormState>({
     slime_name: searchParams.get("slime_name") ?? "",
     brand_name_raw: searchParams.get("brand") ?? "",
@@ -389,9 +321,6 @@ function LogPageInner() {
     selected_color_values: [],
     color_description: "",
     image_url: null,
-    order_date: "",
-    ship_date: "",
-    received_date: "",
     rating_texture: null,
     rating_scent: null,
     rating_sound: null,
@@ -439,7 +368,7 @@ function LogPageInner() {
               form.color_description,
             );
 
-      // [Change 3] Pass brand_id to LogSlimeInput
+      // [Change 2] Removed order_date, ship_date, received_date from submit payload
       const input: LogSlimeInput = {
         slime_name: form.slime_name.trim() || undefined,
         brand_name_raw: form.brand_name_raw.trim() || undefined,
@@ -454,9 +383,6 @@ function LogPageInner() {
         in_wishlist: form.in_wishlist,
         colors: finalColors,
         image_url: form.image_url ?? undefined,
-        order_date: form.order_date || undefined,
-        ship_date: form.ship_date || undefined,
-        received_date: form.received_date || undefined,
         rating_texture: form.rating_texture ?? undefined,
         rating_scent: form.rating_scent ?? undefined,
         rating_sound: form.rating_sound ?? undefined,
@@ -527,7 +453,6 @@ function LogPageInner() {
                 />
               </Field>
 
-              {/* [Change 4] Replace free-text brand input with BrandSearchInput */}
               <Field label="Brand / Shop Name" optional>
                 <BrandSearchInput
                   value={form.brand_name_raw}
@@ -634,6 +559,7 @@ function LogPageInner() {
                   onChange={(e) => set("purchase_price", e.target.value)}
                 />
               </Field>
+              {/* [Change 2] Shipping Dates section removed entirely */}
               <Field label="Colors" optional>
                 {form.slime_type === "clear" ? (
                   <p
@@ -654,15 +580,6 @@ function LogPageInner() {
                   />
                 )}
               </Field>
-              <div className="pt-1">
-                <p className="section-label mb-3">Shipping Dates</p>
-                <ShippingDates
-                  orderDate={form.order_date}
-                  shipDate={form.ship_date}
-                  receivedDate={form.received_date}
-                  onChange={(field, value) => set(field, value)}
-                />
-              </div>
             </div>
           )}
 

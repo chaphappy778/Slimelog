@@ -221,10 +221,10 @@ function WaitlistForm() {
           className="font-bold text-base"
           style={{ color: "#39FF14", fontFamily: "'Montserrat', sans-serif" }}
         >
-          You're on the list!
+          You&apos;re on the list!
         </p>
         <p className="text-sm mt-1" style={{ color: "rgba(245,245,245,0.6)" }}>
-          We'll hit your inbox the moment we launch.
+          We&apos;ll hit your inbox the moment we launch.
         </p>
       </div>
     );
@@ -244,10 +244,10 @@ function WaitlistForm() {
           className="font-bold text-base"
           style={{ color: "#39FF14", fontFamily: "'Montserrat', sans-serif" }}
         >
-          You're already on the list!
+          You&apos;re already on the list!
         </p>
         <p className="text-sm mt-1" style={{ color: "rgba(245,245,245,0.6)" }}>
-          We'll be in touch soon. Follow @SlimeLogApp for updates.
+          We&apos;ll be in touch soon. Follow @SlimeLogApp for updates.
         </p>
       </div>
     );
@@ -486,7 +486,7 @@ export default function LandingPage() {
           <FeatureCard
             icon={<Star size={20} />}
             title="Rate Every Slime"
-            body="Score texture, scent, sound, drizzle, creativity and more across 7 dimensions."
+            body="Score texture, scent, sound, aesthetic, creativity, quality and more across 6 dimensions."
           />
           <FeatureCard
             icon={<Layers size={20} />}
@@ -585,8 +585,8 @@ export default function LandingPage() {
             margin: "0 auto 2rem",
           }}
         >
-          We're building the ultimate slime rating &amp; discovery app — and we
-          want YOUR shop featured.
+          We&apos;re building the ultimate slime rating &amp; discovery app —
+          and we want YOUR shop featured.
         </p>
 
         {/* Feature pills */}

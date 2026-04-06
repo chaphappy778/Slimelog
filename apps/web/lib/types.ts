@@ -206,6 +206,9 @@ export const SLIME_TYPE_COLORS: Record<
   thiggly: { bg: "rgba(100,200,150,0.12)", text: "#6ee7b7" },
 };
 
+// NOTE: DB column names (rating_drizzle, rating_sensory_fit) are unchanged.
+// Display labels updated: drizzle → Aesthetic, sensory_fit → Quality, sound → Sound / ASMR
+// Do not rename DB columns — existing log data would be orphaned.
 export const RATING_DIMENSIONS: {
   key: RatingDimension;
   label: string;
@@ -232,9 +235,9 @@ export const RATING_DIMENSIONS: {
   },
   {
     key: "drizzle",
-    label: "Drizzle",
+    label: "Aesthetic",
     emoji: "",
-    description: "Consistency & flow",
+    description: "Visual appeal & presentation",
   },
   {
     key: "creativity",
@@ -244,9 +247,9 @@ export const RATING_DIMENSIONS: {
   },
   {
     key: "sensory_fit",
-    label: "Sensory Fit",
+    label: "Quality",
     emoji: "",
-    description: "Activation satisfaction",
+    description: "Overall build and finish quality",
   },
   {
     key: "overall",

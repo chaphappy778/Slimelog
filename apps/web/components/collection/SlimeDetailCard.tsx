@@ -8,7 +8,6 @@ import { createBrowserClient } from "@supabase/ssr";
 import type { CollectionLog } from "@/lib/types";
 import LikeButton from "@/components/collection/LikeButton";
 import CommentSection from "@/components/collection/CommentSection";
-// [Change 1] Import BrandMiniSheet
 import BrandMiniSheet from "@/components/BrandMiniSheet";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -55,13 +54,14 @@ const COLOR_SWATCHES: Record<string, string> = {
   silver: "#C0C0C0",
 };
 
+// [Change 1] Updated labels: Sound → Sound / ASMR, Drizzle → Aesthetic, Sensory Fit → Quality
 const RATING_DIMENSIONS: Array<{ key: keyof CollectionLog; label: string }> = [
   { key: "rating_texture", label: "Texture" },
   { key: "rating_scent", label: "Scent" },
-  { key: "rating_sound", label: "Sound" },
-  { key: "rating_drizzle", label: "Drizzle" },
+  { key: "rating_sound", label: "Sound / ASMR" },
+  { key: "rating_drizzle", label: "Aesthetic" },
   { key: "rating_creativity", label: "Creativity" },
-  { key: "rating_sensory_fit", label: "Sensory Fit" },
+  { key: "rating_sensory_fit", label: "Quality" },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -136,7 +136,6 @@ interface Props {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-// Module-level client — created once, not on every render
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -156,18 +155,11 @@ export default function SlimeDetailCard({
 }: Props) {
   const commentRef = useRef<HTMLDivElement>(null);
 
-  // [Bug 1] Live comment count — initialized from prop, updated via onCountChange
   const [liveCommentCount, setLiveCommentCount] = useState(commentCount);
-
-  // [Change 2] Brand mini-sheet state
   const [showBrandSheet, setShowBrandSheet] = useState(false);
-
-  // [Change 3] Wishlist state — null means "checking", true/false means resolved
   const [isWishlisted, setIsWishlisted] = useState<boolean | null>(null);
   const [wishlistLoading, setWishlistLoading] = useState(false);
 
-  // [Change 3] On mount, check if current user already has a wishlist entry
-  // matching this slime name. Only runs when currentUserId is non-null.
   useEffect(() => {
     if (!currentUserId || !log.slime_name) {
       setIsWishlisted(false);
@@ -197,7 +189,6 @@ export default function SlimeDetailCard({
     };
   }, [currentUserId, log.slime_name]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // [Change 3] Insert a new collection_logs row with in_wishlist: true
   async function handleAddToWishlist() {
     if (!currentUserId || wishlistLoading || isWishlisted) return;
     setWishlistLoading(true);
@@ -248,7 +239,7 @@ export default function SlimeDetailCard({
         WebkitOverflowScrolling: "touch",
       }}
     >
-      {/* [Change 1] Floating header */}
+      {/* Floating header */}
       <div
         style={{
           position: "sticky",
@@ -434,7 +425,7 @@ export default function SlimeDetailCard({
           </div>
         )}
 
-        {/* Info card body — paddingBottom clears the fixed footer */}
+        {/* Info card body */}
         <div
           style={{
             padding: "0 16px",
@@ -470,7 +461,6 @@ export default function SlimeDetailCard({
             >
               {brandSlug ? (
                 <>
-                  {/* [Change 2] Replace Link with button — opens BrandMiniSheet */}
                   <button
                     type="button"
                     onClick={() => setShowBrandSheet(true)}
@@ -487,7 +477,6 @@ export default function SlimeDetailCard({
                   >
                     {log.brand_name_raw}
                   </button>
-                  {/* [Change 2] Three-dot button — also opens BrandMiniSheet */}
                   <button
                     type="button"
                     onClick={() => setShowBrandSheet(true)}
@@ -704,7 +693,6 @@ export default function SlimeDetailCard({
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
               <span style={{ fontSize: 14, fontWeight: 600 }}>Comment</span>
-              {/* [Bug 1] Live count from state */}
               {liveCommentCount > 0 && (
                 <span
                   style={{
@@ -850,7 +838,6 @@ export default function SlimeDetailCard({
           </div>
 
           {/* Comment section */}
-          {/* [Bug 1] onCountChange wired to live state setter */}
           <div ref={commentRef}>
             <CommentSection
               logId={log.id}
@@ -861,11 +848,7 @@ export default function SlimeDetailCard({
         </div>
       </div>
 
-      {/* ── [Change 3] Two-button fixed footer ──
-          Left: Add to Wishlist (hidden when not logged in)
-          Right: View Full Review
-          position: fixed so it's always visible regardless of scroll.
-          padding-bottom clears the ~64px bottom nav bar. */}
+      {/* Fixed footer */}
       <div
         style={{
           position: "fixed",
@@ -880,7 +863,6 @@ export default function SlimeDetailCard({
           gap: 10,
         }}
       >
-        {/* Add to Wishlist — only shown when logged in */}
         {currentUserId !== null && (
           <button
             type="button"
@@ -895,7 +877,6 @@ export default function SlimeDetailCard({
               fontFamily: "Montserrat, Inter, sans-serif",
               cursor: isWishlisted || wishlistLoading ? "default" : "pointer",
               transition: "opacity 0.15s",
-              // [Change 3] Muted style when already wishlisted, active purple when not
               ...(isWishlisted
                 ? {
                     background: "rgba(204,68,255,0.1)",
@@ -921,7 +902,6 @@ export default function SlimeDetailCard({
           </button>
         )}
 
-        {/* View Full Review */}
         <Link
           href={`/slimes/${log.id}`}
           style={{
@@ -943,7 +923,6 @@ export default function SlimeDetailCard({
         </Link>
       </div>
 
-      {/* [Change 2] BrandMiniSheet — rendered when showBrandSheet is true and brandSlug is non-null */}
       {showBrandSheet && brandSlug && (
         <BrandMiniSheet
           brandSlug={brandSlug}
