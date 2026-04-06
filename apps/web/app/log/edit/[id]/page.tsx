@@ -10,6 +10,8 @@ import type { SlimeType } from "@/lib/types";
 import { ImageUpload } from "@/components/ImageUpload";
 import PageWrapper from "@/components/PageWrapper";
 import FloatingPills from "@/components/FloatingPills";
+// [Change 1] Import BrandSearchInput
+import BrandSearchInput from "@/components/BrandSearchInput";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -25,7 +27,6 @@ type RatingKey =
   | "rating_sensory_fit"
   | "rating_overall";
 
-// [Change 4] Emojis removed from RATING_FIELDS — no-emoji rule
 const RATING_FIELDS: { key: RatingKey; label: string }[] = [
   { key: "rating_texture", label: "Texture" },
   { key: "rating_scent", label: "Scent" },
@@ -43,7 +44,6 @@ interface ColorSwatch {
   dark?: boolean;
 }
 
-// [Change 1] Removed holographic. [Change 2] Added brown between Red and Black.
 const COLOR_SWATCHES: ColorSwatch[] = [
   { label: "White", hex: "#FFFFFF", value: "white", dark: true },
   { label: "Cream", hex: "#FFF5DC", value: "cream", dark: true },
@@ -63,9 +63,11 @@ const COLOR_SWATCHES: ColorSwatch[] = [
 
 const KNOWN_COLOR_VALUES = COLOR_SWATCHES.map((s) => s.value);
 
+// [Change 2] Added brand_id: string | null to FormState
 interface FormState {
   slime_name: string;
   brand_name_raw: string;
+  brand_id: string | null;
   collection_name: string;
   slime_type: SlimeType | "";
   scent: string;
@@ -99,7 +101,6 @@ function buildColorsArray(
 
 // ─── Star Rating ──────────────────────────────────────────────────────────────
 
-// [Change 4] emoji prop removed — RATING_FIELDS no longer carries it
 function StarRating({
   value,
   onChange,
@@ -368,9 +369,11 @@ function EditLogPageInner() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // [Change 2] brand_id: null added to initial state
   const [form, setForm] = useState<FormState>({
     slime_name: "",
     brand_name_raw: "",
+    brand_id: null,
     collection_name: "",
     slime_type: "",
     scent: "",
@@ -432,9 +435,11 @@ function EditLogPageInner() {
         .filter((c) => !KNOWN_COLOR_VALUES.includes(c))
         .join(", ");
 
+      // [Change 2] Populate brand_id from existing record
       setForm({
         slime_name: data.slime_name ?? "",
         brand_name_raw: data.brand_name_raw ?? "",
+        brand_id: data.brand_id ?? null,
         collection_name: data.collection_name ?? "",
         slime_type: (data.slime_type as SlimeType) ?? "",
         scent: data.scent ?? "",
@@ -485,7 +490,6 @@ function EditLogPageInner() {
     setSaving(true);
     setSaveError(null);
     try {
-      // [Change 3] If slime_type is "clear", override colors to ["clear"]
       const finalColors =
         form.slime_type === "clear"
           ? ["clear"]
@@ -494,9 +498,11 @@ function EditLogPageInner() {
               form.color_description,
             );
 
+      // [Change 3] Pass brand_id in update payload
       const updates: Partial<LogSlimeInput> & { colors?: string[] } = {
         slime_name: form.slime_name.trim() || undefined,
         brand_name_raw: form.brand_name_raw.trim() || undefined,
+        brand_id: form.brand_id ?? undefined,
         slime_type: form.slime_type as SlimeType,
         scent: form.scent.trim() || undefined,
         purchase_price:
@@ -613,14 +619,19 @@ function EditLogPageInner() {
                   onChange={(e) => set("slime_name", e.target.value)}
                 />
               </Field>
+
+              {/* [Change 4] Replace free-text brand input with BrandSearchInput */}
               <Field label="Brand / Shop Name" optional>
-                <input
-                  className={inputCls}
-                  placeholder="e.g. Peachybbies"
+                <BrandSearchInput
                   value={form.brand_name_raw}
-                  onChange={(e) => set("brand_name_raw", e.target.value)}
+                  onChange={(name: string, id: string | null) => {
+                    set("brand_name_raw", name);
+                    setForm((f) => ({ ...f, brand_id: id }));
+                  }}
+                  placeholder="Search brands..."
                 />
               </Field>
+
               <Field label="Collection" optional>
                 <input
                   className={inputCls}
@@ -713,7 +724,6 @@ function EditLogPageInner() {
                   onChange={(e) => set("purchase_price", e.target.value)}
                 />
               </Field>
-              {/* [Change 3] Clear type hides color picker */}
               <Field label="Colors" optional>
                 {form.slime_type === "clear" ? (
                   <p
@@ -752,7 +762,6 @@ function EditLogPageInner() {
               <h2 className="text-lg font-bold text-slime-cyan mb-3">
                 Rate it
               </h2>
-              {/* [Change 4] emoji prop removed from StarRating call */}
               {RATING_FIELDS.map(({ key, label }) => (
                 <StarRating
                   key={key}
