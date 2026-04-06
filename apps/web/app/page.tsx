@@ -1,769 +1,517 @@
-"use client";
-// apps/web/app/log/page.tsx
-
-import { useState, useRef, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { logSlime } from "@/lib/slime-actions";
-import type { LogSlimeInput } from "@/lib/slime-actions";
-import { SLIME_TYPE_LABELS } from "@/lib/types";
-import type { SlimeType } from "@/lib/types";
-import { ImageUpload } from "@/components/ImageUpload";
-import { createBrowserClient } from "@supabase/ssr";
+// apps/web/app/page.tsx
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import FeedTabs from "@/components/FeedTabs";
+import FeedCard, { type FeedCardLog } from "@/components/FeedCard";
+import PageHeader from "@/components/PageHeader";
 import PageWrapper from "@/components/PageWrapper";
-import FloatingPills from "@/components/FloatingPills";
-import BrandSearchInput from "@/components/BrandSearchInput";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Internal query row types ──────────────────────────────────────────────────
+// These are only used to type raw Supabase responses before normalisation.
+// They are NOT exported — all consumer-facing data uses FeedCardLog from FeedCard.
 
-const STEPS = ["Identity", "Details", "Ratings", "Notes"] as const;
-type Step = 0 | 1 | 2 | 3;
-
-type RatingKey =
-  | "rating_texture"
-  | "rating_scent"
-  | "rating_sound"
-  | "rating_drizzle"
-  | "rating_creativity"
-  | "rating_sensory_fit"
-  | "rating_overall";
-
-// [Change 1] Updated labels: Sound → Sound / ASMR, Drizzle → Aesthetic, Sensory Fit → Quality
-const RATING_FIELDS: { key: RatingKey; label: string }[] = [
-  { key: "rating_texture", label: "Texture" },
-  { key: "rating_scent", label: "Scent" },
-  { key: "rating_sound", label: "Sound / ASMR" },
-  { key: "rating_drizzle", label: "Aesthetic" },
-  { key: "rating_creativity", label: "Creativity" },
-  { key: "rating_sensory_fit", label: "Quality" },
-  { key: "rating_overall", label: "Overall" },
-];
-
-interface ColorSwatch {
-  label: string;
-  hex: string;
-  value: string;
-  dark?: boolean;
-}
-
-const COLOR_SWATCHES: ColorSwatch[] = [
-  { label: "White", hex: "#FFFFFF", value: "white", dark: true },
-  { label: "Cream", hex: "#FFF5DC", value: "cream", dark: true },
-  { label: "Pink", hex: "#FFB6C1", value: "pink" },
-  { label: "Hot Pink", hex: "#FF3E8A", value: "hot pink" },
-  { label: "Purple", hex: "#9B5DE5", value: "purple" },
-  { label: "Lavender", hex: "#C9B8F5", value: "lavender" },
-  { label: "Blue", hex: "#4A90E2", value: "blue" },
-  { label: "Mint", hex: "#98E4C8", value: "mint" },
-  { label: "Green", hex: "#4CAF50", value: "green" },
-  { label: "Yellow", hex: "#FFE135", value: "yellow", dark: true },
-  { label: "Orange", hex: "#FF8C42", value: "orange" },
-  { label: "Red", hex: "#E94040", value: "red" },
-  { label: "Brown", hex: "#8B4513", value: "brown" },
-  { label: "Black", hex: "#1A1A1A", value: "black" },
-];
-
-// [Change 2] Removed order_date, ship_date, received_date from FormState
-interface FormState {
-  slime_name: string;
-  brand_name_raw: string;
-  brand_id: string | null;
-  collection_name: string;
-  slime_type: SlimeType | "";
-  scent: string;
-  purchase_price: string;
-  selected_color_values: string[];
-  color_description: string;
-  image_url: string | null;
-  rating_texture: number | null;
-  rating_scent: number | null;
-  rating_sound: number | null;
-  rating_drizzle: number | null;
-  rating_creativity: number | null;
-  rating_sensory_fit: number | null;
+type CommunityQueryRow = {
+  id: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+  slime_name: string | null;
+  brand_name_raw: string | null;
+  slime_type: string | null;
+  colors: string[] | null;
   rating_overall: number | null;
-  notes: string;
-  in_wishlist: boolean;
-  in_collection: boolean;
-}
-
-function buildColorsArray(
-  selectedValues: string[],
-  description: string,
-): string[] | undefined {
-  const trimmed = description.trim();
-  const parts = [...selectedValues, ...(trimmed ? [trimmed] : [])];
-  return parts.length > 0 ? parts : undefined;
-}
-
-// ─── Star Rating ──────────────────────────────────────────────────────────────
-
-function StarRating({
-  value,
-  onChange,
-  label,
-}: {
-  value: number | null;
-  onChange: (v: number) => void;
-  label: string;
-}) {
-  const [hovered, setHovered] = useState<number | null>(null);
-  return (
-    <div
-      className="flex items-center justify-between py-3 border-b last:border-0"
-      style={{ borderColor: "rgba(45,10,78,0.5)" }}
-    >
-      <span className="flex items-center gap-2 text-sm font-medium text-slime-text">
-        {label}
-      </span>
-      <div className="flex gap-1">
-        {[1, 2, 3, 4, 5].map((star) => {
-          const filled =
-            hovered !== null ? star <= hovered : star <= (value ?? 0);
-          return (
-            <button
-              key={star}
-              type="button"
-              onClick={() => onChange(star)}
-              onMouseEnter={() => setHovered(star)}
-              onMouseLeave={() => setHovered(null)}
-              className={`w-8 h-8 rounded-full text-lg transition-all duration-100 ${filled ? "text-slime-accent scale-110" : "text-slime-muted hover:text-slime-accent"}`}
-              aria-label={`${star} star`}
-            >
-              {filled ? "●" : "○"}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ─── Step Indicator ───────────────────────────────────────────────────────────
-
-function StepIndicator({ step }: { step: Step }) {
-  return (
-    <div className="flex items-center justify-center gap-2 mb-8">
-      {STEPS.map((label, i) => (
-        <div key={label} className="flex items-center gap-2">
-          <div
-            className={`w-7 h-7 rounded-full text-xs font-bold flex items-center justify-center transition-all duration-200 ${
-              i < step
-                ? "text-slime-bg shadow-glow-green"
-                : i === step
-                  ? "text-slime-bg ring-4 ring-slime-accent/30"
-                  : "bg-slime-surface text-slime-muted border border-slime-border"
-            }`}
-            style={
-              i <= step
-                ? { background: "linear-gradient(135deg, #39FF14, #00F0FF)" }
-                : undefined
-            }
-          >
-            {i < step ? "✓" : i + 1}
-          </div>
-          {i < STEPS.length - 1 && (
-            <div
-              className={`h-0.5 w-6 rounded transition-all duration-300 ${i < step ? "bg-slime-accent" : "bg-slime-border"}`}
-            />
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ─── Field ────────────────────────────────────────────────────────────────────
-
-function Field({
-  label,
-  optional,
-  hint,
-  children,
-}: {
-  label: string;
-  optional?: boolean;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-2">
-        <label className="section-label">{label}</label>
-        {optional && (
-          <span className="text-xs text-slime-muted/60 normal-case tracking-normal font-normal">
-            optional
-          </span>
-        )}
-      </div>
-      {children}
-      {hint && <p className="text-xs text-slime-muted/70 mt-0.5">{hint}</p>}
-    </div>
-  );
-}
-
-const inputCls =
-  "w-full rounded-xl bg-slime-surface border border-slime-border px-4 py-3 text-sm text-slime-text placeholder:text-slime-muted focus:outline-none focus:ring-1 focus:ring-slime-accent/40 focus:border-slime-accent/50 transition";
-
-// ─── Color Picker ─────────────────────────────────────────────────────────────
-
-function ColorPicker({
-  selectedValues,
-  onToggle,
-  description,
-  onDescriptionChange,
-}: {
-  selectedValues: string[];
-  onToggle: (value: string) => void;
-  description: string;
-  onDescriptionChange: (v: string) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-7 gap-2">
-        {COLOR_SWATCHES.map((swatch) => {
-          const isSelected = selectedValues.includes(swatch.value);
-          return (
-            <button
-              key={swatch.value}
-              type="button"
-              onClick={() => onToggle(swatch.value)}
-              aria-label={`${swatch.label}${isSelected ? " (selected)" : ""}`}
-              aria-pressed={isSelected}
-              className={`relative w-full aspect-square rounded-full transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-slime-accent ${
-                isSelected
-                  ? "ring-2 ring-slime-accent ring-offset-2 ring-offset-slime-card scale-110"
-                  : swatch.dark
-                    ? "ring-1 ring-slime-border hover:scale-105"
-                    : "hover:scale-105"
-              }`}
-              style={{ backgroundColor: swatch.hex }}
-            >
-              {isSelected && (
-                <span
-                  className="absolute inset-0 flex items-center justify-center text-xs font-bold"
-                  style={{ color: swatch.dark ? "#1A1A1A" : "#FFFFFF" }}
-                >
-                  ✓
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-      {selectedValues.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {selectedValues.map((val) => (
-            <span
-              key={val}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slime-accent/15 border border-slime-accent/30 text-xs font-medium text-slime-accent"
-            >
-              {val}
-              <button
-                type="button"
-                onClick={() => onToggle(val)}
-                className="ml-0.5 hover:text-slime-text transition"
-                aria-label={`Remove ${val}`}
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-      <input
-        className={inputCls}
-        placeholder='e.g. "galaxy swirl" or "mint chocolate chip"'
-        value={description}
-        onChange={(e) => onDescriptionChange(e.target.value)}
-      />
-    </div>
-  );
-}
-
-// ─── Step card style ──────────────────────────────────────────────────────────
-
-const cardStyle = {
-  background: "rgba(45,10,78,0.3)",
-  border: "1px solid rgba(45,10,78,0.8)",
-  boxShadow: "inset 0 0 30px rgba(45,10,78,0.2), 0 8px 32px rgba(0,0,0,0.4)",
+  image_url: string | null;
+  // [Change 1] in_wishlist added to community query row type
+  in_wishlist: boolean | null;
+  // PostgREST returns a to-one join as a plain object, not an array.
+  // We normalise this below so the rest of the code never has to branch.
+  profiles:
+    | { username: string | null; avatar_url: string | null }
+    | { username: string | null; avatar_url: string | null }[]
+    | null;
 };
 
-// ─── Inner Page ───────────────────────────────────────────────────────────────
+type ActivityFeedQueryRow = {
+  id: string;
+  created_at: string;
+  actor_id: string;
+  // [Change 1] activity_type confirmed present on this type
+  activity_type: string;
+  log_id: string | null;
+  metadata: {
+    slime_name?: string | null;
+    slime_type?: string | null;
+    brand_name_raw?: string | null;
+    rating_overall?: number | null;
+    colors?: string[] | null;
+    image_url?: string | null;
+    in_wishlist?: boolean | null;
+  } | null;
+  profiles:
+    | { username: string | null; avatar_url: string | null }
+    | { username: string | null; avatar_url: string | null }[]
+    | null;
+};
 
-function LogPageInner() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const [step, setStep] = useState<Step>(0);
+// ─── Profile normaliser ────────────────────────────────────────────────────────
+// PostgREST can return a to-one relation as either an object or a single-item
+// array depending on the join hint used. Always normalise to the object form.
 
-  const [userId, setUserId] = useState<string | null>(null);
-  const userIdFetchedRef = useRef(false);
+function normaliseProfile(
+  raw:
+    | { username: string | null; avatar_url: string | null }
+    | { username: string | null; avatar_url: string | null }[]
+    | null,
+): { username: string | null; avatar_url: string | null } | null {
+  if (!raw) return null;
+  if (Array.isArray(raw)) return raw[0] ?? null;
+  return raw;
+}
 
-  if (typeof window !== "undefined" && !userIdFetchedRef.current) {
-    userIdFetchedRef.current = true;
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    );
-    supabase.auth.getUser().then(({ data }) => {
-      setUserId(data.user?.id ?? null);
-    });
+// ─── Empty states ──────────────────────────────────────────────────────────────
+
+function EmptyFeed() {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
+      <div
+        className="w-20 h-20 rounded-full flex items-center justify-center bg-slime-surface border border-slime-border"
+        aria-hidden="true"
+      >
+        {/* Bubble SVG */}
+        <svg
+          width="36"
+          height="36"
+          viewBox="0 0 36 36"
+          fill="none"
+          aria-hidden="true"
+        >
+          <circle
+            cx="18"
+            cy="18"
+            r="14"
+            stroke="#39FF14"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+            opacity="0.4"
+          />
+          <circle
+            cx="18"
+            cy="18"
+            r="7"
+            fill="rgba(57,255,20,0.12)"
+            stroke="#39FF14"
+            strokeWidth="1"
+          />
+        </svg>
+      </div>
+      <p className="text-slime-text font-semibold">No logs yet</p>
+      <p className="text-sm text-slime-muted max-w-xs">
+        Be the first to log a slime and get this feed poppin&apos;.
+      </p>
+    </div>
+  );
+}
+
+function EmptyFollowingFeed() {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
+      <div
+        className="w-20 h-20 rounded-full flex items-center justify-center bg-slime-surface border border-slime-border"
+        aria-hidden="true"
+      >
+        <svg
+          width="32"
+          height="32"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="rgba(255,255,255,0.25)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+      </div>
+      <p className="text-slime-text font-semibold">Nothing here yet</p>
+      <p className="text-sm text-slime-muted max-w-xs">
+        Follow some slimers to see their logs here.
+      </p>
+    </div>
+  );
+}
+
+function LoginPrompt() {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 gap-4 text-center px-6">
+      <div
+        className="w-20 h-20 rounded-full flex items-center justify-center bg-slime-surface border border-slime-border"
+        aria-hidden="true"
+      >
+        <svg
+          width="32"
+          height="32"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="rgba(255,255,255,0.25)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </svg>
+      </div>
+      <p className="text-slime-text font-semibold">
+        Sign in to see your Following feed
+      </p>
+      <p className="text-sm text-slime-muted max-w-xs">
+        Log in to follow slimers and see their latest ratings here.
+      </p>
+      <Link
+        href="/login"
+        className="mt-1 inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold text-slime-bg shadow-glow-green"
+        style={{ background: "linear-gradient(135deg, #39FF14, #00F0FF)" }}
+      >
+        Sign in
+      </Link>
+    </div>
+  );
+}
+
+// ─── Page ──────────────────────────────────────────────────────────────────────
+
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const { tab } = await searchParams;
+  const activeTab = tab === "following" ? "following" : "community";
+
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { get: (name) => cookieStore.get(name)?.value } },
+  );
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const isLoggedIn = !!user;
+
+  if (!isLoggedIn) {
+    redirect("/landing");
   }
 
-  // [Change 2] Removed order_date, ship_date, received_date from initial state
-  const [form, setForm] = useState<FormState>({
-    slime_name: searchParams.get("slime_name") ?? "",
-    brand_name_raw: searchParams.get("brand") ?? "",
-    brand_id: null,
-    collection_name: searchParams.get("collection") ?? "",
-    slime_type: (searchParams.get("type") as SlimeType) ?? "",
-    scent: "",
-    purchase_price: "",
-    selected_color_values: [],
-    color_description: "",
-    image_url: null,
-    rating_texture: null,
-    rating_scent: null,
-    rating_sound: null,
-    rating_drizzle: null,
-    rating_creativity: null,
-    rating_sensory_fit: null,
-    rating_overall: null,
-    notes: "",
-    in_wishlist: false,
-    in_collection: true,
-  });
+  // ─── Community feed ────────────────────────────────────────────────────────
 
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  let communityLogs: FeedCardLog[] = [];
+  let communityError = false;
 
-  function set<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((f) => ({ ...f, [key]: value }));
-  }
+  if (activeTab === "community") {
+    const { data: baseData, error: baseError } = await supabase
+      .from("collection_logs")
+      .select(
+        `id,
+         user_id,
+         created_at,
+         updated_at,
+         slime_name,
+         brand_name_raw,
+         slime_type,
+         colors,
+         rating_overall,
+         image_url,
+         in_wishlist,
+         profiles!collection_logs_user_id_fkey ( username, avatar_url )`,
+        // [Change 1] in_wishlist added to select
+      )
+      .eq("is_public", true)
+      .order("created_at", { ascending: false })
+      .limit(20);
 
-  function toggleColor(value: string) {
-    setForm((f) => {
-      const already = f.selected_color_values.includes(value);
-      return {
-        ...f,
-        selected_color_values: already
-          ? f.selected_color_values.filter((v) => v !== value)
-          : [...f.selected_color_values, value],
-      };
-    });
-  }
+    if (baseError) {
+      communityError = true;
+    } else {
+      const rows = (baseData ?? []) as unknown as CommunityQueryRow[];
+      const ids = rows.map((r) => r.id);
 
-  async function handleSubmit() {
-    if (!form.slime_type) {
-      setSaveError("Please select a slime type.");
-      return;
+      const { data: likesData } = await supabase
+        .from("likes")
+        .select("log_id")
+        .in("log_id", ids);
+
+      const { data: commentsData } = await supabase
+        .from("comments")
+        .select("log_id")
+        .in("log_id", ids);
+
+      const { data: userLikesData } = user
+        ? await supabase
+            .from("likes")
+            .select("log_id")
+            .eq("user_id", user.id)
+            .in("log_id", ids)
+        : { data: [] };
+
+      const likeCountMap: Record<string, number> = {};
+      const commentCountMap: Record<string, number> = {};
+      const userLikedSet = new Set<string>();
+
+      for (const row of likesData ?? []) {
+        likeCountMap[row.log_id] = (likeCountMap[row.log_id] ?? 0) + 1;
+      }
+      for (const row of commentsData ?? []) {
+        commentCountMap[row.log_id] = (commentCountMap[row.log_id] ?? 0) + 1;
+      }
+      for (const row of userLikesData ?? []) {
+        userLikedSet.add(row.log_id);
+      }
+
+      communityLogs = rows.map((r): FeedCardLog => {
+        const profile = normaliseProfile(r.profiles);
+        return {
+          id: r.id,
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+          slime_name: r.slime_name,
+          brand_name_raw: r.brand_name_raw,
+          slime_type: r.slime_type,
+          colors: r.colors,
+          rating_overall: r.rating_overall,
+          image_url: r.image_url,
+          // [Change 1] in_wishlist and activity_type added to FeedCardLog build
+          in_wishlist: r.in_wishlist ?? false,
+          activity_type: "log_created",
+          actor_id: r.user_id,
+          username: profile?.username ?? null,
+          avatar_url: profile?.avatar_url ?? null,
+          like_count: likeCountMap[r.id] ?? 0,
+          comment_count: commentCountMap[r.id] ?? 0,
+          is_liked_by_current_user: userLikedSet.has(r.id),
+        };
+      });
     }
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const finalColors =
-        form.slime_type === "clear"
-          ? ["clear"]
-          : buildColorsArray(
-              form.selected_color_values,
-              form.color_description,
-            );
+  }
 
-      // [Change 2] Removed order_date, ship_date, received_date from submit payload
-      const input: LogSlimeInput = {
-        slime_name: form.slime_name.trim() || undefined,
-        brand_name_raw: form.brand_name_raw.trim() || undefined,
-        brand_id: form.brand_id ?? undefined,
-        slime_type: form.slime_type as SlimeType,
-        scent: form.scent.trim() || undefined,
-        purchase_price:
-          form.purchase_price !== ""
-            ? parseFloat(form.purchase_price)
-            : undefined,
-        in_collection: form.in_collection,
-        in_wishlist: form.in_wishlist,
-        colors: finalColors,
-        image_url: form.image_url ?? undefined,
-        rating_texture: form.rating_texture ?? undefined,
-        rating_scent: form.rating_scent ?? undefined,
-        rating_sound: form.rating_sound ?? undefined,
-        rating_drizzle: form.rating_drizzle ?? undefined,
-        rating_creativity: form.rating_creativity ?? undefined,
-        rating_sensory_fit: form.rating_sensory_fit ?? undefined,
-        rating_overall: form.rating_overall ?? undefined,
-        notes: form.notes.trim() || undefined,
-      };
-      await logSlime(input);
-      router.push("/collection");
-    } catch (err) {
-      setSaveError(
-        err instanceof Error ? err.message : "Something went wrong.",
+  // ─── Following feed ────────────────────────────────────────────────────────
+
+  let followingLogs: FeedCardLog[] = [];
+  let followingError = false;
+
+  if (activeTab === "following" && user) {
+    const { data: followRows, error: followsErr } = await supabase
+      .from("follows")
+      .select("following_id")
+      .eq("follower_id", user.id);
+
+    if (followsErr) {
+      followingError = true;
+    } else {
+      const followingIds = (followRows ?? []).map(
+        (r) => r.following_id as string,
       );
-    } finally {
-      setSaving(false);
+
+      if (followingIds.length > 0) {
+        const { data: activityRows, error: activityErr } = await supabase
+          .from("activity_feed")
+          .select(
+            `id, created_at, actor_id, activity_type, log_id, metadata,
+             profiles!activity_feed_actor_id_fkey ( username, avatar_url )`,
+            // [Change 1] activity_type added to select
+          )
+          .in("activity_type", ["log_created", "wishlist_added"])
+          .in("actor_id", followingIds)
+          .order("created_at", { ascending: false })
+          .limit(20);
+
+        if (activityErr) {
+          followingError = true;
+        } else {
+          const typedRows = (activityRows ??
+            []) as unknown as ActivityFeedQueryRow[];
+          const followingLogIds = typedRows
+            .map((r) => r.log_id)
+            .filter((id): id is string => id != null);
+
+          const { data: fLikesData } = await supabase
+            .from("likes")
+            .select("log_id")
+            .in("log_id", followingLogIds);
+
+          const { data: fCommentsData } = await supabase
+            .from("comments")
+            .select("log_id")
+            .in("log_id", followingLogIds);
+
+          const { data: fUserLikesData } = await supabase
+            .from("likes")
+            .select("log_id")
+            .eq("user_id", user.id)
+            .in("log_id", followingLogIds);
+
+          const { data: updatedAtData } = await supabase
+            .from("collection_logs")
+            .select("id, updated_at, in_wishlist")
+            // [Change 1] in_wishlist fetched from collection_logs for following feed
+            .in("id", followingLogIds);
+
+          const updatedAtMap: Record<string, string> = {};
+          const wishlistMap: Record<string, boolean> = {};
+          for (const row of updatedAtData ?? []) {
+            updatedAtMap[row.id] = row.updated_at;
+            wishlistMap[row.id] = row.in_wishlist ?? false;
+          }
+
+          const fLikeCountMap: Record<string, number> = {};
+          const fCommentCountMap: Record<string, number> = {};
+          const fUserLikedSet = new Set<string>();
+
+          for (const row of fLikesData ?? []) {
+            fLikeCountMap[row.log_id] = (fLikeCountMap[row.log_id] ?? 0) + 1;
+          }
+          for (const row of fCommentsData ?? []) {
+            fCommentCountMap[row.log_id] =
+              (fCommentCountMap[row.log_id] ?? 0) + 1;
+          }
+          for (const row of fUserLikesData ?? []) {
+            fUserLikedSet.add(row.log_id);
+          }
+
+          followingLogs = typedRows.map((row): FeedCardLog => {
+            const meta = row.metadata ?? {};
+            const profile = normaliseProfile(row.profiles);
+            const logId = row.log_id ?? row.id;
+
+            return {
+              id: logId,
+              created_at: row.created_at,
+              updated_at: updatedAtMap[logId] ?? row.created_at,
+              slime_name: meta.slime_name ?? null,
+              brand_name_raw: meta.brand_name_raw ?? null,
+              slime_type: meta.slime_type ?? null,
+              colors: meta.colors ?? null,
+              rating_overall:
+                meta.rating_overall != null
+                  ? Number(meta.rating_overall)
+                  : null,
+              image_url: meta.image_url ?? null,
+              // [Change 1] in_wishlist resolved from collection_logs bulk fetch;
+              // falls back to metadata.in_wishlist if row not found, then
+              // falls back to activity_type check.
+              in_wishlist:
+                wishlistMap[logId] ??
+                meta.in_wishlist ??
+                row.activity_type === "wishlist_added",
+              // [Change 1] activity_type passed through from activity_feed row
+              activity_type: row.activity_type,
+              actor_id: row.actor_id,
+              username: profile?.username ?? null,
+              avatar_url: profile?.avatar_url ?? null,
+              like_count: fLikeCountMap[logId] ?? 0,
+              comment_count: fCommentCountMap[logId] ?? 0,
+              is_liked_by_current_user: fUserLikedSet.has(logId),
+            };
+          });
+        }
+      }
     }
   }
+
+  // ─── Brand slug lookup ─────────────────────────────────────────────────────
+
+  const displayLogs = activeTab === "following" ? followingLogs : communityLogs;
+  const displayError =
+    activeTab === "following" ? followingError : communityError;
+
+  const uniqueBrandNames = [
+    ...new Set(
+      displayLogs
+        .map((l) => l.brand_name_raw)
+        .filter((n): n is string => n != null && n.trim() !== ""),
+    ),
+  ];
+
+  let brandSlugMap: Record<string, string> = {};
+
+  if (uniqueBrandNames.length > 0) {
+    const { data: brandRows } = await supabase
+      .from("brands")
+      .select("name, slug")
+      .in("name", uniqueBrandNames);
+
+    for (const row of brandRows ?? []) {
+      if (row.name && row.slug) {
+        brandSlugMap[row.name] = row.slug;
+      }
+    }
+  }
+
+  // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
     <PageWrapper dots glow="cyan">
-      <div className="px-4 py-8 flex flex-col items-center">
-        {/* Header with floating pills */}
-        <div
-          className="relative w-full max-w-md mb-6 overflow-hidden rounded-2xl px-5 py-5"
-          style={{
-            background: "rgba(45,10,78,0.2)",
-            border: "1px solid rgba(45,10,78,0.5)",
-          }}
-        >
-          <FloatingPills area="section" density="low" zIndex={0} />
-          <div className="relative z-10">
-            <h1
-              className="text-2xl font-extrabold tracking-tight"
-              style={{
-                background:
-                  "linear-gradient(90deg, #00F0FF 0%, #39FF14 50%, #FF00E5 100%)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-              }}
-            >
-              Log a Slime
-            </h1>
-            <p className="text-sm text-slime-muted mt-1">
-              {form.in_wishlist ? "Adding to wishlist" : "Adding to collection"}
-            </p>
-          </div>
+      <PageHeader />
+
+      <div className="pt-14">
+        {/* Feed header */}
+        <div className="px-4 pt-6 pb-2">
+          <p className="section-label">Community Feed</p>
+          <p className="text-sm text-slime-muted mt-1">
+            What the community is logging
+          </p>
         </div>
 
-        {/* Step card */}
-        <div className="w-full max-w-md rounded-2xl p-6" style={cardStyle}>
-          <StepIndicator step={step} />
+        <div className="px-4 pb-4">
+          <FeedTabs activeTab={activeTab} isLoggedIn={isLoggedIn} />
+        </div>
 
-          {/* ── Step 0: Identity ── */}
-          {step === 0 && (
-            <div className="flex flex-col gap-5">
-              <h2 className="text-lg font-bold text-slime-cyan">
-                What slime is this?
-              </h2>
-
-              <Field label="Slime Name *">
-                <input
-                  className={inputCls}
-                  placeholder="e.g. Honeydew Dreams"
-                  value={form.slime_name}
-                  onChange={(e) => set("slime_name", e.target.value)}
-                />
-              </Field>
-
-              <Field label="Brand / Shop Name" optional>
-                <BrandSearchInput
-                  value={form.brand_name_raw}
-                  onChange={(name: string, id: string | null) => {
-                    set("brand_name_raw", name);
-                    setForm((f) => ({ ...f, brand_id: id }));
-                  }}
-                  placeholder="Search brands..."
-                />
-              </Field>
-
-              <Field label="Collection" optional>
-                <input
-                  className={inputCls}
-                  placeholder="e.g. Sundae Funday"
-                  value={form.collection_name}
-                  onChange={(e) => set("collection_name", e.target.value)}
-                />
-              </Field>
-              <Field label="Slime Type *">
-                <select
-                  className={inputCls}
-                  value={form.slime_type}
-                  onChange={(e) =>
-                    set("slime_type", e.target.value as SlimeType | "")
-                  }
-                >
-                  <option value="">— Pick a type —</option>
-                  {(
-                    Object.entries(SLIME_TYPE_LABELS) as [SlimeType, string][]
-                  ).map(([val, label]) => (
-                    <option key={val} value={val}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              {/* Wishlist toggle */}
-              <button
-                type="button"
-                onClick={() => {
-                  set("in_wishlist", !form.in_wishlist);
-                  set("in_collection", form.in_wishlist);
-                }}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-sm font-medium"
-                style={
-                  form.in_wishlist
-                    ? {
-                        borderColor: "rgba(57,255,20,0.4)",
-                        background: "rgba(57,255,20,0.08)",
-                        color: "#39FF14",
-                      }
-                    : {
-                        borderColor: "rgba(45,10,78,0.6)",
-                        background: "rgba(45,10,78,0.2)",
-                        color: "#888888",
-                      }
-                }
-              >
-                {form.in_wishlist ? "Wishlist item" : "Add to wishlist instead"}
-              </button>
-            </div>
-          )}
-
-          {/* ── Step 1: Details ── */}
-          {step === 1 && (
-            <div className="flex flex-col gap-5">
-              <h2 className="text-lg font-bold text-slime-cyan">
-                Tell us more
-              </h2>
-
-              <Field label="Photo" optional>
-                {userId ? (
-                  <ImageUpload
-                    bucket="slime-photos"
-                    userId={userId}
-                    existingUrl={form.image_url}
-                    onUploadComplete={(url) => set("image_url", url)}
-                    onRemove={() => set("image_url", null)}
-                    label="Add a photo (optional)"
-                    aspectRatio="4:3"
-                  />
-                ) : (
-                  <div className="w-full aspect-[4/3] rounded-2xl bg-slime-surface border border-slime-border animate-pulse" />
-                )}
-              </Field>
-              <Field label="Scent" optional>
-                <input
-                  className={inputCls}
-                  placeholder="e.g. Watermelon candy"
-                  value={form.scent}
-                  onChange={(e) => set("scent", e.target.value)}
-                />
-              </Field>
-              <Field label="Purchase Price ($)" optional>
-                <input
-                  className={inputCls}
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={form.purchase_price}
-                  onChange={(e) => set("purchase_price", e.target.value)}
-                />
-              </Field>
-              {/* [Change 2] Shipping Dates section removed entirely */}
-              <Field label="Colors" optional>
-                {form.slime_type === "clear" ? (
-                  <p
-                    style={{
-                      fontSize: 13,
-                      color: "rgba(255,255,255,0.4)",
-                      fontStyle: "italic",
-                    }}
-                  >
-                    Color is automatically set to clear for this slime type.
-                  </p>
-                ) : (
-                  <ColorPicker
-                    selectedValues={form.selected_color_values}
-                    onToggle={toggleColor}
-                    description={form.color_description}
-                    onDescriptionChange={(v) => set("color_description", v)}
-                  />
-                )}
-              </Field>
-            </div>
-          )}
-
-          {/* ── Step 2: Ratings ── */}
-          {step === 2 && (
-            <div className="flex flex-col gap-1">
-              <h2 className="text-lg font-bold text-slime-cyan mb-3">
-                Rate it
-              </h2>
-              {RATING_FIELDS.map(({ key, label }) => (
-                <StarRating
-                  key={key}
-                  value={form[key] as number | null}
-                  onChange={(v) => set(key, v)}
-                  label={label}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* ── Step 3: Notes ── */}
-          {step === 3 && (
-            <div className="flex flex-col gap-5">
-              <h2 className="text-lg font-bold text-slime-cyan">Any notes?</h2>
-
-              <Field label="Notes" optional>
-                <textarea
-                  className={`${inputCls} resize-none h-36`}
-                  placeholder="Texture thoughts, storage tips, first impressions…"
-                  value={form.notes}
-                  onChange={(e) => set("notes", e.target.value)}
-                />
-              </Field>
-
-              {/* Summary card */}
-              <div
-                className="rounded-xl px-4 py-4 text-sm text-slime-muted space-y-1"
-                style={{
-                  background: "rgba(45,10,78,0.3)",
-                  border: "1px solid rgba(45,10,78,0.6)",
-                }}
-              >
-                {form.image_url && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={form.image_url}
-                    alt="Slime photo"
-                    className="w-full aspect-[4/3] object-cover rounded-xl mb-3"
-                  />
-                )}
-                <p>
-                  <span className="font-semibold text-slime-cyan">
-                    {form.slime_name || "Unnamed slime"}
-                  </span>
-                  {form.brand_name_raw ? (
-                    <span className="text-slime-magenta">
-                      {" "}
-                      by {form.brand_name_raw}
-                    </span>
-                  ) : (
-                    ""
-                  )}
-                </p>
-                {form.collection_name && (
-                  <p>Collection: {form.collection_name}</p>
-                )}
-                {form.slime_type && (
-                  <p>
-                    Type:{" "}
-                    <span className="text-slime-accent">
-                      {SLIME_TYPE_LABELS[form.slime_type as SlimeType]}
-                    </span>
-                  </p>
-                )}
-                {form.slime_type === "clear" ? (
-                  <p>
-                    Colors: <span className="text-slime-accent">clear</span>
-                  </p>
-                ) : (
-                  (form.selected_color_values.length > 0 ||
-                    form.color_description.trim()) && (
-                    <p>
-                      Colors:{" "}
-                      {buildColorsArray(
-                        form.selected_color_values,
-                        form.color_description,
-                      )?.join(", ")}
-                    </p>
-                  )
-                )}
-                {form.rating_overall && (
-                  <p>
-                    Overall:{" "}
-                    <span className="text-slime-accent font-bold">
-                      {form.rating_overall}/5
-                    </span>
-                  </p>
-                )}
-              </div>
-
-              {saveError && (
-                <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">
-                  {saveError}
+        <section className="px-4 pb-24">
+          {activeTab === "following" && !isLoggedIn ? (
+            <LoginPrompt />
+          ) : (
+            <>
+              {displayError && (
+                <div className="mb-4 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-xs text-red-400">
+                  Couldn&apos;t load the feed right now — try refreshing.
                 </div>
               )}
-            </div>
+              {displayLogs.length === 0 && !displayError ? (
+                activeTab === "following" ? (
+                  <EmptyFollowingFeed />
+                ) : (
+                  <EmptyFeed />
+                )
+              ) : (
+                <>
+                  <p className="text-xs text-slime-muted mb-4 font-medium uppercase tracking-wider">
+                    {activeTab === "following"
+                      ? "From people you follow"
+                      : "Recent logs"}{" "}
+                    · {displayLogs.length} shown
+                  </p>
+                  <div className="flex flex-col gap-3">
+                    {displayLogs.map((log) => (
+                      <FeedCard
+                        key={log.id}
+                        log={log}
+                        brandSlugMap={brandSlugMap}
+                        currentUserId={user?.id ?? null}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
           )}
-
-          {/* Navigation */}
-          <div className="flex gap-3 mt-8">
-            {step > 0 && (
-              <button
-                type="button"
-                onClick={() => setStep((s) => (s - 1) as Step)}
-                className="flex-1 py-3 rounded-xl text-sm font-semibold text-slime-muted transition"
-                style={{
-                  border: "1px solid rgba(45,10,78,0.6)",
-                  background: "rgba(45,10,78,0.2)",
-                }}
-              >
-                Back
-              </button>
-            )}
-
-            {step < 3 ? (
-              <button
-                type="button"
-                onClick={() => setStep((s) => (s + 1) as Step)}
-                disabled={step === 0 && !form.slime_name.trim()}
-                className="flex-1 py-3 rounded-xl text-sm font-bold text-slime-bg shadow-glow-green transition disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]"
-                style={{
-                  background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-                }}
-              >
-                Next →
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={saving}
-                className="flex-1 py-3 rounded-xl text-sm font-bold text-slime-bg shadow-glow-green transition disabled:opacity-60 active:scale-[0.98]"
-                style={{
-                  background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-                }}
-              >
-                {saving
-                  ? "Saving…"
-                  : form.in_wishlist
-                    ? "Add to Wishlist"
-                    : "Save to Collection"}
-              </button>
-            )}
-          </div>
-        </div>
+        </section>
       </div>
     </PageWrapper>
-  );
-}
-
-// ─── Loading fallback ─────────────────────────────────────────────────────────
-
-function LogPageLoading() {
-  return (
-    <div
-      className="min-h-screen flex items-center justify-center"
-      style={{
-        background:
-          "radial-gradient(ellipse 100% 60% at 50% 0%, #2D0A4E 0%, #100020 35%, #0A0A0A 65%)",
-      }}
-    >
-      <div className="text-slime-accent text-sm font-medium animate-pulse">
-        Loading…
-      </div>
-    </div>
-  );
-}
-
-// ─── Default export ───────────────────────────────────────────────────────────
-
-export default function LogPage() {
-  return (
-    <Suspense fallback={<LogPageLoading />}>
-      <LogPageInner />
-    </Suspense>
   );
 }
