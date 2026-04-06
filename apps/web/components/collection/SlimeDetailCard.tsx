@@ -134,6 +134,12 @@ interface Props {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+// Module-level client — created once, not on every render
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+);
+
 export default function SlimeDetailCard({
   log,
   imageUrl,
@@ -154,11 +160,6 @@ export default function SlimeDetailCard({
   // [Change 3] Wishlist state — null means "checking", true/false means resolved
   const [isWishlisted, setIsWishlisted] = useState<boolean | null>(null);
   const [wishlistLoading, setWishlistLoading] = useState(false);
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
 
   // [Change 3] On mount, check if current user already has a wishlist entry
   // matching this slime name. Only runs when currentUserId is non-null.
@@ -196,18 +197,18 @@ export default function SlimeDetailCard({
     if (!currentUserId || wishlistLoading || isWishlisted) return;
     setWishlistLoading(true);
 
-    const { error } = await supabase.from("collection_logs").insert({
-      user_id: currentUserId,
-      slime_name: log.slime_name,
-      brand_name_raw: log.brand_name_raw,
-      slime_type: log.slime_type,
-      in_wishlist: true,
-      in_collection: false,
-      is_public: true,
+    const res = await fetch("/api/wishlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        slime_name: log.slime_name,
+        brand_name_raw: log.brand_name_raw,
+        slime_type: log.slime_type,
+      }),
     });
 
     setWishlistLoading(false);
-    if (!error) {
+    if (res.ok) {
       setIsWishlisted(true);
     }
   }
@@ -848,7 +849,7 @@ export default function SlimeDetailCard({
       <div
         style={{
           position: "fixed",
-          bottom: 0,
+          bottom: 25,
           left: 0,
           right: 0,
           zIndex: 101,
@@ -911,8 +912,8 @@ export default function SlimeDetailCard({
             borderRadius: 14,
             background: "linear-gradient(135deg, #39FF14, #00F0FF)",
             color: "#0A0A0A",
-            fontSize: 15,
-            fontWeight: 800,
+            fontSize: 14,
+            fontWeight: 700,
             textDecoration: "none",
             letterSpacing: "0.02em",
             fontFamily: "Montserrat, Inter, sans-serif",
