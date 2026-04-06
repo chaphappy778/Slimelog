@@ -24,7 +24,11 @@ export async function POST(req: NextRequest) {
   });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    console.error("Wishlist insert error:", error);
+    return NextResponse.json(
+      { error: error.message, details: error },
+      { status: 400 },
+    );
   }
 
   return NextResponse.json({ success: true });
