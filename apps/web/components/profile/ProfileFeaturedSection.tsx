@@ -153,9 +153,6 @@ export default function ProfileFeaturedSection({
     setEditorOpen(false);
   }
 
-  // Spec: omit section entirely if empty and not editing
-  if (featuredLogs.length === 0 && !editorOpen) return null;
-
   return (
     <section className="px-4 mb-8">
       {/* Section header — always shown when section is visible */}
@@ -217,12 +214,15 @@ export default function ProfileFeaturedSection({
           userId={userId}
           onDone={handleEditorDone}
         />
-      ) : (
+      ) : featuredLogs.length > 0 ? (
         <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none">
           {featuredLogs.map((log) => (
             <FeaturedCard key={log.id} log={log} />
           ))}
         </div>
+      ) : (
+        /* Empty state — owner prompt to pin slimes */
+        <p className="text-sm text-slime-muted">Pin your top slimes</p>
       )}
     </section>
   );
