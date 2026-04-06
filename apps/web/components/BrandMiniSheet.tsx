@@ -221,7 +221,7 @@ export default function BrandMiniSheet({
       <div
         style={{
           position: "absolute",
-          bottom: 0,
+          bottom: 300,
           left: 0,
           right: 0,
           background: "#0F0018",
