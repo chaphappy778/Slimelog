@@ -8,6 +8,8 @@ import { createBrowserClient } from "@supabase/ssr";
 import type { CollectionLog } from "@/lib/types";
 import LikeButton from "@/components/collection/LikeButton";
 import CommentSection from "@/components/collection/CommentSection";
+// [Change 1] Import BrandMiniSheet
+import BrandMiniSheet from "@/components/BrandMiniSheet";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -156,6 +158,9 @@ export default function SlimeDetailCard({
 
   // [Bug 1] Live comment count — initialized from prop, updated via onCountChange
   const [liveCommentCount, setLiveCommentCount] = useState(commentCount);
+
+  // [Change 2] Brand mini-sheet state
+  const [showBrandSheet, setShowBrandSheet] = useState(false);
 
   // [Change 3] Wishlist state — null means "checking", true/false means resolved
   const [isWishlisted, setIsWishlisted] = useState<boolean | null>(null);
@@ -465,9 +470,15 @@ export default function SlimeDetailCard({
             >
               {brandSlug ? (
                 <>
-                  <Link
-                    href={`/brands/${brandSlug}`}
+                  {/* [Change 2] Replace Link with button — opens BrandMiniSheet */}
+                  <button
+                    type="button"
+                    onClick={() => setShowBrandSheet(true)}
                     style={{
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      cursor: "pointer",
                       fontSize: 15,
                       fontWeight: 600,
                       color: "#00F0FF",
@@ -475,11 +486,20 @@ export default function SlimeDetailCard({
                     }}
                   >
                     {log.brand_name_raw}
-                  </Link>
-                  <Link
-                    href={`/brands/${brandSlug}`}
-                    aria-label={`Visit ${log.brand_name_raw}`}
-                    style={{ color: "rgba(255,255,255,0.3)", lineHeight: 0 }}
+                  </button>
+                  {/* [Change 2] Three-dot button — also opens BrandMiniSheet */}
+                  <button
+                    type="button"
+                    onClick={() => setShowBrandSheet(true)}
+                    aria-label={`More about ${log.brand_name_raw}`}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      cursor: "pointer",
+                      color: "rgba(255,255,255,0.3)",
+                      lineHeight: 0,
+                    }}
                   >
                     <svg
                       width="18"
@@ -496,7 +516,7 @@ export default function SlimeDetailCard({
                       <circle cx="19" cy="12" r="1" />
                       <circle cx="5" cy="12" r="1" />
                     </svg>
-                  </Link>
+                  </button>
                 </>
               ) : (
                 <span
@@ -922,6 +942,15 @@ export default function SlimeDetailCard({
           View Full Review
         </Link>
       </div>
+
+      {/* [Change 2] BrandMiniSheet — rendered when showBrandSheet is true and brandSlug is non-null */}
+      {showBrandSheet && brandSlug && (
+        <BrandMiniSheet
+          brandSlug={brandSlug}
+          brandName={log.brand_name_raw ?? ""}
+          onClose={() => setShowBrandSheet(false)}
+        />
+      )}
     </div>
   );
 }
