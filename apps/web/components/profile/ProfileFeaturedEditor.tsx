@@ -1,6 +1,6 @@
+// apps/web/components/profile/ProfileFeaturedEditor.tsx
 "use client";
 
-// components/profile/ProfileFeaturedEditor.tsx
 // Lets the profile owner select up to 3 featured slimes.
 // Saves immediately on each toggle via PATCH to profiles.featured_log_ids.
 // onDone receives the final saved IDs so the parent can update display without a refetch.
@@ -8,7 +8,14 @@
 import { useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
-import { SLIME_TYPE_LABELS, type SlimeType } from "@/lib/types"; // [Change: no local type labels]
+import { SLIME_TYPE_LABELS, type SlimeType } from "@/lib/types";
+import { useToast } from "@/components/Toast"; // [Change 1] Import useToast
+
+// [Change 2] Module-level client — was inside component body (absolute rule violation)
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+);
 
 type CandidateLog = {
   id: string;
@@ -24,7 +31,6 @@ type Props = {
   allLogs: CandidateLog[];
   initialFeaturedIds: string[];
   userId: string;
-  /** Called when user taps Done. Receives the final saved featured IDs. */
   onDone: (savedIds: string[]) => void;
 };
 
@@ -68,8 +74,6 @@ function StarOutline({ size = 16 }: { size?: number }) {
   );
 }
 
-// ─── Gradient swatch for logs without an image ─────────────────────────────────
-
 function ColorSwatch({ colors }: { colors: string[] | null }) {
   const c1 = colors?.[0] ?? "#2D0A4E";
   const c2 = colors?.[1] ?? c1;
@@ -81,8 +85,6 @@ function ColorSwatch({ colors }: { colors: string[] | null }) {
     />
   );
 }
-
-// ─── Candidate row ─────────────────────────────────────────────────────────────
 
 function CandidateRow({
   log,
@@ -105,7 +107,6 @@ function CandidateRow({
 
   return (
     <li className="flex items-center gap-3 py-3 border-b border-slime-border/50 last:border-0">
-      {/* Thumbnail */}
       <div className="w-10 h-10 rounded-xl shrink-0 overflow-hidden bg-slime-surface border border-slime-border">
         {log.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -119,7 +120,6 @@ function CandidateRow({
         )}
       </div>
 
-      {/* Name + meta */}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-slime-text truncate leading-tight">
           {log.slime_name ?? "Untitled slime"}
@@ -135,14 +135,12 @@ function CandidateRow({
         </p>
       </div>
 
-      {/* Rating */}
       {log.rating_overall != null && (
         <p className="text-xs font-bold text-slime-cyan shrink-0 tabular-nums">
           {log.rating_overall}/5
         </p>
       )}
 
-      {/* Toggle star */}
       <button
         type="button"
         onClick={onToggle}
@@ -174,12 +172,7 @@ export default function ProfileFeaturedEditor({
 }: Props) {
   const [featuredIds, setFeaturedIds] = useState<string[]>(initialFeaturedIds);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
+  const { showToast } = useToast(); // [Change 1]
 
   async function toggle(logId: string) {
     const isFeatured = featuredIds.includes(logId);
@@ -191,7 +184,6 @@ export default function ProfileFeaturedEditor({
 
     // Optimistic update
     setFeaturedIds(newIds);
-    setError(null);
     setSaving(true);
 
     const { error: saveErr } = await supabase
@@ -200,10 +192,13 @@ export default function ProfileFeaturedEditor({
       .eq("id", userId);
 
     setSaving(false);
+
+    // [Change 1] Toast on save result; roll back on error
     if (saveErr) {
-      // Roll back
       setFeaturedIds(featuredIds);
-      setError("Couldn\u2019t save \u2014 please try again.");
+      showToast("Could not save featured slimes", "error");
+    } else {
+      showToast("Featured slimes saved", "success");
     }
   }
 
@@ -240,7 +235,7 @@ export default function ProfileFeaturedEditor({
         </button>
       </div>
 
-      {error && <p className="text-xs text-red-400 pt-2 pb-1">{error}</p>}
+      {/* [Change 1] Error state removed — replaced by toast. No inline error div. */}
 
       {allLogs.length === 0 ? (
         <div className="py-8 text-center text-slime-muted text-sm">

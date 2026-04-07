@@ -1,8 +1,15 @@
-"use client";
 // apps/web/components/collection/CommentSection.tsx
+"use client";
 
 import { useState, useEffect, useRef } from "react";
 import { createBrowserClient } from "@supabase/ssr";
+import { useToast } from "@/components/Toast"; // [Change 1] Import useToast
+
+// [Change 2] Module-level client — was inside component body (absolute rule violation)
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+);
 
 interface Comment {
   id: string;
@@ -15,7 +22,6 @@ interface Comment {
 interface Props {
   logId: string;
   currentUserId: string | null;
-  // [Bug 1] Callback so SlimeDetailCard can track live comment count
   onCountChange: (count: number) => void;
 }
 
@@ -30,14 +36,9 @@ export default function CommentSection({
   const [loading, setLoading] = useState(true);
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  // [Fix 1] Collapsed/expanded state — show 2 by default
   const [expanded, setExpanded] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
+  const { showToast } = useToast(); // [Change 1]
 
   useEffect(() => {
     let cancelled = false;
@@ -48,13 +49,11 @@ export default function CommentSection({
         .from("comments")
         .select("id, user_id, body, created_at, profiles ( username )")
         .eq("log_id", logId)
-        // [Bug 3] Newest first
         .order("created_at", { ascending: false });
 
       if (!cancelled) {
         const loaded = (data as unknown as Comment[]) ?? [];
         setComments(loaded);
-        // [Bug 1] Safe — called after setComments, not inside its updater
         onCountChange(loaded.length);
         setLoading(false);
       }
@@ -78,16 +77,18 @@ export default function CommentSection({
       .select("id, user_id, body, created_at, profiles ( username )")
       .single();
 
+    setSubmitting(false);
+
+    // [Change 1] Toast on comment post result
     if (!error && data) {
       const newComment = data as unknown as Comment;
-      // [Bug 3] Prepend so newest appears at top
-      // [Fix] onCountChange called after setComments, never inside the updater
       setComments((prev) => [newComment, ...prev]);
       onCountChange(comments.length + 1);
       setBody("");
+      showToast("Comment posted", "success");
+    } else {
+      showToast("Could not post comment", "error");
     }
-
-    setSubmitting(false);
   }
 
   async function handleDelete(commentId: string) {
@@ -97,10 +98,11 @@ export default function CommentSection({
       .eq("id", commentId)
       .eq("user_id", currentUserId!);
 
+    // [Change 1] Toast on delete result
     if (!error) {
-      // [Fix] onCountChange called after setComments, never inside the updater
       setComments((prev) => prev.filter((c) => c.id !== commentId));
       onCountChange(comments.length - 1);
+      showToast("Comment deleted", "info");
     }
   }
 
@@ -118,7 +120,6 @@ export default function CommentSection({
     );
   }
 
-  // [Fix 1] Slice to COLLAPSED_COUNT unless expanded
   const visibleComments = expanded
     ? comments
     : comments.slice(0, COLLAPSED_COUNT);
@@ -135,8 +136,6 @@ export default function CommentSection({
         }}
       />
 
-      {/* [Fix 1] No scroll container — overlay scrolls naturally.
-          Show only visibleComments; expand/collapse button below. */}
       <div
         style={{
           display: "flex",
@@ -264,7 +263,7 @@ export default function CommentSection({
         )}
       </div>
 
-      {/* [Fix 1] Expand / collapse toggle — only shown when there are more than 2 */}
+      {/* Expand / collapse */}
       {hasMore && (
         <button
           type="button"
@@ -286,7 +285,7 @@ export default function CommentSection({
         </button>
       )}
 
-      {/* Input — always visible below list. Only shown when logged in. */}
+      {/* Input */}
       {currentUserId && (
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
           <textarea

@@ -409,8 +409,9 @@ export default function SlimeMenu() {
                   }}
                 >
                   <p className="text-xs text-red-300 font-semibold leading-snug">
-                    This will permanently delete your account and all your slime
-                    logs. This cannot be undone.
+                    This will permanently delete your account. All of your slime
+                    logs, photos, comments, and follows will be removed. This
+                    cannot be undone.
                   </p>
                   {deleteError && (
                     <p className="text-xs text-red-400">{deleteError}</p>

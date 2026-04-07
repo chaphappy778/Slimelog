@@ -1,5 +1,5 @@
-"use client";
 // apps/web/app/settings/profile/page.tsx
+"use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createBrowserClient } from "@supabase/ssr";
@@ -8,6 +8,13 @@ import Link from "next/link";
 import { updateProfile, checkUsernameAvailable } from "@/lib/profile-actions";
 import { ImageUpload } from "@/components/ImageUpload";
 import PageWrapper from "@/components/PageWrapper";
+import { useToast } from "@/components/Toast"; // [Change 1] Import useToast
+
+// [Change 2] Module-level client — was inside component body (absolute rule violation)
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+);
 
 type FormState = {
   username: string;
@@ -132,7 +139,6 @@ function UsernameHint({
 const inputCls =
   "w-full px-3 py-2.5 rounded-xl border border-slime-border bg-slime-surface text-sm text-slime-text placeholder:text-slime-muted outline-none focus:border-slime-accent/50 focus:ring-1 focus:ring-slime-accent/30 transition-colors";
 
-// Deep purple section card style
 const sectionStyle = {
   background: "rgba(45,10,78,0.25)",
   border: "1px solid rgba(45,10,78,0.7)",
@@ -141,10 +147,7 @@ const sectionStyle = {
 
 export default function ProfileSettingsPage() {
   const router = useRouter();
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
+  const { showToast } = useToast(); // [Change 1]
 
   const [authChecked, setAuthChecked] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -158,7 +161,7 @@ export default function ProfileSettingsPage() {
         setAuthChecked(true);
       }
     });
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [originalForm, setOriginalForm] = useState<FormState>({
     username: "",
@@ -197,7 +200,7 @@ export default function ProfileSettingsPage() {
         }
         setProfileLoading(false);
       });
-  }, [userId]);
+  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>("idle");
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -236,8 +239,7 @@ export default function ProfileSettingsPage() {
   };
 
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  // [Change 1] saveSuccess, saveError state removed — replaced by toasts
 
   const hasChanges =
     form.username !== originalForm.username ||
@@ -257,21 +259,22 @@ export default function ProfileSettingsPage() {
   const handleSave = async () => {
     if (!isFormValid) return;
     setSaving(true);
-    setSaveError(null);
-    setSaveSuccess(false);
+
     const result = await updateProfile({
       username: form.username,
       bio: form.bio || undefined,
       avatar_url: form.avatar_url || undefined,
     });
+
     setSaving(false);
+
+    // [Change 1] Toast on save result; inline banners removed
     if (result.success) {
-      setSaveSuccess(true);
+      showToast("Profile saved", "success");
       setOriginalForm({ ...form });
       setUsernameStatus("idle");
-      setTimeout(() => setSaveSuccess(false), 3000);
     } else {
-      setSaveError(result.error ?? "Something went wrong.");
+      showToast("Could not save profile", "error");
     }
   };
 
@@ -458,31 +461,10 @@ export default function ProfileSettingsPage() {
           />
         </section>
 
-        {saveError && (
-          <div className="px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-xs text-red-400">
-            {saveError}
-          </div>
-        )}
-        {saveSuccess && (
-          <div className="px-4 py-3 rounded-2xl bg-slime-accent/10 border border-slime-accent/30 text-xs text-slime-accent font-semibold flex items-center gap-2">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              width={14}
-              height={14}
-            >
-              <path
-                fillRule="evenodd"
-                d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
-                clipRule="evenodd"
-              />
-            </svg>
-            Profile updated!
-          </div>
-        )}
+        {/* [Change 1] saveError div removed. saveSuccess banner removed. Both replaced by toasts. */}
 
         <button
+          type="button"
           onClick={handleSave}
           disabled={!isFormValid || saving}
           className={`w-full py-3.5 rounded-2xl text-sm font-black tracking-wide transition-all active:scale-95 ${isFormValid && !saving ? "text-slime-bg shadow-glow-green" : "bg-slime-surface text-slime-muted cursor-not-allowed"}`}
@@ -492,7 +474,7 @@ export default function ProfileSettingsPage() {
               : undefined
           }
         >
-          {saving ? "Saving…" : "Save Profile"}
+          {saving ? "Saving..." : "Save Profile"}
         </button>
       </div>
     </PageWrapper>

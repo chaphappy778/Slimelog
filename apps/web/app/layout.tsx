@@ -1,6 +1,8 @@
+// apps/web/app/layout.tsx
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import BottomNavWrapper from "@/components/BottomNavWrapper";
+import { ToastProvider } from "@/components/Toast"; // [Change 1] Import ToastProvider
 
 export const metadata: Metadata = {
   title: "SlimeLog",
@@ -33,8 +35,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
-        <main className="page-enter">{children}</main>
-        <BottomNavWrapper />
+        {/* [Change 1] Wrap with ToastProvider so all consumer pages can call useToast */}
+        <ToastProvider>
+          <main className="page-enter">{children}</main>
+          <BottomNavWrapper />
+        </ToastProvider>
       </body>
     </html>
   );

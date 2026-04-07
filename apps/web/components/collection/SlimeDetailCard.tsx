@@ -1,5 +1,5 @@
-"use client";
 // apps/web/components/collection/SlimeDetailCard.tsx
+"use client";
 
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
@@ -9,6 +9,14 @@ import type { CollectionLog } from "@/lib/types";
 import LikeButton from "@/components/collection/LikeButton";
 import CommentSection from "@/components/collection/CommentSection";
 import BrandMiniSheet from "@/components/BrandMiniSheet";
+import { useToast } from "@/components/Toast"; // [Change 1] Import useToast
+
+// ─── Supabase (module-level) ──────────────────────────────────────────────────
+
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+);
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -54,7 +62,6 @@ const COLOR_SWATCHES: Record<string, string> = {
   silver: "#C0C0C0",
 };
 
-// [Change 1] Updated labels: Sound → Sound / ASMR, Drizzle → Aesthetic, Sensory Fit → Quality
 const RATING_DIMENSIONS: Array<{ key: keyof CollectionLog; label: string }> = [
   { key: "rating_texture", label: "Texture" },
   { key: "rating_scent", label: "Scent" },
@@ -136,11 +143,6 @@ interface Props {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
-
 export default function SlimeDetailCard({
   log,
   imageUrl,
@@ -154,6 +156,7 @@ export default function SlimeDetailCard({
   currentUserId,
 }: Props) {
   const commentRef = useRef<HTMLDivElement>(null);
+  const { showToast } = useToast(); // [Change 1] Wire toast hook
 
   const [liveCommentCount, setLiveCommentCount] = useState(commentCount);
   const [showBrandSheet, setShowBrandSheet] = useState(false);
@@ -204,8 +207,13 @@ export default function SlimeDetailCard({
     });
 
     setWishlistLoading(false);
+
+    // [Change 1] Toast on wishlist result
     if (res.ok) {
       setIsWishlisted(true);
+      showToast("Added to wishlist", "success");
+    } else {
+      showToast("Could not add to wishlist", "error");
     }
   }
 
@@ -366,7 +374,7 @@ export default function SlimeDetailCard({
         </div>
       )}
 
-      {/* ── Info card ── */}
+      {/* Info card */}
       <div
         style={{
           position: "relative",
