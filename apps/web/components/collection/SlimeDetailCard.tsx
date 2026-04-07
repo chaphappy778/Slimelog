@@ -9,7 +9,8 @@ import type { CollectionLog } from "@/lib/types";
 import LikeButton from "@/components/collection/LikeButton";
 import CommentSection from "@/components/collection/CommentSection";
 import BrandMiniSheet from "@/components/BrandMiniSheet";
-import { useToast } from "@/components/Toast"; // [Change 1] Import useToast
+import ReportButton from "@/components/ReportButton"; // [Change 1] Import ReportButton
+import { useToast } from "@/components/Toast";
 
 // ─── Supabase (module-level) ──────────────────────────────────────────────────
 
@@ -156,7 +157,7 @@ export default function SlimeDetailCard({
   currentUserId,
 }: Props) {
   const commentRef = useRef<HTMLDivElement>(null);
-  const { showToast } = useToast(); // [Change 1] Wire toast hook
+  const { showToast } = useToast();
 
   const [liveCommentCount, setLiveCommentCount] = useState(commentCount);
   const [showBrandSheet, setShowBrandSheet] = useState(false);
@@ -208,7 +209,6 @@ export default function SlimeDetailCard({
 
     setWishlistLoading(false);
 
-    // [Change 1] Toast on wishlist result
     if (res.ok) {
       setIsWishlisted(true);
       showToast("Added to wishlist", "success");
@@ -232,6 +232,9 @@ export default function SlimeDetailCard({
   function scrollToComments() {
     commentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
+  // [Change 1] Show report button only on other users' content
+  const showReport = currentUserId !== null && currentUserId !== log.user_id;
 
   const IMAGE_HEIGHT = "28vh";
   const OVERLAP = imageUrl ? 56 : 0;
@@ -559,9 +562,9 @@ export default function SlimeDetailCard({
                   padding: "3px 11px",
                   borderRadius: 20,
                   fontSize: 12,
-                  background: "rgba(148,0,211,0.15)",
+                  background: "rgba(204,68,255,0.15)",
                   color: "#CC44FF",
-                  border: "1px solid rgba(148,0,211,0.35)",
+                  border: "1px solid rgba(204,68,255,0.35)",
                 }}
               >
                 Wishlist
@@ -637,7 +640,8 @@ export default function SlimeDetailCard({
             </div>
           )}
 
-          {/* Like + Comment action bar */}
+          {/* Like + Comment + Report action bar */}
+          {/* [Change 1] Added Report as third action slot */}
           <div
             style={{
               display: "flex",
@@ -713,6 +717,34 @@ export default function SlimeDetailCard({
                 </span>
               )}
             </button>
+
+            {/* [Change 1] Report action — only for other users' content */}
+            {showReport && (
+              <>
+                <div
+                  style={{
+                    width: 1,
+                    background: "rgba(45,10,78,0.6)",
+                    flexShrink: 0,
+                  }}
+                />
+                <div
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    padding: "13px 0",
+                  }}
+                >
+                  <ReportButton
+                    contentType="log"
+                    contentId={log.id}
+                    currentUserId={currentUserId}
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           {/* Dimension rating grid */}

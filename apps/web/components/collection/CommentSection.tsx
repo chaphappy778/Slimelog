@@ -3,9 +3,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import { useToast } from "@/components/Toast"; // [Change 1] Import useToast
+import { useToast } from "@/components/Toast";
+import ReportButton from "@/components/ReportButton"; // [Change 1] Import ReportButton
 
-// [Change 2] Module-level client — was inside component body (absolute rule violation)
+// Module-level client
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -38,7 +39,7 @@ export default function CommentSection({
   const [submitting, setSubmitting] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const { showToast } = useToast(); // [Change 1]
+  const { showToast } = useToast();
 
   useEffect(() => {
     let cancelled = false;
@@ -79,7 +80,6 @@ export default function CommentSection({
 
     setSubmitting(false);
 
-    // [Change 1] Toast on comment post result
     if (!error && data) {
       const newComment = data as unknown as Comment;
       setComments((prev) => [newComment, ...prev]);
@@ -98,7 +98,6 @@ export default function CommentSection({
       .eq("id", commentId)
       .eq("user_id", currentUserId!);
 
-    // [Change 1] Toast on delete result
     if (!error) {
       setComments((prev) => prev.filter((c) => c.id !== commentId));
       onCountChange(comments.length - 1);
@@ -187,6 +186,7 @@ export default function CommentSection({
                   position: "relative",
                 }}
               >
+                {/* [Change 1] Comment header row with ReportButton */}
                 <div
                   style={{
                     display: "flex",
@@ -206,13 +206,19 @@ export default function CommentSection({
                     @{username}
                   </span>
                   <div
-                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                    style={{ display: "flex", alignItems: "center", gap: 4 }}
                   >
                     <span
                       style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}
                     >
                       {formatRelativeTime(c.created_at)}
                     </span>
+                    {/* [Change 1] Report button on all comments for logged-in users */}
+                    <ReportButton
+                      contentType="comment"
+                      contentId={c.id}
+                      currentUserId={currentUserId}
+                    />
                     {isOwn && (
                       <button
                         type="button"

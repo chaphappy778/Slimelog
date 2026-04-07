@@ -6,6 +6,7 @@ import Link from "next/link";
 import { TypeBadge } from "@/components/TypeBadge";
 import { DeleteLogButton } from "@/components/DeleteLogButton";
 import { BackButton } from "@/components/BackButton";
+import ReportButton from "@/components/ReportButton"; // [Change 1] Import ReportButton
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -253,13 +254,13 @@ export default async function SlimeDetailPage({
   } = await supabase.auth.getUser();
 
   const isOwner = !!user && user.id === log.user_id;
+  const currentUserId = user?.id ?? null;
 
   const brandName = log.brands?.name ?? log.brand_name_raw ?? "Unknown brand";
   const brandHref = log.brands?.slug ? `/brands/${log.brands.slug}` : null;
   const displayPrice = log.purchase_price ?? log.cost_paid;
   const currency = log.purchase_currency ?? "USD";
 
-  // [Change 1] Updated labels: Sound → Sound / ASMR, Drizzle → Aesthetic, Sensory Fit → Quality
   const SUB_RATINGS: { key: keyof SlimeDetail; label: string }[] = [
     { key: "rating_texture", label: "Texture" },
     { key: "rating_scent", label: "Scent" },
@@ -277,6 +278,9 @@ export default async function SlimeDetailPage({
     log.purchased_from ||
     log.purchased_at;
   const hasNotes = log.likes || log.dislikes || log.notes;
+
+  // [Change 1] Show report for logged-in non-owners
+  const showReport = currentUserId !== null && !isOwner;
 
   return (
     <div
@@ -528,6 +532,17 @@ export default async function SlimeDetailPage({
               Edit
             </Link>
             <DeleteLogButton logId={id} />
+          </div>
+        )}
+
+        {/* [Change 1] Report button for non-owners */}
+        {showReport && (
+          <div className="flex justify-end pb-2">
+            <ReportButton
+              contentType="log"
+              contentId={id}
+              currentUserId={currentUserId}
+            />
           </div>
         )}
       </div>

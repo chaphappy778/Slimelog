@@ -4,7 +4,8 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import FollowUserButton from "@/components/FollowUserButton";
-import { formatDistanceToNow } from "date-fns";
+import ReportButton from "@/components/ReportButton"; // [Change 1] Import ReportButton
+// [Change 2] Removed: import { formatDistanceToNow } from "date-fns"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,21 @@ const TYPE_STYLE: Record<string, { bg: string; text: string }> = {
   slay: { bg: "bg-red-900/40", text: "text-red-300" },
 };
 
+// [Change 2] Inline relative time — replaces formatDistanceToNow from date-fns
+function formatRelativeTime(isoString: string): string {
+  const diffMs = Date.now() - new Date(isoString).getTime();
+  const diffMins = Math.floor(diffMs / 1000 / 60);
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `${diffDays}d ago`;
+  const diffMonths = Math.floor(diffDays / 30);
+  if (diffMonths < 12) return `${diffMonths}mo ago`;
+  return `${Math.floor(diffMonths / 12)}y ago`;
+}
+
 function Stars({ rating }: { rating: number | null }) {
   if (!rating) return <span className="text-xs text-slime-muted">—</span>;
   return (
@@ -54,12 +70,16 @@ function Stars({ rating }: { rating: number | null }) {
       aria-label={`${rating} out of 5`}
     >
       {[1, 2, 3, 4, 5].map((n) => (
-        <span
+        <svg
           key={n}
-          className={`text-xs ${n <= rating ? "text-slime-accent" : "text-slime-border"}`}
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill={n <= rating ? "#39FF14" : "rgba(57,255,20,0.15)"}
+          aria-hidden="true"
         >
-          ★
-        </span>
+          <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+        </svg>
       ))}
     </span>
   );
@@ -152,8 +172,10 @@ export default async function UserProfilePage({
   }
   const favoriteType =
     Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-  const favoriteTypeStyle = favoriteType ? TYPE_STYLE[favoriteType] : null;
   const avatarInitial = (profile.username ?? "?").charAt(0).toUpperCase();
+
+  // [Change 1] Show report for logged-in users viewing other profiles
+  const showReport = currentUserId !== null && currentUserId !== profile.id;
 
   return (
     <div className="min-h-screen bg-slime-bg">
@@ -204,24 +226,62 @@ export default async function UserProfilePage({
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                {/* Username — cyan */}
                 <h1 className="font-black text-lg text-slime-cyan tracking-tight">
                   {profile.username}
                 </h1>
+                {/* [Change 3] Replaced ✓ character with SVG checkmark */}
                 {profile.is_verified && (
-                  <span className="text-[10px] font-semibold bg-slime-accent/20 text-slime-accent px-2 py-0.5 rounded-full">
-                    ✓ Verified
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-slime-accent/20 text-slime-accent px-2 py-0.5 rounded-full">
+                    <svg
+                      width="9"
+                      height="9"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    Verified
                   </span>
                 )}
+                {/* [Change 4] Replaced ✦ character with SVG star */}
                 {profile.is_premium && (
-                  <span className="text-[10px] font-semibold bg-slime-cyan/20 text-slime-cyan px-2 py-0.5 rounded-full">
-                    ✦ Pro
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-slime-cyan/20 text-slime-cyan px-2 py-0.5 rounded-full">
+                    <svg
+                      width="9"
+                      height="9"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+                    </svg>
+                    Pro
                   </span>
                 )}
               </div>
               {profile.location && (
-                <p className="text-xs text-slime-muted mt-0.5">
-                  📍 {profile.location}
+                <p className="text-xs text-slime-muted mt-0.5 flex items-center gap-1">
+                  {/* [Change 5] Replace pin emoji with SVG */}
+                  <svg
+                    width="11"
+                    height="11"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                  {profile.location}
                 </p>
               )}
               {profile.bio && (
@@ -242,7 +302,7 @@ export default async function UserProfilePage({
             </div>
           </div>
 
-          {/* Follow counts + button */}
+          {/* Follow counts + button + report */}
           <div className="flex items-center justify-between mt-4 pt-4 border-t border-slime-border">
             <div className="flex gap-4">
               <div className="text-center">
@@ -270,24 +330,28 @@ export default async function UserProfilePage({
                 </p>
               </div>
             </div>
-            <FollowUserButton
-              targetUserId={profile.id}
-              currentUserId={currentUserId}
-              initialIsFollowing={initialIsFollowing}
-            />
+            {/* [Change 1] Follow button + Report button side by side */}
+            <div className="flex items-center gap-2">
+              <FollowUserButton
+                targetUserId={profile.id}
+                currentUserId={currentUserId}
+                initialIsFollowing={initialIsFollowing}
+              />
+              {showReport && (
+                <ReportButton
+                  contentType="profile"
+                  contentId={profile.id}
+                  currentUserId={currentUserId}
+                />
+              )}
+            </div>
           </div>
         </div>
       </header>
 
-      {/*
-        Stats row — same pattern as profile/page.tsx:
-        slimes logged = green
-        avg rating = cyan
-        fav type = green (shown as type badge)
-      */}
+      {/* Stats row */}
       <section className="px-4 pb-4">
         <div className="grid grid-cols-3 gap-2">
-          {/* Slimes logged — green */}
           <div className="bg-slime-card rounded-2xl border border-slime-border p-3 text-center">
             <p className="text-2xl font-black text-slime-accent">
               {totalLogged}
@@ -296,7 +360,6 @@ export default async function UserProfilePage({
               Slimes logged
             </p>
           </div>
-          {/* Avg rating — cyan */}
           <div className="bg-slime-card rounded-2xl border border-slime-border p-3 text-center">
             <p className="text-2xl font-black text-slime-cyan">
               {avgRating ?? "—"}
@@ -305,7 +368,6 @@ export default async function UserProfilePage({
               Avg rating
             </p>
           </div>
-          {/* Fav type — type badge with bg-slime-purple text-slime-cyan (global rule) */}
           <div className="bg-slime-card rounded-2xl border border-slime-border p-3 text-center flex flex-col items-center justify-center gap-1">
             {favoriteType ? (
               <span className="bg-slime-purple text-slime-cyan text-xs font-bold px-2 py-0.5 rounded-full">
@@ -327,10 +389,38 @@ export default async function UserProfilePage({
           Recent logs
         </h2>
 
+        {/* [Change 5] Replaced bubble emoji with SVG icon in empty state */}
         {!logs || logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
-            <div className="w-14 h-14 rounded-full flex items-center justify-center text-3xl bg-slime-surface border border-slime-border">
-              🫧
+            <div className="w-14 h-14 rounded-full flex items-center justify-center bg-slime-surface border border-slime-border">
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="rgba(255,255,255,0.25)"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <circle
+                  cx="8"
+                  cy="9"
+                  r="1.5"
+                  fill="rgba(255,255,255,0.25)"
+                  stroke="none"
+                />
+                <circle
+                  cx="15"
+                  cy="9"
+                  r="1.5"
+                  fill="rgba(255,255,255,0.25)"
+                  stroke="none"
+                />
+                <path d="M8 15s1.5 2 4 2 4-2 4-2" />
+              </svg>
             </div>
             <p className="text-sm text-slime-muted">No public logs yet</p>
           </div>
@@ -370,7 +460,6 @@ export default async function UserProfilePage({
                           {brandName}
                         </p>
                       </div>
-                      {/* Type badge — global rule: bg-slime-purple text-slime-cyan */}
                       {typeStyle && log.slime_type && (
                         <span className="shrink-0 bg-slime-purple text-slime-cyan text-xs font-bold px-2 py-0.5 rounded-full">
                           {TYPE_LABELS[log.slime_type] ?? log.slime_type}
@@ -379,13 +468,12 @@ export default async function UserProfilePage({
                     </div>
                     <div className="flex items-center justify-between mt-2">
                       <Stars rating={log.rating_overall} />
+                      {/* [Change 2] Inline relative time replaces formatDistanceToNow */}
                       <time
                         className="text-[11px] text-slime-muted"
                         dateTime={log.created_at}
                       >
-                        {formatDistanceToNow(new Date(log.created_at), {
-                          addSuffix: true,
-                        })}
+                        {formatRelativeTime(log.created_at)}
                       </time>
                     </div>
                   </article>
