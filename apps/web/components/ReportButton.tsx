@@ -36,6 +36,7 @@ export default function ReportButton({
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [openUpward, setOpenUpward] = useState(true);
   const { showToast } = useToast();
 
   // Close on outside click
@@ -98,7 +99,13 @@ export default function ReportButton({
       {/* Trigger button */}
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          if (containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            setOpenUpward(rect.top > 280);
+          }
+          setOpen((o) => !o);
+        }}
         aria-label="Report this content"
         style={{
           display: "flex",
@@ -146,10 +153,14 @@ export default function ReportButton({
         <div
           style={{
             position: "absolute",
-            bottom: "calc(100% + 8px)",
+            ...(openUpward
+              ? { bottom: "calc(100% + 8px)" }
+              : { top: "calc(100% + 8px)" }),
             right: 0,
             zIndex: 200,
             width: 280,
+            maxHeight: "60vh",
+            overflowY: "auto",
             background: "rgba(15,0,24,0.97)",
             border: "1px solid rgba(45,10,78,0.7)",
             borderRadius: 14,
