@@ -264,6 +264,8 @@ export default function ProfileSettingsPage() {
       username: form.username,
       bio: form.bio || undefined,
       avatar_url: form.avatar_url || undefined,
+      location: form.location || undefined,
+      website_url: form.website_url || undefined,
     });
 
     setSaving(false);

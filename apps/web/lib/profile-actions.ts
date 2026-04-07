@@ -10,6 +10,8 @@ type UpdateProfileInput = {
   username: string;
   bio?: string;
   avatar_url?: string;
+  location?: string;
+  website_url?: string;
 };
 
 type UpdateProfileResult = {
@@ -119,6 +121,9 @@ export async function updateProfile(
   if (input.bio !== undefined) payload.bio = input.bio || null;
   if (input.avatar_url !== undefined)
     payload.avatar_url = input.avatar_url || null;
+  if (input.location !== undefined) payload.location = input.location || null;
+  if (input.website_url !== undefined)
+    payload.website_url = input.website_url || null;
 
   // ── 5. Persist — RLS ensures user can only update their own row ──
   const { error: updateError } = await supabase
