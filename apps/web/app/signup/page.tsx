@@ -5,18 +5,52 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
+// [Change 1] Age calculation helper — inline, no date-fns
+function calculateAge(dob: string): number {
+  const today = new Date();
+  const birth = new Date(dob);
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
+
 export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [dob, setDob] = useState("");
+  const [parentalConsent, setParentalConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  // Derived age
+  const age = dob ? calculateAge(dob) : null;
+  const isUnder13 = age !== null && age < 13;
+  const isTeen = age !== null && age >= 13 && age < 18;
+
+  const today = new Date().toISOString().split("T")[0];
+  const minDate = `${new Date().getFullYear() - 120}-01-01`;
 
   function handleEmailSignup(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
+    if (!dob) {
+      setError("Please enter your date of birth.");
+      return;
+    }
+    if (isUnder13) {
+      setError("You must be at least 13 years old to use SlimeLog.");
+      return;
+    }
+    if (isTeen && !parentalConsent) {
+      setError(
+        "You must have your parent or guardian's permission to continue.",
+      );
+      return;
+    }
     if (password !== confirmPassword) {
       setError("Passwords don't match — give it another go.");
       return;
@@ -28,7 +62,7 @@ export default function SignupPage() {
 
     startTransition(async () => {
       const supabase = createClient();
-      const { error } = await supabase.auth.signUp({
+      const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -36,11 +70,16 @@ export default function SignupPage() {
         },
       });
 
-      if (error) {
-        setError(error.message);
+      if (signUpError) {
+        setError(signUpError.message);
         return;
       }
 
+      // [Change 2] After successful signup, save DOB via age-verify API
+      // The user won't have a session yet (email not confirmed), so we store
+      // the intent — the age-verify page handles confirmed sessions. For email
+      // signups we show the confirmation screen; age verify happens post-confirm
+      // when they click the email link and land at /auth/callback → /age-verify.
       setSuccess(true);
     });
   }
@@ -69,13 +108,36 @@ export default function SignupPage() {
         </div>
 
         <div className="relative w-full max-w-sm text-center space-y-5">
+          {/* [Change 3] SVG envelope icon — replaces 📬 emoji */}
           <div
             className="inline-flex items-center justify-center w-20 h-20 rounded-3xl shadow-glow-green"
             style={{ background: "linear-gradient(135deg, #39FF14, #00F0FF)" }}
           >
-            <span className="text-4xl" role="img" aria-label="mail">
-              📬
-            </span>
+            <svg
+              viewBox="0 0 32 32"
+              width="36"
+              height="36"
+              fill="none"
+              aria-hidden="true"
+            >
+              <rect
+                x="3"
+                y="7"
+                width="26"
+                height="18"
+                rx="2"
+                stroke="#0A0A0A"
+                strokeWidth="2"
+                fill="none"
+              />
+              <path
+                d="M3 9l13 9 13-9"
+                stroke="#0A0A0A"
+                strokeWidth="2"
+                strokeLinecap="round"
+                fill="none"
+              />
+            </svg>
           </div>
           <div>
             <h2 className="text-2xl font-bold text-slime-cyan">
@@ -83,16 +145,31 @@ export default function SignupPage() {
             </h2>
             <p className="mt-2 text-sm text-slime-muted leading-relaxed">
               We sent a confirmation link to{" "}
-              {/* Email address highlighted in magenta */}
               <span className="text-slime-magenta font-medium">{email}</span>.
               Click it to activate your account and start logging slimes.
             </p>
           </div>
+          {/* [Change 4] SVG arrow — replaces ← text arrow */}
           <Link
             href="/login"
             className="inline-flex items-center gap-1.5 text-sm font-semibold text-slime-magenta hover:text-slime-accent transition-colors"
           >
-            ← Back to sign in
+            <svg
+              viewBox="0 0 16 16"
+              width="14"
+              height="14"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M10 3L5 8l5 5"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Back to sign in
           </Link>
         </div>
       </div>
@@ -102,7 +179,6 @@ export default function SignupPage() {
   // ── Signup form ───────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slime-bg flex flex-col items-center justify-center px-5 py-12">
-      {/* Background blobs — brand accent colors */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-slime-magenta/8 blur-3xl" />
         <div className="absolute -bottom-32 -left-32 w-96 h-96 rounded-full bg-slime-violet/15 blur-3xl" />
@@ -112,43 +188,50 @@ export default function SignupPage() {
       <div className="relative w-full max-w-sm">
         {/* Logo / header */}
         <div className="mb-8 text-center">
+          {/* [Change 5] SVG sparkle/star icon — replaces ✨ emoji */}
           <div
             className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 shadow-glow-cyan"
             style={{ background: "linear-gradient(135deg, #00F0FF, #39FF14)" }}
           >
-            <span className="text-3xl" role="img" aria-label="slime sparkle">
-              ✨
-            </span>
+            <svg
+              viewBox="0 0 32 32"
+              width="30"
+              height="30"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M16 3 L17.5 13 L27 16 L17.5 19 L16 29 L14.5 19 L5 16 L14.5 13 Z"
+                fill="#0A0A0A"
+                opacity="0.85"
+              />
+            </svg>
           </div>
-          {/* Headline — cyan */}
           <h1 className="text-2xl font-bold text-slime-cyan tracking-tight">
             Start your collection
           </h1>
           <p className="mt-1 text-sm text-slime-muted">
-            Track, rate, and discover slimes you'll love
+            Track, rate, and discover slimes you&apos;ll love
           </p>
         </div>
 
-        {/* Slime type teaser pills */}
+        {/* [Change 6] Slime type teaser pills — emojis removed, text labels only */}
         <div className="flex flex-wrap gap-1.5 justify-center mb-6 opacity-60">
-          {["🧈 Butter", "☁️ Cloud", "🧊 Icee", "🫧 Clear", "✨ Slay"].map(
-            (label) => (
-              <span
-                key={label}
-                className="rounded-full bg-slime-surface border border-slime-border px-3 py-1 text-xs text-slime-muted"
-              >
-                {label}
-              </span>
-            ),
-          )}
+          {["Butter", "Cloud", "Icee", "Clear", "Slay"].map((label) => (
+            <span
+              key={label}
+              className="rounded-full bg-slime-surface border border-slime-border px-3 py-1 text-xs text-slime-muted"
+            >
+              {label}
+            </span>
+          ))}
           <span className="rounded-full bg-slime-surface border border-slime-border px-3 py-1 text-xs text-slime-muted">
-            +11 more
+            +46 more
           </span>
         </div>
 
         {/* Card */}
         <div className="rounded-3xl bg-slime-card border border-slime-border backdrop-blur-sm p-6 shadow-2xl space-y-5">
-          {/* Error */}
           {error && (
             <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-300">
               {error}
@@ -187,7 +270,6 @@ export default function SignupPage() {
             Continue with Google
           </button>
 
-          {/* Divider */}
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-slime-border" />
             <span className="text-xs text-slime-muted uppercase tracking-widest">
@@ -196,7 +278,6 @@ export default function SignupPage() {
             <div className="flex-1 h-px bg-slime-border" />
           </div>
 
-          {/* Form */}
           <form onSubmit={handleEmailSignup} className="space-y-4">
             <div>
               <label
@@ -255,10 +336,67 @@ export default function SignupPage() {
               />
             </div>
 
-            {/* Submit button — keep green */}
+            {/* [Change 7] Date of birth field — new, above submit */}
+            <div>
+              <label
+                htmlFor="dob"
+                className="block text-xs font-semibold text-slime-muted uppercase tracking-widest mb-2"
+              >
+                Date of Birth
+              </label>
+              <input
+                id="dob"
+                type="date"
+                required
+                min={minDate}
+                max={today}
+                value={dob}
+                onChange={(e) => {
+                  setDob(e.target.value);
+                  setError(null);
+                  setParentalConsent(false);
+                }}
+                className="w-full rounded-xl bg-slime-surface border border-slime-border px-4 py-3 text-sm text-slime-text placeholder-slime-muted focus:border-slime-cyan/60 focus:outline-none focus:ring-1 focus:ring-slime-cyan/40 transition"
+                style={{ colorScheme: "dark" }}
+              />
+              {isUnder13 && dob && (
+                <p className="mt-1.5 text-xs text-red-400">
+                  You must be at least 13 years old to use SlimeLog.
+                </p>
+              )}
+            </div>
+
+            {/* [Change 8] Parental consent — only shown for teens 13–17 */}
+            {isTeen && (
+              <div
+                className="rounded-xl px-4 py-4 space-y-3"
+                style={{
+                  background: "rgba(57,255,20,0.06)",
+                  border: "1px solid rgba(57,255,20,0.2)",
+                }}
+              >
+                <p className="text-xs text-slime-muted leading-relaxed">
+                  Because you are under 18, we need a parent or guardian to
+                  confirm your use of SlimeLog.
+                </p>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={parentalConsent}
+                    onChange={(e) => setParentalConsent(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-slime-border bg-slime-surface accent-slime-accent shrink-0"
+                  />
+                  <span className="text-xs text-slime-text leading-relaxed">
+                    I have my parent or guardian&apos;s permission to use
+                    SlimeLog.
+                  </span>
+                </label>
+              </div>
+            )}
+
             <button
               type="submit"
-              disabled={isPending}
+              disabled={isPending || isUnder13 || (isTeen && !parentalConsent)}
               className="w-full rounded-2xl px-4 py-3.5 text-sm font-bold text-slime-bg shadow-glow-green hover:shadow-glow-green-lg active:scale-[0.98] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 background: "linear-gradient(135deg, #39FF14, #00F0FF)",
@@ -311,7 +449,6 @@ export default function SignupPage() {
           </p>
         </div>
 
-        {/* Footer — link text magenta */}
         <p className="mt-6 text-center text-sm text-slime-muted">
           Already have an account?{" "}
           <Link

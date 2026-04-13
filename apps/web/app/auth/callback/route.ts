@@ -5,6 +5,10 @@
 //
 // Next.js 16 note: This is a Route Handler — no async params needed here
 // since we read from searchParams, not dynamic segments.
+//
+// [Change 1] After session exchange, checks if the user has completed age
+// verification. New users (age_verified = false OR date_of_birth IS NULL)
+// are redirected to /age-verify. Existing verified users proceed to `next`.
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
@@ -39,7 +43,30 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      // Redirect to the intended destination — always scoped to our origin.
+      // [Change 2] Check age verification status for this user
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("age_verified, date_of_birth")
+          .eq("id", user.id)
+          .single();
+
+        // [Change 3] New or unverified users go to age gate
+        const needsAgeVerify =
+          !profile || !profile.age_verified || profile.date_of_birth === null;
+
+        if (needsAgeVerify) {
+          // Preserve `next` so after age verify they land in the right place
+          const ageVerifyUrl = `${origin}/age-verify?next=${encodeURIComponent(next)}`;
+          return NextResponse.redirect(ageVerifyUrl);
+        }
+      }
+
+      // Verified user — redirect to intended destination
       return NextResponse.redirect(`${origin}${next}`);
     }
 

@@ -56,7 +56,6 @@ function LoginPageInner() {
           "radial-gradient(ellipse 100% 60% at 50% 0%, #2D0A4E 0%, #100020 35%, #0A0A0A 65%)",
       }}
     >
-      {/* Floating pill decorations replacing old blobs */}
       <FloatingPills area="hero" density="medium" zIndex={0} />
 
       <div className="relative z-10 w-full max-w-sm">
@@ -66,9 +65,47 @@ function LoginPageInner() {
             className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 shadow-glow-green"
             style={{ background: "linear-gradient(135deg, #39FF14, #00F0FF)" }}
           >
-            <span className="text-3xl" role="img" aria-label="slime">
-              🫧
-            </span>
+            {/* [Change 1] SVG slime blob icon — replaces 🫧 emoji */}
+            <svg
+              viewBox="0 0 32 32"
+              width="32"
+              height="32"
+              fill="none"
+              aria-hidden="true"
+            >
+              <ellipse
+                cx="16"
+                cy="18"
+                rx="12"
+                ry="10"
+                fill="#0A0A0A"
+                opacity="0.85"
+              />
+              <ellipse
+                cx="10"
+                cy="12"
+                rx="5"
+                ry="4"
+                fill="#0A0A0A"
+                opacity="0.85"
+              />
+              <ellipse
+                cx="22"
+                cy="11"
+                rx="4"
+                ry="3.5"
+                fill="#0A0A0A"
+                opacity="0.85"
+              />
+              <ellipse
+                cx="16"
+                cy="16"
+                rx="8"
+                ry="7"
+                fill="#0A0A0A"
+                opacity="0.7"
+              />
+            </svg>
           </div>
           <h1 className="text-2xl font-bold text-slime-cyan tracking-tight">
             Welcome back
