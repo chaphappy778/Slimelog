@@ -2,7 +2,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import BottomNavWrapper from "@/components/BottomNavWrapper";
-import { ToastProvider } from "@/components/Toast"; // [Change 1] Import ToastProvider
+import { ToastProvider } from "@/components/Toast";
+import CookieBanner from "@/components/CookieBanner";
 
 export const metadata: Metadata = {
   title: "SlimeLog",
@@ -39,6 +40,7 @@ export default function RootLayout({
         <ToastProvider>
           <main className="page-enter">{children}</main>
           <BottomNavWrapper />
+          <CookieBanner />
         </ToastProvider>
       </body>
     </html>
