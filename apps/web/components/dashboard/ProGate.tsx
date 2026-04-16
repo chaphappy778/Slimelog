@@ -1,12 +1,21 @@
-import Link from "next/link";
+// apps/web/components/dashboard/ProGate.tsx
+"use client";
+
+import UpgradeButton from "@/components/UpgradeButton";
 
 interface ProGateProps {
   isPro: boolean;
   children: React.ReactNode;
-  slug?: string;
+  brandId?: string;
+  brandSlug?: string;
 }
 
-export default function ProGate({ isPro, children, slug }: ProGateProps) {
+export default function ProGate({
+  isPro,
+  children,
+  brandId,
+  brandSlug,
+}: ProGateProps) {
   if (isPro) return <>{children}</>;
 
   return (
@@ -27,19 +36,20 @@ export default function ProGate({ isPro, children, slug }: ProGateProps) {
           }}
         >
           <p className="text-xs font-bold uppercase tracking-widest text-[#00F0FF] mb-2">
-            Verified Brand Feature
+            Brand Pro Feature
           </p>
           <p className="text-sm text-[#9B8AAE] mb-4 leading-relaxed">
-            Upgrade to Verified to unlock full analytics, drop notifications,
-            and more.
+            Upgrade to Brand Pro to unlock full analytics and export tools.
           </p>
-          <Link
-            href={slug ? `/brands/${slug}` : "/brands"}
-            className="inline-block px-4 py-2 rounded-full text-sm font-bold text-[#0A0A0A] transition-opacity hover:opacity-90"
-            style={{ background: "linear-gradient(135deg, #39FF14, #00F0FF)" }}
-          >
-            Learn More
-          </Link>
+          <UpgradeButton
+            priceId={process.env.NEXT_PUBLIC_STRIPE_BRAND_PRO_PRICE_ID!}
+            label="Upgrade to Brand Pro — $19/mo"
+            mode="brand"
+            brandId={brandId}
+            currentPath={
+              brandSlug ? `/brand-dashboard/${brandSlug}/analytics` : "/brands"
+            }
+          />
         </div>
       </div>
     </div>

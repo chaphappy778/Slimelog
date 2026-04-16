@@ -3,14 +3,15 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { updateProfile, checkUsernameAvailable } from "@/lib/profile-actions";
 import { ImageUpload } from "@/components/ImageUpload";
 import PageWrapper from "@/components/PageWrapper";
-import { useToast } from "@/components/Toast"; // [Change 1] Import useToast
+import { useToast } from "@/components/Toast";
+import UpgradeButton from "@/components/UpgradeButton";
 
-// [Change 2] Module-level client — was inside component body (absolute rule violation)
+// Module-level client — absolute rule
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -145,23 +146,111 @@ const sectionStyle = {
   boxShadow: "inset 0 0 16px rgba(45,10,78,0.1)",
 };
 
-export default function ProfileSettingsPage() {
-  const router = useRouter();
-  const { showToast } = useToast(); // [Change 1]
+function SubscriptionSection({
+  subscriptionTier,
+}: {
+  subscriptionTier: string;
+}) {
+  const [portalLoading, setPortalLoading] = useState(false);
 
-  const [authChecked, setAuthChecked] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) {
-        router.replace("/login");
-      } else {
-        setUserId(data.user.id);
-        setAuthChecked(true);
+  const handleManage = async () => {
+    if (portalLoading) return;
+    setPortalLoading(true);
+    try {
+      const res = await fetch("/api/stripe/portal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          return_url: window.location.href,
+          mode: "user",
+        }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
       }
-    });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    } catch (err) {
+      console.error("Portal error:", err);
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
+  return (
+    <section className="rounded-2xl p-4 space-y-3" style={sectionStyle}>
+      <p className="section-label">Subscription</p>
+
+      {subscriptionTier === "pro" ? (
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span
+              style={{
+                background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                color: "#0A0A0A",
+                fontSize: "11px",
+                fontWeight: 800,
+                padding: "3px 10px",
+                borderRadius: "9999px",
+                fontFamily: "Montserrat, sans-serif",
+                letterSpacing: "0.04em",
+              }}
+            >
+              PRO
+            </span>
+            <span className="text-sm text-slime-text font-semibold">
+              SlimeLog Pro
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleManage}
+            disabled={portalLoading}
+            style={{
+              background: "rgba(45,10,78,0.5)",
+              border: "1px solid rgba(45,10,78,0.9)",
+              color: portalLoading
+                ? "rgba(245,245,245,0.4)"
+                : "rgba(245,245,245,0.75)",
+              cursor: portalLoading ? "not-allowed" : "pointer",
+              padding: "8px 16px",
+              borderRadius: "9999px",
+              fontSize: "13px",
+              fontWeight: 700,
+              transition: "opacity 0.15s ease",
+            }}
+          >
+            {portalLoading ? "Loading..." : "Manage Subscription"}
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-xs text-slime-muted leading-relaxed">
+            Upgrade to Pro for unlimited logging, advanced stats, custom
+            categories, ad-free experience, and a Pro badge.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <UpgradeButton
+              priceId={process.env.NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID!}
+              label="Go Pro — $2.99/mo"
+              mode="user"
+              currentPath="/settings/profile"
+            />
+            <UpgradeButton
+              priceId={process.env.NEXT_PUBLIC_STRIPE_PRO_YEARLY_PRICE_ID!}
+              label="Go Pro — $14.99/yr"
+              mode="user"
+              currentPath="/settings/profile"
+            />
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ProfileSettingsContent({ userId }: { userId: string }) {
+  const { showToast } = useToast();
+  const searchParams = useSearchParams();
 
   const [originalForm, setOriginalForm] = useState<FormState>({
     username: "",
@@ -177,13 +266,22 @@ export default function ProfileSettingsPage() {
     website_url: "",
     avatar_url: null,
   });
+  const [subscriptionTier, setSubscriptionTier] = useState<string>("free");
   const [profileLoading, setProfileLoading] = useState(true);
 
+  // Show upgrade toast if redirected back from Stripe
   useEffect(() => {
-    if (!userId) return;
+    if (searchParams.get("upgraded") === "true") {
+      showToast("Welcome to SlimeLog Pro!", "success");
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     supabase
       .from("profiles")
-      .select("username, bio, location, website_url, avatar_url")
+      .select(
+        "username, bio, location, website_url, avatar_url, subscription_tier",
+      )
       .eq("id", userId)
       .maybeSingle()
       .then(({ data }) => {
@@ -197,6 +295,7 @@ export default function ProfileSettingsPage() {
           };
           setOriginalForm(loaded);
           setForm(loaded);
+          setSubscriptionTier(data.subscription_tier ?? "free");
         }
         setProfileLoading(false);
       });
@@ -239,7 +338,6 @@ export default function ProfileSettingsPage() {
   };
 
   const [saving, setSaving] = useState(false);
-  // [Change 1] saveSuccess, saveError state removed — replaced by toasts
 
   const hasChanges =
     form.username !== originalForm.username ||
@@ -247,6 +345,7 @@ export default function ProfileSettingsPage() {
     form.location !== originalForm.location ||
     form.website_url !== originalForm.website_url ||
     form.avatar_url !== originalForm.avatar_url;
+
   const isFormValid =
     hasChanges &&
     form.username.length >= 3 &&
@@ -270,7 +369,6 @@ export default function ProfileSettingsPage() {
 
     setSaving(false);
 
-    // [Change 1] Toast on save result; inline banners removed
     if (result.success) {
       showToast("Profile saved", "success");
       setOriginalForm({ ...form });
@@ -280,22 +378,20 @@ export default function ProfileSettingsPage() {
     }
   };
 
-  if (!authChecked || profileLoading) {
+  if (profileLoading) {
     return (
-      <PageWrapper>
-        <div className="px-4 pt-10 space-y-4 animate-pulse">
-          <div className="h-6 w-32 bg-slime-surface rounded-xl" />
-          <div className="h-28 w-28 bg-slime-surface rounded-2xl" />
-          <div className="h-12 rounded-2xl" style={sectionStyle} />
-          <div className="h-24 rounded-2xl" style={sectionStyle} />
-          <div className="h-12 rounded-2xl" style={sectionStyle} />
-        </div>
-      </PageWrapper>
+      <div className="px-4 pt-10 space-y-4 animate-pulse">
+        <div className="h-6 w-32 bg-slime-surface rounded-xl" />
+        <div className="h-28 w-28 bg-slime-surface rounded-2xl" />
+        <div className="h-12 rounded-2xl" style={sectionStyle} />
+        <div className="h-24 rounded-2xl" style={sectionStyle} />
+        <div className="h-12 rounded-2xl" style={sectionStyle} />
+      </div>
     );
   }
 
   return (
-    <PageWrapper dots>
+    <>
       <header className="px-4 pt-10 pb-6 flex items-center gap-3">
         <Link
           href="/profile"
@@ -331,42 +427,38 @@ export default function ProfileSettingsPage() {
         {/* Avatar */}
         <section className="rounded-2xl p-4 space-y-2" style={sectionStyle}>
           <p className="section-label">Profile Photo</p>
-          {userId ? (
-            <div className="flex items-start gap-4 mt-2">
-              <div className="w-24 shrink-0">
-                <ImageUpload
-                  bucket="avatars"
-                  userId={userId}
-                  existingUrl={form.avatar_url}
-                  onUploadComplete={(url) =>
-                    setForm((f) => ({ ...f, avatar_url: url }))
-                  }
-                  onRemove={() => setForm((f) => ({ ...f, avatar_url: null }))}
-                  label="Add photo"
-                  aspectRatio="square"
-                />
-              </div>
-              <div className="flex-1 flex flex-col justify-center gap-1 pt-1">
-                <p className="text-sm font-semibold text-slime-text leading-tight">
-                  {form.username || "Your Name"}
-                </p>
-                <p className="text-xs text-slime-muted">
-                  Tap to upload or change your avatar. Max 2 MB.
-                </p>
-                {form.avatar_url && (
-                  <button
-                    type="button"
-                    onClick={() => setForm((f) => ({ ...f, avatar_url: null }))}
-                    className="mt-1 text-xs text-red-400 font-medium text-left active:opacity-70 transition-opacity"
-                  >
-                    Remove photo
-                  </button>
-                )}
-              </div>
+          <div className="flex items-start gap-4 mt-2">
+            <div className="w-24 shrink-0">
+              <ImageUpload
+                bucket="avatars"
+                userId={userId}
+                existingUrl={form.avatar_url}
+                onUploadComplete={(url) =>
+                  setForm((f) => ({ ...f, avatar_url: url }))
+                }
+                onRemove={() => setForm((f) => ({ ...f, avatar_url: null }))}
+                label="Add photo"
+                aspectRatio="square"
+              />
             </div>
-          ) : (
-            <div className="w-24 aspect-square rounded-2xl bg-slime-surface border border-slime-border animate-pulse" />
-          )}
+            <div className="flex-1 flex flex-col justify-center gap-1 pt-1">
+              <p className="text-sm font-semibold text-slime-text leading-tight">
+                {form.username || "Your Name"}
+              </p>
+              <p className="text-xs text-slime-muted">
+                Tap to upload or change your avatar. Max 2 MB.
+              </p>
+              {form.avatar_url && (
+                <button
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, avatar_url: null }))}
+                  className="mt-1 text-xs text-red-400 font-medium text-left active:opacity-70 transition-opacity"
+                >
+                  Remove photo
+                </button>
+              )}
+            </div>
+          </div>
         </section>
 
         {/* Username */}
@@ -463,7 +555,8 @@ export default function ProfileSettingsPage() {
           />
         </section>
 
-        {/* [Change 1] saveError div removed. saveSuccess banner removed. Both replaced by toasts. */}
+        {/* Subscription */}
+        <SubscriptionSection subscriptionTier={subscriptionTier} />
 
         <button
           type="button"
@@ -479,6 +572,43 @@ export default function ProfileSettingsPage() {
           {saving ? "Saving..." : "Save Profile"}
         </button>
       </div>
+    </>
+  );
+}
+
+export default function ProfileSettingsPage() {
+  const router = useRouter();
+  const [authChecked, setAuthChecked] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user) {
+        router.replace("/login");
+      } else {
+        setUserId(data.user.id);
+        setAuthChecked(true);
+      }
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!authChecked || !userId) {
+    return (
+      <PageWrapper>
+        <div className="px-4 pt-10 space-y-4 animate-pulse">
+          <div className="h-6 w-32 bg-slime-surface rounded-xl" />
+          <div className="h-28 w-28 bg-slime-surface rounded-2xl" />
+          <div className="h-12 rounded-2xl" style={sectionStyle} />
+          <div className="h-24 rounded-2xl" style={sectionStyle} />
+          <div className="h-12 rounded-2xl" style={sectionStyle} />
+        </div>
+      </PageWrapper>
+    );
+  }
+
+  return (
+    <PageWrapper dots>
+      <ProfileSettingsContent userId={userId} />
     </PageWrapper>
   );
 }
