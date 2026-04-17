@@ -1,25 +1,24 @@
-// apps/web/components/collection/LikeButton.tsx
+// apps/web/components/collection/CommentLikeButton.tsx
 "use client";
 
 import { useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 
-// [Change 1] Module-level client (absolute rule). Previously inside the
-// component body, which caused "No API key" 400 errors per project gotchas.
+// Module-level client (absolute rule).
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
 );
 
 interface Props {
-  logId: string;
+  commentId: string;
   initialCount: number;
   initialLiked: boolean;
   currentUserId: string | null;
 }
 
-export default function LikeButton({
-  logId,
+export default function CommentLikeButton({
+  commentId,
   initialCount,
   initialLiked,
   currentUserId,
@@ -33,6 +32,7 @@ export default function LikeButton({
 
     const wasLiked = liked;
     const prevCount = count;
+
     // Optimistic update
     setLiked(!wasLiked);
     setCount(wasLiked ? count - 1 : count + 1);
@@ -40,19 +40,20 @@ export default function LikeButton({
 
     if (wasLiked) {
       const { error } = await supabase
-        .from("likes")
+        .from("comment_likes")
         .delete()
-        .eq("log_id", logId)
+        .eq("comment_id", commentId)
         .eq("user_id", currentUserId);
 
       if (error) {
+        // Revert on failure
         setLiked(wasLiked);
         setCount(prevCount);
       }
     } else {
       const { error } = await supabase
-        .from("likes")
-        .insert({ log_id: logId, user_id: currentUserId });
+        .from("comment_likes")
+        .insert({ comment_id: commentId, user_id: currentUserId });
 
       if (error) {
         setLiked(wasLiked);
@@ -64,28 +65,27 @@ export default function LikeButton({
   }
 
   return (
-    // type="button" prevents implicit form submission that could
-    // trigger this handler when Enter is pressed in an adjacent textarea.
     <button
       type="button"
       onClick={handleToggle}
       disabled={!currentUserId || pending}
-      aria-label={liked ? "Unlike" : "Like"}
+      aria-label={liked ? "Unlike comment" : "Like comment"}
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 6,
+        gap: 4,
         background: "none",
         border: "none",
         cursor: currentUserId ? "pointer" : "default",
         padding: 0,
         opacity: pending ? 0.6 : 1,
         transition: "opacity 0.15s",
+        lineHeight: 1,
       }}
     >
       <svg
-        width="18"
-        height="18"
+        width="14"
+        height="14"
         viewBox="0 0 24 24"
         fill={liked ? "#39FF14" : "none"}
         stroke={liked ? "#39FF14" : "rgba(255,255,255,0.4)"}
@@ -97,17 +97,19 @@ export default function LikeButton({
       >
         <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
       </svg>
-      <span
-        style={{
-          fontSize: 13,
-          fontWeight: 600,
-          color: liked ? "#39FF14" : "rgba(255,255,255,0.4)",
-          transition: "color 0.15s",
-          minWidth: 12,
-        }}
-      >
-        {count}
-      </span>
+      {count > 0 && (
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            color: liked ? "#39FF14" : "rgba(255,255,255,0.4)",
+            transition: "color 0.15s",
+            minWidth: 8,
+          }}
+        >
+          {count}
+        </span>
+      )}
     </button>
   );
 }

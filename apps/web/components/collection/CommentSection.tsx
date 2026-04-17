@@ -4,7 +4,8 @@
 import { useState, useEffect, useRef } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { useToast } from "@/components/Toast";
-import ReportButton from "@/components/ReportButton"; // [Change 1] Import ReportButton
+import ReportButton from "@/components/ReportButton";
+import CommentLikeButton from "@/components/collection/CommentLikeButton"; // [Change 1] Import new comment like button
 
 // Module-level client
 const supabase = createBrowserClient(
@@ -38,6 +39,9 @@ export default function CommentSection({
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  // [Change 2] Per-comment like state — keyed by comment id.
+  const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
+  const [likedByUser, setLikedByUser] = useState<Record<string, boolean>>({});
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { showToast } = useToast();
 
@@ -52,19 +56,57 @@ export default function CommentSection({
         .eq("log_id", logId)
         .order("created_at", { ascending: false });
 
-      if (!cancelled) {
-        const loaded = (data as unknown as Comment[]) ?? [];
-        setComments(loaded);
-        onCountChange(loaded.length);
-        setLoading(false);
+      if (cancelled) return;
+
+      const loaded = (data as unknown as Comment[]) ?? [];
+
+      // [Change 3] Fetch like counts and current user's liked state in parallel.
+      const commentIds = loaded.map((c) => c.id);
+
+      let countMap: Record<string, number> = {};
+      let likedMap: Record<string, boolean> = {};
+
+      if (commentIds.length > 0) {
+        const [likeCountsRes, userLikesRes] = await Promise.all([
+          supabase
+            .from("comment_likes")
+            .select("comment_id")
+            .in("comment_id", commentIds),
+          currentUserId
+            ? supabase
+                .from("comment_likes")
+                .select("comment_id")
+                .in("comment_id", commentIds)
+                .eq("user_id", currentUserId)
+            : Promise.resolve({ data: [] as { comment_id: string }[] }),
+        ]);
+
+        if (cancelled) return;
+
+        for (const row of (likeCountsRes.data ?? []) as {
+          comment_id: string;
+        }[]) {
+          countMap[row.comment_id] = (countMap[row.comment_id] ?? 0) + 1;
+        }
+        for (const row of (userLikesRes.data ?? []) as {
+          comment_id: string;
+        }[]) {
+          likedMap[row.comment_id] = true;
+        }
       }
+
+      setComments(loaded);
+      setLikeCounts(countMap);
+      setLikedByUser(likedMap);
+      onCountChange(loaded.length);
+      setLoading(false);
     }
 
     load();
     return () => {
       cancelled = true;
     };
-  }, [logId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [logId, currentUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSubmit() {
     const trimmed = body.trim();
@@ -83,6 +125,9 @@ export default function CommentSection({
     if (!error && data) {
       const newComment = data as unknown as Comment;
       setComments((prev) => [newComment, ...prev]);
+      // [Change 4] Initialize like state for the new comment.
+      setLikeCounts((prev) => ({ ...prev, [newComment.id]: 0 }));
+      setLikedByUser((prev) => ({ ...prev, [newComment.id]: false }));
       onCountChange(comments.length + 1);
       setBody("");
       showToast("Comment posted", "success");
@@ -100,6 +145,17 @@ export default function CommentSection({
 
     if (!error) {
       setComments((prev) => prev.filter((c) => c.id !== commentId));
+      // [Change 5] Drop the deleted comment's like state.
+      setLikeCounts((prev) => {
+        const next = { ...prev };
+        delete next[commentId];
+        return next;
+      });
+      setLikedByUser((prev) => {
+        const next = { ...prev };
+        delete next[commentId];
+        return next;
+      });
       onCountChange(comments.length - 1);
       showToast("Comment deleted", "info");
     }
@@ -186,7 +242,7 @@ export default function CommentSection({
                   position: "relative",
                 }}
               >
-                {/* [Change 1] Comment header row with ReportButton */}
+                {/* Comment header row with like button, timestamp, report, delete */}
                 <div
                   style={{
                     display: "flex",
@@ -206,14 +262,20 @@ export default function CommentSection({
                     @{username}
                   </span>
                   <div
-                    style={{ display: "flex", alignItems: "center", gap: 4 }}
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
                   >
+                    {/* [Change 6] Comment like button — left of timestamp */}
+                    <CommentLikeButton
+                      commentId={c.id}
+                      initialCount={likeCounts[c.id] ?? 0}
+                      initialLiked={likedByUser[c.id] ?? false}
+                      currentUserId={currentUserId}
+                    />
                     <span
                       style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}
                     >
                       {formatRelativeTime(c.created_at)}
                     </span>
-                    {/* [Change 1] Report button on all comments for logged-in users */}
                     <ReportButton
                       contentType="comment"
                       contentId={c.id}
