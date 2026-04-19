@@ -1,7 +1,7 @@
+// apps/web/components/profile/ProfileFeaturedSection.tsx
 "use client";
 
-// components/profile/ProfileFeaturedSection.tsx
-// Client wrapper that owns the edit-mode toggle for the featured slimes section.
+// Client wrapper that owns the edit-mode toggle for the favorite slimes section.
 // The parent server component passes all data in; this component holds no fetch logic.
 
 import { useState } from "react";
@@ -172,15 +172,16 @@ export default function ProfileFeaturedSection({
           >
             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
           </svg>
+          {/* [Label rename] Featured Slimes → Favorite Slimes */}
           <p
             className="text-xs font-bold uppercase tracking-widest"
             style={{ color: "#39FF14" }}
           >
-            Featured Slimes
+            Favorite Slimes
           </p>
         </div>
 
-        {/* Edit Featured button — owner only (always owner on /profile) */}
+        {/* Edit Favorites button — owner only (always owner on /profile) */}
         {!editorOpen && (
           <button
             type="button"
@@ -201,7 +202,8 @@ export default function ProfileFeaturedSection({
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
             </svg>
-            Edit Featured
+            {/* [Label rename] Edit Featured → Edit Favorites */}
+            Edit Favorites
           </button>
         )}
       </div>

@@ -10,6 +10,12 @@ interface FollowUserButtonProps {
   initialIsFollowing: boolean;
 }
 
+// Module-level Supabase client — never inside component body
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+);
+
 export default function FollowUserButton({
   targetUserId,
   currentUserId,
@@ -19,11 +25,6 @@ export default function FollowUserButton({
   const [isPending, startTransition] = useTransition();
 
   if (!currentUserId || currentUserId === targetUserId) return null;
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
 
   function handleClick() {
     startTransition(async () => {
@@ -45,6 +46,7 @@ export default function FollowUserButton({
 
   return (
     <button
+      type="button"
       onClick={handleClick}
       disabled={isPending}
       aria-label={isFollowing ? "Unfollow user" : "Follow user"}
@@ -67,24 +69,8 @@ export default function FollowUserButton({
       {isPending ? (
         <span className="w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
       ) : isFollowing ? (
-        <>
-          <svg
-            className="w-3.5 h-3.5"
-            viewBox="0 0 16 16"
-            fill="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              d="M13.5 2.5l-8 8L2 7"
-              stroke="currentColor"
-              strokeWidth="2"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          Following
-        </>
+        /* [Change] Checkmark SVG removed — text-only in Following state */
+        "Following"
       ) : (
         <>
           <svg
