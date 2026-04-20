@@ -9,6 +9,10 @@ const adminClient = createAdminClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
+// [Fix 2A] Active subscription statuses — block new checkout for these.
+// past_due / canceled / unpaid users are allowed through to start a fresh checkout.
+const ACTIVE_STATUSES = new Set(["active", "trialing"]);
+
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createClient();
@@ -51,13 +55,19 @@ export async function POST(req: NextRequest) {
 
     let customerId: string;
     let sessionMetadata: Record<string, string>;
+    // [Fix 2A] Track current subscription status so we can short-circuit to portal
+    // if the caller is already in an active/trialing subscription.
+    let currentSubscriptionStatus: string | null = null;
 
     if (mode === "user") {
       const { data: profile } = await adminClient
         .from("profiles")
-        .select("stripe_customer_id")
+        // [Fix 2A] pull subscription_status alongside stripe_customer_id
+        .select("stripe_customer_id, subscription_status")
         .eq("id", user.id)
         .single();
+
+      currentSubscriptionStatus = profile?.subscription_status ?? null;
 
       if (profile?.stripe_customer_id) {
         customerId = profile.stripe_customer_id;
@@ -77,7 +87,8 @@ export async function POST(req: NextRequest) {
     } else {
       const { data: brand } = await adminClient
         .from("brands")
-        .select("id, name, stripe_customer_id, owner_id")
+        // [Fix 2A] pull subscription_status alongside existing fields
+        .select("id, name, stripe_customer_id, owner_id, subscription_status")
         .eq("id", brand_id!)
         .single();
 
@@ -88,6 +99,8 @@ export async function POST(req: NextRequest) {
       if (brand.owner_id !== user.id) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
       }
+
+      currentSubscriptionStatus = brand.subscription_status ?? null;
 
       if (brand.stripe_customer_id) {
         customerId = brand.stripe_customer_id;
@@ -104,6 +117,25 @@ export async function POST(req: NextRequest) {
       }
 
       sessionMetadata = { brand_id: brand_id! };
+    }
+
+    // [Fix 2A] If the caller is already in an active or trialing subscription,
+    // don't create a second checkout session. Create a billing portal session
+    // for the existing customer and return { already_active, portal_url } so
+    // the client can show a toast and redirect to subscription management.
+    if (
+      currentSubscriptionStatus &&
+      ACTIVE_STATUSES.has(currentSubscriptionStatus)
+    ) {
+      const portalSession = await stripe.billingPortal.sessions.create({
+        customer: customerId,
+        return_url: cancel_url,
+      });
+
+      return NextResponse.json({
+        already_active: true,
+        portal_url: portalSession.url,
+      });
     }
 
     const session = await stripe.checkout.sessions.create({

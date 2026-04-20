@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import { useToast } from "@/components/Toast"; // [Fix 2B] Toast hook needed to surface "already subscribed" message before portal redirect.
 
 interface Props {
   priceId: string;
@@ -19,6 +20,7 @@ export default function UpgradeButton({
   currentPath,
 }: Props) {
   const [loading, setLoading] = useState(false);
+  const { showToast } = useToast(); // [Fix 2B]
 
   const handleClick = async () => {
     if (loading) return;
@@ -38,6 +40,22 @@ export default function UpgradeButton({
       });
 
       const data = await res.json();
+
+      // [Fix 2B] If the user already has an active/trialing subscription, the
+      // checkout route returns { already_active: true, portal_url }. Show an
+      // info toast first, then redirect to the Stripe billing portal after a
+      // brief delay so the toast is visible. Button stays in "Redirecting..."
+      // state during the delay — do not unset loading here.
+      if (data.already_active && data.portal_url) {
+        showToast(
+          "You're already subscribed. Opening subscription management...",
+          "info",
+        );
+        setTimeout(() => {
+          window.location.href = data.portal_url;
+        }, 1500);
+        return;
+      }
 
       if (data.url) {
         window.location.href = data.url;

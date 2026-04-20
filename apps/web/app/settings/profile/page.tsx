@@ -17,7 +17,6 @@ const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
 );
 
-// [Change 3] — FormState extended with instagram_handle, tiktok_handle, shop_url
 type FormState = {
   username: string;
   bio: string;
@@ -36,7 +35,6 @@ function validateUsername(value: string): "invalid" | "valid" {
   return USERNAME_RE.test(value) ? "valid" : "invalid";
 }
 
-// [Change 2] — Social handle / URL validation regexes
 const INSTAGRAM_RE = /^[a-zA-Z0-9._]{1,30}$/;
 const TIKTOK_RE = /^[a-zA-Z0-9._]{1,24}$/;
 const SHOP_URL_RE = /^https?:\/\/.+/;
@@ -149,7 +147,6 @@ function UsernameHint({
 const inputCls =
   "w-full px-3 py-2.5 rounded-xl border border-slime-border bg-slime-surface text-sm text-slime-text placeholder:text-slime-muted outline-none focus:border-slime-accent/50 focus:ring-1 focus:ring-slime-accent/30 transition-colors";
 
-// [Change 1] — Sub-label style for fields inside a grouped card. NOT cyan — only top section label is cyan.
 const subLabelCls =
   "text-[10px] font-semibold uppercase tracking-wider text-slime-muted mb-1.5";
 
@@ -263,9 +260,9 @@ function SubscriptionSection({
 
 function ProfileSettingsContent({ userId }: { userId: string }) {
   const { showToast } = useToast();
+  const router = useRouter(); // [Fix 1] router needed here to strip query params after toast
   const searchParams = useSearchParams();
 
-  // [Change 3] — Initialize both originalForm and form with empty strings for the three new social fields
   const [originalForm, setOriginalForm] = useState<FormState>({
     username: "",
     bio: "",
@@ -289,17 +286,26 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
   const [subscriptionTier, setSubscriptionTier] = useState<string>("free");
   const [profileLoading, setProfileLoading] = useState(true);
 
-  // Show upgrade toast if redirected back from Stripe
+  // [Fix 1] Show upgrade toast once, then strip ?upgraded / ?already_pro from the URL
+  // so a remount or client-side navigation back to this page does not re-fire.
   useEffect(() => {
-    if (searchParams.get("upgraded") === "true") {
+    const upgraded = searchParams.get("upgraded") === "true";
+    const alreadyPro = searchParams.get("already_pro") === "true";
+
+    if (upgraded) {
       showToast("Welcome to SlimeLog Pro!", "success");
+    } else if (alreadyPro) {
+      showToast("You're already subscribed to Pro.", "info");
+    }
+
+    if (upgraded || alreadyPro) {
+      router.replace("/settings/profile");
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     supabase
       .from("profiles")
-      // [Change 4] — Fetch the three new social columns alongside existing fields
       .select(
         "username, bio, location, website_url, avatar_url, subscription_tier, instagram_handle, tiktok_handle, shop_url",
       )
@@ -307,7 +313,6 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
       .maybeSingle()
       .then(({ data }) => {
         if (data) {
-          // [Change 4] — null-coalesce to "" so controlled inputs don't warn
           const loaded: FormState = {
             username: data.username ?? "",
             bio: data.bio ?? "",
@@ -362,7 +367,6 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     debounceTimer.current = setTimeout(() => checkUsername(value), 500);
   };
 
-  // [Change 2] — Strip leading @ on Instagram / TikTok handle input
   const stripLeadingAt = (value: string) =>
     value.startsWith("@") ? value.slice(1) : value;
 
@@ -376,7 +380,6 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     setForm((f) => ({ ...f, tiktok_handle: value }));
   };
 
-  // [Change 2] — Shop URL: auto-prefix https:// on blur if protocol missing
   const handleShopUrlBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     const value = e.target.value.trim();
     if (value && !/^https?:\/\//i.test(value)) {
@@ -386,7 +389,6 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
 
   const [saving, setSaving] = useState(false);
 
-  // [Change 5] — hasChanges extended with three new social fields
   const hasChanges =
     form.username !== originalForm.username ||
     form.bio !== originalForm.bio ||
@@ -397,7 +399,6 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     form.tiktok_handle !== originalForm.tiktok_handle ||
     form.shop_url !== originalForm.shop_url;
 
-  // [Change 6] — isFormValid extended: each social field must be empty OR match its regex
   const instagramValid =
     form.instagram_handle === "" || INSTAGRAM_RE.test(form.instagram_handle);
   const tiktokValid =
@@ -420,7 +421,6 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     if (!isFormValid) return;
     setSaving(true);
 
-    // [Change 7] — pass the three new social fields to updateProfile
     const result = await updateProfile({
       username: form.username,
       bio: form.bio || undefined,
@@ -489,7 +489,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
       </header>
 
       <div className="px-4 pb-28 space-y-5">
-        {/* [Change 1] CARD 1 — Profile Photo (unchanged) */}
+        {/* CARD 1 — Profile Photo */}
         <section className="rounded-2xl p-4 space-y-2" style={sectionStyle}>
           <p className="section-label">Profile Photo</p>
           <div className="flex items-start gap-4 mt-2">
@@ -526,7 +526,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
           </div>
         </section>
 
-        {/* [Change 1] CARD 2 — About You (username + bio combined) */}
+        {/* CARD 2 — About You */}
         <section className="rounded-2xl p-4" style={sectionStyle}>
           <p className="section-label">About You</p>
 
@@ -598,7 +598,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
           </div>
         </section>
 
-        {/* [Change 1] CARD 3 — Contact & Links (location + website + IG + TikTok + shop) */}
+        {/* CARD 3 — Contact & Links */}
         <section className="rounded-2xl p-4" style={sectionStyle}>
           <p className="section-label">Contact &amp; Links</p>
 
@@ -640,7 +640,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
               />
             </div>
 
-            {/* [Change 2] Instagram handle */}
+            {/* Instagram */}
             <div>
               <label htmlFor="instagram_handle" className={subLabelCls}>
                 INSTAGRAM
@@ -677,7 +677,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
               )}
             </div>
 
-            {/* [Change 2] TikTok handle */}
+            {/* TikTok */}
             <div>
               <label htmlFor="tiktok_handle" className={subLabelCls}>
                 TIKTOK
@@ -714,7 +714,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
               )}
             </div>
 
-            {/* [Change 2] Shop URL */}
+            {/* Shop URL */}
             <div>
               <label htmlFor="shop_url" className={subLabelCls}>
                 SHOP URL
@@ -747,7 +747,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
           </div>
         </section>
 
-        {/* [Change 1] CARD 4 — Subscription (unchanged) */}
+        {/* CARD 4 — Subscription */}
         <SubscriptionSection subscriptionTier={subscriptionTier} />
 
         <button

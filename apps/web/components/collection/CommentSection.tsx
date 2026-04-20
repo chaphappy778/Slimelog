@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { useToast } from "@/components/Toast";
 import ReportButton from "@/components/ReportButton";
-import CommentLikeButton from "@/components/collection/CommentLikeButton"; // [Change 1] Import new comment like button
+import CommentLikeButton from "@/components/collection/CommentLikeButton";
 
 // Module-level client
 const supabase = createBrowserClient(
@@ -29,6 +29,23 @@ interface Props {
 
 const COLLAPSED_COUNT = 2;
 
+// [Fix 3] Bucketed short-form relative time — matches the pattern used in
+// users/[username]/page.tsx. Replaces the old Intl.RelativeTimeFormat "minute"-
+// only helper that produced strings like "18,355 minutes ago".
+function formatRelativeTime(isoString: string): string {
+  const diffMs = Date.now() - new Date(isoString).getTime();
+  const diffMins = Math.floor(diffMs / 1000 / 60);
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `${diffDays}d ago`;
+  const diffMonths = Math.floor(diffDays / 30);
+  if (diffMonths < 12) return `${diffMonths}mo ago`;
+  return `${Math.floor(diffMonths / 12)}y ago`;
+}
+
 export default function CommentSection({
   logId,
   currentUserId,
@@ -39,7 +56,6 @@ export default function CommentSection({
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  // [Change 2] Per-comment like state — keyed by comment id.
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
   const [likedByUser, setLikedByUser] = useState<Record<string, boolean>>({});
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -60,7 +76,6 @@ export default function CommentSection({
 
       const loaded = (data as unknown as Comment[]) ?? [];
 
-      // [Change 3] Fetch like counts and current user's liked state in parallel.
       const commentIds = loaded.map((c) => c.id);
 
       let countMap: Record<string, number> = {};
@@ -125,7 +140,6 @@ export default function CommentSection({
     if (!error && data) {
       const newComment = data as unknown as Comment;
       setComments((prev) => [newComment, ...prev]);
-      // [Change 4] Initialize like state for the new comment.
       setLikeCounts((prev) => ({ ...prev, [newComment.id]: 0 }));
       setLikedByUser((prev) => ({ ...prev, [newComment.id]: false }));
       onCountChange(comments.length + 1);
@@ -145,7 +159,6 @@ export default function CommentSection({
 
     if (!error) {
       setComments((prev) => prev.filter((c) => c.id !== commentId));
-      // [Change 5] Drop the deleted comment's like state.
       setLikeCounts((prev) => {
         const next = { ...prev };
         delete next[commentId];
@@ -166,13 +179,6 @@ export default function CommentSection({
       e.preventDefault();
       handleSubmit();
     }
-  }
-
-  function formatRelativeTime(isoString: string): string {
-    return new Intl.RelativeTimeFormat("en", { numeric: "auto" }).format(
-      Math.round((new Date(isoString).getTime() - Date.now()) / 1000 / 60),
-      "minute",
-    );
   }
 
   const visibleComments = expanded
@@ -242,7 +248,7 @@ export default function CommentSection({
                   position: "relative",
                 }}
               >
-                {/* Comment header row with like button, timestamp, report, delete */}
+                {/* Comment header row */}
                 <div
                   style={{
                     display: "flex",
@@ -264,7 +270,6 @@ export default function CommentSection({
                   <div
                     style={{ display: "flex", alignItems: "center", gap: 8 }}
                   >
-                    {/* [Change 6] Comment like button — left of timestamp */}
                     <CommentLikeButton
                       commentId={c.id}
                       initialCount={likeCounts[c.id] ?? 0}
