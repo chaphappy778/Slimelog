@@ -119,6 +119,12 @@ function Stars({ rating }: { rating: number | null }) {
 //     so the "Fav type" tile no longer looks underweight next to the 2xl numerals.
 //   - Label styling and empty-state em-dash for pill variant are unchanged.
 // Function signature is preserved.
+// [Centering follow-up] Outer container now centers content both axes:
+//   items-center + justify-center + text-center center the value and label
+//   horizontally/vertically inside the min-h-20 box. gap bumped 1 → 1.5 for
+//   slightly more breathing room. The pill variant's `self-start` was removed
+//   so the pill also centers (was previously left-aligning the pill even after
+//   items-center was added to the parent).
 function StatTile({
   value,
   label,
@@ -132,7 +138,7 @@ function StatTile({
 }) {
   return (
     <div
-      className="snap-start shrink-0 w-36 rounded-2xl p-4 flex flex-col gap-1 min-h-20"
+      className="snap-start shrink-0 w-36 rounded-2xl p-4 flex flex-col items-center justify-center text-center gap-1.5 min-h-20"
       style={{
         background: "rgba(45,10,78,0.3)",
         border: "1px solid rgba(45,10,78,0.7)",
@@ -143,8 +149,10 @@ function StatTile({
         value != null && value !== "" ? (
           // [Fix A] Magenta pill — scaled up from text-xs / px-2 py-0.5 to
           // text-base / px-3 py-1 / font-black / leading-tight.
+          // [Centering follow-up] Removed self-start so the pill inherits
+          // the container's items-center alignment instead of left-aligning.
           <span
-            className="text-base font-black px-3 py-1 rounded-full self-start leading-tight"
+            className="text-base font-black px-3 py-1 rounded-full leading-tight"
             style={{
               background: "rgba(255,0,229,0.12)",
               color: "#FF00E5",
