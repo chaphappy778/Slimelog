@@ -300,7 +300,10 @@ export default async function UserProfilePage({
               </div>
             </div>
 
-            {/* [Change 7] Social links row — icon-only 36x36 circular pill buttons */}
+            {/* [Fix 37] Social links row — icon-only 36x36 circular pill buttons.
+                Bumped SVG width/height from 16 to 18 for tighter visual centering.
+                aria-hidden="true" and consistent strokeLinecap/strokeLinejoin="round"
+                retained on every icon. Container dimensions (w-9 h-9) unchanged. */}
             {hasSocialLinks && (
               <div className="flex items-center gap-2 mt-4">
                 {profile.instagram_handle && (
@@ -316,9 +319,10 @@ export default async function UserProfilePage({
                       color: "#00F0FF",
                     }}
                   >
+                    {/* [Fix 37] 16 → 18 */}
                     <svg
-                      width="16"
-                      height="16"
+                      width="18"
+                      height="18"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -346,9 +350,10 @@ export default async function UserProfilePage({
                       color: "#00F0FF",
                     }}
                   >
+                    {/* [Fix 37] 16 → 18 */}
                     <svg
-                      width="16"
-                      height="16"
+                      width="18"
+                      height="18"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -376,9 +381,10 @@ export default async function UserProfilePage({
                       color: "#00F0FF",
                     }}
                   >
+                    {/* [Fix 37] 16 → 18 */}
                     <svg
-                      width="16"
-                      height="16"
+                      width="18"
+                      height="18"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"

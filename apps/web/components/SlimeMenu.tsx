@@ -231,6 +231,7 @@ export default function SlimeMenu() {
   return (
     <>
       <button
+        type="button"
         onClick={handleOpen}
         aria-label="Open navigation menu"
         aria-expanded={isOpen}
@@ -381,6 +382,7 @@ export default function SlimeMenu() {
 
             <NavSection title="Account">
               <button
+                type="button"
                 onClick={handleSignOut}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-400 hover:bg-red-500/10 transition-all duration-100 active:scale-[0.97] w-full text-left"
               >
@@ -392,6 +394,7 @@ export default function SlimeMenu() {
 
               {!showDeleteConfirm ? (
                 <button
+                  type="button"
                   onClick={() => setShowDeleteConfirm(true)}
                   className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-500/70 hover:bg-red-500/10 hover:text-red-400 transition-all duration-100 active:scale-[0.97] w-full text-left"
                 >
@@ -418,6 +421,7 @@ export default function SlimeMenu() {
                   )}
                   <div className="flex gap-2 mt-1">
                     <button
+                      type="button"
                       onClick={() => {
                         setShowDeleteConfirm(false);
                         setDeleteError(null);
@@ -429,6 +433,7 @@ export default function SlimeMenu() {
                       Cancel
                     </button>
                     <button
+                      type="button"
                       onClick={handleDeleteAccount}
                       disabled={deleteLoading}
                       className="flex-1 py-2 rounded-lg text-xs font-bold text-white transition-colors disabled:opacity-50"
@@ -442,7 +447,12 @@ export default function SlimeMenu() {
             </NavSection>
 
             <div className="flex-1" />
-            <div className="pb-8 px-4">
+            {/* [Fix 40] Footer padding bumped pb-8 → pb-28. When the menu is scrolled
+                all the way down, the floating "+Log" button and bottom nav bar
+                (~80px combined) were clipping the Delete Account button. The extra
+                ~80px of bottom padding on this footer wrapper pushes the tagline
+                down and lets the preceding Account section clear the bottom nav. */}
+            <div className="pb-28 px-4">
               <p className="text-[10px] text-slime-muted text-center">
                 SlimeLog · Rate it. Log it. Love it.
               </p>

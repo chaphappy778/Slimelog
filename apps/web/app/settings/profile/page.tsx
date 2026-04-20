@@ -162,6 +162,9 @@ function SubscriptionSection({
   subscriptionTier: string;
 }) {
   const [portalLoading, setPortalLoading] = useState(false);
+  // [Fix 43] Hover state for the Manage Subscription button — needed because the
+  // styling is inline (not a Tailwind class) and inline :hover can't be expressed.
+  const [manageHover, setManageHover] = useState(false);
 
   const handleManage = async () => {
     if (portalLoading) return;
@@ -191,7 +194,12 @@ function SubscriptionSection({
       <p className="section-label">Subscription</p>
 
       {subscriptionTier === "pro" ? (
-        <div className="flex items-center justify-between gap-3 flex-wrap">
+        // [Fix 43] Pro-tier view restructured to a vertical stack.
+        //   Row 1: PRO pill + "SlimeLog Pro" label (horizontal, compact).
+        //   Row 2: Full-width Manage Subscription button, styled to clearly read
+        //          as an interactive control (border, prominent bg, bold text).
+        // Free-tier branch (else) is unchanged.
+        <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <span
               style={{
@@ -214,19 +222,35 @@ function SubscriptionSection({
           <button
             type="button"
             onClick={handleManage}
+            onMouseEnter={() => setManageHover(true)}
+            onMouseLeave={() => setManageHover(false)}
             disabled={portalLoading}
+            className="w-full"
             style={{
-              background: "rgba(45,10,78,0.5)",
+              // [Fix 43] Full-width button styling per spec:
+              //   bg rgba(45,10,78,0.5) default, rgba(45,10,78,0.7) on hover
+              //   border 1px solid rgba(45,10,78,0.9)
+              //   color rgba(245,245,245,0.85) default, #FFFFFF on hover
+              //   13px / 700 weight, rounded-full, py-3
+              //   Disabled: opacity 0.5, muted text, not-allowed cursor
+              background:
+                !portalLoading && manageHover
+                  ? "rgba(45,10,78,0.7)"
+                  : "rgba(45,10,78,0.5)",
               border: "1px solid rgba(45,10,78,0.9)",
               color: portalLoading
                 ? "rgba(245,245,245,0.4)"
-                : "rgba(245,245,245,0.75)",
+                : manageHover
+                  ? "#FFFFFF"
+                  : "rgba(245,245,245,0.85)",
+              opacity: portalLoading ? 0.5 : 1,
               cursor: portalLoading ? "not-allowed" : "pointer",
-              padding: "8px 16px",
+              paddingTop: "12px",
+              paddingBottom: "12px",
               borderRadius: "9999px",
               fontSize: "13px",
               fontWeight: 700,
-              transition: "opacity 0.15s ease",
+              transition: "all 0.15s ease",
             }}
           >
             {portalLoading ? "Loading..." : "Manage Subscription"}
