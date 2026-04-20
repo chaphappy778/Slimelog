@@ -39,6 +39,24 @@ const INSTAGRAM_RE = /^[a-zA-Z0-9._]{1,30}$/;
 const TIKTOK_RE = /^[a-zA-Z0-9._]{1,24}$/;
 const SHOP_URL_RE = /^https?:\/\/.+/;
 
+// [Fix C] Module-scoped formatter so it isn't recreated on every render of
+// SubscriptionSection. Returns null for any bad / missing / unparseable input
+// so the caller can skip rendering entirely.
+function formatPeriodEnd(iso: string | null): string | null {
+  if (!iso) return null;
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return null;
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(d);
+  } catch {
+    return null;
+  }
+}
+
 function UsernameStatusIcon({ status }: { status: UsernameStatus }) {
   if (status === "idle") return null;
   if (status === "checking") {
@@ -158,13 +176,22 @@ const sectionStyle = {
 
 function SubscriptionSection({
   subscriptionTier,
+  periodEnd,
+  cancelAtPeriodEnd,
 }: {
   subscriptionTier: string;
+  periodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
 }) {
   const [portalLoading, setPortalLoading] = useState(false);
   // [Fix 43] Hover state for the Manage Subscription button — needed because the
   // styling is inline (not a Tailwind class) and inline :hover can't be expressed.
   const [manageHover, setManageHover] = useState(false);
+
+  // [Fix C] Format the incoming ISO timestamp once per render into a short
+  // human-readable string like "Apr 16, 2027". null means "don't render the
+  // secondary text at all" — no em-dash, no placeholder.
+  const formattedDate = formatPeriodEnd(periodEnd);
 
   const handleManage = async () => {
     if (portalLoading) return;
@@ -194,10 +221,11 @@ function SubscriptionSection({
       <p className="section-label">Subscription</p>
 
       {subscriptionTier === "pro" ? (
-        // [Fix 43] Pro-tier view restructured to a vertical stack.
-        //   Row 1: PRO pill + "SlimeLog Pro" label (horizontal, compact).
-        //   Row 2: Full-width Manage Subscription button, styled to clearly read
-        //          as an interactive control (border, prominent bg, bold text).
+        // [Fix C] Pro-tier view restructured:
+        //   Row 1: PRO pill + renewal/end date (horizontal, compact).
+        //          "SlimeLog Pro" text has been removed — the pill carries the
+        //          tier signal, and the date communicates lifecycle state.
+        //   Row 2: Full-width Manage Subscription button (unchanged).
         // Free-tier branch (else) is unchanged.
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
@@ -215,9 +243,11 @@ function SubscriptionSection({
             >
               PRO
             </span>
-            <span className="text-sm text-slime-text font-semibold">
-              SlimeLog Pro
-            </span>
+            {formattedDate && (
+              <span className="text-xs text-slime-muted font-medium">
+                {cancelAtPeriodEnd ? "Ends" : "Renews"} {formattedDate}
+              </span>
+            )}
           </div>
           <button
             type="button"
@@ -308,6 +338,12 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     shop_url: "",
   });
   const [subscriptionTier, setSubscriptionTier] = useState<string>("free");
+  // [Fix C] New state for the renewal/end date display on the subscription card.
+  const [subscriptionPeriodEnd, setSubscriptionPeriodEnd] = useState<
+    string | null
+  >(null);
+  const [subscriptionCancelAtPeriodEnd, setSubscriptionCancelAtPeriodEnd] =
+    useState<boolean>(false);
   const [profileLoading, setProfileLoading] = useState(true);
 
   // [Fix 1] Show upgrade toast once, then strip ?upgraded / ?already_pro from the URL
@@ -331,7 +367,10 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     supabase
       .from("profiles")
       .select(
-        "username, bio, location, website_url, avatar_url, subscription_tier, instagram_handle, tiktok_handle, shop_url",
+        // [Fix C] Added subscription_current_period_end and
+        // subscription_cancel_at_period_end to the select list so the
+        // SubscriptionSection has the data it needs to render the renewal date.
+        "username, bio, location, website_url, avatar_url, subscription_tier, subscription_current_period_end, subscription_cancel_at_period_end, instagram_handle, tiktok_handle, shop_url",
       )
       .eq("id", userId)
       .maybeSingle()
@@ -350,6 +389,14 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
           setOriginalForm(loaded);
           setForm(loaded);
           setSubscriptionTier(data.subscription_tier ?? "free");
+          // [Fix C] Default missing/null values safely — null period end means
+          // "don't render secondary text", false cancel flag means "Renews".
+          setSubscriptionPeriodEnd(
+            data.subscription_current_period_end ?? null,
+          );
+          setSubscriptionCancelAtPeriodEnd(
+            data.subscription_cancel_at_period_end ?? false,
+          );
         }
         setProfileLoading(false);
       });
@@ -772,7 +819,13 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
         </section>
 
         {/* CARD 4 — Subscription */}
-        <SubscriptionSection subscriptionTier={subscriptionTier} />
+        {/* [Fix C] New periodEnd + cancelAtPeriodEnd props drive the "Renews"
+            / "Ends" text next to the PRO pill. */}
+        <SubscriptionSection
+          subscriptionTier={subscriptionTier}
+          periodEnd={subscriptionPeriodEnd}
+          cancelAtPeriodEnd={subscriptionCancelAtPeriodEnd}
+        />
 
         <button
           type="button"
