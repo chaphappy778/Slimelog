@@ -6,12 +6,16 @@ import { cookies } from "next/headers";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+// [Change 8] — UpdateProfileInput extended with instagram_handle, tiktok_handle, shop_url
 type UpdateProfileInput = {
   username: string;
   bio?: string;
   avatar_url?: string;
   location?: string;
   website_url?: string;
+  instagram_handle?: string;
+  tiktok_handle?: string;
+  shop_url?: string;
 };
 
 type UpdateProfileResult = {
@@ -42,6 +46,11 @@ async function getSupabaseServerClient() {
 }
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
+
+// [Change 8] — Server-side validation regexes mirror the client
+const INSTAGRAM_RE = /^[a-zA-Z0-9._]{1,30}$/;
+const TIKTOK_RE = /^[a-zA-Z0-9._]{1,24}$/;
+const SHOP_URL_RE = /^https?:\/\/.+/;
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
@@ -74,6 +83,38 @@ export async function updateProfile(
   }
   if (input.bio && input.bio.length > 150) {
     return { success: false, error: "Bio must be 150 characters or fewer." };
+  }
+
+  // [Change 8] — Server-side validation for the three new social fields.
+  // Strip leading @ on handles as defense-in-depth (the client already does this).
+  let instagramHandle: string | undefined = input.instagram_handle;
+  if (instagramHandle !== undefined && instagramHandle !== "") {
+    if (instagramHandle.startsWith("@")) {
+      instagramHandle = instagramHandle.slice(1);
+    }
+    if (!INSTAGRAM_RE.test(instagramHandle)) {
+      return { success: false, error: "Invalid Instagram handle." };
+    }
+  }
+
+  let tiktokHandle: string | undefined = input.tiktok_handle;
+  if (tiktokHandle !== undefined && tiktokHandle !== "") {
+    if (tiktokHandle.startsWith("@")) {
+      tiktokHandle = tiktokHandle.slice(1);
+    }
+    if (!TIKTOK_RE.test(tiktokHandle)) {
+      return { success: false, error: "Invalid TikTok handle." };
+    }
+  }
+
+  const shopUrl: string | undefined = input.shop_url;
+  if (shopUrl !== undefined && shopUrl !== "") {
+    if (!SHOP_URL_RE.test(shopUrl)) {
+      return {
+        success: false,
+        error: "Shop URL must start with http:// or https://.",
+      };
+    }
   }
 
   // ── 2. Auth check ──
@@ -124,6 +165,13 @@ export async function updateProfile(
   if (input.location !== undefined) payload.location = input.location || null;
   if (input.website_url !== undefined)
     payload.website_url = input.website_url || null;
+
+  // [Change 8] — Persist the three new social fields with null-coalesce for empty strings
+  if (input.instagram_handle !== undefined)
+    payload.instagram_handle = instagramHandle || null;
+  if (input.tiktok_handle !== undefined)
+    payload.tiktok_handle = tiktokHandle || null;
+  if (input.shop_url !== undefined) payload.shop_url = shopUrl || null;
 
   // ── 5. Persist — RLS ensures user can only update their own row ──
   const { error: updateError } = await supabase

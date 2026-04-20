@@ -17,12 +17,16 @@ const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
 );
 
+// [Change 3] — FormState extended with instagram_handle, tiktok_handle, shop_url
 type FormState = {
   username: string;
   bio: string;
   location: string;
   website_url: string;
   avatar_url: string | null;
+  instagram_handle: string;
+  tiktok_handle: string;
+  shop_url: string;
 };
 
 type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid";
@@ -31,6 +35,11 @@ const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
 function validateUsername(value: string): "invalid" | "valid" {
   return USERNAME_RE.test(value) ? "valid" : "invalid";
 }
+
+// [Change 2] — Social handle / URL validation regexes
+const INSTAGRAM_RE = /^[a-zA-Z0-9._]{1,30}$/;
+const TIKTOK_RE = /^[a-zA-Z0-9._]{1,24}$/;
+const SHOP_URL_RE = /^https?:\/\/.+/;
 
 function UsernameStatusIcon({ status }: { status: UsernameStatus }) {
   if (status === "idle") return null;
@@ -139,6 +148,10 @@ function UsernameHint({
 
 const inputCls =
   "w-full px-3 py-2.5 rounded-xl border border-slime-border bg-slime-surface text-sm text-slime-text placeholder:text-slime-muted outline-none focus:border-slime-accent/50 focus:ring-1 focus:ring-slime-accent/30 transition-colors";
+
+// [Change 1] — Sub-label style for fields inside a grouped card. NOT cyan — only top section label is cyan.
+const subLabelCls =
+  "text-[10px] font-semibold uppercase tracking-wider text-slime-muted mb-1.5";
 
 const sectionStyle = {
   background: "rgba(45,10,78,0.25)",
@@ -252,12 +265,16 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
   const { showToast } = useToast();
   const searchParams = useSearchParams();
 
+  // [Change 3] — Initialize both originalForm and form with empty strings for the three new social fields
   const [originalForm, setOriginalForm] = useState<FormState>({
     username: "",
     bio: "",
     location: "",
     website_url: "",
     avatar_url: null,
+    instagram_handle: "",
+    tiktok_handle: "",
+    shop_url: "",
   });
   const [form, setForm] = useState<FormState>({
     username: "",
@@ -265,6 +282,9 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     location: "",
     website_url: "",
     avatar_url: null,
+    instagram_handle: "",
+    tiktok_handle: "",
+    shop_url: "",
   });
   const [subscriptionTier, setSubscriptionTier] = useState<string>("free");
   const [profileLoading, setProfileLoading] = useState(true);
@@ -279,19 +299,24 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
   useEffect(() => {
     supabase
       .from("profiles")
+      // [Change 4] — Fetch the three new social columns alongside existing fields
       .select(
-        "username, bio, location, website_url, avatar_url, subscription_tier",
+        "username, bio, location, website_url, avatar_url, subscription_tier, instagram_handle, tiktok_handle, shop_url",
       )
       .eq("id", userId)
       .maybeSingle()
       .then(({ data }) => {
         if (data) {
+          // [Change 4] — null-coalesce to "" so controlled inputs don't warn
           const loaded: FormState = {
             username: data.username ?? "",
             bio: data.bio ?? "",
             location: data.location ?? "",
             website_url: data.website_url ?? "",
             avatar_url: data.avatar_url ?? null,
+            instagram_handle: data.instagram_handle ?? "",
+            tiktok_handle: data.tiktok_handle ?? "",
+            shop_url: data.shop_url ?? "",
           };
           setOriginalForm(loaded);
           setForm(loaded);
@@ -337,14 +362,47 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     debounceTimer.current = setTimeout(() => checkUsername(value), 500);
   };
 
+  // [Change 2] — Strip leading @ on Instagram / TikTok handle input
+  const stripLeadingAt = (value: string) =>
+    value.startsWith("@") ? value.slice(1) : value;
+
+  const handleInstagramChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = stripLeadingAt(e.target.value);
+    setForm((f) => ({ ...f, instagram_handle: value }));
+  };
+
+  const handleTiktokChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = stripLeadingAt(e.target.value);
+    setForm((f) => ({ ...f, tiktok_handle: value }));
+  };
+
+  // [Change 2] — Shop URL: auto-prefix https:// on blur if protocol missing
+  const handleShopUrlBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const value = e.target.value.trim();
+    if (value && !/^https?:\/\//i.test(value)) {
+      setForm((f) => ({ ...f, shop_url: `https://${value}` }));
+    }
+  };
+
   const [saving, setSaving] = useState(false);
 
+  // [Change 5] — hasChanges extended with three new social fields
   const hasChanges =
     form.username !== originalForm.username ||
     form.bio !== originalForm.bio ||
     form.location !== originalForm.location ||
     form.website_url !== originalForm.website_url ||
-    form.avatar_url !== originalForm.avatar_url;
+    form.avatar_url !== originalForm.avatar_url ||
+    form.instagram_handle !== originalForm.instagram_handle ||
+    form.tiktok_handle !== originalForm.tiktok_handle ||
+    form.shop_url !== originalForm.shop_url;
+
+  // [Change 6] — isFormValid extended: each social field must be empty OR match its regex
+  const instagramValid =
+    form.instagram_handle === "" || INSTAGRAM_RE.test(form.instagram_handle);
+  const tiktokValid =
+    form.tiktok_handle === "" || TIKTOK_RE.test(form.tiktok_handle);
+  const shopUrlValid = form.shop_url === "" || SHOP_URL_RE.test(form.shop_url);
 
   const isFormValid =
     hasChanges &&
@@ -353,18 +411,25 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
       usernameStatus === "available") &&
     (form.username === originalForm.username ||
       validateUsername(form.username) === "valid") &&
-    form.bio.length <= 150;
+    form.bio.length <= 150 &&
+    instagramValid &&
+    tiktokValid &&
+    shopUrlValid;
 
   const handleSave = async () => {
     if (!isFormValid) return;
     setSaving(true);
 
+    // [Change 7] — pass the three new social fields to updateProfile
     const result = await updateProfile({
       username: form.username,
       bio: form.bio || undefined,
       avatar_url: form.avatar_url || undefined,
       location: form.location || undefined,
       website_url: form.website_url || undefined,
+      instagram_handle: form.instagram_handle || undefined,
+      tiktok_handle: form.tiktok_handle || undefined,
+      shop_url: form.shop_url || undefined,
     });
 
     setSaving(false);
@@ -424,7 +489,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
       </header>
 
       <div className="px-4 pb-28 space-y-5">
-        {/* Avatar */}
+        {/* [Change 1] CARD 1 — Profile Photo (unchanged) */}
         <section className="rounded-2xl p-4 space-y-2" style={sectionStyle}>
           <p className="section-label">Profile Photo</p>
           <div className="flex items-start gap-4 mt-2">
@@ -461,101 +526,228 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
           </div>
         </section>
 
-        {/* Username */}
-        <section className="rounded-2xl p-4 space-y-1" style={sectionStyle}>
-          <label htmlFor="username" className="section-label">
-            Username
-          </label>
-          <div className="relative flex items-center mt-1">
-            <span className="absolute left-3 text-slime-muted text-sm font-medium select-none">
-              @
-            </span>
-            <input
-              id="username"
-              type="text"
-              autoComplete="off"
-              autoCapitalize="none"
-              spellCheck={false}
-              value={form.username}
-              onChange={handleUsernameChange}
-              maxLength={20}
-              placeholder="your_username"
-              className={`w-full pl-7 pr-10 py-2.5 rounded-xl border text-sm font-semibold placeholder:text-slime-muted outline-none transition-colors bg-slime-surface text-slime-text ${
-                usernameStatus === "taken" || usernameStatus === "invalid"
-                  ? "border-red-500/40 focus:border-red-500/60"
-                  : usernameStatus === "available"
-                    ? "border-slime-accent/40 focus:border-slime-accent/60"
-                    : "border-slime-border focus:border-slime-accent/50"
-              }`}
-            />
-            <div className="absolute right-3">
-              <UsernameStatusIcon status={usernameStatus} />
+        {/* [Change 1] CARD 2 — About You (username + bio combined) */}
+        <section className="rounded-2xl p-4" style={sectionStyle}>
+          <p className="section-label">About You</p>
+
+          <div className="flex flex-col gap-4 mt-3">
+            {/* Username */}
+            <div>
+              <label htmlFor="username" className={subLabelCls}>
+                USERNAME
+              </label>
+              <div className="relative flex items-center">
+                <span className="absolute left-3 text-slime-muted text-sm font-medium select-none">
+                  @
+                </span>
+                <input
+                  id="username"
+                  type="text"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  value={form.username}
+                  onChange={handleUsernameChange}
+                  maxLength={20}
+                  placeholder="your_username"
+                  className={`w-full pl-7 pr-10 py-2.5 rounded-xl border text-sm font-semibold placeholder:text-slime-muted outline-none transition-colors bg-slime-surface text-slime-text ${
+                    usernameStatus === "taken" || usernameStatus === "invalid"
+                      ? "border-red-500/40 focus:border-red-500/60"
+                      : usernameStatus === "available"
+                        ? "border-slime-accent/40 focus:border-slime-accent/60"
+                        : "border-slime-border focus:border-slime-accent/50"
+                  }`}
+                />
+                <div className="absolute right-3">
+                  <UsernameStatusIcon status={usernameStatus} />
+                </div>
+              </div>
+              <UsernameHint status={usernameStatus} username={form.username} />
+            </div>
+
+            {/* Bio */}
+            <div>
+              <div className="flex items-center justify-between">
+                <label htmlFor="bio" className={subLabelCls}>
+                  BIO
+                </label>
+                <span
+                  className={`text-[10px] font-medium tabular-nums transition-colors mb-1.5 ${
+                    form.bio.length > 140
+                      ? form.bio.length > 150
+                        ? "text-red-400"
+                        : "text-amber-400"
+                      : "text-slime-muted"
+                  }`}
+                >
+                  {form.bio.length}/150
+                </span>
+              </div>
+              <textarea
+                id="bio"
+                rows={3}
+                value={form.bio}
+                maxLength={150}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, bio: e.target.value }))
+                }
+                placeholder="Tell the slime world about yourself…"
+                className={`${inputCls} resize-none`}
+              />
             </div>
           </div>
-          <UsernameHint status={usernameStatus} username={form.username} />
         </section>
 
-        {/* Bio */}
-        <section className="rounded-2xl p-4 space-y-1" style={sectionStyle}>
-          <div className="flex items-center justify-between">
-            <label htmlFor="bio" className="section-label">
-              Bio
-            </label>
-            <span
-              className={`text-xs font-medium tabular-nums transition-colors ${form.bio.length > 140 ? (form.bio.length > 150 ? "text-red-400" : "text-amber-400") : "text-slime-muted"}`}
-            >
-              {form.bio.length}/150
-            </span>
+        {/* [Change 1] CARD 3 — Contact & Links (location + website + IG + TikTok + shop) */}
+        <section className="rounded-2xl p-4" style={sectionStyle}>
+          <p className="section-label">Contact &amp; Links</p>
+
+          <div className="flex flex-col gap-4 mt-3">
+            {/* Location */}
+            <div>
+              <label htmlFor="location" className={subLabelCls}>
+                LOCATION
+              </label>
+              <input
+                id="location"
+                type="text"
+                value={form.location}
+                maxLength={100}
+                placeholder="e.g. Austin, TX"
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, location: e.target.value }))
+                }
+                className={inputCls}
+              />
+            </div>
+
+            {/* Website */}
+            <div>
+              <label htmlFor="website_url" className={subLabelCls}>
+                WEBSITE
+              </label>
+              <input
+                id="website_url"
+                type="url"
+                inputMode="url"
+                value={form.website_url}
+                maxLength={200}
+                placeholder="https://yourshop.com"
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, website_url: e.target.value }))
+                }
+                className={inputCls}
+              />
+            </div>
+
+            {/* [Change 2] Instagram handle */}
+            <div>
+              <label htmlFor="instagram_handle" className={subLabelCls}>
+                INSTAGRAM
+              </label>
+              <div className="relative flex items-center">
+                <span className="absolute left-3 text-slime-muted text-sm font-medium select-none">
+                  @
+                </span>
+                <input
+                  id="instagram_handle"
+                  type="text"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  value={form.instagram_handle}
+                  onChange={handleInstagramChange}
+                  maxLength={30}
+                  placeholder="slimelogapp"
+                  className={`${inputCls} pl-7`}
+                />
+              </div>
+              {form.instagram_handle === "" ? (
+                <p className="text-xs text-slime-muted mt-1">
+                  Your Instagram username (without @)
+                </p>
+              ) : INSTAGRAM_RE.test(form.instagram_handle) ? (
+                <p className="text-[10px] text-slime-muted mt-1">
+                  Links to instagram.com/{form.instagram_handle}
+                </p>
+              ) : (
+                <p className="text-xs text-red-400 mt-1">
+                  Letters, numbers, periods, and underscores only.
+                </p>
+              )}
+            </div>
+
+            {/* [Change 2] TikTok handle */}
+            <div>
+              <label htmlFor="tiktok_handle" className={subLabelCls}>
+                TIKTOK
+              </label>
+              <div className="relative flex items-center">
+                <span className="absolute left-3 text-slime-muted text-sm font-medium select-none">
+                  @
+                </span>
+                <input
+                  id="tiktok_handle"
+                  type="text"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  value={form.tiktok_handle}
+                  onChange={handleTiktokChange}
+                  maxLength={24}
+                  placeholder="slimelogapp"
+                  className={`${inputCls} pl-7`}
+                />
+              </div>
+              {form.tiktok_handle === "" ? (
+                <p className="text-xs text-slime-muted mt-1">
+                  Your TikTok username (without @)
+                </p>
+              ) : TIKTOK_RE.test(form.tiktok_handle) ? (
+                <p className="text-[10px] text-slime-muted mt-1">
+                  Links to tiktok.com/@{form.tiktok_handle}
+                </p>
+              ) : (
+                <p className="text-xs text-red-400 mt-1">
+                  Letters, numbers, periods, and underscores only.
+                </p>
+              )}
+            </div>
+
+            {/* [Change 2] Shop URL */}
+            <div>
+              <label htmlFor="shop_url" className={subLabelCls}>
+                SHOP URL
+              </label>
+              <input
+                id="shop_url"
+                type="url"
+                inputMode="url"
+                autoCapitalize="none"
+                spellCheck={false}
+                value={form.shop_url}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, shop_url: e.target.value }))
+                }
+                onBlur={handleShopUrlBlur}
+                maxLength={200}
+                placeholder="https://myshop.etsy.com"
+                className={inputCls}
+              />
+              {form.shop_url === "" ? (
+                <p className="text-xs text-slime-muted mt-1">
+                  Your Etsy, Shopify, or other shop link
+                </p>
+              ) : SHOP_URL_RE.test(form.shop_url) ? null : (
+                <p className="text-xs text-red-400 mt-1">
+                  Must be a valid URL starting with https://
+                </p>
+              )}
+            </div>
           </div>
-          <textarea
-            id="bio"
-            rows={3}
-            value={form.bio}
-            maxLength={150}
-            onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))}
-            placeholder="Tell the slime world about yourself…"
-            className={`${inputCls} resize-none mt-1`}
-          />
         </section>
 
-        {/* Location */}
-        <section className="rounded-2xl p-4 space-y-1" style={sectionStyle}>
-          <label htmlFor="location" className="section-label">
-            Location
-          </label>
-          <input
-            id="location"
-            type="text"
-            value={form.location}
-            maxLength={100}
-            placeholder="e.g. Austin, TX"
-            onChange={(e) =>
-              setForm((f) => ({ ...f, location: e.target.value }))
-            }
-            className={`${inputCls} mt-1`}
-          />
-        </section>
-
-        {/* Website */}
-        <section className="rounded-2xl p-4 space-y-1" style={sectionStyle}>
-          <label htmlFor="website_url" className="section-label">
-            Website
-          </label>
-          <input
-            id="website_url"
-            type="url"
-            inputMode="url"
-            value={form.website_url}
-            maxLength={200}
-            placeholder="https://yourshop.com"
-            onChange={(e) =>
-              setForm((f) => ({ ...f, website_url: e.target.value }))
-            }
-            className={`${inputCls} mt-1`}
-          />
-        </section>
-
-        {/* Subscription */}
+        {/* [Change 1] CARD 4 — Subscription (unchanged) */}
         <SubscriptionSection subscriptionTier={subscriptionTier} />
 
         <button
