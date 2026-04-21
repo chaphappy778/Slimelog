@@ -40,7 +40,22 @@ export default function AgeVerifyPage() {
   // Min date = 120 years ago (sanity bound)
   const minDate = `${new Date().getFullYear() - 120}-01-01`;
 
+  // [Fix B - Change 1] Before signing out, call the reject route to delete
+  // the Supabase auth user (cascades to profile row). COPPA best practice:
+  // retain no data for under-13 users.
   async function handleSignOutAndReturn() {
+    if (dob) {
+      try {
+        await fetch("/api/age-verify/reject", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date_of_birth: dob }),
+        });
+      } catch (err) {
+        console.error("[age-verify] reject call failed:", err);
+        // Continue with sign-out regardless — don't block the user
+      }
+    }
     await supabase.auth.signOut();
     router.push("/");
   }
@@ -141,12 +156,16 @@ export default function AgeVerifyPage() {
               />
             </svg>
           </div>
+          {/* [Fix B - Change 2] Soften heading copy when user is under 13.
+              New copy: "Thanks for your interest" instead of "Quick check". */}
           <h1 className="text-2xl font-bold text-slime-cyan tracking-tight">
-            Quick check
+            {isUnder13 ? "Thanks for your interest" : "Quick check"}
           </h1>
-          <p className="mt-1 text-sm text-slime-muted">
-            Enter your date of birth to get started
-          </p>
+          {!isUnder13 && (
+            <p className="mt-1 text-sm text-slime-muted">
+              Enter your date of birth to get started
+            </p>
+          )}
         </div>
 
         {/* Card */}
@@ -162,13 +181,13 @@ export default function AgeVerifyPage() {
           {/* Under-13 block screen */}
           {isUnder13 ? (
             <div className="space-y-5 text-center">
+              {/* [Fix B - Change 3] Soften block-screen body copy.
+                  New copy: "You'll need to be at least 13 to create a SlimeLog
+                  account." — single sentence, no "come back later" language. */}
               <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-4">
-                <p className="text-sm text-red-300 font-semibold mb-1">
-                  Age requirement not met
-                </p>
-                <p className="text-xs text-red-200/80 leading-relaxed">
-                  SlimeLog requires users to be at least 13 years old. We are
-                  not able to create an account at this time.
+                <p className="text-sm text-red-200/90 leading-relaxed">
+                  You&apos;ll need to be at least 13 to create a SlimeLog
+                  account.
                 </p>
               </div>
               <button
@@ -293,17 +312,19 @@ export default function AgeVerifyPage() {
           )}
         </div>
 
-        <p className="mt-6 text-center text-xs text-slime-muted leading-relaxed">
-          Your date of birth is used for age verification only and is stored
-          securely. See our{" "}
-          <a
-            href="/privacy"
-            className="underline underline-offset-2 hover:text-slime-text transition-colors"
-          >
-            Privacy Policy
-          </a>
-          .
-        </p>
+        {!isUnder13 && (
+          <p className="mt-6 text-center text-xs text-slime-muted leading-relaxed">
+            Your date of birth is used for age verification only and is stored
+            securely. See our{" "}
+            <a
+              href="/privacy"
+              className="underline underline-offset-2 hover:text-slime-text transition-colors"
+            >
+              Privacy Policy
+            </a>
+            .
+          </p>
+        )}
       </div>
     </div>
   );

@@ -176,6 +176,85 @@ export default function SignupPage() {
     );
   }
 
+  // ── [Fix C] Under-13 block screen ─────────────────────────────────────────
+  // Placed after the `success` branch, before the main signup form return.
+  // User has NOT completed signup yet — no session exists, no API call needed.
+  // Navigation via window.location.href to fully discard form state.
+  if (isUnder13 && dob) {
+    return (
+      <div className="min-h-screen bg-slime-bg flex flex-col items-center justify-center px-5 py-12">
+        <div className="pointer-events-none fixed inset-0 overflow-hidden">
+          <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-slime-magenta/8 blur-3xl" />
+          <div className="absolute -bottom-32 -left-32 w-96 h-96 rounded-full bg-slime-violet/15 blur-3xl" />
+          <div className="absolute top-1/3 right-1/4 w-48 h-48 rounded-full bg-slime-cyan/8 blur-2xl" />
+        </div>
+
+        <div className="relative w-full max-w-sm">
+          {/* Header — branded sparkle icon, same as main signup header */}
+          <div className="mb-8 text-center">
+            <div
+              className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 shadow-glow-cyan"
+              style={{
+                background: "linear-gradient(135deg, #00F0FF, #39FF14)",
+              }}
+            >
+              <svg
+                viewBox="0 0 32 32"
+                width="30"
+                height="30"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M16 3 L17.5 13 L27 16 L17.5 19 L16 29 L14.5 19 L5 16 L14.5 13 Z"
+                  fill="#0A0A0A"
+                  opacity="0.85"
+                />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold text-slime-cyan tracking-tight">
+              Thanks for your interest
+            </h1>
+          </div>
+
+          {/* Block card */}
+          <div
+            className="rounded-3xl backdrop-blur-sm p-6 shadow-2xl space-y-5"
+            style={{
+              background: "rgba(45,10,78,0.3)",
+              border: "1px solid rgba(45,10,78,0.8)",
+              boxShadow:
+                "inset 0 0 30px rgba(45,10,78,0.2), 0 8px 32px rgba(0,0,0,0.6)",
+            }}
+          >
+            <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-4 text-center">
+              <p className="text-sm text-red-200/90 leading-relaxed">
+                You&apos;ll need to be at least 13 to create a SlimeLog account.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                // Navigate home — no sign-out needed, user hasn't signed up yet.
+                // window.location.href ensures a fresh page load, fully
+                // discarding form state.
+                window.location.href = "/";
+              }}
+              className="w-full rounded-2xl px-4 py-3.5 text-sm font-bold"
+              style={{
+                background: "rgba(45,10,78,0.5)",
+                border: "1px solid rgba(45,10,78,0.9)",
+                color: "#00F0FF",
+              }}
+            >
+              Return to home
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ── Signup form ───────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slime-bg flex flex-col items-center justify-center px-5 py-12">
@@ -336,7 +415,9 @@ export default function SignupPage() {
               />
             </div>
 
-            {/* [Change 7] Date of birth field — new, above submit */}
+            {/* [Change 7] Date of birth field.
+                [Fix C] Inline under-13 error removed — the block-screen branch
+                above takes over before this message could be seen. */}
             <div>
               <label
                 htmlFor="dob"
@@ -359,11 +440,6 @@ export default function SignupPage() {
                 className="w-full rounded-xl bg-slime-surface border border-slime-border px-4 py-3 text-sm text-slime-text placeholder-slime-muted focus:border-slime-cyan/60 focus:outline-none focus:ring-1 focus:ring-slime-cyan/40 transition"
                 style={{ colorScheme: "dark" }}
               />
-              {isUnder13 && dob && (
-                <p className="mt-1.5 text-xs text-red-400">
-                  You must be at least 13 years old to use SlimeLog.
-                </p>
-              )}
             </div>
 
             {/* [Change 8] Parental consent — only shown for teens 13–17 */}
@@ -394,6 +470,8 @@ export default function SignupPage() {
               </div>
             )}
 
+            {/* [Fix C] isUnder13 retained in disabled condition as
+                defense-in-depth — block screen takes over before this point. */}
             <button
               type="submit"
               disabled={isPending || isUnder13 || (isTeen && !parentalConsent)}
