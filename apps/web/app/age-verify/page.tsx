@@ -1,7 +1,7 @@
 // apps/web/app/age-verify/page.tsx
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import FloatingPills from "@/components/FloatingPills";
@@ -22,23 +22,92 @@ function calculateAge(dob: string): number {
   return age;
 }
 
+// [Fix #47 - Change A] Static month options — 3-letter labels, 01-12 values.
+// Declared outside component so they're not recreated on every render.
+const MONTH_OPTIONS: { value: string; label: string }[] = [
+  { value: "01", label: "Jan" },
+  { value: "02", label: "Feb" },
+  { value: "03", label: "Mar" },
+  { value: "04", label: "Apr" },
+  { value: "05", label: "May" },
+  { value: "06", label: "Jun" },
+  { value: "07", label: "Jul" },
+  { value: "08", label: "Aug" },
+  { value: "09", label: "Sep" },
+  { value: "10", label: "Oct" },
+  { value: "11", label: "Nov" },
+  { value: "12", label: "Dec" },
+];
+
+// [Fix #47 - Change B] Helper: days in a given month/year. Passing day 0 of
+// the next month returns the last day of the current month — correctly handles
+// leap years for February.
+function daysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
+// [Fix #47 - Change C] Helper: zero-pad a 1-2 digit number for YYYY-MM-DD.
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : String(n);
+}
+
 export default function AgeVerifyPage() {
   const router = useRouter();
-  const [dob, setDob] = useState("");
+
+  // [Fix #47 - Change D] Replace single `dob` state with three split states.
+  // The composed YYYY-MM-DD string is derived via useMemo below.
+  const [dobMonth, setDobMonth] = useState<string>("");
+  const [dobDay, setDobDay] = useState<string>("");
+  const [dobYear, setDobYear] = useState<string>("");
+
   const [parentalConsent, setParentalConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  // Derived age — computed live as user types
+  // [Fix #47 - Change E] Build year options: current year down to (current - 120).
+  // Descending order so recent years appear first — most users are closest to
+  // the top of the list.
+  const currentYear = new Date().getFullYear();
+  const yearOptions = useMemo(() => {
+    const years: number[] = [];
+    for (let y = currentYear; y >= currentYear - 120; y--) {
+      years.push(y);
+    }
+    return years;
+  }, [currentYear]);
+
+  // [Fix #47 - Change F] Dynamic day options based on selected month + year.
+  // When month/year aren't both set yet, fall back to 31 to keep the list
+  // stable. Once both are known, we trim invalid days (e.g. Feb 30).
+  const maxDay = useMemo(() => {
+    if (!dobMonth || !dobYear) return 31;
+    return daysInMonth(parseInt(dobYear, 10), parseInt(dobMonth, 10));
+  }, [dobMonth, dobYear]);
+
+  const dayOptions = useMemo(() => {
+    const days: string[] = [];
+    for (let d = 1; d <= maxDay; d++) {
+      days.push(pad2(d));
+    }
+    return days;
+  }, [maxDay]);
+
+  // [Fix #47 - Change G] Compose YYYY-MM-DD only when all three parts are set.
+  // If the user previously selected day 31 then switches to February, the day
+  // will now exceed maxDay — we treat the dob as incomplete until they pick a
+  // valid day.
+  const dob = useMemo(() => {
+    if (!dobMonth || !dobDay || !dobYear) return "";
+    const dayNum = parseInt(dobDay, 10);
+    if (dayNum > maxDay) return "";
+    return `${dobYear}-${dobMonth}-${dobDay}`;
+  }, [dobMonth, dobDay, dobYear, maxDay]);
+
+  // Derived age — computed live as user types (preserved from original)
   const age = dob ? calculateAge(dob) : null;
   const isUnder13 = age !== null && age < 13;
   const isTeen = age !== null && age >= 13 && age < 18;
   const isAdult = age !== null && age >= 18;
-
-  // Max date = today (can't be born in the future)
-  const today = new Date().toISOString().split("T")[0];
-  // Min date = 120 years ago (sanity bound)
-  const minDate = `${new Date().getFullYear() - 120}-01-01`;
 
   // [Fix B - Change 1] Before signing out, call the reject route to delete
   // the Supabase auth user (cascades to profile row). COPPA best practice:
@@ -65,7 +134,7 @@ export default function AgeVerifyPage() {
     setError(null);
 
     if (!dob) {
-      setError("Please enter your date of birth.");
+      setError("Please enter your full date of birth.");
       return;
     }
     if (isUnder13) {
@@ -96,6 +165,12 @@ export default function AgeVerifyPage() {
       router.push("/");
     });
   }
+
+  // [Fix #47 - Change H] Shared select classes — matches existing input styling
+  // (bg-slime-surface, border-slime-border, rounded-xl, px-4 py-3). colorScheme
+  // dark ensures native OS dropdowns render in dark mode on iOS/Android.
+  const selectClasses =
+    "w-full rounded-xl bg-slime-surface border border-slime-border px-4 py-3 text-sm text-slime-text focus:border-slime-accent/60 focus:outline-none focus:ring-1 focus:ring-slime-accent/40 transition appearance-none";
 
   return (
     <div
@@ -211,29 +286,110 @@ export default function AgeVerifyPage() {
                 </div>
               )}
 
-              {/* Date of birth input */}
+              {/* [Fix #47 - Change I] Three split DOB dropdowns.
+                  Replaces the single <input type="date"> which forced mobile
+                  users to swipe back month-by-month. Native <select> renders
+                  as a fast wheel picker on iOS and a searchable list on
+                  Android. Column widths tuned so Month is narrowest, Year
+                  widest, Day in between. */}
               <div>
-                <label
-                  htmlFor="dob"
-                  className="block text-xs font-semibold text-slime-muted uppercase tracking-widest mb-2"
-                >
+                <span className="block text-xs font-semibold text-slime-muted uppercase tracking-widest mb-2">
                   Date of Birth
-                </label>
-                <input
-                  id="dob"
-                  type="date"
-                  required
-                  min={minDate}
-                  max={today}
-                  value={dob}
-                  onChange={(e) => {
-                    setDob(e.target.value);
-                    setError(null);
-                    setParentalConsent(false);
-                  }}
-                  className="w-full rounded-xl bg-slime-surface border border-slime-border px-4 py-3 text-sm text-slime-text focus:border-slime-accent/60 focus:outline-none focus:ring-1 focus:ring-slime-accent/40 transition"
-                  style={{ colorScheme: "dark" }}
-                />
+                </span>
+                <div className="flex gap-3">
+                  {/* Month — narrowest column */}
+                  <div className="flex-[3] min-w-0">
+                    <label
+                      htmlFor="dob-month"
+                      className="block text-[10px] font-medium text-slime-muted mb-1.5"
+                    >
+                      Month
+                    </label>
+                    <select
+                      id="dob-month"
+                      required
+                      value={dobMonth}
+                      onChange={(e) => {
+                        setDobMonth(e.target.value);
+                        setError(null);
+                        setParentalConsent(false);
+                      }}
+                      className={selectClasses}
+                      style={{ colorScheme: "dark" }}
+                    >
+                      <option value="" disabled>
+                        Month
+                      </option>
+                      {MONTH_OPTIONS.map((m) => (
+                        <option key={m.value} value={m.value}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Day — middle width */}
+                  <div className="flex-[2] min-w-0">
+                    <label
+                      htmlFor="dob-day"
+                      className="block text-[10px] font-medium text-slime-muted mb-1.5"
+                    >
+                      Day
+                    </label>
+                    <select
+                      id="dob-day"
+                      required
+                      value={dobDay}
+                      onChange={(e) => {
+                        setDobDay(e.target.value);
+                        setError(null);
+                        setParentalConsent(false);
+                      }}
+                      className={selectClasses}
+                      style={{ colorScheme: "dark" }}
+                    >
+                      <option value="" disabled>
+                        Day
+                      </option>
+                      {dayOptions.map((d) => (
+                        <option key={d} value={d}>
+                          {d}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Year — widest column */}
+                  <div className="flex-[3] min-w-0">
+                    <label
+                      htmlFor="dob-year"
+                      className="block text-[10px] font-medium text-slime-muted mb-1.5"
+                    >
+                      Year
+                    </label>
+                    <select
+                      id="dob-year"
+                      required
+                      value={dobYear}
+                      onChange={(e) => {
+                        setDobYear(e.target.value);
+                        setError(null);
+                        setParentalConsent(false);
+                      }}
+                      className={selectClasses}
+                      style={{ colorScheme: "dark" }}
+                    >
+                      <option value="" disabled>
+                        Year
+                      </option>
+                      {yearOptions.map((y) => (
+                        <option key={y} value={String(y)}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
 
               {/* Parental consent — only shown for teens 13–17 */}
