@@ -129,7 +129,7 @@ export default async function WaitlistAdminPage() {
   // ── Data fetch (service role — bypasses RLS) ──────────────────────────────
   const supabase = createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
 
   const { data: waitlist } = await supabase
