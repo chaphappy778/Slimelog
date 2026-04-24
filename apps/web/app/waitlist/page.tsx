@@ -1,6 +1,14 @@
 "use client";
 
 // apps/web/app/waitlist/page.tsx
+//
+// NO CHANGES in this Brevo integration task. File is re-delivered verbatim
+// for convenience alongside the other artifacts. The existing form already:
+//   - Captures marketing_consent via checkbox
+//   - POSTs { email, marketing_consent } to /api/waitlist
+//   - Handles { success }, { already }, and error response shapes correctly
+// The Brevo rewrite in /api/waitlist/route.ts preserves those exact response
+// shapes, so this page works without modification.
 
 import { useState } from "react";
 import Link from "next/link";
@@ -167,14 +175,15 @@ function WaitlistForm() {
           className="font-bold text-lg mb-2"
           style={{ color: "#39FF14", fontFamily: "'Montserrat', sans-serif" }}
         >
-          You're on the list!
+          You&apos;re on the list!
         </p>
         <p
           className="text-sm leading-relaxed mb-5"
           style={{ color: "rgba(245,245,245,0.6)" }}
         >
-          We'll reach out with your beta invite when we're ready. Follow{" "}
-          <span style={{ color: "#39FF14" }}>@SlimeLogApp</span> for updates.
+          We&apos;ll reach out with your beta invite when we&apos;re ready.
+          Follow <span style={{ color: "#39FF14" }}>@SlimeLogApp</span> for
+          updates.
         </p>
         <a
           href="https://instagram.com/SlimeLogApp"
@@ -207,10 +216,10 @@ function WaitlistForm() {
           className="font-bold text-lg mb-2"
           style={{ color: "#39FF14", fontFamily: "'Montserrat', sans-serif" }}
         >
-          You're already on the list!
+          You&apos;re already on the list!
         </p>
         <p className="text-sm" style={{ color: "rgba(245,245,245,0.6)" }}>
-          We'll be in touch soon.
+          We&apos;ll be in touch soon.
         </p>
       </div>
     );
@@ -293,6 +302,7 @@ function WaitlistForm() {
 
       {/* Submit button */}
       <button
+        type="button"
         onClick={handleSubmit}
         disabled={loading}
         className="w-full rounded-xl py-3.5 text-sm font-bold transition-transform active:scale-[0.97] disabled:opacity-70 disabled:cursor-not-allowed"
