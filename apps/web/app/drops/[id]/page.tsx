@@ -1,470 +1,534 @@
 // apps/web/app/drops/[id]/page.tsx
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import Image from "next/image";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import Link from "next/link";
-import { notFound } from "next/navigation";
 import PageWrapper from "@/components/PageWrapper";
-import FloatingPills from "@/components/FloatingPills";
+import PageHeader from "@/components/PageHeader";
+// [Boyscout #35] Import shared label map; removed local copy that drifted
+// from @/lib/types.
+import { SLIME_TYPE_LABELS } from "@/lib/types";
 
-type DropDetail = {
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface Drop {
   id: string;
-  name: string | null;
+  brand_id: string;
+  drop_name: string;
   description: string | null;
-  drop_at: string | null;
+  drop_date: string;
   status: string | null;
-  shop_url: string | null;
   cover_image_url: string | null;
-  brand_id: string | null;
-  brand_name: string | null;
-  brand_slug: string | null;
+  drop_url: string | null;
+  created_at: string;
+}
+
+interface DropBrand {
+  id: string;
+  slug: string;
+  name: string;
   logo_url: string | null;
-  follower_count: number | null;
-};
+  is_verified: boolean | null;
+}
 
-type DropSlime = {
-  drop_id: string;
-  slime_id: string | null;
-  slimes: {
-    id: string;
-    name: string | null;
-    slime_type: string | null;
-    description: string | null;
-    scent: string | null;
-    retail_price: number | null;
-    colors: string[] | null;
-    image_url: string | null;
-  } | null;
-};
+interface DropSlime {
+  id: string;
+  slime_name: string;
+  slime_type: string | null;
+  description: string | null;
+  image_url: string | null;
+  price: number | null;
+  display_order: number;
+}
 
-const DROP_STATUS = {
-  announced: {
-    label: "Announced",
-    bg: "bg-slime-purple",
-    text: "text-white",
-    dot: "bg-slime-magenta",
-  },
-  live: {
-    label: "Live Now",
-    bg: "bg-emerald-900/40",
-    text: "text-emerald-300",
-    dot: "bg-emerald-400",
-  },
-  sold_out: {
-    label: "Sold Out",
-    bg: "bg-slime-surface",
-    text: "text-slime-muted",
-    dot: "bg-slime-muted",
-  },
-  restocked: {
-    label: "Restocked",
-    bg: "bg-sky-900/40",
-    text: "text-sky-300",
-    dot: "bg-sky-400",
-  },
-  cancelled: {
-    label: "Cancelled",
-    bg: "bg-red-900/40",
-    text: "text-red-400",
-    dot: "bg-red-400",
-  },
-} as const;
+// ─── Server Supabase ──────────────────────────────────────────────────────────
 
-const SLIME_TYPE_LABELS: Record<string, string> = {
-  butter: "Butter",
-  clear: "Clear",
-  cloud: "Cloud",
-  icee: "Icee",
-  fluffy: "Fluffy",
-  floam: "Floam",
-  snow_fizz: "Snow Fizz",
-  thick_and_glossy: "Thick & Glossy",
-  jelly: "Jelly",
-  beaded: "Beaded",
-  clay: "Clay",
-  cloud_cream: "Cloud Cream",
-  magnetic: "Magnetic",
-  thermochromic: "Thermochromic",
-  avalanche: "Avalanche",
-  slay: "Slay",
-};
+async function getSupabase() {
+  const cookieStore = await cookies();
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { get: (name) => cookieStore.get(name)?.value } },
+  );
+}
 
-type StatusConfig = { label: string; bg: string; text: string; dot: string };
+async function fetchDropAndBrand(
+  id: string,
+): Promise<{ drop: Drop; brand: DropBrand } | null> {
+  const supabase = await getSupabase();
+  const { data: dropRow } = await supabase
+    .from("drops")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
 
-function getStatusConfig(status: string | null): StatusConfig {
-  if (status && status in DROP_STATUS)
-    return DROP_STATUS[status as keyof typeof DROP_STATUS];
+  if (!dropRow) return null;
+  const drop = dropRow as Drop;
+
+  const { data: brandRow } = await supabase
+    .from("brands")
+    .select("id, slug, name, logo_url, is_verified")
+    .eq("id", drop.brand_id)
+    .maybeSingle();
+
+  if (!brandRow) return null;
+  return { drop, brand: brandRow as DropBrand };
+}
+
+// ─── Metadata (#35) ───────────────────────────────────────────────────────────
+// [Change 1 — #35] Added static generateMetadata. Dynamic OG image deferred
+// as fast-follow; static metadata referencing /og-default.png is fine.
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const result = await fetchDropAndBrand(id);
+
+  if (!result) {
+    return {
+      title: "Drop not found — SlimeLog",
+      description: "This drop doesn't exist on SlimeLog.",
+    };
+  }
+
+  const { drop, brand } = result;
+  const title = `${drop.drop_name} drop from ${brand.name} — SlimeLog`;
+  const description =
+    drop.description?.trim() ||
+    `${drop.drop_name} — an upcoming slime drop from ${brand.name}. See details on SlimeLog.`;
+
+  const url = `https://slimelog.com/drops/${drop.id}`;
+
   return {
-    label: status ?? "Unknown",
-    bg: "bg-slime-surface",
-    text: "text-slime-muted",
-    dot: "bg-slime-muted",
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      type: "article",
+      url,
+      title,
+      description,
+      siteName: "SlimeLog",
+      images: [{ url: drop.cover_image_url ?? "/og-default.png" }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [drop.cover_image_url ?? "/og-default.png"],
+    },
   };
 }
 
-function formatDropDate(dateStr: string | null): string {
-  if (!dateStr) return "Date TBA";
-  const d = new Date(dateStr);
-  const now = new Date();
-  const diffDays = Math.ceil(
-    (d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-  );
-  const formatted = d.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatDropDate(iso: string): { date: string; time: string } {
+  const d = new Date(iso);
+  const date = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
     day: "numeric",
     year: "numeric",
+  }).format(d);
+  const time = new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
+    hour12: true,
     timeZoneName: "short",
-  });
-  if (diffDays === 0) return `Today · ${formatted}`;
-  if (diffDays === 1) return `Tomorrow · ${formatted}`;
-  if (diffDays > 1 && diffDays <= 7)
-    return `In ${diffDays} days · ${formatted}`;
-  return formatted;
+  }).format(d);
+  return { date, time };
 }
 
-function formatPrice(price: number | null): string {
-  if (price === null || price === undefined) return "";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(price);
+function getCountdown(iso: string): {
+  label: string;
+  isLive: boolean;
+  isPast: boolean;
+} {
+  const target = new Date(iso).getTime();
+  const now = Date.now();
+  const diff = target - now;
+
+  if (diff <= 0) {
+    const sincePast = Math.abs(diff);
+    if (sincePast < 1000 * 60 * 60 * 6) {
+      return { label: "LIVE NOW", isLive: true, isPast: false };
+    }
+    return { label: "Past drop", isLive: false, isPast: true };
+  }
+
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+  if (days > 0)
+    return { label: `${days}d ${hours}h`, isLive: false, isPast: false };
+  if (hours > 0)
+    return { label: `${hours}h ${mins}m`, isLive: false, isPast: false };
+  return { label: `${mins}m`, isLive: false, isPast: false };
 }
 
-function buildLogUrl(
-  slime: DropSlime,
-  dropName: string | null,
-  brandName: string | null,
-): string {
-  const s = slime.slimes;
-  const params = new URLSearchParams();
-  if (s?.name) params.set("slime_name", s.name);
-  if (brandName) params.set("brand", brandName);
-  if (dropName) params.set("collection", dropName);
-  if (s?.slime_type) params.set("type", s.slime_type);
-  return `/log?${params.toString()}`;
-}
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
-function StatusBadge({ status }: { status: string | null }) {
-  const cfg = getStatusConfig(status);
-  const isLive = status === "live";
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full ${cfg.bg} ${cfg.text}`}
-    >
-      <span
-        className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${isLive ? "animate-pulse" : ""}`}
-      />
-      {cfg.label}
-    </span>
-  );
-}
-
-function SlimeCard({
-  slime,
-  dropName,
-  brandName,
-}: {
-  slime: DropSlime;
-  dropName: string | null;
-  brandName: string | null;
-}) {
-  const s = slime.slimes;
-  const logUrl = buildLogUrl(slime, dropName, brandName);
-  const typeLabel = s?.slime_type
-    ? (SLIME_TYPE_LABELS[s.slime_type] ?? s.slime_type)
-    : null;
-
-  return (
-    <article
-      className="rounded-2xl overflow-hidden"
-      style={{
-        background: "rgba(45,10,78,0.25)",
-        border: "1px solid rgba(45,10,78,0.7)",
-      }}
-    >
-      {s?.image_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={s.image_url}
-          alt={s?.name ?? "Slime"}
-          className="w-full h-40 object-cover"
-        />
-      ) : (
-        <div
-          className="w-full h-32 flex items-center justify-center text-4xl"
-          style={{ background: "linear-gradient(135deg, #2D0A4E, #1A1A1A)" }}
-          aria-hidden="true"
-        >
-          🫧
-        </div>
-      )}
-
-      <div className="p-4">
-        {typeLabel && (
-          <div className="mb-2">
-            <span className="bg-slime-purple text-slime-cyan text-xs font-bold px-2 py-0.5 rounded-full">
-              {typeLabel}
-            </span>
-          </div>
-        )}
-        <div className="flex items-start justify-between gap-2 mb-1.5">
-          <h3 className="text-sm font-bold text-slime-text leading-snug">
-            {s?.name ?? "Unnamed Slime"}
-          </h3>
-          {s?.retail_price != null && (
-            <span className="text-sm font-bold text-slime-accent shrink-0">
-              {formatPrice(s.retail_price)}
-            </span>
-          )}
-        </div>
-        {s?.description && (
-          <p className="text-xs text-slime-muted leading-relaxed mb-3 line-clamp-2">
-            {s.description}
-          </p>
-        )}
-        <Link
-          href={logUrl}
-          className="flex items-center justify-center gap-1.5 w-full text-xs font-bold py-2 rounded-xl transition-opacity active:opacity-70 text-slime-bg"
-          style={{ background: "linear-gradient(90deg, #39FF14, #00F0FF)" }}
-        >
-          <span aria-hidden="true">＋</span>
-          Log this slime
-        </Link>
-      </div>
-    </article>
-  );
-}
-
-export default async function DropDetailPage({
+export default async function DropPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { get: (name) => cookieStore.get(name)?.value } },
-  );
+  const result = await fetchDropAndBrand(id);
 
-  const [dropResult, slimesResult] = await Promise.all([
-    supabase
-      .from("upcoming_drops")
-      .select(
-        "id, name, description, drop_at, status, shop_url, cover_image_url, brand_id, brand_name, brand_slug, logo_url, follower_count",
-      )
-      .eq("id", id)
-      .single(),
-    supabase
-      .from("drop_slimes")
-      .select(
-        "drop_id, slime_id, slimes!drop_slimes_slime_id_fkey (id, name, slime_type, description, scent, retail_price, colors, image_url)",
-      )
-      .eq("drop_id", id),
-  ]);
-
-  if (dropResult.error || !dropResult.data) {
-    const { data: rawDrop, error: rawError } = await supabase
-      .from("drops")
-      .select(
-        "id, name, description, drop_at, status, shop_url, cover_image_url, brand_id",
-      )
-      .eq("id", id)
-      .single();
-    if (rawError || !rawDrop) notFound();
-    const { data: brand } = await supabase
-      .from("brands")
-      .select("id, slug, name:owner_name, brand_name:slug")
-      .eq("id", rawDrop.brand_id)
-      .single();
-    const fallbackDrop: DropDetail = {
-      ...rawDrop,
-      brand_name: brand
-        ? ((brand as unknown as { name: string }).name ?? rawDrop.brand_id)
-        : rawDrop.brand_id,
-      brand_slug: brand ? (brand as unknown as { slug: string }).slug : null,
-      logo_url: null,
-      follower_count: null,
-    };
-    return (
-      <DropView
-        drop={fallbackDrop}
-        slimes={(slimesResult.data ?? []) as unknown as DropSlime[]}
-      />
-    );
+  if (!result) {
+    notFound();
   }
 
-  return (
-    <DropView
-      drop={dropResult.data}
-      slimes={(slimesResult.data ?? []) as unknown as DropSlime[]}
-    />
-  );
-}
+  const { drop, brand } = result;
+  const supabase = await getSupabase();
 
-function DropView({ drop, slimes }: { drop: DropDetail; slimes: DropSlime[] }) {
-  const isLive = drop.status === "live";
+  // Fetch slimes in this drop
+  const { data: slimeRows } = await supabase
+    .from("drop_slimes")
+    .select(
+      "id, slime_name, slime_type, description, image_url, price, display_order",
+    )
+    .eq("drop_id", drop.id)
+    .order("display_order", { ascending: true });
+
+  const slimes = (slimeRows ?? []) as DropSlime[];
+
+  const { date, time } = formatDropDate(drop.drop_date);
+  const countdown = getCountdown(drop.drop_date);
+  const isCancelled = drop.status === "cancelled";
 
   return (
-    <PageWrapper dots glow="cyan">
-      {/* Hero cover */}
-      {drop.cover_image_url ? (
-        <div className="relative w-full h-52 overflow-hidden">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={drop.cover_image_url}
-            alt={drop.name ?? "Drop cover"}
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-slime-bg/90 to-transparent" />
-        </div>
-      ) : (
+    <PageWrapper dots>
+      <PageHeader />
+
+      <main className="pt-14 pb-24 max-w-2xl mx-auto">
+        {/* Cover image */}
         <div
-          className="relative w-full h-44 flex items-center justify-center text-6xl overflow-hidden"
-          aria-hidden="true"
+          className="relative w-full h-56 sm:h-72"
           style={{
-            background: "linear-gradient(135deg, #2D0A4E, #100020, #0A0A0A)",
+            background: drop.cover_image_url
+              ? undefined
+              : "linear-gradient(135deg, rgba(57,255,20,0.15), rgba(45,10,78,0.5))",
           }}
         >
-          <FloatingPills area="hero" density="medium" zIndex={0} />
-          <span className="relative z-10 drop-shadow-lg">
-            {isLive ? "🔴" : "🫧"}
-          </span>
-        </div>
-      )}
-
-      <div className="px-4 pt-4 pb-1">
-        <Link
-          href="/discover"
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-slime-muted hover:text-slime-accent transition-colors"
-        >
-          <span aria-hidden="true">←</span> Discover
-        </Link>
-      </div>
-
-      <header className="px-4 pt-2 pb-5">
-        <div className="flex items-center gap-2 mb-3 flex-wrap">
-          <StatusBadge status={drop.status} />
-          {drop.brand_slug ? (
-            <Link
-              href={`/brands/${drop.brand_slug}`}
-              className="text-xs font-semibold text-slime-magenta hover:text-slime-accent transition-colors"
-            >
-              {drop.brand_name ?? "Unknown Brand"}
-            </Link>
-          ) : (
-            <span className="text-xs font-semibold text-slime-magenta">
-              {drop.brand_name ?? "Unknown Brand"}
-            </span>
+          {drop.cover_image_url && (
+            <Image
+              src={drop.cover_image_url}
+              alt={drop.drop_name}
+              fill
+              sizes="100vw"
+              priority
+              className="object-cover"
+            />
           )}
-        </div>
-
-        <h1 className="text-3xl font-black tracking-tight mb-2 leading-tight text-slime-cyan">
-          {drop.name ?? "Unnamed Drop"}
-        </h1>
-
-        {drop.description && (
-          <p className="text-sm text-slime-muted leading-relaxed mb-3">
-            {drop.description}
-          </p>
-        )}
-
-        <p className="text-xs text-slime-muted font-medium mb-4">
-          <span aria-hidden="true">🗓 </span>
-          {formatDropDate(drop.drop_at)}
-        </p>
-
-        {drop.shop_url && drop.status !== "cancelled" && (
-          <a
-            href={drop.shop_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl text-sm font-bold text-slime-bg shadow-glow-green transition-opacity active:opacity-80"
-            style={{ background: "linear-gradient(90deg, #39FF14, #00F0FF)" }}
-          >
-            {isLive ? "🛒 Shop Now" : "🔔 Visit Shop"}
-            <span aria-hidden="true" className="opacity-70 text-xs">
-              ↗
-            </span>
-          </a>
-        )}
-
-        {drop.status === "sold_out" && (
-          <div className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl text-sm font-semibold text-slime-muted bg-slime-surface border border-slime-border">
-            Sold Out
-          </div>
-        )}
-      </header>
-
-      <div
-        className="mx-4 mb-5 h-px"
-        style={{
-          background:
-            "linear-gradient(90deg, transparent, rgba(45,10,78,0.8), transparent)",
-        }}
-      />
-
-      <section className="px-4 pb-28">
-        <div className="flex items-center gap-3 mb-4">
           <div
-            className="w-9 h-9 rounded-2xl flex items-center justify-center text-lg shrink-0"
+            className="absolute inset-0 pointer-events-none"
             style={{
-              background: "rgba(45,10,78,0.4)",
-              border: "1px solid rgba(45,10,78,0.7)",
+              background:
+                "linear-gradient(to bottom, rgba(0,0,0,0) 50%, rgba(10,10,10,0.85) 100%)",
             }}
-            aria-hidden="true"
-          >
-            🫧
-          </div>
-          <div>
-            <p className="section-label">Slimes in This Drop</p>
-            <p className="text-xs text-slime-muted">
-              {slimes.length} {slimes.length === 1 ? "slime" : "slimes"}{" "}
-              included
-            </p>
+          />
+
+          {/* Status badge */}
+          <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
+            {countdown.isLive && (
+              <span
+                className="text-[11px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full flex items-center gap-1.5"
+                style={{
+                  background: "rgba(255,0,229,0.95)",
+                  color: "#0A0A0A",
+                  fontFamily: "Montserrat, sans-serif",
+                }}
+              >
+                {/* [Boyscout #35] Replaced 🔴 emoji with pulsing dot SVG */}
+                <span
+                  className="w-2 h-2 rounded-full"
+                  style={{
+                    background: "#0A0A0A",
+                    animation: "pulse 1.2s ease-in-out infinite",
+                  }}
+                  aria-hidden="true"
+                />
+                LIVE
+              </span>
+            )}
+            {isCancelled && (
+              <span
+                className="text-[11px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full"
+                style={{
+                  background: "rgba(231,76,60,0.95)",
+                  color: "#fff",
+                  fontFamily: "Montserrat, sans-serif",
+                }}
+              >
+                Cancelled
+              </span>
+            )}
           </div>
         </div>
 
-        {slimes.length === 0 ? (
-          <div className="text-center py-10 text-slime-muted text-sm">
-            Slime details coming soon — check back closer to the drop!
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4">
-            {slimes.map((slime) => (
-              <SlimeCard
-                key={`${slime.drop_id}-${slime.slime_id}`}
-                slime={slime}
-                dropName={drop.name}
-                brandName={drop.brand_name}
-              />
-            ))}
-          </div>
-        )}
+        {/* Drop header */}
+        <section className="px-4 -mt-12 relative z-10">
+          <Link
+            href={`/brands/${brand.slug}`}
+            className="inline-flex items-center gap-2 text-sm text-slime-cyan hover:text-slime-accent transition-colors mb-3"
+          >
+            <div className="relative w-7 h-7 rounded-full overflow-hidden border border-slime-border">
+              {brand.logo_url ? (
+                <Image
+                  src={brand.logo_url}
+                  alt={brand.name}
+                  fill
+                  sizes="28px"
+                  className="object-cover"
+                />
+              ) : (
+                <div
+                  className="w-full h-full flex items-center justify-center text-xs font-bold"
+                  style={{
+                    background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                    color: "#0A0A0A",
+                  }}
+                  aria-hidden="true"
+                >
+                  {brand.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
+            <span className="font-semibold">{brand.name}</span>
+            {brand.is_verified && (
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="#00F0FF"
+                aria-label="Verified"
+              >
+                <path d="M12 0l3.09 5.26L21 6l-4.5 4.39L17.18 17 12 14.27 6.82 17l.68-6.61L3 6l5.91-.74L12 0z" />
+              </svg>
+            )}
+          </Link>
 
+          <h1
+            className="text-3xl font-black leading-tight"
+            style={{
+              color: "#fff",
+              fontFamily: "Montserrat, Inter, sans-serif",
+            }}
+          >
+            {drop.drop_name}
+          </h1>
+
+          {drop.description && (
+            <p className="mt-3 text-sm text-slime-text/80 leading-relaxed">
+              {drop.description}
+            </p>
+          )}
+
+          {/* Drop time block */}
+          <div
+            className="mt-4 p-4 rounded-xl border flex items-center gap-4"
+            style={{
+              background: "rgba(45,10,78,0.3)",
+              borderColor: "rgba(45,10,78,0.6)",
+            }}
+          >
+            {/* [Boyscout #35] Replaced 🗓 emoji with calendar SVG */}
+            <div
+              className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+              style={{
+                background: "rgba(57,255,20,0.15)",
+                border: "1px solid rgba(57,255,20,0.3)",
+              }}
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#39FF14"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-slime-text">{date}</p>
+              <p className="text-xs text-slime-muted">{time}</p>
+            </div>
+            {!isCancelled && !countdown.isPast && !countdown.isLive && (
+              <div
+                className="text-right shrink-0 px-3 py-1.5 rounded-lg"
+                style={{
+                  background: "rgba(0,240,255,0.1)",
+                  border: "1px solid rgba(0,240,255,0.3)",
+                }}
+              >
+                <p className="text-[10px] uppercase tracking-wider text-slime-muted font-semibold">
+                  Drops in
+                </p>
+                <p
+                  className="text-base font-black"
+                  style={{
+                    color: "#00F0FF",
+                    fontFamily: "Montserrat, sans-serif",
+                  }}
+                >
+                  {countdown.label}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Drop URL CTA */}
+          {drop.drop_url && !isCancelled && (
+            <a
+              href={drop.drop_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 w-full text-center py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+              style={{
+                background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                color: "#0A0A0A",
+                fontFamily: "Montserrat, Inter, sans-serif",
+              }}
+            >
+              {/* [Boyscout #35] Replaced 🛒 emoji with shopping bag SVG */}
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <path d="M16 10a4 4 0 0 1-8 0" />
+              </svg>
+              Shop the drop
+            </a>
+          )}
+        </section>
+
+        {/* Slimes in this drop */}
         {slimes.length > 0 && (
-          <div
-            className="mt-8 rounded-2xl p-4 text-center"
-            style={{
-              background: "rgba(45,10,78,0.2)",
-              border: "1px solid rgba(45,10,78,0.5)",
-            }}
-          >
-            <p className="text-sm font-semibold text-slime-text mb-1">
-              Already tried {slimes.length > 1 ? "these slimes" : "this slime"}?
-            </p>
-            <p className="text-xs text-slime-muted">
-              Tap "Log this slime" on any slime above to add it to your
-              collection.
-            </p>
-          </div>
+          <section className="px-4 mt-8">
+            <h2
+              className="text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2"
+              style={{ color: "#39FF14", fontFamily: "Montserrat, sans-serif" }}
+            >
+              {/* [Boyscout #35] Replaced 🫧 emoji with droplet SVG */}
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 2 C8 7 5 11 5 15 a7 7 0 0 0 14 0 C19 11 16 7 12 2 z" />
+              </svg>
+              Drop Lineup ({slimes.length})
+            </h2>
+            <div className="flex flex-col gap-3">
+              {slimes.map((slime) => {
+                const typeLabel = slime.slime_type
+                  ? (SLIME_TYPE_LABELS[
+                      slime.slime_type as keyof typeof SLIME_TYPE_LABELS
+                    ] ?? slime.slime_type.replace(/_/g, " "))
+                  : null;
+                return (
+                  <article
+                    key={slime.id}
+                    className="rounded-xl overflow-hidden border bg-slime-card flex flex-row gap-3 p-3"
+                    style={{ borderColor: "rgba(45,10,78,0.5)" }}
+                  >
+                    <div
+                      className="relative w-20 h-20 rounded-lg overflow-hidden shrink-0"
+                      style={{ background: "rgba(45,10,78,0.4)" }}
+                    >
+                      {slime.image_url ? (
+                        <Image
+                          src={slime.image_url}
+                          alt={slime.slime_name}
+                          fill
+                          sizes="80px"
+                          className="object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <svg
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="rgba(255,255,255,0.3)"
+                            strokeWidth="1.5"
+                            aria-hidden="true"
+                          >
+                            <path d="M12 2 L14 9 L21 12 L14 15 L12 22 L10 15 L3 12 L10 9 Z" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
+                      <p className="text-sm font-bold text-slime-text">
+                        {slime.slime_name}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {typeLabel && (
+                          <span
+                            className="text-[10px] uppercase tracking-wider font-semibold"
+                            style={{ color: "#00F0FF" }}
+                          >
+                            {typeLabel}
+                          </span>
+                        )}
+                        {typeof slime.price === "number" && (
+                          <span
+                            className="text-xs font-bold"
+                            style={{ color: "#39FF14" }}
+                          >
+                            {new Intl.NumberFormat("en-US", {
+                              style: "currency",
+                              currency: "USD",
+                            }).format(slime.price)}
+                          </span>
+                        )}
+                      </div>
+                      {slime.description && (
+                        <p className="text-xs text-slime-muted line-clamp-2">
+                          {slime.description}
+                        </p>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
         )}
-      </section>
+      </main>
     </PageWrapper>
   );
 }

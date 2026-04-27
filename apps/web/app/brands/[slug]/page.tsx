@@ -1,614 +1,677 @@
 // apps/web/app/brands/[slug]/page.tsx
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-import FollowBrandButton from "@/components/FollowBrandButton";
+import Image from "next/image";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import PageWrapper from "@/components/PageWrapper";
-import FloatingPills from "@/components/FloatingPills";
+import PageHeader from "@/components/PageHeader";
+import FollowBrandButton from "@/components/FollowBrandButton";
+import { SLIME_TYPE_LABELS } from "@/lib/types";
 
-interface PageProps {
-  params: Promise<{ slug: string }>;
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface Brand {
+  id: string;
+  slug: string;
+  name: string;
+  bio: string | null;
+  logo_url: string | null;
+  banner_url: string | null;
+  website_url: string | null;
+  instagram_handle: string | null;
+  tiktok_handle: string | null;
+  shopify_url: string | null;
+  is_verified: boolean | null;
+  follower_count: number | null;
+  created_at: string;
 }
 
-const SLIME_TYPE_COLORS: Record<string, string> = {
-  butter: "bg-yellow-900/40 text-yellow-300",
-  clear: "bg-sky-900/40 text-sky-300",
-  cloud: "bg-slate-800 text-slate-300",
-  icee: "bg-cyan-900/40 text-cyan-300",
-  fluffy: "bg-pink-900/40 text-pink-300",
-  floam: "bg-lime-900/40 text-lime-300",
-  snow_fizz: "bg-blue-900/40 text-blue-300",
-  thick_and_glossy: "bg-fuchsia-900/40 text-fuchsia-300",
-  jelly: "bg-green-900/40 text-green-300",
-  beaded: "bg-orange-900/40 text-orange-300",
-  clay: "bg-amber-900/40 text-amber-300",
-  cloud_cream: "bg-rose-900/40 text-rose-300",
-  magnetic: "bg-zinc-800 text-zinc-300",
-  thermochromic: "bg-fuchsia-900/40 text-fuchsia-300",
-  avalanche: "bg-indigo-900/40 text-indigo-300",
-  slay: "bg-violet-900/40 text-violet-300",
-};
-
-function formatSlimeType(type: string) {
-  return type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+interface BrandSlimeRow {
+  id: string;
+  user_id: string;
+  slime_name: string | null;
+  slime_type: string | null;
+  rating_overall: number | null;
+  image_url: string | null;
+  created_at: string;
+  // [Change 1 — #35] Profile join swapped to profiles_public.
+  profiles_public:
+    | { username: string | null; avatar_url: string | null }
+    | { username: string | null; avatar_url: string | null }[]
+    | null;
 }
 
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+interface UpcomingDrop {
+  id: string;
+  drop_name: string;
+  description: string | null;
+  drop_date: string;
+  status: string | null;
+  cover_image_url: string | null;
 }
 
-function StarRow({ value, label }: { value: number | null; label: string }) {
-  if (value == null) return null;
-  const filled = Math.round(value);
-  return (
-    <div className="flex items-center justify-between py-2 border-b border-slime-border/50 last:border-0">
-      <span className="text-xs text-slime-muted">{label}</span>
-      <div className="flex items-center gap-1">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <svg key={i} viewBox="0 0 10 10" className="w-3.5 h-3.5">
-            <polygon
-              points="5,1 6.2,3.8 9,3.8 7,5.8 7.8,9 5,7.5 2.2,9 3,5.8 1,3.8 3.8,3.8"
-              className={i < filled ? "fill-slime-accent" : "fill-slime-border"}
-            />
-          </svg>
-        ))}
-        <span className="ml-1 text-xs font-bold text-slime-text">
-          {value.toFixed(1)}
-        </span>
-      </div>
-    </div>
+// ─── Server Supabase ──────────────────────────────────────────────────────────
+
+async function getSupabase() {
+  const cookieStore = await cookies();
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { get: (name) => cookieStore.get(name)?.value } },
   );
 }
 
-function StatPill({
-  label,
-  value,
-  unit,
-  icon,
-  valueColor = "text-slime-text",
-}: {
-  label: string;
-  value: string | number | null;
-  unit?: string;
-  icon: string;
-  valueColor?: string;
-}) {
-  return (
-    <div
-      className="flex flex-col items-center rounded-2xl p-3 gap-0.5 min-w-0"
-      style={{
-        background: "rgba(45,10,78,0.3)",
-        border: "1px solid rgba(45,10,78,0.7)",
-      }}
-    >
-      <span className="text-xl leading-none">{icon}</span>
-      {value != null ? (
-        <span
-          className={`text-base font-black mt-1 leading-none ${valueColor}`}
-        >
-          {value}
-          {unit && (
-            <span className="text-xs font-medium text-slime-muted ml-0.5">
-              {unit}
-            </span>
-          )}
-        </span>
-      ) : (
-        <span className="text-xs text-slime-muted mt-1">—</span>
-      )}
-      <span className="text-[10px] text-slime-muted text-center leading-tight mt-0.5">
-        {label}
-      </span>
-    </div>
-  );
-}
-
-export async function generateMetadata({ params }: PageProps) {
-  const { slug } = await params;
-  const supabase = await createClient();
+async function fetchBrand(slug: string): Promise<Brand | null> {
+  const supabase = await getSupabase();
   const { data } = await supabase
     .from("brands")
-    .select("name, bio")
+    .select("*")
     .eq("slug", slug)
-    .single();
-  if (!data) return { title: "Brand — SlimeLog" };
+    .maybeSingle();
+  return (data as Brand | null) ?? null;
+}
+
+// ─── Profile normaliser ───────────────────────────────────────────────────────
+
+function normaliseProfile(
+  raw:
+    | { username: string | null; avatar_url: string | null }
+    | { username: string | null; avatar_url: string | null }[]
+    | null,
+): { username: string | null; avatar_url: string | null } | null {
+  if (!raw) return null;
+  if (Array.isArray(raw)) return raw[0] ?? null;
+  return raw;
+}
+
+// ─── Metadata (#35) ───────────────────────────────────────────────────────────
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const brand = await fetchBrand(slug);
+
+  if (!brand) {
+    return {
+      title: "Brand not found — SlimeLog",
+      description: "This brand isn't on SlimeLog.",
+    };
+  }
+
+  const title = `${brand.name} — SlimeLog`;
+  const description =
+    brand.bio?.trim() ||
+    `See what slimers are saying about ${brand.name} on SlimeLog. Rate, log, and discover slime products from ${brand.name}.`;
+
+  const url = `https://slimelog.com/brands/${brand.slug}`;
+
   return {
-    title: `${data.name} — SlimeLog`,
-    description:
-      data.bio ??
-      `Explore ${data.name} slimes and community reviews on SlimeLog.`,
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      type: "website",
+      url,
+      title,
+      description,
+      siteName: "SlimeLog",
+      ...(brand.banner_url
+        ? { images: [{ url: brand.banner_url }] }
+        : brand.logo_url
+          ? { images: [{ url: brand.logo_url }] }
+          : {}),
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      ...(brand.banner_url
+        ? { images: [brand.banner_url] }
+        : brand.logo_url
+          ? { images: [brand.logo_url] }
+          : {}),
+    },
   };
 }
 
-export default async function BrandPage({ params }: PageProps) {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatRelativeTime(isoString: string): string {
+  const diffMs = Date.now() - new Date(isoString).getTime();
+  const diffMins = Math.floor(diffMs / 1000 / 60);
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `${diffDays}d ago`;
+  const diffMonths = Math.floor(diffDays / 30);
+  if (diffMonths < 12) return `${diffMonths}mo ago`;
+  return `${Math.floor(diffMonths / 12)}y ago`;
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default async function BrandPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
   const { slug } = await params;
-  const supabase = await createClient();
+  const brand = await fetchBrand(slug);
 
-  const { data: brand, error: brandError } = await supabase
-    .from("brands")
-    .select(
-      `
-      id, name, slug, description, bio, logo_url, website_url, shop_url,
-      instagram_handle, tiktok_handle, owner_name, verification_tier,
-      avg_shipping, avg_customer_service, total_brand_ratings,
-      avg_days_to_ship, avg_days_to_receive, shipping_log_count,
-      location, founded_year, restock_schedule, follower_count, total_logs,
-      country_code, contact_email
-    `,
-    )
-    .eq("slug", slug)
-    .single();
+  if (!brand) {
+    notFound();
+  }
 
-  if (brandError || !brand) notFound();
+  const supabase = await getSupabase();
 
-  const { data: logs } = await supabase
+  // Avg rating + log count for the brand
+  const { data: ratingRows } = await supabase
+    .from("collection_logs")
+    .select("rating_overall")
+    .eq("brand_name_raw", brand.name)
+    .eq("is_public", true)
+    .not("rating_overall", "is", null);
+
+  const ratings = (ratingRows ?? [])
+    .map((r) => r.rating_overall as number | null)
+    .filter((r): r is number => r !== null);
+  const avgRating =
+    ratings.length > 0
+      ? ratings.reduce((sum, r) => sum + r, 0) / ratings.length
+      : null;
+  const logCount = ratings.length;
+
+  // [Change 2 — #35] Recent community logs query — ADDED is_public = true
+  // filter (was missing — pre-existing privacy bug). Profile join swapped
+  // to profiles_public.
+  const { data: communityRows } = await supabase
     .from("collection_logs")
     .select(
-      `id, slime_name, slime_type, rating_overall, created_at, brand_name_raw, slimes ( name ), profiles ( username, avatar_url )`,
+      `id, user_id, slime_name, slime_type, rating_overall, image_url, created_at,
+       profiles_public!collection_logs_user_id_fkey ( username, avatar_url )`,
     )
-    .eq("brand_id", brand.id)
+    .eq("brand_name_raw", brand.name)
+    .eq("is_public", true)
     .order("created_at", { ascending: false })
-    .limit(10);
+    .limit(12);
 
-  const recentLogs = logs ?? [];
-  const initials = brand.name.slice(0, 2).toUpperCase();
+  const communityLogs = (communityRows ?? []) as unknown as BrandSlimeRow[];
+
+  // Upcoming drops (only active / scheduled, not cancelled)
+  const { data: dropRows } = await supabase
+    .from("drops")
+    .select("id, drop_name, description, drop_date, status, cover_image_url")
+    .eq("brand_id", brand.id)
+    .neq("status", "cancelled")
+    .gte("drop_date", new Date().toISOString())
+    .order("drop_date", { ascending: true })
+    .limit(3);
+
+  const upcomingDrops = (dropRows ?? []) as UpcomingDrop[];
 
   return (
     <PageWrapper dots>
-      {/* Sticky back nav */}
-      <div
-        className="sticky top-0 z-20 px-4"
-        style={{
-          background: "rgba(10,10,10,0.92)",
-          borderBottom: "1px solid rgba(57,255,20,0.12)",
-        }}
-      >
-        <div className="max-w-[390px] mx-auto flex items-center gap-3 py-3">
-          <Link
-            href="/brands"
-            className="p-1.5 rounded-xl bg-slime-surface text-slime-accent hover:bg-slime-border transition-colors active:scale-95"
-          >
-            <svg viewBox="0 0 20 20" className="w-5 h-5 fill-current">
-              <path
-                d="M13 4l-6 6 6 6"
-                stroke="currentColor"
-                strokeWidth="2"
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </Link>
-          <span className="text-sm font-bold text-slime-text truncate">
-            {brand.name}
-          </span>
-        </div>
-      </div>
+      <PageHeader />
 
-      <div className="max-w-[390px] mx-auto px-4 space-y-4 pt-5 pb-28">
-        {/* Brand Header Card */}
+      <main className="pt-14 pb-24 max-w-2xl mx-auto">
+        {/* Banner */}
         <div
-          className="relative rounded-3xl overflow-hidden"
+          className="relative w-full h-40 sm:h-56"
           style={{
-            background: "rgba(45,10,78,0.3)",
-            border: "1px solid rgba(45,10,78,0.8)",
-            boxShadow: "inset 0 0 30px rgba(45,10,78,0.2)",
+            background: brand.banner_url
+              ? undefined
+              : "linear-gradient(135deg, rgba(45,10,78,0.5), rgba(0,240,255,0.15))",
           }}
         >
-          {/* Holographic hero banner */}
-          <div className="h-28 relative overflow-hidden">
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  "linear-gradient(135deg, #00F0FF 0%, #39FF14 35%, #FF00E5 70%, #2D0A4E 100%)",
-              }}
+          {brand.banner_url && (
+            <Image
+              src={brand.banner_url}
+              alt={`${brand.name} banner`}
+              fill
+              sizes="100vw"
+              className="object-cover"
+              priority
             />
-            {/* Dot texture on banner */}
-            <div
-              className="absolute inset-0 opacity-20"
-              style={{
-                backgroundImage:
-                  "radial-gradient(circle, rgba(255,255,255,0.4) 1px, transparent 1px)",
-                backgroundSize: "20px 20px",
-              }}
-            />
-            {/* Floating pills in banner */}
-            <div className="absolute inset-0 overflow-hidden">
-              <FloatingPills area="section" density="low" zIndex={1} />
-            </div>
-          </div>
-
-          {/* Avatar overlapping banner */}
-          <div className="absolute top-16 left-4 z-10">
-            <div
-              className="p-0.5 rounded-2xl shadow-md"
-              style={{
-                background:
-                  "linear-gradient(135deg, #39FF14, #00F0FF, #FF00E5)",
-              }}
-            >
-              <div className="w-16 h-16 rounded-2xl bg-slime-bg overflow-hidden flex items-center justify-center">
-                {brand.logo_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={brand.logo_url}
-                    alt={brand.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-xl font-black text-slime-accent select-none">
-                    {initials}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Content */}
-          <div className="px-4 pt-10 pb-4">
-            <div className="flex items-start justify-between gap-2 mb-1">
-              <div className="flex items-center gap-2 flex-wrap min-w-0">
-                <h1 className="text-lg font-black text-slime-text leading-tight">
-                  {brand.name}
-                </h1>
-                {brand.verification_tier === "verified" && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slime-accent/20 text-slime-accent border border-slime-accent/30 uppercase tracking-wide shrink-0">
-                    <svg
-                      viewBox="0 0 12 12"
-                      className="w-2.5 h-2.5 fill-current"
-                    >
-                      <path d="M6 1L7.3 4H11L8.3 6.2l.9 3.3L6 7.8 2.8 9.5l.9-3.3L1 4h3.7z" />
-                    </svg>
-                    Verified
-                  </span>
-                )}
-              </div>
-              <div className="shrink-0">
-                <FollowBrandButton
-                  brandId={brand.id}
-                  brandSlug={brand.slug}
-                  initialFollowerCount={brand.follower_count ?? 0}
-                />
-              </div>
-            </div>
-
-            {brand.owner_name && (
-              <p className="text-xs text-slime-muted mt-0.5">
-                by {brand.owner_name}
-              </p>
-            )}
-
-            <div className="flex items-center gap-3 mt-2 flex-wrap">
-              {brand.location && (
-                <span className="flex items-center gap-1 text-xs text-slime-muted">
-                  <svg
-                    viewBox="0 0 12 12"
-                    className="w-3 h-3 fill-slime-accent shrink-0"
-                  >
-                    <path d="M6 1a3.5 3.5 0 0 0-3.5 3.5C2.5 7.5 6 11 6 11s3.5-3.5 3.5-6.5A3.5 3.5 0 0 0 6 1zm0 4.75A1.25 1.25 0 1 1 6 3.25a1.25 1.25 0 0 1 0 2.5z" />
-                  </svg>
-                  {brand.location}
-                </span>
-              )}
-              {brand.founded_year && (
-                <span className="text-xs text-slime-muted">
-                  Est. {brand.founded_year}
-                </span>
-              )}
-              {brand.follower_count != null && (
-                <span className="text-xs text-slime-muted">
-                  <span className="font-bold text-slime-cyan">
-                    {brand.follower_count.toLocaleString()}
-                  </span>{" "}
-                  followers
-                </span>
-              )}
-            </div>
-
-            {(brand.bio || brand.description) && (
-              <p className="mt-3 text-xs text-slime-muted leading-relaxed">
-                {brand.bio ?? brand.description}
-              </p>
-            )}
-
-            {/* Links */}
-            <div className="flex items-center gap-2 mt-3 flex-wrap">
-              {brand.website_url && (
-                <a
-                  href={brand.website_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-[11px] font-semibold text-slime-cyan bg-slime-surface border border-slime-border px-2.5 py-1 rounded-lg hover:border-slime-cyan/50 transition-colors"
-                >
-                  🌐 Website
-                </a>
-              )}
-              {brand.shop_url && brand.shop_url !== brand.website_url && (
-                <a
-                  href={brand.shop_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-[11px] font-semibold text-slime-accent bg-slime-surface border border-slime-border px-2.5 py-1 rounded-lg hover:border-slime-accent/50 transition-colors"
-                >
-                  🛍️ Shop
-                </a>
-              )}
-              {brand.instagram_handle && (
-                <a
-                  href={`https://instagram.com/${brand.instagram_handle}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-[11px] font-semibold text-orange-400 bg-slime-surface border border-slime-border px-2.5 py-1 rounded-lg hover:border-orange-400/50 transition-colors"
-                >
-                  📸 @{brand.instagram_handle}
-                </a>
-              )}
-              {brand.tiktok_handle && (
-                <a
-                  href={`https://tiktok.com/@${brand.tiktok_handle}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-[11px] font-semibold text-slime-muted bg-slime-surface border border-slime-border px-2.5 py-1 rounded-lg hover:border-slime-muted/50 transition-colors"
-                >
-                  🎵 @{brand.tiktok_handle}
-                </a>
-              )}
-            </div>
-          </div>
+          )}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background:
+                "linear-gradient(to bottom, rgba(0,0,0,0) 50%, rgba(10,10,10,0.85) 100%)",
+            }}
+          />
         </div>
 
-        {/* Restock Schedule */}
-        {brand.restock_schedule ? (
-          <div
-            className="rounded-2xl p-4 flex items-center gap-3"
-            style={{
-              background: "rgba(45,10,78,0.4)",
-              border: "1px solid rgba(57,255,20,0.2)",
-            }}
-          >
+        {/* Header section */}
+        <section className="px-4 -mt-10 relative z-10">
+          <div className="flex items-end gap-4">
+            {/* Logo */}
             <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm text-slime-bg"
+              className="relative w-20 h-20 rounded-2xl border-2 overflow-hidden shrink-0"
               style={{
-                background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                borderColor: "#0A0A0A",
+                background: "rgba(45,10,78,0.6)",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.6)",
               }}
             >
-              <svg viewBox="0 0 20 20" className="w-5 h-5 fill-current">
-                <path d="M10 2a8 8 0 1 0 0 16A8 8 0 0 0 10 2zm1 8.41V6a1 1 0 0 0-2 0v4.59l3.71 3.7 1.41-1.41L11 10.41z" />
-              </svg>
+              {brand.logo_url ? (
+                <Image
+                  src={brand.logo_url}
+                  alt={brand.name}
+                  fill
+                  sizes="80px"
+                  className="object-cover"
+                />
+              ) : (
+                <div
+                  className="w-full h-full flex items-center justify-center text-3xl font-black"
+                  style={{
+                    background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                    color: "#0A0A0A",
+                    fontFamily: "Montserrat, Inter, sans-serif",
+                  }}
+                  aria-hidden="true"
+                >
+                  {brand.name.charAt(0).toUpperCase()}
+                </div>
+              )}
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold text-slime-accent uppercase tracking-widest">
-                Restock Schedule
-              </p>
-              <p className="text-sm font-bold text-slime-text mt-0.5">
-                {brand.restock_schedule}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div
-            className="rounded-2xl p-4 flex items-center gap-3"
-            style={{
-              background: "rgba(45,10,78,0.2)",
-              border: "1px solid rgba(45,10,78,0.5)",
-            }}
-          >
-            <div className="w-10 h-10 rounded-xl bg-slime-border flex items-center justify-center shrink-0">
-              <svg viewBox="0 0 20 20" className="w-5 h-5 fill-slime-muted">
-                <path d="M10 2a8 8 0 1 0 0 16A8 8 0 0 0 10 2zm1 8.41V6a1 1 0 0 0-2 0v4.59l3.71 3.7 1.41-1.41L11 10.41z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-slime-muted uppercase tracking-widest">
-                Restock Schedule
-              </p>
-              <p className="text-xs text-slime-muted italic mt-0.5">
-                No schedule listed — follow to get notified
-              </p>
+            <div className="flex-1 min-w-0">
+              <FollowBrandButton
+                brandId={brand.id}
+                brandSlug={brand.slug}
+                initialFollowerCount={brand.follower_count ?? 0}
+              />
             </div>
           </div>
+
+          <div className="mt-3 flex items-center gap-2">
+            <h1
+              className="text-2xl font-black"
+              style={{
+                color: "#fff",
+                fontFamily: "Montserrat, Inter, sans-serif",
+              }}
+            >
+              {brand.name}
+            </h1>
+            {brand.is_verified && (
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="#00F0FF"
+                aria-label="Verified"
+              >
+                <path d="M12 0l3.09 5.26L21 6l-4.5 4.39L17.18 17 12 14.27 6.82 17l.68-6.61L3 6l5.91-.74L12 0z" />
+              </svg>
+            )}
+          </div>
+
+          {brand.bio && (
+            <p className="mt-2 text-sm leading-relaxed text-slime-text/80">
+              {brand.bio}
+            </p>
+          )}
+
+          {/* Stats row */}
+          <div className="mt-4 flex items-center gap-6">
+            {avgRating !== null && (
+              <div className="flex flex-col">
+                <span
+                  className="text-xl font-black leading-none"
+                  style={{
+                    color: "#39FF14",
+                    fontFamily: "Montserrat, sans-serif",
+                  }}
+                >
+                  {avgRating.toFixed(1)}
+                </span>
+                <span className="text-[10px] uppercase tracking-wider text-slime-muted font-semibold mt-1">
+                  Avg Rating
+                </span>
+              </div>
+            )}
+            <div className="flex flex-col">
+              <span
+                className="text-xl font-black leading-none"
+                style={{
+                  color: "#00F0FF",
+                  fontFamily: "Montserrat, sans-serif",
+                }}
+              >
+                {logCount}
+              </span>
+              <span className="text-[10px] uppercase tracking-wider text-slime-muted font-semibold mt-1">
+                Logs
+              </span>
+            </div>
+            <div className="flex flex-col">
+              <span
+                className="text-xl font-black leading-none"
+                style={{
+                  color: "#FF00E5",
+                  fontFamily: "Montserrat, sans-serif",
+                }}
+              >
+                {brand.follower_count ?? 0}
+              </span>
+              <span className="text-[10px] uppercase tracking-wider text-slime-muted font-semibold mt-1">
+                Followers
+              </span>
+            </div>
+          </div>
+
+          {/* Social links — [Boyscout #35] Replaced emoji with SVG icons.
+              Was: 🌐 🛍️ 📸 🎵
+              Now: globe / shopping bag / camera-square / music-note */}
+          <div className="mt-3 flex items-center gap-3 flex-wrap">
+            {brand.website_url && (
+              <a
+                href={brand.website_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-slime-muted hover:text-slime-cyan transition-colors flex items-center gap-1.5 text-xs"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="2" y1="12" x2="22" y2="12" />
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                </svg>
+                Website
+              </a>
+            )}
+            {brand.shopify_url && (
+              <a
+                href={brand.shopify_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-slime-muted hover:text-slime-accent transition-colors flex items-center gap-1.5 text-xs"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <path d="M16 10a4 4 0 0 1-8 0" />
+                </svg>
+                Shop
+              </a>
+            )}
+            {brand.instagram_handle && (
+              <a
+                href={`https://instagram.com/${brand.instagram_handle}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-slime-muted hover:text-slime-magenta transition-colors flex items-center gap-1.5 text-xs"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+                  <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+                  <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+                </svg>
+                Instagram
+              </a>
+            )}
+            {brand.tiktok_handle && (
+              <a
+                href={`https://tiktok.com/@${brand.tiktok_handle}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-slime-muted hover:text-slime-cyan transition-colors flex items-center gap-1.5 text-xs"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5.21 16.74a6.34 6.34 0 0 0 10.86-4.43V8.93a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1.24-.36z" />
+                </svg>
+                TikTok
+              </a>
+            )}
+          </div>
+        </section>
+
+        {/* Upcoming drops */}
+        {upcomingDrops.length > 0 && (
+          <section className="px-4 mt-8">
+            <h2
+              className="text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2"
+              style={{ color: "#39FF14", fontFamily: "Montserrat, sans-serif" }}
+            >
+              {/* [Boyscout #35] Replaced 📦 emoji with package SVG */}
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M16.5 9.4l-9-5.19" />
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                <line x1="12" y1="22.08" x2="12" y2="12" />
+              </svg>
+              Upcoming Drops
+            </h2>
+            <div className="flex flex-col gap-3">
+              {upcomingDrops.map((drop) => (
+                <Link
+                  key={drop.id}
+                  href={`/drops/${drop.id}`}
+                  className="block rounded-xl overflow-hidden border border-slime-border bg-slime-card hover:border-slime-accent/50 transition-colors p-3 flex flex-row items-center gap-3"
+                >
+                  <div className="relative w-16 h-16 rounded-lg overflow-hidden shrink-0 bg-slime-surface">
+                    {drop.cover_image_url ? (
+                      <Image
+                        src={drop.cover_image_url}
+                        alt={drop.drop_name}
+                        fill
+                        sizes="64px"
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div
+                        className="w-full h-full flex items-center justify-center"
+                        style={{
+                          background:
+                            "linear-gradient(135deg, rgba(57,255,20,0.2), rgba(0,240,255,0.2))",
+                        }}
+                      >
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="rgba(255,255,255,0.4)"
+                          strokeWidth="1.5"
+                          aria-hidden="true"
+                        >
+                          <path d="M12 2 L14 9 L21 12 L14 15 L12 22 L10 15 L3 12 L10 9 Z" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slime-text line-clamp-1">
+                      {drop.drop_name}
+                    </p>
+                    <p className="text-xs text-slime-muted line-clamp-1">
+                      {new Intl.DateTimeFormat("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      }).format(new Date(drop.drop_date))}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
         )}
 
-        {/* Community Stats */}
-        <div>
-          <p className="section-label mb-3 px-1">Community Stats</p>
-          <div className="grid grid-cols-4 gap-2 mb-3">
-            <StatPill
-              label="Total Logs"
-              value={brand.total_logs ?? 0}
-              icon="📋"
-              valueColor="text-slime-cyan"
-            />
-            <StatPill
-              label="Avg Ship"
-              value={brand.avg_days_to_ship}
-              unit="d"
-              icon="📦"
-              valueColor="text-slime-cyan"
-            />
-            <StatPill
-              label="Avg Receive"
-              value={brand.avg_days_to_receive}
-              unit="d"
-              icon="📬"
-              valueColor="text-slime-cyan"
-            />
-            <StatPill
-              label="Ship Logs"
-              value={brand.shipping_log_count ?? 0}
-              icon="🚚"
-              valueColor="text-slime-cyan"
-            />
-          </div>
-
-          {brand.avg_shipping != null || brand.avg_customer_service != null ? (
-            <div
-              className="rounded-2xl px-4 py-2"
-              style={{
-                background: "rgba(45,10,78,0.2)",
-                border: "1px solid rgba(45,10,78,0.6)",
-              }}
+        {/* Community logs */}
+        <section className="px-4 mt-8">
+          <h2
+            className="text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2"
+            style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
+          >
+            {/* [Boyscout #35] Replaced 📋 emoji with clipboard SVG */}
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
             >
-              <StarRow value={brand.avg_shipping} label="Shipping Rating" />
-              <StarRow
-                value={brand.avg_customer_service}
-                label="Customer Service"
-              />
-              {brand.total_brand_ratings != null &&
-                brand.total_brand_ratings > 0 && (
-                  <p className="text-[10px] text-slime-muted pt-2 text-right">
-                    Based on {brand.total_brand_ratings} rating
-                    {brand.total_brand_ratings !== 1 ? "s" : ""}
-                  </p>
-                )}
-            </div>
+              <path d="M9 2h6a2 2 0 0 1 2 2v2H7V4a2 2 0 0 1 2-2z" />
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+            </svg>
+            Recent Community Logs
+          </h2>
+          {communityLogs.length === 0 ? (
+            <p className="text-sm text-slime-muted text-center py-12">
+              No public logs for {brand.name} yet. Be the first.
+            </p>
           ) : (
-            <div
-              className="rounded-2xl px-4 py-4 text-center"
-              style={{
-                background: "rgba(45,10,78,0.2)",
-                border: "1px solid rgba(45,10,78,0.5)",
-              }}
-            >
-              <p className="text-xs text-slime-muted">
-                No ratings yet — be the first to rate this brand!
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Community Logs */}
-        <div>
-          <div className="flex items-center justify-between mb-3 px-1">
-            <p className="section-label">Community Logs</p>
-            <span className="text-[11px] text-slime-accent font-semibold">
-              {recentLogs.length} recent
-            </span>
-          </div>
-
-          {recentLogs.length === 0 ? (
-            <NoLogsEmpty brandName={brand.name} />
-          ) : (
-            <div className="space-y-2">
-              {recentLogs.map((log) => {
-                const slimeName =
-                  (log.slimes as any)?.name ??
-                  log.slime_name ??
-                  "Unnamed Slime";
-                const username = (log.profiles as any)?.username ?? "slimer";
-                const avatarUrl = (log.profiles as any)?.avatar_url;
-                const typeColor = log.slime_type
-                  ? (SLIME_TYPE_COLORS[log.slime_type] ??
-                    "bg-slime-surface text-slime-muted")
+            <div className="grid grid-cols-2 gap-3">
+              {communityLogs.map((row) => {
+                const profile = normaliseProfile(row.profiles_public);
+                const typeLabel = row.slime_type
+                  ? (SLIME_TYPE_LABELS[
+                      row.slime_type as keyof typeof SLIME_TYPE_LABELS
+                    ] ?? row.slime_type.replace(/_/g, " "))
                   : null;
-
                 return (
-                  <div
-                    key={log.id}
-                    className="rounded-2xl p-3 flex items-start gap-3"
-                    style={{
-                      background: "rgba(45,10,78,0.2)",
-                      border: "1px solid rgba(45,10,78,0.6)",
-                    }}
+                  <Link
+                    key={row.id}
+                    href={`/slimes/${row.id}`}
+                    className="block rounded-xl overflow-hidden border border-slime-border bg-slime-card hover:border-slime-accent/50 transition-colors"
                   >
-                    <div className="w-8 h-8 rounded-full bg-slime-surface border border-slime-border flex items-center justify-center shrink-0 overflow-hidden">
-                      {avatarUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={avatarUrl}
-                          alt={username}
-                          className="w-full h-full object-cover"
+                    <div className="relative w-full aspect-square bg-slime-surface">
+                      {row.image_url ? (
+                        <Image
+                          src={row.image_url}
+                          alt={row.slime_name ?? "Slime"}
+                          fill
+                          sizes="(max-width: 640px) 50vw, 33vw"
+                          className="object-cover"
                         />
                       ) : (
-                        <span className="text-xs font-bold text-slime-accent">
-                          {username.slice(0, 1).toUpperCase()}
+                        <div
+                          className="w-full h-full flex items-center justify-center"
+                          style={{
+                            background:
+                              "linear-gradient(135deg, rgba(45,10,78,0.4), rgba(0,240,255,0.1))",
+                          }}
+                        >
+                          <svg
+                            width="32"
+                            height="32"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="rgba(255,255,255,0.3)"
+                            strokeWidth="1.5"
+                            aria-hidden="true"
+                          >
+                            <path d="M12 2 L14 9 L21 12 L14 15 L12 22 L10 15 L3 12 L10 9 Z" />
+                          </svg>
+                        </div>
+                      )}
+                      {typeof row.rating_overall === "number" && (
+                        <span
+                          className="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded font-bold"
+                          style={{
+                            background: "rgba(10,10,10,0.7)",
+                            color: "#39FF14",
+                          }}
+                        >
+                          {row.rating_overall}/5
                         </span>
                       )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-slime-text truncate">
-                            {slimeName}
-                          </p>
-                          <p className="text-[11px] text-slime-magenta">
-                            @{username}
-                          </p>
+                    <div className="p-2.5">
+                      <p className="text-xs font-semibold text-slime-text line-clamp-1">
+                        {row.slime_name ?? "Unnamed"}
+                      </p>
+                      {typeLabel && (
+                        <p className="text-[10px] text-slime-muted line-clamp-1 capitalize">
+                          {typeLabel}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-1.5 mt-1.5">
+                        <div className="relative w-4 h-4 rounded-full overflow-hidden shrink-0 bg-slime-surface">
+                          {profile?.avatar_url ? (
+                            <Image
+                              src={profile.avatar_url}
+                              alt=""
+                              fill
+                              sizes="16px"
+                              className="object-cover"
+                            />
+                          ) : null}
                         </div>
-                        {log.rating_overall != null && (
-                          <div className="flex items-center gap-0.5 shrink-0">
-                            {Array.from({ length: 5 }).map((_, i) => (
-                              <svg
-                                key={i}
-                                viewBox="0 0 10 10"
-                                className="w-3 h-3"
-                              >
-                                <polygon
-                                  points="5,1 6.2,3.8 9,3.8 7,5.8 7.8,9 5,7.5 2.2,9 3,5.8 1,3.8 3.8,3.8"
-                                  className={
-                                    i < log.rating_overall!
-                                      ? "fill-slime-accent"
-                                      : "fill-slime-border"
-                                  }
-                                />
-                              </svg>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                        {typeColor && log.slime_type && (
-                          <span
-                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${typeColor}`}
-                          >
-                            {formatSlimeType(log.slime_type)}
-                          </span>
-                        )}
-                        <span className="text-[10px] text-slime-muted">
-                          {formatDate(log.created_at)}
+                        <span className="text-[10px] text-slime-magenta truncate">
+                          @{profile?.username ?? "unknown"}
+                        </span>
+                        <span className="text-[10px] text-slime-muted ml-auto shrink-0">
+                          {formatRelativeTime(row.created_at)}
                         </span>
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
           )}
-        </div>
-      </div>
+        </section>
+      </main>
     </PageWrapper>
-  );
-}
-
-function NoLogsEmpty({ brandName }: { brandName: string }) {
-  return (
-    <div
-      className="rounded-2xl p-8 flex flex-col items-center text-center"
-      style={{
-        background: "rgba(45,10,78,0.2)",
-        border: "1px solid rgba(45,10,78,0.6)",
-      }}
-    >
-      <div className="text-4xl mb-3">🫧</div>
-      <h3 className="text-sm font-bold text-slime-text mb-1">No logs yet</h3>
-      <p className="text-xs text-slime-muted leading-relaxed">
-        Be the first to log a {brandName} slime and help the community!
-      </p>
-      <Link
-        href="/log"
-        className="mt-4 inline-flex items-center gap-1.5 text-slime-bg text-xs font-bold px-5 py-2.5 rounded-xl shadow-glow-green active:scale-95 transition-transform"
-        style={{ background: "linear-gradient(135deg, #39FF14, #00F0FF)" }}
-      >
-        <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 fill-current">
-          <path d="M8 2a1 1 0 0 1 1 1v4h4a1 1 0 0 1 0 2H9v4a1 1 0 0 1-2 0V9H3a1 1 0 0 1 0-2h4V3a1 1 0 0 1 1-1z" />
-        </svg>
-        Log a Slime
-      </Link>
-    </div>
   );
 }

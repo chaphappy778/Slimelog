@@ -9,8 +9,9 @@ import PageHeader from "@/components/PageHeader";
 import PageWrapper from "@/components/PageWrapper";
 
 // ─── Internal query row types ──────────────────────────────────────────────────
-// These are only used to type raw Supabase responses before normalisation.
-// They are NOT exported — all consumer-facing data uses FeedCardLog from FeedCard.
+// [Change 1 — #35] These types now describe the profiles_public projection
+// rather than the base profiles table. The shape is identical for the
+// fields we read (username, avatar_url) — the swap is in the FK hint below.
 
 type CommunityQueryRow = {
   id: string;
@@ -23,11 +24,10 @@ type CommunityQueryRow = {
   colors: string[] | null;
   rating_overall: number | null;
   image_url: string | null;
-  // [Change 1] in_wishlist added to community query row type
   in_wishlist: boolean | null;
   // PostgREST returns a to-one join as a plain object, not an array.
   // We normalise this below so the rest of the code never has to branch.
-  profiles:
+  profiles_public:
     | { username: string | null; avatar_url: string | null }
     | { username: string | null; avatar_url: string | null }[]
     | null;
@@ -37,7 +37,6 @@ type ActivityFeedQueryRow = {
   id: string;
   created_at: string;
   actor_id: string;
-  // [Change 1] activity_type confirmed present on this type
   activity_type: string;
   log_id: string | null;
   metadata: {
@@ -49,7 +48,7 @@ type ActivityFeedQueryRow = {
     image_url?: string | null;
     in_wishlist?: boolean | null;
   } | null;
-  profiles:
+  profiles_public:
     | { username: string | null; avatar_url: string | null }
     | { username: string | null; avatar_url: string | null }[]
     | null;
@@ -79,7 +78,6 @@ function EmptyFeed() {
         className="w-20 h-20 rounded-full flex items-center justify-center bg-slime-surface border border-slime-border"
         aria-hidden="true"
       >
-        {/* Bubble SVG */}
         <svg
           width="36"
           height="36"
@@ -205,6 +203,7 @@ export default async function HomePage({
   } = await supabase.auth.getUser();
   const isLoggedIn = !!user;
 
+  // [Preserved — DO NOT MODIFY] Logged-out users redirect to /landing.
   if (!isLoggedIn) {
     redirect("/landing");
   }
@@ -215,6 +214,12 @@ export default async function HomePage({
   let communityError = false;
 
   if (activeTab === "community") {
+    // [Change 2 — #35] FK hint swapped from
+    //   profiles!collection_logs_user_id_fkey
+    // to
+    //   profiles_public!collection_logs_user_id_fkey
+    // The FK lives on the base profiles table; the view exposes `id` so
+    // PostgREST resolves the relationship via the underlying FK.
     const { data: baseData, error: baseError } = await supabase
       .from("collection_logs")
       .select(
@@ -229,8 +234,7 @@ export default async function HomePage({
          rating_overall,
          image_url,
          in_wishlist,
-         profiles!collection_logs_user_id_fkey ( username, avatar_url )`,
-        // [Change 1] in_wishlist added to select
+         profiles_public!collection_logs_user_id_fkey ( username, avatar_url )`,
       )
       .eq("is_public", true)
       .order("created_at", { ascending: false })
@@ -275,7 +279,7 @@ export default async function HomePage({
       }
 
       communityLogs = rows.map((r): FeedCardLog => {
-        const profile = normaliseProfile(r.profiles);
+        const profile = normaliseProfile(r.profiles_public);
         return {
           id: r.id,
           created_at: r.created_at,
@@ -286,7 +290,6 @@ export default async function HomePage({
           colors: r.colors,
           rating_overall: r.rating_overall,
           image_url: r.image_url,
-          // [Change 1] in_wishlist and activity_type added to FeedCardLog build
           in_wishlist: r.in_wishlist ?? false,
           activity_type: "log_created",
           actor_id: r.user_id,
@@ -319,12 +322,12 @@ export default async function HomePage({
       );
 
       if (followingIds.length > 0) {
+        // [Change 3 — #35] FK hint swapped to profiles_public.
         const { data: activityRows, error: activityErr } = await supabase
           .from("activity_feed")
           .select(
             `id, created_at, actor_id, activity_type, log_id, metadata,
-             profiles!activity_feed_actor_id_fkey ( username, avatar_url )`,
-            // [Change 1] activity_type added to select
+             profiles_public!activity_feed_actor_id_fkey ( username, avatar_url )`,
           )
           .in("activity_type", ["log_created", "wishlist_added"])
           .in("actor_id", followingIds)
@@ -359,7 +362,6 @@ export default async function HomePage({
           const { data: updatedAtData } = await supabase
             .from("collection_logs")
             .select("id, updated_at, in_wishlist")
-            // [Change 1] in_wishlist fetched from collection_logs for following feed
             .in("id", followingLogIds);
 
           const updatedAtMap: Record<string, string> = {};
@@ -386,7 +388,7 @@ export default async function HomePage({
 
           followingLogs = typedRows.map((row): FeedCardLog => {
             const meta = row.metadata ?? {};
-            const profile = normaliseProfile(row.profiles);
+            const profile = normaliseProfile(row.profiles_public);
             const logId = row.log_id ?? row.id;
 
             return {
@@ -402,14 +404,10 @@ export default async function HomePage({
                   ? Number(meta.rating_overall)
                   : null,
               image_url: meta.image_url ?? null,
-              // [Change 1] in_wishlist resolved from collection_logs bulk fetch;
-              // falls back to metadata.in_wishlist if row not found, then
-              // falls back to activity_type check.
               in_wishlist:
                 wishlistMap[logId] ??
                 meta.in_wishlist ??
                 row.activity_type === "wishlist_added",
-              // [Change 1] activity_type passed through from activity_feed row
               activity_type: row.activity_type,
               actor_id: row.actor_id,
               username: profile?.username ?? null,
