@@ -501,7 +501,7 @@ export default async function BrandPage({
                 <Link
                   key={drop.id}
                   href={`/drops/${drop.id}`}
-                  className="block rounded-xl overflow-hidden border border-slime-border bg-slime-card hover:border-slime-accent/50 transition-colors p-3 flex flex-row items-center gap-3"
+                  className="rounded-xl overflow-hidden border border-slime-border bg-slime-card hover:border-slime-accent/50 transition-colors p-3 flex flex-row items-center gap-3"
                 >
                   <div className="relative w-16 h-16 rounded-lg overflow-hidden shrink-0 bg-slime-surface">
                     {drop.cover_image_url ? (
