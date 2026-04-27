@@ -6,11 +6,16 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import FloatingPills from "@/components/FloatingPills";
+import { safeRedirect } from "@/lib/safe-redirect"; // [Change 1 — #35]
 
 function LoginPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/";
+
+  // [Change 2 — #35] Validate the `next` param against open-redirect
+  // attacks. Falls back to "/" for logged-in destination.
+  const rawNext = searchParams.get("next");
+  const next = safeRedirect(rawNext, "/");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -31,6 +36,7 @@ function LoginPageInner() {
         setError(error.message);
         return;
       }
+      // [Change 3 — #35] Push validated `next` instead of raw param.
       router.push(next);
       router.refresh();
     });
@@ -65,7 +71,6 @@ function LoginPageInner() {
             className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 shadow-glow-green"
             style={{ background: "linear-gradient(135deg, #39FF14, #00F0FF)" }}
           >
-            {/* [Change 1] SVG slime blob icon — replaces 🫧 emoji */}
             <svg
               viewBox="0 0 32 32"
               width="32"
@@ -257,7 +262,7 @@ function LoginPageInner() {
         <p className="mt-6 text-center text-sm text-slime-muted">
           New to Slimelog?{" "}
           <Link
-            href="/signup"
+            href={`/signup?next=${encodeURIComponent(next)}`}
             className="font-semibold text-slime-magenta hover:text-slime-accent transition-colors"
           >
             Create an account

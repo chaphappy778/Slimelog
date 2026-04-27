@@ -1,11 +1,13 @@
 // apps/web/app/signup/page.tsx
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { safeRedirect } from "@/lib/safe-redirect"; // [Change 1 — #35]
 
-// [Change 1] Age calculation helper — inline, no date-fns
+// Age calculation helper — inline, no date-fns
 function calculateAge(dob: string): number {
   const today = new Date();
   const birth = new Date(dob);
@@ -15,8 +17,7 @@ function calculateAge(dob: string): number {
   return age;
 }
 
-// [Fix #47 - Change A] Static month options — 3-letter labels, 01-12 values.
-// Declared outside component so they're not recreated on every render.
+// Static month options.
 const MONTH_OPTIONS: { value: string; label: string }[] = [
   { value: "01", label: "Jan" },
   { value: "02", label: "Feb" },
@@ -32,25 +33,28 @@ const MONTH_OPTIONS: { value: string; label: string }[] = [
   { value: "12", label: "Dec" },
 ];
 
-// [Fix #47 - Change B] Helper: days in a given month/year. Passing day 0 of
-// the next month returns the last day of the current month — correctly handles
-// leap years for February.
 function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
 }
 
-// [Fix #47 - Change C] Helper: zero-pad a 1-2 digit number for YYYY-MM-DD.
 function pad2(n: number): string {
   return n < 10 ? `0${n}` : String(n);
 }
 
-export default function SignupPage() {
+function SignupPageInner() {
+  const searchParams = useSearchParams();
+
+  // [Change 2 — #35] Read and validate the optional `next` param so a
+  // logged-out user clicking an action button gets routed back to the
+  // page they came from after signup confirms. Validated to prevent
+  // open-redirect.
+  const rawNext = searchParams.get("next");
+  const next = safeRedirect(rawNext, "/");
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // [Fix #47 - Change D] Replace single `dob` state with three split states.
-  // The composed YYYY-MM-DD string is derived via useMemo below.
   const [dobMonth, setDobMonth] = useState<string>("");
   const [dobDay, setDobDay] = useState<string>("");
   const [dobYear, setDobYear] = useState<string>("");
@@ -60,8 +64,6 @@ export default function SignupPage() {
   const [success, setSuccess] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  // [Fix #47 - Change E] Build year options: current year down to (current - 120).
-  // Descending order so recent years appear first.
   const currentYear = new Date().getFullYear();
   const yearOptions = useMemo(() => {
     const years: number[] = [];
@@ -71,9 +73,6 @@ export default function SignupPage() {
     return years;
   }, [currentYear]);
 
-  // [Fix #47 - Change F] Dynamic day options based on selected month + year.
-  // When month/year aren't both set yet, fall back to 31 to keep the list
-  // stable. Once both are known, we trim invalid days (e.g. Feb 30).
   const maxDay = useMemo(() => {
     if (!dobMonth || !dobYear) return 31;
     return daysInMonth(parseInt(dobYear, 10), parseInt(dobMonth, 10));
@@ -87,10 +86,6 @@ export default function SignupPage() {
     return days;
   }, [maxDay]);
 
-  // [Fix #47 - Change G] Compose YYYY-MM-DD only when all three parts are set.
-  // If the user previously selected day 31 then switches to February, the day
-  // will now exceed maxDay — we treat the dob as incomplete until they pick a
-  // valid day.
   const dob = useMemo(() => {
     if (!dobMonth || !dobDay || !dobYear) return "";
     const dayNum = parseInt(dobDay, 10);
@@ -98,13 +93,10 @@ export default function SignupPage() {
     return `${dobYear}-${dobMonth}-${dobDay}`;
   }, [dobMonth, dobDay, dobYear, maxDay]);
 
-  // Derived age (preserved from original)
   const age = dob ? calculateAge(dob) : null;
   const isUnder13 = age !== null && age < 13;
   const isTeen = age !== null && age >= 13 && age < 18;
 
-  // [Fix #47 - Change H] Shared select classes — matches existing input styling
-  // in this file (bg-slime-surface, border-slime-border, rounded-xl, px-4 py-3).
   const selectClasses =
     "w-full rounded-xl bg-slime-surface border border-slime-border px-4 py-3 text-sm text-slime-text focus:border-slime-cyan/60 focus:outline-none focus:ring-1 focus:ring-slime-cyan/40 transition appearance-none";
 
@@ -137,11 +129,13 @@ export default function SignupPage() {
 
     startTransition(async () => {
       const supabase = createClient();
+      // [Change 3 — #35] Thread `next` through the email confirmation
+      // callback URL so the post-confirm landing respects the source page.
       const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
         },
       });
 
@@ -150,11 +144,6 @@ export default function SignupPage() {
         return;
       }
 
-      // [Change 2] After successful signup, save DOB via age-verify API
-      // The user won't have a session yet (email not confirmed), so we store
-      // the intent — the age-verify page handles confirmed sessions. For email
-      // signups we show the confirmation screen; age verify happens post-confirm
-      // when they click the email link and land at /auth/callback → /age-verify.
       setSuccess(true);
     });
   }
@@ -163,17 +152,18 @@ export default function SignupPage() {
     setError(null);
     const supabase = createClient();
 
+    // [Change 4 — #35] Thread `next` into Google OAuth callback URL.
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
 
     if (error) setError(error.message);
   }
 
-  // ── Email-sent confirmation screen ────────────────────────────────────────
+  // Email-sent confirmation screen
   if (success) {
     return (
       <div className="min-h-screen bg-slime-bg flex flex-col items-center justify-center px-5 py-12">
@@ -183,7 +173,6 @@ export default function SignupPage() {
         </div>
 
         <div className="relative w-full max-w-sm text-center space-y-5">
-          {/* [Change 3] SVG envelope icon — replaces 📬 emoji */}
           <div
             className="inline-flex items-center justify-center w-20 h-20 rounded-3xl shadow-glow-green"
             style={{ background: "linear-gradient(135deg, #39FF14, #00F0FF)" }}
@@ -224,9 +213,8 @@ export default function SignupPage() {
               Click it to activate your account and start logging slimes.
             </p>
           </div>
-          {/* [Change 4] SVG arrow — replaces ← text arrow */}
           <Link
-            href="/login"
+            href={`/login?next=${encodeURIComponent(next)}`}
             className="inline-flex items-center gap-1.5 text-sm font-semibold text-slime-magenta hover:text-slime-accent transition-colors"
           >
             <svg
@@ -251,10 +239,7 @@ export default function SignupPage() {
     );
   }
 
-  // ── [Fix C] Under-13 block screen ─────────────────────────────────────────
-  // Placed after the `success` branch, before the main signup form return.
-  // User has NOT completed signup yet — no session exists, no API call needed.
-  // Navigation via window.location.href to fully discard form state.
+  // Under-13 block screen
   if (isUnder13 && dob) {
     return (
       <div className="min-h-screen bg-slime-bg flex flex-col items-center justify-center px-5 py-12">
@@ -265,7 +250,6 @@ export default function SignupPage() {
         </div>
 
         <div className="relative w-full max-w-sm">
-          {/* Header — branded sparkle icon, same as main signup header */}
           <div className="mb-8 text-center">
             <div
               className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 shadow-glow-cyan"
@@ -292,7 +276,6 @@ export default function SignupPage() {
             </h1>
           </div>
 
-          {/* Block card */}
           <div
             className="rounded-3xl backdrop-blur-sm p-6 shadow-2xl space-y-5"
             style={{
@@ -310,9 +293,6 @@ export default function SignupPage() {
             <button
               type="button"
               onClick={() => {
-                // Navigate home — no sign-out needed, user hasn't signed up yet.
-                // window.location.href ensures a fresh page load, fully
-                // discarding form state.
                 window.location.href = "/";
               }}
               className="w-full rounded-2xl px-4 py-3.5 text-sm font-bold"
@@ -330,7 +310,7 @@ export default function SignupPage() {
     );
   }
 
-  // ── Signup form ───────────────────────────────────────────────────────────
+  // Signup form
   return (
     <div className="min-h-screen bg-slime-bg flex flex-col items-center justify-center px-5 py-12">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
@@ -340,9 +320,7 @@ export default function SignupPage() {
       </div>
 
       <div className="relative w-full max-w-sm">
-        {/* Logo / header */}
         <div className="mb-8 text-center">
-          {/* [Change 5] SVG sparkle/star icon — replaces ✨ emoji */}
           <div
             className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 shadow-glow-cyan"
             style={{ background: "linear-gradient(135deg, #00F0FF, #39FF14)" }}
@@ -369,7 +347,6 @@ export default function SignupPage() {
           </p>
         </div>
 
-        {/* [Change 6] Slime type teaser pills — emojis removed, text labels only */}
         <div className="flex flex-wrap gap-1.5 justify-center mb-6 opacity-60">
           {["Butter", "Cloud", "Icee", "Clear", "Slay"].map((label) => (
             <span
@@ -384,7 +361,6 @@ export default function SignupPage() {
           </span>
         </div>
 
-        {/* Card */}
         <div className="rounded-3xl bg-slime-card border border-slime-border backdrop-blur-sm p-6 shadow-2xl space-y-5">
           {error && (
             <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-300">
@@ -392,7 +368,6 @@ export default function SignupPage() {
             </div>
           )}
 
-          {/* Google button */}
           <button
             type="button"
             onClick={handleGoogleSignup}
@@ -490,19 +465,11 @@ export default function SignupPage() {
               />
             </div>
 
-            {/* [Change 7] Date of birth.
-                [Fix C] Inline under-13 error removed — the block-screen branch
-                above takes over before this message could be seen.
-                [Fix #47 - Change I] Replaced single <input type="date"> with
-                three split dropdowns (Month | Day | Year). Native <select>
-                renders as a fast wheel picker on iOS and a searchable list on
-                Android — adult users no longer swipe back month-by-month. */}
             <div>
               <span className="block text-xs font-semibold text-slime-muted uppercase tracking-widest mb-2">
                 Date of Birth
               </span>
               <div className="flex gap-3">
-                {/* Month — narrowest column */}
                 <div className="flex-[3] min-w-0">
                   <label
                     htmlFor="dob-month"
@@ -533,7 +500,6 @@ export default function SignupPage() {
                   </select>
                 </div>
 
-                {/* Day — middle width */}
                 <div className="flex-[2] min-w-0">
                   <label
                     htmlFor="dob-day"
@@ -564,7 +530,6 @@ export default function SignupPage() {
                   </select>
                 </div>
 
-                {/* Year — widest column */}
                 <div className="flex-[3] min-w-0">
                   <label
                     htmlFor="dob-year"
@@ -597,7 +562,6 @@ export default function SignupPage() {
               </div>
             </div>
 
-            {/* [Change 8] Parental consent — only shown for teens 13–17 */}
             {isTeen && (
               <div
                 className="rounded-xl px-4 py-4 space-y-3"
@@ -625,8 +589,6 @@ export default function SignupPage() {
               </div>
             )}
 
-            {/* [Fix C] isUnder13 retained in disabled condition as
-                defense-in-depth — block screen takes over before this point. */}
             <button
               type="submit"
               disabled={isPending || isUnder13 || (isTeen && !parentalConsent)}
@@ -685,7 +647,7 @@ export default function SignupPage() {
         <p className="mt-6 text-center text-sm text-slime-muted">
           Already have an account?{" "}
           <Link
-            href="/login"
+            href={`/login?next=${encodeURIComponent(next)}`}
             className="font-semibold text-slime-magenta hover:text-slime-accent transition-colors"
           >
             Sign in
@@ -693,5 +655,15 @@ export default function SignupPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+// [Change 5 — #35] Wrap inner component in Suspense per absolute rule 5
+// (useSearchParams requires a Suspense boundary).
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slime-bg" />}>
+      <SignupPageInner />
+    </Suspense>
   );
 }
