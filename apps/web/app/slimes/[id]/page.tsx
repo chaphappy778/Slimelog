@@ -1,551 +1,530 @@
 // apps/web/app/slimes/[id]/page.tsx
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { TypeBadge } from "@/components/TypeBadge";
-import { DeleteLogButton } from "@/components/DeleteLogButton";
-import { BackButton } from "@/components/BackButton";
-import ReportButton from "@/components/ReportButton"; // [Change 1] Import ReportButton
+import Image from "next/image";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import PageWrapper from "@/components/PageWrapper";
+import PageHeader from "@/components/PageHeader";
+import LikeButton from "@/components/collection/LikeButton";
+import ReportButton from "@/components/ReportButton";
+import ClientComments from "@/components/collection/ClientComments";
+import { safeRedirect } from "@/lib/safe-redirect";
+import type { CollectionLog } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SlimeDetail = {
-  id: string;
-  user_id: string | null;
-  created_at: string;
-  slime_name: string | null;
-  brand_id: string | null;
-  brand_name_raw: string | null;
-  collection_name: string | null;
-  slime_type: string | null;
-  colors: string[] | null;
-  scent: string | null;
+interface OwnerProfile {
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+}
+
+// SlimeLogRecord — local extension of CollectionLog with image_url field
+// that exists on the DB column but isn't in the lib/types CollectionLog
+// definition. Filed as separate type-cleanup work; cast at fetch boundary
+// instead of mutating the shared type.
+type SlimeLogRecord = CollectionLog & {
   image_url: string | null;
-  purchase_price: number | null;
-  purchase_currency: string | null;
-  cost_paid: number | null;
-  purchased_from: string | null;
-  purchased_at: string | null;
-  likes: string | null;
-  dislikes: string | null;
-  notes: string | null;
-  in_collection: boolean;
-  in_wishlist: boolean;
-  is_public: boolean;
-  rating_overall: number | null;
-  rating_texture: number | null;
-  rating_scent: number | null;
-  rating_sound: number | null;
-  rating_drizzle: number | null;
-  rating_creativity: number | null;
-  rating_sensory_fit: number | null;
-  order_date: string | null;
-  ship_date: string | null;
-  received_date: string | null;
-  days_to_ship: number | null;
-  days_to_receive: number | null;
-  brands: { name: string; slug: string } | null;
 };
+
+// ─── Server-side Supabase ─────────────────────────────────────────────────────
+
+async function getSupabase() {
+  const cookieStore = await cookies();
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { get: (name) => cookieStore.get(name)?.value } },
+  );
+}
+
+// ─── Log fetch ────────────────────────────────────────────────────────────────
+// RLS on collection_logs (post-#35 migration) allows anon SELECT only when
+// is_public = true. We still filter explicitly in the query as defense in
+// depth. If the log isn't public, the query returns null and we 404.
+
+async function fetchLog(id: string): Promise<SlimeLogRecord | null> {
+  const supabase = await getSupabase();
+  const { data } = await supabase
+    .from("collection_logs")
+    .select("*")
+    .eq("id", id)
+    .eq("is_public", true)
+    .maybeSingle();
+  return (data as SlimeLogRecord | null) ?? null;
+}
+
+// ─── Metadata (#35) ───────────────────────────────────────────────────────────
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const log = await fetchLog(id);
+
+  if (!log) {
+    return {
+      title: "Slime not found — SlimeLog",
+      description: "This slime doesn't exist or isn't public on SlimeLog.",
+    };
+  }
+
+  const slimeName = log.slime_name ?? "Unnamed slime";
+  const brandPart = log.brand_name_raw ? ` from ${log.brand_name_raw}` : "";
+  const ratingPart =
+    typeof log.rating_overall === "number"
+      ? ` — rated ${log.rating_overall}/5`
+      : "";
+
+  const title = `${slimeName}${brandPart}${ratingPart} — SlimeLog`;
+  const description =
+    log.notes?.trim() ||
+    `${slimeName}${brandPart} — see the full review and ratings on SlimeLog.`;
+
+  const url = `https://slimelog.com/slimes/${log.id}`;
+
+  return {
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      type: "article",
+      url,
+      title,
+      description,
+      siteName: "SlimeLog",
+      ...(log.image_url ? { images: [{ url: log.image_url }] } : {}),
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      ...(log.image_url ? { images: [log.image_url] } : {}),
+    },
+  };
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const COLOR_MAP: Record<string, string> = {
-  pink: "#f9a8d4",
-  purple: "#c4b5fd",
-  blue: "#93c5fd",
-  green: "#86efac",
-  yellow: "#fde68a",
-  orange: "#fdba74",
-  red: "#fca5a5",
-  white: "#f3f4f6",
-  black: "#1f2937",
-  clear: "#e0f2fe",
-  teal: "#5eead4",
-  lavender: "#ddd6fe",
-  mint: "#a7f3d0",
-  peach: "#fecaca",
-  gold: "#fcd34d",
-  silver: "#d1d5db",
+const TYPE_COLORS: Record<string, string> = {
+  butter: "#FFB347",
+  clear: "#00F0FF",
+  cloud: "#F5F5F5",
+  icee: "#4FC3F7",
+  fluffy: "#FF6B9D",
+  floam: "#8BC34A",
+  jelly: "#4ECDC4",
+  beaded: "#FF00E5",
+  clay: "#E74C3C",
 };
 
-function colorDot(color: string) {
-  const bg = COLOR_MAP[color.toLowerCase()] ?? "#2a2a2a";
-  const isDark = ["black", "purple", "blue"].includes(color.toLowerCase());
-  return (
-    <span
-      key={color}
-      title={color}
-      className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-white/10"
-      style={{ backgroundColor: bg, color: isDark ? "#f9fafb" : "#111111" }}
-    >
-      <span
-        className="w-2 h-2 rounded-full inline-block border border-white/10"
-        style={{ backgroundColor: bg }}
-      />
-      {color}
-    </span>
-  );
-}
-
-function fmt(iso: string | null) {
-  if (!iso) return "—";
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date(iso));
-}
-
-function StarRating({
-  rating,
-  size = "lg",
-}: {
-  rating: number | null;
-  size?: "sm" | "lg";
-}) {
-  if (!rating)
-    return <span className="text-xs text-slime-muted">No rating</span>;
-  const dim = size === "lg" ? 24 : 16;
-  return (
-    <span
-      className="flex items-center gap-0.5"
-      aria-label={`${rating} out of 5`}
-    >
-      {[1, 2, 3, 4, 5].map((n) => (
-        <svg
-          key={n}
-          width={dim}
-          height={dim}
-          viewBox="0 0 24 24"
-          fill={n <= rating ? "#39FF14" : "rgba(57,255,20,0.15)"}
-          aria-hidden="true"
-        >
-          <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
-        </svg>
-      ))}
-    </span>
-  );
-}
-
-function DotRating({ value }: { value: number | null }) {
-  if (value == null) return <span className="text-xs text-slime-muted">—</span>;
-  return (
-    <span className="flex gap-0.5" aria-label={`${value} out of 5`}>
-      {[1, 2, 3, 4, 5].map((i) => (
-        <span
-          key={i}
-          className={`w-2 h-2 rounded-full ${i <= value ? "bg-slime-accent" : "bg-slime-border"}`}
-        />
-      ))}
-    </span>
-  );
-}
-
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="bg-slime-card rounded-2xl border border-slime-border overflow-hidden">
-      <div className="px-5 py-3 border-b border-slime-border bg-slime-surface">
-        <h2 className="text-xs font-bold uppercase tracking-widest text-slime-accent">
-          {title}
-        </h2>
-      </div>
-      <div className="px-5 py-4">{children}</div>
-    </section>
-  );
-}
-
-function DetailRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-3 py-1.5 border-b border-slime-border last:border-0">
-      <span className="text-xs text-slime-muted font-medium shrink-0">
-        {label}
-      </span>
-      <span className="text-xs text-slime-text text-right">{value}</span>
-    </div>
-  );
-}
-
-function ShippingStat({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number | null;
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-2xl bg-slime-surface border border-slime-border p-3 gap-0.5">
-      <span className="text-2xl font-black text-slime-cyan leading-none">
-        {value ?? "—"}
-      </span>
-      <span className="text-[10px] text-slime-muted font-medium text-center">
-        {label}
-      </span>
-    </div>
-  );
-}
-
-function TextBlock({ label, value }: { label: string; value: string | null }) {
-  if (!value) return null;
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-slime-accent/70">
-        {label}
-      </span>
-      <p className="text-sm text-slime-text leading-relaxed">{value}</p>
-    </div>
-  );
-}
+const RATING_DIMENSIONS: Array<{ key: keyof CollectionLog; label: string }> = [
+  { key: "rating_texture", label: "Texture" },
+  { key: "rating_scent", label: "Scent" },
+  { key: "rating_sound", label: "Sound / ASMR" },
+  { key: "rating_drizzle", label: "Aesthetic" },
+  { key: "rating_creativity", label: "Creativity" },
+  { key: "rating_sensory_fit", label: "Quality" },
+];
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default async function SlimeDetailPage({
+export default async function SlimePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const cookieStore = await cookies();
+  const log = await fetchLog(id);
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { get: (name) => cookieStore.get(name)?.value } },
-  );
+  if (!log) {
+    notFound();
+  }
 
-  const { data, error } = await supabase
-    .from("collection_logs")
-    .select(
-      `
-      id, user_id, created_at, slime_name, brand_id, brand_name_raw,
-      collection_name, slime_type, colors, scent, image_url,
-      purchase_price, purchase_currency, cost_paid,
-      purchased_from, purchased_at,
-      likes, dislikes, notes,
-      in_collection, in_wishlist, is_public,
-      rating_overall, rating_texture, rating_scent, rating_sound,
-      rating_drizzle, rating_creativity, rating_sensory_fit,
-      order_date, ship_date, received_date,
-      days_to_ship, days_to_receive,
-      brands ( name, slug )
-    `,
-    )
-    .eq("id", id)
-    .single();
+  const supabase = await getSupabase();
 
-  if (error || !data) notFound();
-
-  const log = data as unknown as SlimeDetail;
-
+  // Current viewer
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const isOwner = !!user && user.id === log.user_id;
   const currentUserId = user?.id ?? null;
 
-  const brandName = log.brands?.name ?? log.brand_name_raw ?? "Unknown brand";
-  const brandHref = log.brands?.slug ? `/brands/${log.brands.slug}` : null;
-  const displayPrice = log.purchase_price ?? log.cost_paid;
-  const currency = log.purchase_currency ?? "USD";
+  // Owner profile via profiles_public
+  const { data: ownerData } = await supabase
+    .from("profiles_public")
+    .select("username, display_name, avatar_url")
+    .eq("id", log.user_id)
+    .maybeSingle();
+  const owner = ownerData as OwnerProfile | null;
 
-  const SUB_RATINGS: { key: keyof SlimeDetail; label: string }[] = [
-    { key: "rating_texture", label: "Texture" },
-    { key: "rating_scent", label: "Scent" },
-    { key: "rating_sound", label: "Sound / ASMR" },
-    { key: "rating_drizzle", label: "Aesthetic" },
-    { key: "rating_creativity", label: "Creativity" },
-    { key: "rating_sensory_fit", label: "Quality" },
-  ];
+  // Brand slug for linking
+  let brandSlug: string | null = null;
+  if (log.brand_name_raw) {
+    const { data: brandRow } = await supabase
+      .from("brands")
+      .select("slug")
+      .eq("name", log.brand_name_raw)
+      .maybeSingle();
+    brandSlug = (brandRow?.slug as string | undefined) ?? null;
+  }
 
-  const hasSubRatings = SUB_RATINGS.some((r) => log[r.key] != null);
-  const hasShipping = !!log.order_date;
-  const hasDetails =
-    log.collection_name ||
-    displayPrice != null ||
-    log.purchased_from ||
-    log.purchased_at;
-  const hasNotes = log.likes || log.dislikes || log.notes;
+  // Like info — bulk
+  const [{ count: likeCount }, { data: userLikeRow }] = await Promise.all([
+    supabase
+      .from("likes")
+      .select("user_id", { count: "exact", head: true })
+      .eq("log_id", log.id),
+    currentUserId
+      ? supabase
+          .from("likes")
+          .select("user_id")
+          .eq("log_id", log.id)
+          .eq("user_id", currentUserId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
 
-  // [Change 1] Show report for logged-in non-owners
-  const showReport = currentUserId !== null && !isOwner;
+  const typeColor = log.slime_type
+    ? (TYPE_COLORS[log.slime_type] ?? "#39FF14")
+    : "#39FF14";
+
+  const activeDimensions = RATING_DIMENSIONS.filter(
+    ({ key }) => typeof log[key] === "number",
+  );
+
+  // [Change 1 — #35] "Log this slime" CTA appears for any non-owner
+  // viewer (logged-in or out). Wishlist intent is a real conversion
+  // hook for shareable pages.
+  const showCTA = currentUserId !== log.user_id;
+  const ctaNext = safeRedirect(`/slimes/${log.id}`, "/landing");
+  const ctaHref = currentUserId
+    ? `/log?prefill=${encodeURIComponent(log.slime_name ?? "")}&brand=${encodeURIComponent(log.brand_name_raw ?? "")}`
+    : `/signup?next=${encodeURIComponent(ctaNext)}`;
 
   return (
-    <div
-      className="min-h-screen pb-24"
-      style={{
-        background:
-          "radial-gradient(ellipse 100% 60% at 50% 0%, #2D0A4E 0%, #100020 35%, #0A0A0A 65%)",
-      }}
-    >
-      {/* Sticky top bar */}
-      <div
-        className="sticky top-0 z-20 px-4 py-3 flex items-center justify-between gap-2"
-        style={{
-          background: "rgba(10,10,10,0.92)",
-          borderBottom: "1px solid rgba(57,255,20,0.12)",
-          backdropFilter: "blur(8px)",
-          WebkitBackdropFilter: "blur(8px)",
-        }}
-      >
-        <BackButton />
+    <PageWrapper dots>
+      <PageHeader />
 
-        {isOwner && (
-          <span
-            className={`flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full border ${
-              log.in_wishlist
-                ? "bg-violet-900/40 text-violet-300 border-violet-500/30"
-                : "bg-slime-accent/10 text-slime-accent border-slime-accent/30"
-            }`}
-          >
-            <svg
-              width="10"
-              height="10"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <polygon points="12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9" />
-            </svg>
-            {log.in_wishlist ? "Wishlist" : "In Collection"}
-          </span>
-        )}
-      </div>
-
-      <div className="px-4 pt-6 flex flex-col gap-5 max-w-lg mx-auto">
-        {/* Hero */}
-        <div className="bg-slime-card rounded-2xl border border-slime-border overflow-hidden flex flex-col relative">
-          <div
-            className="absolute -top-8 -right-8 w-32 h-32 rounded-full opacity-10 blur-3xl pointer-events-none z-0"
-            style={{ background: "radial-gradient(circle, #39FF14, #00F0FF)" }}
-            aria-hidden="true"
-          />
-
-          {log.image_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+      <main className="pt-14 pb-32 max-w-2xl mx-auto">
+        {/* Hero image */}
+        {log.image_url && (
+          <div className="relative w-full aspect-square">
+            <Image
               src={log.image_url}
               alt={log.slime_name ?? "Slime photo"}
-              className="w-full h-56 object-cover"
+              fill
+              sizes="(max-width: 768px) 100vw, 700px"
+              priority
+              className="object-cover"
             />
-          ) : (
             <div
-              className="w-full h-40 flex items-center justify-center"
+              className="absolute inset-0 pointer-events-none"
               style={{
-                background: "linear-gradient(135deg, #2D0A4E, #1A1A1A)",
+                background:
+                  "linear-gradient(to bottom, rgba(0,0,0,0) 60%, rgba(10,10,10,0.85) 100%)",
               }}
-              aria-hidden="true"
+            />
+          </div>
+        )}
+
+        <div className="px-4 mt-4 flex flex-col gap-4">
+          {/* Owner row */}
+          {owner && (
+            <Link
+              href={`/users/${owner.username}`}
+              className="flex items-center gap-3 group"
             >
-              <svg
-                width="40"
-                height="40"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="rgba(57,255,20,0.3)"
-                strokeWidth="1.5"
+              <div className="relative w-9 h-9 rounded-full overflow-hidden border border-slime-border shrink-0">
+                {owner.avatar_url ? (
+                  <Image
+                    src={owner.avatar_url}
+                    alt={owner.display_name ?? owner.username ?? "User"}
+                    fill
+                    sizes="36px"
+                    className="object-cover"
+                  />
+                ) : (
+                  <div
+                    className="w-full h-full flex items-center justify-center text-xs font-bold"
+                    style={{
+                      background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                      color: "#0A0A0A",
+                    }}
+                    aria-hidden="true"
+                  >
+                    {(owner.display_name ?? owner.username ?? "?")
+                      .charAt(0)
+                      .toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col leading-tight">
+                <span className="text-sm font-semibold text-slime-text group-hover:text-slime-magenta transition-colors">
+                  {owner.display_name ?? owner.username}
+                </span>
+                <span className="text-xs text-slime-muted">
+                  @{owner.username}
+                </span>
+              </div>
+            </Link>
+          )}
+
+          {/* Title + brand */}
+          <header className="flex flex-col gap-1.5">
+            <h1
+              className="text-2xl font-black leading-tight"
+              style={{
+                color: "#fff",
+                fontFamily: "Montserrat, Inter, sans-serif",
+              }}
+            >
+              {log.slime_name ?? "Unnamed Slime"}
+            </h1>
+            {log.brand_name_raw && (
+              <div className="text-sm">
+                {brandSlug ? (
+                  <Link
+                    href={`/brands/${brandSlug}`}
+                    className="font-semibold"
+                    style={{ color: "#00F0FF" }}
+                  >
+                    {log.brand_name_raw}
+                  </Link>
+                ) : (
+                  <span className="text-slime-muted font-medium">
+                    {log.brand_name_raw}
+                  </span>
+                )}
+              </div>
+            )}
+          </header>
+
+          {/* Type + status badges */}
+          <div className="flex flex-wrap gap-2 items-center">
+            {log.slime_type && (
+              <span
+                className="px-3 py-1 rounded-full text-xs font-semibold border"
+                style={{
+                  background: `${typeColor}20`,
+                  color: typeColor,
+                  borderColor: `${typeColor}50`,
+                }}
               >
-                <circle cx="12" cy="12" r="10" />
-                <circle
-                  cx="8"
-                  cy="9"
-                  r="1.5"
-                  fill="rgba(57,255,20,0.3)"
-                  stroke="none"
-                />
-                <circle
-                  cx="15"
-                  cy="7"
-                  r="1"
-                  fill="rgba(57,255,20,0.2)"
-                  stroke="none"
-                />
-              </svg>
+                {log.slime_type.replace(/_/g, " ")}
+              </span>
+            )}
+            {log.in_wishlist ? (
+              <span
+                className="px-3 py-1 rounded-full text-xs font-semibold border"
+                style={{
+                  background: "rgba(204,68,255,0.15)",
+                  color: "#CC44FF",
+                  borderColor: "rgba(204,68,255,0.4)",
+                }}
+              >
+                Wishlist
+              </span>
+            ) : log.in_collection ? (
+              <span
+                className="px-3 py-1 rounded-full text-xs font-semibold border"
+                style={{
+                  background: "rgba(57,255,20,0.15)",
+                  color: "#39FF14",
+                  borderColor: "rgba(57,255,20,0.4)",
+                }}
+              >
+                In Collection
+              </span>
+            ) : null}
+          </div>
+
+          {/* Overall rating */}
+          {typeof log.rating_overall === "number" && (
+            <div className="flex items-center gap-4 mt-1">
+              <span
+                className="text-5xl font-black leading-none"
+                style={{
+                  color: "#39FF14",
+                  fontFamily: "Montserrat, Inter, sans-serif",
+                }}
+              >
+                {log.rating_overall}
+              </span>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-0.5">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <svg
+                      key={n}
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill={
+                        n <= (log.rating_overall ?? 0)
+                          ? "#39FF14"
+                          : "rgba(57,255,20,0.15)"
+                      }
+                      aria-hidden="true"
+                    >
+                      <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+                    </svg>
+                  ))}
+                </div>
+                <span className="text-xs text-slime-muted uppercase tracking-wider">
+                  overall rating
+                </span>
+              </div>
             </div>
           )}
 
-          <div className="px-5 pb-5 pt-4 flex flex-col gap-3 relative z-10">
-            <h1 className="text-2xl font-black text-slime-cyan leading-tight tracking-tight pr-4">
-              {log.slime_name ?? "Untitled Slime"}
-            </h1>
-            <div className="flex items-center gap-1.5 text-sm text-slime-muted">
-              <span>by</span>
-              {brandHref ? (
-                <Link
-                  href={brandHref}
-                  className="font-semibold text-slime-magenta hover:text-slime-accent underline underline-offset-2 transition"
-                >
-                  {brandName}
-                </Link>
-              ) : (
-                <span className="font-semibold text-slime-magenta">
-                  {brandName}
-                </span>
-              )}
+          {/* Action bar — Like + Report */}
+          <div
+            className="flex items-stretch border-y"
+            style={{
+              borderColor: "rgba(45,10,78,0.6)",
+              marginTop: 4,
+            }}
+          >
+            <div className="flex-1 flex items-center justify-center py-3">
+              <LikeButton
+                logId={log.id}
+                initialCount={likeCount ?? 0}
+                initialLiked={!!userLikeRow}
+                currentUserId={currentUserId}
+              />
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {log.slime_type && <TypeBadge type={log.slime_type as any} />}
-              {log.colors?.map((c) => colorDot(c))}
-            </div>
-            {log.scent && (
-              <p className="text-sm text-slime-muted flex items-center gap-1.5">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#FF00E5"
-                  strokeWidth="1.5"
-                  aria-hidden="true"
-                >
-                  <path d="M12 2C12 2 10 6 12 8C14 6 12 2 12 2Z" />
-                  <path d="M12 22C12 22 10 18 12 16C14 18 12 22 12 22Z" />
-                  <path d="M2 12C2 12 6 10 8 12C6 14 2 12 2 12Z" />
-                  <path d="M22 12C22 12 18 10 16 12C18 14 22 12 22 12Z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-                <span className="font-medium text-slime-text">{log.scent}</span>
-              </p>
+            {showCTA && (
+              <>
+                <div
+                  className="w-px shrink-0"
+                  style={{ background: "rgba(45,10,78,0.6)" }}
+                />
+                <div className="flex-1 flex items-center justify-center py-3">
+                  <ReportButton
+                    contentType="log"
+                    contentId={log.id}
+                    currentUserId={currentUserId}
+                  />
+                </div>
+              </>
             )}
           </div>
-        </div>
 
-        {/* Ratings */}
-        <Section title="Ratings">
-          <div className="flex items-center justify-between mb-4 pb-4 border-b border-slime-border">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-slime-muted mb-1">
-                Overall
-              </p>
-              <StarRating rating={log.rating_overall} size="lg" />
-            </div>
-            {log.rating_overall != null && (
-              <span className="text-4xl font-black text-slime-cyan">
-                {log.rating_overall}
-                <span className="text-xl text-slime-border">/5</span>
-              </span>
-            )}
-          </div>
-          {hasSubRatings ? (
-            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-              {SUB_RATINGS.map(({ key, label }) => (
-                <div key={key} className="flex flex-col gap-1">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-slime-muted">
+          {/* Dimension grid */}
+          {activeDimensions.length > 0 && (
+            <div
+              className="grid grid-cols-2 gap-x-4 gap-y-2.5 p-4 rounded-xl border"
+              style={{
+                background: "rgba(45,10,78,0.25)",
+                borderColor: "rgba(45,10,78,0.5)",
+              }}
+            >
+              {activeDimensions.map(({ key, label }) => (
+                <div key={key} className="flex flex-col gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wider text-slime-muted font-semibold">
                     {label}
                   </span>
-                  <DotRating value={log[key] as number | null} />
+                  <div className="flex items-center gap-1.5">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <span
+                        key={i}
+                        className="w-2 h-2 rounded-full"
+                        style={{
+                          background:
+                            i <= (log[key] as number)
+                              ? "#39FF14"
+                              : "rgba(57,255,20,0.15)",
+                        }}
+                      />
+                    ))}
+                    <span
+                      className="text-xs font-bold ml-1"
+                      style={{ color: "#39FF14" }}
+                    >
+                      {log[key] as number}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
-          ) : (
-            <p className="text-xs text-slime-muted text-center py-2">
-              No detailed ratings yet.
+          )}
+
+          {/* Notes */}
+          {log.notes && (
+            <p className="text-sm italic leading-relaxed text-slime-text/70">
+              {log.notes}
             </p>
           )}
-        </Section>
 
-        {hasDetails && (
-          <Section title="Details">
-            {log.collection_name && (
-              <DetailRow label="Collection" value={log.collection_name} />
+          {/* Meta row */}
+          <div className="flex flex-wrap gap-1.5">
+            {log.created_at && (
+              <span
+                className="px-2.5 py-1 rounded-full text-[11px]"
+                style={{
+                  background: "rgba(45,10,78,0.4)",
+                  color: "rgba(255,255,255,0.4)",
+                }}
+              >
+                Logged{" "}
+                {new Intl.DateTimeFormat("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                }).format(new Date(log.created_at))}
+              </span>
             )}
-            {displayPrice != null && (
-              <DetailRow
-                label="Price paid"
-                value={`${currency === "USD" ? "$" : ""}${Number(displayPrice).toFixed(2)}${currency !== "USD" ? ` ${currency}` : ""}`}
-              />
+            {typeof log.cost_paid === "number" && (
+              <span
+                className="px-2.5 py-1 rounded-full text-[11px]"
+                style={{
+                  background: "rgba(45,10,78,0.4)",
+                  color: "rgba(255,255,255,0.5)",
+                }}
+              >
+                {new Intl.NumberFormat("en-US", {
+                  style: "currency",
+                  currency: "USD",
+                }).format(log.cost_paid)}
+              </span>
             )}
             {log.purchased_from && (
-              <DetailRow label="Purchased from" value={log.purchased_from} />
-            )}
-            {log.purchased_at && (
-              <DetailRow label="Purchase date" value={fmt(log.purchased_at)} />
-            )}
-            <DetailRow label="Logged on" value={fmt(log.created_at)} />
-          </Section>
-        )}
-
-        {hasNotes && (
-          <Section title="Notes">
-            <div className="flex flex-col gap-4">
-              <TextBlock label="What I loved" value={log.likes} />
-              <TextBlock label="What I didn't love" value={log.dislikes} />
-              <TextBlock label="Notes" value={log.notes} />
-            </div>
-          </Section>
-        )}
-
-        {hasShipping && (
-          <Section title="Shipping">
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <ShippingStat
-                label="Days to ship"
-                value={log.days_to_ship ?? "—"}
-              />
-              <ShippingStat
-                label="Days to receive"
-                value={log.days_to_receive ?? "—"}
-              />
-            </div>
-            <div className="flex flex-col gap-0">
-              <DetailRow label="Order date" value={fmt(log.order_date)} />
-              <DetailRow label="Ship date" value={fmt(log.ship_date)} />
-              <DetailRow label="Received" value={fmt(log.received_date)} />
-            </div>
-            <p className="text-[11px] text-slime-muted mt-3 text-center italic">
-              This shipping data helps rate {brandName}
-            </p>
-          </Section>
-        )}
-
-        {isOwner && (
-          <div className="flex gap-3 pt-1">
-            <Link
-              href={`/log/edit/${id}`}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-slime-accent/40 text-slime-accent font-bold text-sm hover:bg-slime-accent/10 transition"
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+              <span
+                className="px-2.5 py-1 rounded-full text-[11px]"
+                style={{
+                  background: "rgba(45,10,78,0.4)",
+                  color: "rgba(255,255,255,0.5)",
+                }}
               >
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-              </svg>
-              Edit
-            </Link>
-            <DeleteLogButton logId={id} />
+                {log.purchased_from}
+              </span>
+            )}
           </div>
-        )}
 
-        {/* [Change 1] Report button for non-owners */}
-        {showReport && (
-          <div className="flex justify-end pb-2">
-            <ReportButton
-              contentType="log"
-              contentId={id}
-              currentUserId={currentUserId}
-            />
-          </div>
-        )}
-      </div>
-    </div>
+          {/* "Log this slime" CTA — non-owners only */}
+          {showCTA && (
+            <Link
+              href={ctaHref}
+              className="block w-full text-center py-3.5 rounded-xl text-sm font-bold mt-2"
+              style={{
+                background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                color: "#0A0A0A",
+                fontFamily: "Montserrat, Inter, sans-serif",
+              }}
+            >
+              {currentUserId ? "Log this slime" : "Sign up to log this slime"}
+            </Link>
+          )}
+        </div>
+
+        {/* Comments — client-only mount so they're not in the SSR HTML.
+            [Change 2 — #35] Defers comment thread to hydration so logged-out
+            comment text doesn't appear in indexable page source. */}
+        <ClientComments logId={log.id} />
+      </main>
+    </PageWrapper>
   );
 }

@@ -7,8 +7,6 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import PageWrapper from "@/components/PageWrapper";
 import PageHeader from "@/components/PageHeader";
-// [Boyscout #35] Import shared label map; removed local copy that drifted
-// from @/lib/types.
 import { SLIME_TYPE_LABELS } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -16,12 +14,12 @@ import { SLIME_TYPE_LABELS } from "@/lib/types";
 interface Drop {
   id: string;
   brand_id: string;
-  drop_name: string;
+  name: string;
   description: string | null;
-  drop_date: string;
+  drop_at: string | null;
   status: string | null;
   cover_image_url: string | null;
-  drop_url: string | null;
+  shop_url: string | null;
   created_at: string;
 }
 
@@ -77,9 +75,7 @@ async function fetchDropAndBrand(
   return { drop, brand: brandRow as DropBrand };
 }
 
-// ─── Metadata (#35) ───────────────────────────────────────────────────────────
-// [Change 1 — #35] Added static generateMetadata. Dynamic OG image deferred
-// as fast-follow; static metadata referencing /og-default.png is fine.
+// ─── Metadata ─────────────────────────────────────────────────────────────────
 
 export async function generateMetadata({
   params,
@@ -97,10 +93,10 @@ export async function generateMetadata({
   }
 
   const { drop, brand } = result;
-  const title = `${drop.drop_name} drop from ${brand.name} — SlimeLog`;
+  const title = `${drop.name} drop from ${brand.name} — SlimeLog`;
   const description =
     drop.description?.trim() ||
-    `${drop.drop_name} — an upcoming slime drop from ${brand.name}. See details on SlimeLog.`;
+    `${drop.name} — an upcoming slime drop from ${brand.name}. See details on SlimeLog.`;
 
   const url = `https://slimelog.com/drops/${drop.id}`;
 
@@ -127,8 +123,11 @@ export async function generateMetadata({
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatDropDate(iso: string): { date: string; time: string } {
+function formatDropDate(iso: string | null): { date: string; time: string } {
+  if (!iso) return { date: "Date TBD", time: "" };
   const d = new Date(iso);
+  if (isNaN(d.getTime())) return { date: "Date TBD", time: "" };
+
   const date = new Intl.DateTimeFormat("en-US", {
     weekday: "short",
     month: "short",
@@ -144,32 +143,58 @@ function formatDropDate(iso: string): { date: string; time: string } {
   return { date, time };
 }
 
-function getCountdown(iso: string): {
+function getCountdown(iso: string | null): {
   label: string;
   isLive: boolean;
   isPast: boolean;
+  hasDate: boolean;
 } {
+  if (!iso) {
+    return { label: "", isLive: false, isPast: false, hasDate: false };
+  }
+
   const target = new Date(iso).getTime();
+  if (isNaN(target)) {
+    return { label: "", isLive: false, isPast: false, hasDate: false };
+  }
+
   const now = Date.now();
   const diff = target - now;
 
   if (diff <= 0) {
     const sincePast = Math.abs(diff);
     if (sincePast < 1000 * 60 * 60 * 6) {
-      return { label: "LIVE NOW", isLive: true, isPast: false };
+      return { label: "LIVE NOW", isLive: true, isPast: false, hasDate: true };
     }
-    return { label: "Past drop", isLive: false, isPast: true };
+    return { label: "Past drop", isLive: false, isPast: true, hasDate: true };
   }
 
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
   const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
 
-  if (days > 0)
-    return { label: `${days}d ${hours}h`, isLive: false, isPast: false };
-  if (hours > 0)
-    return { label: `${hours}h ${mins}m`, isLive: false, isPast: false };
-  return { label: `${mins}m`, isLive: false, isPast: false };
+  if (days > 0) {
+    return {
+      label: `${days}d ${hours}h`,
+      isLive: false,
+      isPast: false,
+      hasDate: true,
+    };
+  }
+  if (hours > 0) {
+    return {
+      label: `${hours}h ${mins}m`,
+      isLive: false,
+      isPast: false,
+      hasDate: true,
+    };
+  }
+  return {
+    label: `${mins}m`,
+    isLive: false,
+    isPast: false,
+    hasDate: true,
+  };
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -189,7 +214,6 @@ export default async function DropPage({
   const { drop, brand } = result;
   const supabase = await getSupabase();
 
-  // Fetch slimes in this drop
   const { data: slimeRows } = await supabase
     .from("drop_slimes")
     .select(
@@ -200,8 +224,8 @@ export default async function DropPage({
 
   const slimes = (slimeRows ?? []) as DropSlime[];
 
-  const { date, time } = formatDropDate(drop.drop_date);
-  const countdown = getCountdown(drop.drop_date);
+  const { date, time } = formatDropDate(drop.drop_at);
+  const countdown = getCountdown(drop.drop_at);
   const isCancelled = drop.status === "cancelled";
 
   return (
@@ -209,7 +233,6 @@ export default async function DropPage({
       <PageHeader />
 
       <main className="pt-14 pb-24 max-w-2xl mx-auto">
-        {/* Cover image */}
         <div
           className="relative w-full h-56 sm:h-72"
           style={{
@@ -221,7 +244,7 @@ export default async function DropPage({
           {drop.cover_image_url && (
             <Image
               src={drop.cover_image_url}
-              alt={drop.drop_name}
+              alt={drop.name}
               fill
               sizes="100vw"
               priority
@@ -236,7 +259,6 @@ export default async function DropPage({
             }}
           />
 
-          {/* Status badge */}
           <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
             {countdown.isLive && (
               <span
@@ -247,7 +269,6 @@ export default async function DropPage({
                   fontFamily: "Montserrat, sans-serif",
                 }}
               >
-                {/* [Boyscout #35] Replaced 🔴 emoji with pulsing dot SVG */}
                 <span
                   className="w-2 h-2 rounded-full"
                   style={{
@@ -274,7 +295,6 @@ export default async function DropPage({
           </div>
         </div>
 
-        {/* Drop header */}
         <section className="px-4 -mt-12 relative z-10">
           <Link
             href={`/brands/${brand.slug}`}
@@ -323,7 +343,7 @@ export default async function DropPage({
               fontFamily: "Montserrat, Inter, sans-serif",
             }}
           >
-            {drop.drop_name}
+            {drop.name}
           </h1>
 
           {drop.description && (
@@ -332,71 +352,70 @@ export default async function DropPage({
             </p>
           )}
 
-          {/* Drop time block */}
-          <div
-            className="mt-4 p-4 rounded-xl border flex items-center gap-4"
-            style={{
-              background: "rgba(45,10,78,0.3)",
-              borderColor: "rgba(45,10,78,0.6)",
-            }}
-          >
-            {/* [Boyscout #35] Replaced 🗓 emoji with calendar SVG */}
+          {countdown.hasDate && (
             <div
-              className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+              className="mt-4 p-4 rounded-xl border flex items-center gap-4"
               style={{
-                background: "rgba(57,255,20,0.15)",
-                border: "1px solid rgba(57,255,20,0.3)",
+                background: "rgba(45,10,78,0.3)",
+                borderColor: "rgba(45,10,78,0.6)",
               }}
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#39FF14"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                <line x1="16" y1="2" x2="16" y2="6" />
-                <line x1="8" y1="2" x2="8" y2="6" />
-                <line x1="3" y1="10" x2="21" y2="10" />
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-slime-text">{date}</p>
-              <p className="text-xs text-slime-muted">{time}</p>
-            </div>
-            {!isCancelled && !countdown.isPast && !countdown.isLive && (
               <div
-                className="text-right shrink-0 px-3 py-1.5 rounded-lg"
+                className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
                 style={{
-                  background: "rgba(0,240,255,0.1)",
-                  border: "1px solid rgba(0,240,255,0.3)",
+                  background: "rgba(57,255,20,0.15)",
+                  border: "1px solid rgba(57,255,20,0.3)",
                 }}
               >
-                <p className="text-[10px] uppercase tracking-wider text-slime-muted font-semibold">
-                  Drops in
-                </p>
-                <p
-                  className="text-base font-black"
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#39FF14"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slime-text">{date}</p>
+                {time && <p className="text-xs text-slime-muted">{time}</p>}
+              </div>
+              {!isCancelled && !countdown.isPast && !countdown.isLive && (
+                <div
+                  className="text-right shrink-0 px-3 py-1.5 rounded-lg"
                   style={{
-                    color: "#00F0FF",
-                    fontFamily: "Montserrat, sans-serif",
+                    background: "rgba(0,240,255,0.1)",
+                    border: "1px solid rgba(0,240,255,0.3)",
                   }}
                 >
-                  {countdown.label}
-                </p>
-              </div>
-            )}
-          </div>
+                  <p className="text-[10px] uppercase tracking-wider text-slime-muted font-semibold">
+                    Drops in
+                  </p>
+                  <p
+                    className="text-base font-black"
+                    style={{
+                      color: "#00F0FF",
+                      fontFamily: "Montserrat, sans-serif",
+                    }}
+                  >
+                    {countdown.label}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
-          {/* Drop URL CTA */}
-          {drop.drop_url && !isCancelled && (
+          {drop.shop_url && !isCancelled && (
             <a
-              href={drop.drop_url}
+              href={drop.shop_url}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-4 w-full text-center py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
@@ -406,7 +425,6 @@ export default async function DropPage({
                 fontFamily: "Montserrat, Inter, sans-serif",
               }}
             >
-              {/* [Boyscout #35] Replaced 🛒 emoji with shopping bag SVG */}
               <svg
                 width="16"
                 height="16"
@@ -427,14 +445,12 @@ export default async function DropPage({
           )}
         </section>
 
-        {/* Slimes in this drop */}
         {slimes.length > 0 && (
           <section className="px-4 mt-8">
             <h2
               className="text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2"
               style={{ color: "#39FF14", fontFamily: "Montserrat, sans-serif" }}
             >
-              {/* [Boyscout #35] Replaced 🫧 emoji with droplet SVG */}
               <svg
                 width="14"
                 height="14"
