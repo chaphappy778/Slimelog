@@ -2,8 +2,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { safeRedirect } from "@/lib/safe-redirect";
 
 interface FollowBrandButtonProps {
   brandId: string;
@@ -17,6 +18,7 @@ export default function FollowBrandButton({
   initialFollowerCount,
 }: FollowBrandButtonProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const supabase = createClient();
 
   const [userId, setUserId] = useState<string | null>(null);
@@ -32,7 +34,13 @@ export default function FollowBrandButton({
         data: { session },
       } = await supabase.auth.getSession();
       if (!session?.user) {
-        if (!cancelled) setLoading(false);
+        // [Change 1 — #35] No longer treat unauthenticated as a hard
+        // failure. We still want loading → resolved so the button
+        // renders for logged-out users.
+        if (!cancelled) {
+          setUserId(null);
+          setLoading(false);
+        }
         return;
       }
 
@@ -60,8 +68,14 @@ export default function FollowBrandButton({
   }, [brandId, supabase]);
 
   const handleToggle = useCallback(async () => {
+    // [Change 2 — #35] Logged-out users now route to /signup (higher
+    // conversion CTA than /login per spec). The redirect path is
+    // validated via safeRedirect to prevent open-redirect via crafted
+    // pathnames.
     if (!userId) {
-      router.push(`/login?next=/brands/${brandSlug}`);
+      const fallbackPath = `/brands/${brandSlug}`;
+      const next = safeRedirect(pathname ?? fallbackPath, "/landing");
+      router.push(`/signup?next=${encodeURIComponent(next)}`);
       return;
     }
     if (pending) return;
@@ -90,11 +104,21 @@ export default function FollowBrandButton({
     } finally {
       setPending(false);
     }
-  }, [userId, isFollowing, pending, brandId, brandSlug, supabase, router]);
+  }, [
+    userId,
+    isFollowing,
+    pending,
+    brandId,
+    brandSlug,
+    supabase,
+    router,
+    pathname,
+  ]);
 
   if (loading) {
     return (
       <button
+        type="button"
         disabled
         aria-label="Loading follow status"
         className="flex items-center gap-1.5 min-h-[44px] px-4 py-2 rounded-xl bg-slime-surface border border-slime-border text-xs font-bold cursor-wait"
@@ -109,6 +133,7 @@ export default function FollowBrandButton({
     return (
       /* Following state — magenta outline (social/community semantic role) */
       <button
+        type="button"
         onClick={handleToggle}
         disabled={pending}
         aria-label="Unfollow this brand"
@@ -142,6 +167,7 @@ export default function FollowBrandButton({
   return (
     /* Follow state — keep green */
     <button
+      type="button"
       onClick={handleToggle}
       disabled={pending}
       aria-label="Follow this brand"

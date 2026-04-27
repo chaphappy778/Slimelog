@@ -2,10 +2,12 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { useToast } from "@/components/Toast";
 import ReportButton from "@/components/ReportButton";
 import CommentLikeButton from "@/components/collection/CommentLikeButton";
+import CommentInputGate from "@/components/collection/CommentInputGate";
 
 // Module-level client
 const supabase = createBrowserClient(
@@ -18,7 +20,11 @@ interface Comment {
   user_id: string;
   body: string;
   created_at: string;
-  profiles: { username: string | null } | null;
+  // [Change 1 — #35] Profile fetched separately and merged in. Embedded
+  // join replaced with manual two-step batch fetch via profiles_public —
+  // PostgREST FK auto-resolution through views is unreliable, so we hydrate
+  // usernames in a second query keyed by user_id.
+  username: string | null;
 }
 
 interface Props {
@@ -29,9 +35,7 @@ interface Props {
 
 const COLLAPSED_COUNT = 2;
 
-// [Fix 3] Bucketed short-form relative time — matches the pattern used in
-// users/[username]/page.tsx. Replaces the old Intl.RelativeTimeFormat "minute"-
-// only helper that produced strings like "18,355 minutes ago".
+// Bucketed short-form relative time — matches users/[username]/page.tsx.
 function formatRelativeTime(isoString: string): string {
   const diffMs = Date.now() - new Date(isoString).getTime();
   const diffMins = Math.floor(diffMs / 1000 / 60);
@@ -60,21 +64,59 @@ export default function CommentSection({
   const [likedByUser, setLikedByUser] = useState<Record<string, boolean>>({});
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { showToast } = useToast();
+  const pathname = usePathname();
 
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
       setLoading(true);
-      const { data } = await supabase
+
+      // [Change 2 — #35] Two-step fetch: comments first (from base table),
+      // then profiles_public batch-fetched by user_id. PostgREST FK hints
+      // through views are unreliable; manual hydration is the documented
+      // fallback per the spec's F.6 guidance.
+      const { data: rawComments } = await supabase
         .from("comments")
-        .select("id, user_id, body, created_at, profiles ( username )")
+        .select("id, user_id, body, created_at")
         .eq("log_id", logId)
         .order("created_at", { ascending: false });
 
       if (cancelled) return;
 
-      const loaded = (data as unknown as Comment[]) ?? [];
+      const baseRows = (rawComments ?? []) as Array<{
+        id: string;
+        user_id: string;
+        body: string;
+        created_at: string;
+      }>;
+
+      // Resolve usernames via profiles_public — single batch round-trip.
+      const userIds = Array.from(new Set(baseRows.map((r) => r.user_id)));
+      let usernameMap: Record<string, string | null> = {};
+      if (userIds.length > 0) {
+        const { data: profileRows } = await supabase
+          .from("profiles_public")
+          .select("id, username")
+          .in("id", userIds);
+
+        if (cancelled) return;
+
+        for (const p of (profileRows ?? []) as Array<{
+          id: string;
+          username: string | null;
+        }>) {
+          usernameMap[p.id] = p.username;
+        }
+      }
+
+      const loaded: Comment[] = baseRows.map((r) => ({
+        id: r.id,
+        user_id: r.user_id,
+        body: r.body,
+        created_at: r.created_at,
+        username: usernameMap[r.user_id] ?? null,
+      }));
 
       const commentIds = loaded.map((c) => c.id);
 
@@ -132,13 +174,30 @@ export default function CommentSection({
     const { data, error } = await supabase
       .from("comments")
       .insert({ log_id: logId, user_id: currentUserId, body: trimmed })
-      .select("id, user_id, body, created_at, profiles ( username )")
+      .select("id, user_id, body, created_at")
       .single();
 
     setSubmitting(false);
 
     if (!error && data) {
-      const newComment = data as unknown as Comment;
+      // [Change 3 — #35] After insert, look up the new comment's author
+      // username via profiles_public so the optimistic prepend renders
+      // correctly. This is a single-row lookup, fast.
+      const { data: profileRow } = await supabase
+        .from("profiles_public")
+        .select("username")
+        .eq("id", currentUserId)
+        .maybeSingle();
+
+      const newComment: Comment = {
+        id: (data as { id: string }).id,
+        user_id: (data as { user_id: string }).user_id,
+        body: (data as { body: string }).body,
+        created_at: (data as { created_at: string }).created_at,
+        username:
+          (profileRow as { username: string | null } | null)?.username ?? null,
+      };
+
       setComments((prev) => [newComment, ...prev]);
       setLikeCounts((prev) => ({ ...prev, [newComment.id]: 0 }));
       setLikedByUser((prev) => ({ ...prev, [newComment.id]: false }));
@@ -229,9 +288,7 @@ export default function CommentSection({
           </p>
         ) : (
           visibleComments.map((c) => {
-            const username =
-              (c.profiles as { username: string | null } | null)?.username ??
-              "unknown";
+            const username = c.username ?? "unknown";
             const isOwn = c.user_id === currentUserId;
 
             return (
@@ -358,8 +415,10 @@ export default function CommentSection({
         </button>
       )}
 
-      {/* Input */}
-      {currentUserId && (
+      {/* Input — gated for logged-out users via CommentInputGate.
+          [Change 4 — #35] Previously the input block was hidden entirely
+          when no user. Now we always render — either real input or gate. */}
+      {currentUserId ? (
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
           <textarea
             ref={inputRef}
@@ -410,6 +469,8 @@ export default function CommentSection({
             Post
           </button>
         </div>
+      ) : (
+        <CommentInputGate redirectPath={pathname ?? "/"} />
       )}
     </div>
   );

@@ -4,13 +4,15 @@
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter, usePathname } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import type { CollectionLog } from "@/lib/types";
 import LikeButton from "@/components/collection/LikeButton";
 import CommentSection from "@/components/collection/CommentSection";
 import BrandMiniSheet from "@/components/BrandMiniSheet";
-import ReportButton from "@/components/ReportButton"; // [Change 1] Import ReportButton
+import ReportButton from "@/components/ReportButton";
 import { useToast } from "@/components/Toast";
+import { safeRedirect } from "@/lib/safe-redirect";
 
 // ─── Supabase (module-level) ──────────────────────────────────────────────────
 
@@ -158,6 +160,8 @@ export default function SlimeDetailCard({
 }: Props) {
   const commentRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
+  const router = useRouter();
+  const pathname = usePathname();
 
   const [liveCommentCount, setLiveCommentCount] = useState(commentCount);
   const [showBrandSheet, setShowBrandSheet] = useState(false);
@@ -193,8 +197,16 @@ export default function SlimeDetailCard({
     };
   }, [currentUserId, log.slime_name]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // [Change 1 — #35] Wishlist click now handles logged-out users by routing
+  // to signup. Previously the entire button was hidden when no user.
   async function handleAddToWishlist() {
-    if (!currentUserId || wishlistLoading || isWishlisted) return;
+    if (!currentUserId) {
+      const next = safeRedirect(pathname ?? `/slimes/${log.id}`, "/landing");
+      router.push(`/signup?next=${encodeURIComponent(next)}`);
+      return;
+    }
+
+    if (wishlistLoading || isWishlisted) return;
     setWishlistLoading(true);
 
     const res = await fetch("/api/wishlist", {
@@ -233,11 +245,28 @@ export default function SlimeDetailCard({
     commentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  // [Change 1] Show report button only on other users' content
-  const showReport = currentUserId !== null && currentUserId !== log.user_id;
+  // [Change 2 — #35] Show Report for any non-owner viewer, including
+  // logged-out (the ReportButton component itself handles the route-to-
+  // signup behavior on click). Previously gated by currentUserId !== null.
+  const showReport = currentUserId !== log.user_id;
 
   const IMAGE_HEIGHT = "28vh";
   const OVERLAP = imageUrl ? 56 : 0;
+
+  // [Change 3 — #35] Wishlist button label/logic for the three states:
+  // - Logged-out: "Add to Wishlist" (routes to signup)
+  // - Logged-in, not wishlisted: "Add to Wishlist" (real action)
+  // - Logged-in, already wishlisted: "In Wishlist" (disabled)
+  const wishlistLabel = (() => {
+    if (!currentUserId) return "Add to Wishlist";
+    if (isWishlisted === null) return "...";
+    if (isWishlisted) return "In Wishlist";
+    if (wishlistLoading) return "Saving...";
+    return "Add to Wishlist";
+  })();
+
+  const wishlistIsCta =
+    !currentUserId || (isWishlisted === false && !wishlistLoading);
 
   return (
     <div
@@ -641,7 +670,6 @@ export default function SlimeDetailCard({
           )}
 
           {/* Like + Comment + Report action bar */}
-          {/* [Change 1] Added Report as third action slot */}
           <div
             style={{
               display: "flex",
@@ -718,7 +746,9 @@ export default function SlimeDetailCard({
               )}
             </button>
 
-            {/* [Change 1] Report action — only for other users' content */}
+            {/* [Change 2 — #35] Report slot now shows for all non-owner
+                viewers including logged-out. ReportButton handles the
+                signup-redirect on click internally. */}
             {showReport && (
               <>
                 <div
@@ -889,6 +919,8 @@ export default function SlimeDetailCard({
       </div>
 
       {/* Fixed footer */}
+      {/* [Change 1 — #35] Wishlist button always renders. The handler
+          handles auth state internally. */}
       <div
         style={{
           position: "fixed",
@@ -903,44 +935,35 @@ export default function SlimeDetailCard({
           gap: 10,
         }}
       >
-        {currentUserId !== null && (
-          <button
-            type="button"
-            onClick={handleAddToWishlist}
-            disabled={wishlistLoading || isWishlisted === true}
-            style={{
-              flex: 1,
-              padding: "15px 0",
-              borderRadius: 14,
-              fontSize: 14,
-              fontWeight: 700,
-              fontFamily: "Montserrat, Inter, sans-serif",
-              cursor: isWishlisted || wishlistLoading ? "default" : "pointer",
-              transition: "opacity 0.15s",
-              ...(isWishlisted
-                ? {
-                    background: "rgba(204,68,255,0.1)",
-                    color: "#CC44FF",
-                    border: "1px solid rgba(204,68,255,0.3)",
-                  }
-                : {
-                    background: wishlistLoading
-                      ? "rgba(204,68,255,0.5)"
-                      : "#CC44FF",
-                    color: "#0A0A0A",
-                    border: "none",
-                  }),
-            }}
-          >
-            {isWishlisted === null
-              ? "..."
-              : isWishlisted
-                ? "In Wishlist"
-                : wishlistLoading
-                  ? "Saving..."
-                  : "Add to Wishlist"}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={handleAddToWishlist}
+          disabled={isWishlisted === true || wishlistLoading}
+          style={{
+            flex: 1,
+            padding: "15px 0",
+            borderRadius: 14,
+            fontSize: 14,
+            fontWeight: 700,
+            fontFamily: "Montserrat, Inter, sans-serif",
+            cursor:
+              isWishlisted === true || wishlistLoading ? "default" : "pointer",
+            transition: "opacity 0.15s",
+            ...(wishlistIsCta
+              ? {
+                  background: "#CC44FF",
+                  color: "#0A0A0A",
+                  border: "none",
+                }
+              : {
+                  background: "rgba(204,68,255,0.1)",
+                  color: "#CC44FF",
+                  border: "1px solid rgba(204,68,255,0.3)",
+                }),
+          }}
+        >
+          {wishlistLabel}
+        </button>
 
         <Link
           href={`/slimes/${log.id}`}
