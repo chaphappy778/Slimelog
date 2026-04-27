@@ -2,7 +2,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
+import { safeRedirect } from "@/lib/safe-redirect";
 
 // Module-level client (absolute rule).
 const supabase = createBrowserClient(
@@ -26,9 +28,18 @@ export default function CommentLikeButton({
   const [liked, setLiked] = useState(initialLiked);
   const [count, setCount] = useState(initialCount);
   const [pending, setPending] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
 
   async function handleToggle() {
-    if (!currentUserId || pending) return;
+    // [Change 1 — #35] Logged-out users get routed to signup.
+    if (!currentUserId) {
+      const next = safeRedirect(pathname ?? "/", "/landing");
+      router.push(`/signup?next=${encodeURIComponent(next)}`);
+      return;
+    }
+
+    if (pending) return;
 
     const wasLiked = liked;
     const prevCount = count;
@@ -65,10 +76,11 @@ export default function CommentLikeButton({
   }
 
   return (
+    // [Change 2 — #35] Removed disabled={!currentUserId}.
     <button
       type="button"
       onClick={handleToggle}
-      disabled={!currentUserId || pending}
+      disabled={pending}
       aria-label={liked ? "Unlike comment" : "Like comment"}
       style={{
         display: "flex",
@@ -76,7 +88,7 @@ export default function CommentLikeButton({
         gap: 4,
         background: "none",
         border: "none",
-        cursor: currentUserId ? "pointer" : "default",
+        cursor: "pointer",
         padding: 0,
         opacity: pending ? 0.6 : 1,
         transition: "opacity 0.15s",

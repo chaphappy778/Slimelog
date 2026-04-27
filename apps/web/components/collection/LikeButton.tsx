@@ -2,7 +2,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
+import { safeRedirect } from "@/lib/safe-redirect";
 
 // [Change 1] Module-level client (absolute rule). Previously inside the
 // component body, which caused "No API key" 400 errors per project gotchas.
@@ -27,9 +29,20 @@ export default function LikeButton({
   const [liked, setLiked] = useState(initialLiked);
   const [count, setCount] = useState(initialCount);
   const [pending, setPending] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
 
   async function handleToggle() {
-    if (!currentUserId || pending) return;
+    // [Change 2 — #35] Logged-out users get routed to signup instead of
+    // a no-op disabled button. The button still renders so the UI signals
+    // that liking is possible after signup.
+    if (!currentUserId) {
+      const next = safeRedirect(pathname ?? "/", "/landing");
+      router.push(`/signup?next=${encodeURIComponent(next)}`);
+      return;
+    }
+
+    if (pending) return;
 
     const wasLiked = liked;
     const prevCount = count;
@@ -64,12 +77,12 @@ export default function LikeButton({
   }
 
   return (
-    // type="button" prevents implicit form submission that could
-    // trigger this handler when Enter is pressed in an adjacent textarea.
+    // [Change 3 — #35] Removed `disabled={!currentUserId}` so logged-out
+    // users can click the button. type="button" already present.
     <button
       type="button"
       onClick={handleToggle}
-      disabled={!currentUserId || pending}
+      disabled={pending}
       aria-label={liked ? "Unlike" : "Like"}
       style={{
         display: "flex",
@@ -77,7 +90,7 @@ export default function LikeButton({
         gap: 6,
         background: "none",
         border: "none",
-        cursor: currentUserId ? "pointer" : "default",
+        cursor: "pointer",
         padding: 0,
         opacity: pending ? 0.6 : 1,
         transition: "opacity 0.15s",

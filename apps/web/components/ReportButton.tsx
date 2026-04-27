@@ -2,7 +2,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { useToast } from "@/components/Toast";
+import { safeRedirect } from "@/lib/safe-redirect";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,6 +40,8 @@ export default function ReportButton({
   const containerRef = useRef<HTMLDivElement>(null);
   const [openUpward, setOpenUpward] = useState(true);
   const { showToast } = useToast();
+  const router = useRouter();
+  const pathname = usePathname();
 
   // Close on outside click
   useEffect(() => {
@@ -54,7 +58,9 @@ export default function ReportButton({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open]);
 
-  if (!currentUserId) return null;
+  // [Change 1 — #35] Removed early `if (!currentUserId) return null;`.
+  // The trigger button now renders for logged-out users and routes to
+  // signup on click instead of opening the dropdown sheet.
 
   async function handleSubmit() {
     if (!reason || submitting) return;
@@ -91,6 +97,21 @@ export default function ReportButton({
     }
   }
 
+  // [Change 2 — #35] Trigger handler — routes logged-out users to signup
+  // before any dropdown logic runs.
+  function handleTriggerClick() {
+    if (!currentUserId) {
+      const next = safeRedirect(pathname ?? "/", "/landing");
+      router.push(`/signup?next=${encodeURIComponent(next)}`);
+      return;
+    }
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setOpenUpward(rect.top > 280);
+    }
+    setOpen((o) => !o);
+  }
+
   return (
     <div
       ref={containerRef}
@@ -99,13 +120,7 @@ export default function ReportButton({
       {/* Trigger button */}
       <button
         type="button"
-        onClick={() => {
-          if (containerRef.current) {
-            const rect = containerRef.current.getBoundingClientRect();
-            setOpenUpward(rect.top > 280);
-          }
-          setOpen((o) => !o);
-        }}
+        onClick={handleTriggerClick}
         aria-label="Report this content"
         style={{
           display: "flex",
@@ -148,7 +163,8 @@ export default function ReportButton({
         Report
       </button>
 
-      {/* Dropdown sheet */}
+      {/* Dropdown sheet — only opens for authenticated users (handler routes
+          logged-out users away before this can be true). */}
       {open && (
         <div
           style={{

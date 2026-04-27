@@ -2,7 +2,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
+import { safeRedirect } from "@/lib/safe-redirect";
 
 interface FollowUserButtonProps {
   targetUserId: string;
@@ -23,10 +25,22 @@ export default function FollowUserButton({
 }: FollowUserButtonProps) {
   const [isFollowing, setIsFollowing] = useState(initialIsFollowing);
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+  const pathname = usePathname();
 
-  if (!currentUserId || currentUserId === targetUserId) return null;
+  // [Change 1 — #35] Previously: return null when no user OR self.
+  // Now: only return null on self. Logged-out viewers see a Follow
+  // button that routes to signup on click.
+  if (currentUserId !== null && currentUserId === targetUserId) return null;
 
   function handleClick() {
+    // [Change 2 — #35] Logged-out users get routed to signup.
+    if (!currentUserId) {
+      const next = safeRedirect(pathname ?? "/", "/landing");
+      router.push(`/signup?next=${encodeURIComponent(next)}`);
+      return;
+    }
+
     startTransition(async () => {
       if (isFollowing) {
         const { error } = await supabase
