@@ -40,9 +40,11 @@ export default async function OpengraphImage({
   const { slug } = await params;
   const supabase = getSupabase();
 
+  // [Change 4 — #35] Schema fix: brands table has no banner_url column.
+  // Removed from select. Banner band uses the gradient fallback only.
   const { data: brandRow } = await supabase
     .from("brands")
-    .select("id, name, bio, logo_url, banner_url, is_verified, follower_count")
+    .select("id, name, bio, logo_url, is_verified, follower_count")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -51,7 +53,6 @@ export default async function OpengraphImage({
     name: string;
     bio: string | null;
     logo_url: string | null;
-    banner_url: string | null;
     is_verified: boolean | null;
     follower_count: number | null;
   } | null;
@@ -116,29 +117,18 @@ export default async function OpengraphImage({
         position: "relative",
       }}
     >
-      {/* Banner band — top 220px */}
+      {/* Banner band — top 220px (gradient fallback since no banner_url col) */}
       <div
         style={{
           width: "100%",
           height: 220,
           position: "relative",
           display: "flex",
-          background: brand?.banner_url
-            ? "transparent"
-            : "linear-gradient(135deg, rgba(45,10,78,0.6), rgba(0,240,255,0.2))",
+          background:
+            "linear-gradient(135deg, rgba(45,10,78,0.6), rgba(0,240,255,0.2))",
           overflow: "hidden",
         }}
       >
-        {brand?.banner_url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={brand.banner_url}
-            alt=""
-            width={1200}
-            height={220}
-            style={{ width: 1200, height: 220, objectFit: "cover" }}
-          />
-        )}
         <div
           style={{
             position: "absolute",
@@ -280,7 +270,7 @@ export default async function OpengraphImage({
             {name.length > 28 ? `${name.slice(0, 28)}...` : name}
           </div>
           {brand?.is_verified && (
-            // [Change 4 — #35] SVG checkmark instead of Unicode (no-emoji rule).
+            // [Change 5 — #35] SVG checkmark instead of Unicode (no-emoji rule).
             <div
               style={{
                 width: 40,
