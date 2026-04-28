@@ -1,34 +1,31 @@
 // apps/web/app/brands/[slug]/opengraph-image.tsx
 import { ImageResponse } from "next/og";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { createClient } from "@supabase/supabase-js";
 import { readFile } from "fs/promises";
 import path from "path";
 
-export const runtime = "nodejs";
 export const contentType = "image/png";
 export const size = { width: 1200, height: 630 };
 export const alt = "SlimeLog brand";
 
-async function getSupabase() {
-  const cookieStore = await cookies();
-  return createServerClient(
+function getSupabase() {
+  // [Change 1 — #35] Plain anon-key client. OG routes have no cookie ctx.
+  return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { get: (name) => cookieStore.get(name)?.value } },
   );
 }
 
-// [Change 1 — #35] Variable font support — single file for both weights.
-async function loadVariableFont(): Promise<Buffer | null> {
+// [Change 2 — #35] Static-instance TTFs as ArrayBuffer. Variable fonts
+// crash Satori with "Cannot read properties of undefined (reading '256')".
+async function loadFont(filename: string): Promise<ArrayBuffer | null> {
   try {
-    const fontPath = path.join(
-      process.cwd(),
-      "public",
-      "fonts",
-      "Montserrat-VariableFont_wght.ttf",
-    );
-    return await readFile(fontPath);
+    const fontPath = path.join(process.cwd(), "public", "fonts", filename);
+    const buffer = await readFile(fontPath);
+    return buffer.buffer.slice(
+      buffer.byteOffset,
+      buffer.byteOffset + buffer.byteLength,
+    ) as ArrayBuffer;
   } catch {
     return null;
   }
@@ -37,11 +34,11 @@ async function loadVariableFont(): Promise<Buffer | null> {
 export default async function OpengraphImage({
   params,
 }: {
-  // [Change 2 — #35] params is async in Next.js 16
+  // [Change 3 — #35] params is async in Next.js 16
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const supabase = await getSupabase();
+  const supabase = getSupabase();
 
   const { data: brandRow } = await supabase
     .from("brands")
@@ -81,28 +78,31 @@ export default async function OpengraphImage({
   const name = brand?.name ?? "Brand not found";
   const bio = brand?.bio ?? "Slime brand on SlimeLog";
 
-  const fontBuffer = await loadVariableFont();
+  const [bold, regular] = await Promise.all([
+    loadFont("Montserrat-Bold.ttf"),
+    loadFont("Montserrat-Regular.ttf"),
+  ]);
 
   const fonts: {
     name: string;
-    data: Buffer;
+    data: ArrayBuffer;
     weight: 400 | 700;
     style: "normal";
   }[] = [];
-  if (fontBuffer) {
+  if (regular)
     fonts.push({
       name: "Montserrat",
-      data: fontBuffer,
+      data: regular,
       weight: 400,
       style: "normal",
     });
+  if (bold)
     fonts.push({
       name: "Montserrat",
-      data: fontBuffer,
+      data: bold,
       weight: 700,
       style: "normal",
     });
-  }
 
   return new ImageResponse(
     <div
@@ -280,8 +280,7 @@ export default async function OpengraphImage({
             {name.length > 28 ? `${name.slice(0, 28)}...` : name}
           </div>
           {brand?.is_verified && (
-            // [Change 3 — #35] Replaced Unicode checkmark character with
-            // SVG to comply with absolute "no emoji" rule.
+            // [Change 4 — #35] SVG checkmark instead of Unicode (no-emoji rule).
             <div
               style={{
                 width: 40,

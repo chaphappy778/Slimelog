@@ -1,38 +1,38 @@
 // apps/web/app/users/[username]/opengraph-image.tsx
 import { ImageResponse } from "next/og";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { createClient } from "@supabase/supabase-js";
 import { readFile } from "fs/promises";
 import path from "path";
 
-export const runtime = "nodejs";
 export const contentType = "image/png";
 export const size = { width: 1200, height: 630 };
 export const alt = "SlimeLog profile";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async function getSupabase() {
-  const cookieStore = await cookies();
-  return createServerClient(
+function getSupabase() {
+  // [Change 1 — #35] Use plain anon-key client (not createServerClient).
+  // OG image routes don't have request cookie context, and we only read
+  // public data here.
+  return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { get: (name) => cookieStore.get(name)?.value } },
   );
 }
 
-// [Change 1 — #35] Variable font support. Google Fonts now ships
-// Montserrat as a single variable font file. We load it once and
-// register both weights from the same buffer.
-async function loadVariableFont(): Promise<Buffer | null> {
+// [Change 2 — #35] Static-instance TTF + ArrayBuffer conversion.
+// Satori (the engine behind @vercel/og) does NOT support variable fonts —
+// they crash with "Cannot read properties of undefined (reading '256')".
+// Each weight is loaded from its own static file and converted from Node
+// Buffer to ArrayBuffer before being passed to ImageResponse.
+async function loadFont(filename: string): Promise<ArrayBuffer | null> {
   try {
-    const fontPath = path.join(
-      process.cwd(),
-      "public",
-      "fonts",
-      "Montserrat-VariableFont_wght.ttf",
-    );
-    return await readFile(fontPath);
+    const fontPath = path.join(process.cwd(), "public", "fonts", filename);
+    const buffer = await readFile(fontPath);
+    return buffer.buffer.slice(
+      buffer.byteOffset,
+      buffer.byteOffset + buffer.byteLength,
+    ) as ArrayBuffer;
   } catch {
     return null;
   }
@@ -43,11 +43,11 @@ async function loadVariableFont(): Promise<Buffer | null> {
 export default async function OpengraphImage({
   params,
 }: {
-  // [Change 2 — #35] params is async in Next.js 16
+  // [Change 3 — #35] params is async in Next.js 16
   params: Promise<{ username: string }>;
 }) {
   const { username } = await params;
-  const supabase = await getSupabase();
+  const supabase = getSupabase();
 
   const { data } = await supabase
     .from("profiles_public")
@@ -84,30 +84,31 @@ export default async function OpengraphImage({
     logCount = count ?? 0;
   }
 
-  const fontBuffer = await loadVariableFont();
+  const [bold, regular] = await Promise.all([
+    loadFont("Montserrat-Bold.ttf"),
+    loadFont("Montserrat-Regular.ttf"),
+  ]);
 
   const fonts: {
     name: string;
-    data: Buffer;
+    data: ArrayBuffer;
     weight: 400 | 700;
     style: "normal";
   }[] = [];
-  if (fontBuffer) {
-    // Same file, registered for both weights — variable font handles
-    // the actual weight rendering.
+  if (regular)
     fonts.push({
       name: "Montserrat",
-      data: fontBuffer,
+      data: regular,
       weight: 400,
       style: "normal",
     });
+  if (bold)
     fonts.push({
       name: "Montserrat",
-      data: fontBuffer,
+      data: bold,
       weight: 700,
       style: "normal",
     });
-  }
 
   return new ImageResponse(
     <div
