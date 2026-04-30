@@ -34,11 +34,15 @@
 //        FIRSTNAME         - TEXT    (Brevo default; usually already exists)
 //        MARKETING_OPT_IN  - BOOLEAN
 //        SIGNUP_SOURCE     - TEXT
-//        SIGNUP_DATE       - DATETIME  <-- CRITICAL: must be DATETIME, NOT DATE.
-//                                         If this attribute is set to DATE,
-//                                         Brevo's API will reject the ISO 8601
-//                                         timestamp we send and the whole
-//                                         contact create/update call will fail.
+//        SIGNUP_DATE       - DATE    <-- CRITICAL: must be DATE, NOT DATETIME.
+//                                         The Brevo API expects DATE attributes
+//                                         to be formatted as "YYYY-MM-DD". This
+//                                         module converts the incoming ISO 8601
+//                                         datetime to that format before send.
+//                                         Brevo's dashboard may render the date
+//                                         in your account locale (e.g.
+//                                         DD/MM/YYYY) but stores it as
+//                                         YYYY-MM-DD underneath.
 //
 //   4. Create the welcome email template using the copy at the bottom of this
 //      comment block.
@@ -75,12 +79,11 @@
 //   Got questions? Just reply to this email - it goes straight to us.
 //
 //   Talk soon,
-//   Jennifer
-//   Founder, SlimeLog
+//   SlimeLog Team
 //
 // =============================================================================
 
-// [Change 1] Type definitions for the Brevo POST /v3/contacts request and response
+// Type definitions for the Brevo POST /v3/contacts request and response
 
 /**
  * Custom attributes sent to Brevo. Keys must match the attribute names
@@ -90,7 +93,7 @@ interface BrevoContactAttributes {
   FIRSTNAME?: string;
   MARKETING_OPT_IN: boolean;
   SIGNUP_SOURCE: string;
-  SIGNUP_DATE: string; // ISO 8601 datetime, e.g. "2026-04-24T15:30:00.000Z"
+  SIGNUP_DATE: string; // YYYY-MM-DD format (DATE attribute), e.g. "2026-04-30"
 }
 
 /**
@@ -122,14 +125,21 @@ interface BrevoErrorResponse {
   message: string;
 }
 
-// [Change 2] Public return type from addContactToWaitlist.
+// Public return type from addContactToWaitlist.
 // Errors are returned, never thrown, so the API route calling this can
 // continue to succeed the user's signup even when Brevo is down.
 export type AddContactResult =
   | { success: true; contactId: number | null }
   | { success: false; error: string };
 
-// [Change 3] Public function: add-or-update a contact on the SlimeLog waitlist
+// [Change 1] Convert an ISO 8601 datetime string into a YYYY-MM-DD date string
+// for the Brevo SIGNUP_DATE attribute (configured as DATE in the dashboard).
+// Uses UTC slice to avoid local-timezone drift across server regions.
+function isoDatetimeToBrevoDate(signupDateISO: string): string {
+  return new Date(signupDateISO).toISOString().slice(0, 10);
+}
+
+// Public function: add-or-update a contact on the SlimeLog waitlist
 export async function addContactToWaitlist(params: {
   email: string;
   firstName?: string;
@@ -161,12 +171,17 @@ export async function addContactToWaitlist(params: {
     };
   }
 
+  // [Change 2] Convert incoming ISO datetime to YYYY-MM-DD before building
+  // the attributes payload. Brevo's DATE attribute type rejects full ISO
+  // datetime strings.
+  const signupDate = isoDatetimeToBrevoDate(params.signupDateISO);
+
   // Build attributes. Omit FIRSTNAME if not provided so Brevo's template
   // default ({{ contact.FIRSTNAME | default: "there" }}) kicks in.
   const attributes: BrevoContactAttributes = {
     MARKETING_OPT_IN: params.marketingOptIn,
     SIGNUP_SOURCE: params.source,
-    SIGNUP_DATE: params.signupDateISO,
+    SIGNUP_DATE: signupDate,
   };
   if (params.firstName && params.firstName.trim().length > 0) {
     attributes.FIRSTNAME = params.firstName.trim();
