@@ -2,7 +2,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+// [Change 4 — T31] Add useRouter alongside the existing usePathname import.
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import SlimeMenu from "@/components/SlimeMenu";
@@ -14,9 +15,51 @@ const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
 );
 
+// [Change 5 — T31] Route matcher for back button visibility.
+// Detail/leaf pages where users need an affordance to navigate back.
+const BACK_BUTTON_ROUTES = [
+  /^\/slimes\/[^/]+$/,
+  /^\/drops\/[^/]+$/,
+  /^\/brands\/[^/]+$/,
+  /^\/users\/[^/]+$/,
+  /^\/privacy$/,
+  /^\/terms$/,
+  /^\/wishlist$/,
+];
+
+function shouldShowBackButton(pathname: string | null): boolean {
+  if (!pathname) return false;
+  return BACK_BUTTON_ROUTES.some((re) => re.test(pathname));
+}
+
 export default function PageHeader() {
   const pathname = usePathname();
   const profileActive = pathname === "/profile";
+
+  // [Change 6 — T31] Router + back-button visibility + referrer-aware
+  // handler. Referrer check prevents router.back() from sending users
+  // off-platform (e.g. back to Google) when they arrived via external link.
+  const router = useRouter();
+  const showBack = shouldShowBackButton(pathname);
+
+  const handleBack = () => {
+    const sameOrigin =
+      typeof document !== "undefined" &&
+      !!document.referrer &&
+      (() => {
+        try {
+          return new URL(document.referrer).origin === window.location.origin;
+        } catch {
+          return false;
+        }
+      })();
+
+    if (window.history.length > 1 && sameOrigin) {
+      router.back();
+    } else {
+      router.push("/");
+    }
+  };
 
   // [Change 2 — #35] Auth state — null = resolving, true/false = resolved.
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
@@ -43,30 +86,65 @@ export default function PageHeader() {
           "0 1px 0 0 rgba(0,240,255,0.15), 0 2px 0 0 rgba(57,255,20,0.08), 0 1px 16px 0 rgba(45,10,78,0.3)",
       }}
     >
-      {/* Wordmark — full green-cyan-magenta holo gradient */}
-      <Link href="/" className="flex items-center gap-2 group">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/logo.svg"
-          alt="SlimeLog"
-          width={32}
-          height={32}
-          className="rounded-lg"
-        />
-        <span
-          className="text-lg font-black tracking-tight"
-          style={{
-            background:
-              "linear-gradient(90deg, #39FF14 0%, #00F0FF 40%, #FF00E5 100%)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text",
-            fontFamily: "'Montserrat', sans-serif",
-          }}
-        >
-          SlimeLog
-        </span>
-      </Link>
+      {/* [Change 7 — T31] Wrap back button + wordmark in a left-side flex
+          container so they stay grouped, while justify-between keeps the
+          auth/menu controls pinned right. Back button only renders on
+          detail/leaf routes per BACK_BUTTON_ROUTES. */}
+      <div className="flex items-center gap-3">
+        {showBack && (
+          <button
+            type="button"
+            onClick={handleBack}
+            aria-label="Go back"
+            className="flex items-center justify-center rounded-full transition-colors"
+            style={{
+              width: 36,
+              height: 36,
+              background: "rgba(10,0,20,0.55)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              color: "#FFFFFF",
+            }}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="w-5 h-5"
+            >
+              <path d="M19 12H5" />
+              <path d="M12 19l-7-7 7-7" />
+            </svg>
+          </button>
+        )}
+
+        {/* Wordmark — full green-cyan-magenta holo gradient */}
+        <Link href="/" className="flex items-center gap-2 group">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.svg"
+            alt="SlimeLog"
+            width={32}
+            height={32}
+            className="rounded-lg"
+          />
+          <span
+            className="text-lg font-black tracking-tight"
+            style={{
+              background:
+                "linear-gradient(90deg, #39FF14 0%, #00F0FF 40%, #FF00E5 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+              fontFamily: "'Montserrat', sans-serif",
+            }}
+          >
+            SlimeLog
+          </span>
+        </Link>
+      </div>
 
       {/* Right side — depends on auth state.
           [Change 3 — #35] Logged-out: Log In text link + Sign Up gradient
