@@ -142,6 +142,12 @@ interface Props {
   commentCount: number;
   isLikedByCurrentUser: boolean;
   currentUserId: string | null;
+  // [Change 1 — T30] Optional log creator props. When omitted (e.g. collection
+  // views where the viewer is browsing their own logs) the user row is not
+  // rendered. When provided, surfaces avatar + @username at the top of the
+  // info card body.
+  ownerUsername?: string | null;
+  ownerAvatarUrl?: string | null;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -157,6 +163,9 @@ export default function SlimeDetailCard({
   commentCount,
   isLikedByCurrentUser,
   currentUserId,
+  // [Change 2 — T30] Destructure new owner props. Default to undefined.
+  ownerUsername,
+  ownerAvatarUrl,
 }: Props) {
   const commentRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
@@ -241,6 +250,12 @@ export default function SlimeDetailCard({
     ? log.brand_name_raw.charAt(0).toUpperCase()
     : "?";
 
+  // [Change 3 — T30] Owner row rendering helpers.
+  const showOwnerRow = !!ownerUsername;
+  const ownerInitial = ownerUsername
+    ? ownerUsername.charAt(0).toUpperCase()
+    : "?";
+
   function scrollToComments() {
     commentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -280,6 +295,7 @@ export default function SlimeDetailCard({
       }}
     >
       {/* Floating header */}
+      {/* [Change 4 — T30] Header is unchanged. Back button only. */}
       <div
         style={{
           position: "sticky",
@@ -475,6 +491,73 @@ export default function SlimeDetailCard({
             gap: 14,
           }}
         >
+          {/* [Change 3 — T30] Owner row. Renders only when ownerUsername is
+              provided (i.e. feed/social contexts). Collection views omit the
+              prop and this row is skipped. Sits as the first child in the
+              info card body, above the slime name heading. */}
+          {showOwnerRow && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: -4,
+              }}
+            >
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: "50%",
+                  overflow: "hidden",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  flexShrink: 0,
+                }}
+              >
+                {ownerAvatarUrl ? (
+                  <Image
+                    src={ownerAvatarUrl}
+                    alt={ownerUsername ?? "user"}
+                    width={36}
+                    height={36}
+                    className="object-cover w-full h-full"
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#0A0A0A",
+                      fontSize: 14,
+                      fontWeight: 800,
+                      fontFamily: "Montserrat, Inter, sans-serif",
+                    }}
+                    aria-hidden="true"
+                  >
+                    {ownerInitial}
+                  </div>
+                )}
+              </div>
+              <Link
+                href={`/users/${ownerUsername}`}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#FF00E5",
+                  textDecoration: "none",
+                  fontFamily: "Montserrat, Inter, sans-serif",
+                }}
+              >
+                @{ownerUsername}
+              </Link>
+            </div>
+          )}
+
           <h2
             style={{
               margin: 0,

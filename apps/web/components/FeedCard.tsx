@@ -1,5 +1,5 @@
-"use client";
 // apps/web/components/FeedCard.tsx
+"use client";
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
@@ -511,7 +511,10 @@ export default function FeedCard({
       </article>
 
       {/* ── Level 2: Full-screen detail overlay ──
-          [Change 2] Only mounted for non-wishlist cards */}
+          [Change 2] Only mounted for non-wishlist cards
+          [Change 1 — T30] Pass ownerUsername and ownerAvatarUrl through so the
+          detail overlay can surface the log creator at the top of the info
+          card body. */}
       {showDetail && !isWishlist && (
         <SlimeDetailCard
           log={buildCollectionLog(log)}
@@ -524,6 +527,8 @@ export default function FeedCard({
           commentCount={log.comment_count}
           isLikedByCurrentUser={log.is_liked_by_current_user}
           currentUserId={currentUserId}
+          ownerUsername={log.username}
+          ownerAvatarUrl={log.avatar_url}
         />
       )}
 
