@@ -432,7 +432,11 @@ export default function SlimeDetailCard({
           minHeight: imageUrl
             ? `calc(100vh - ${IMAGE_HEIGHT} + ${OVERLAP}px)`
             : "calc(100vh - 64px)",
-          paddingTop: imageUrl ? OVERLAP + 12 : 16,
+          paddingTop: imageUrl
+            ? showOwnerRow
+              ? OVERLAP - 8
+              : OVERLAP + 12
+            : 16,
         }}
       >
         {/* Brand logo thumbnail */}
