@@ -63,7 +63,7 @@ export default function PageHeader() {
     if (scrollY > 0) {
       requestScrollRestore(path, scrollY);
     }
-    router.push(path);
+    router.push(path, { scroll: false });
   };
 
   // [Change 2 — #35] Auth state — null = resolving, true/false = resolved.
