@@ -10,7 +10,12 @@ import SlimeMenu from "@/components/SlimeMenu";
 import { safeRedirect } from "@/lib/safe-redirect";
 // [Change 8 — T31 v2] Use the in-app navigation history stack instead of
 // the unreliable router.back() / document.referrer approach.
-import { popNavigationHistory } from "@/lib/navigation-history";
+// [Change 1 — scroll restore] Also import requestScrollRestore so handleBack
+// can hand a target scrollY to the destination's useScrollRestore on mount.
+import {
+  popNavigationHistory,
+  requestScrollRestore,
+} from "@/lib/navigation-history";
 
 // [Change 1 — #35] Module-level client for the auth check.
 const supabase = createBrowserClient(
@@ -43,12 +48,22 @@ export default function PageHeader() {
   // [Change 9 — T31 v2] handleBack now pops the in-app nav stack and
   // routes to whatever the user was on before this page. Falls back to
   // "/" if the stack is empty (fresh tab, external entry, etc.).
+  // [Change 2 — scroll restore] handleBack now receives a NavHistoryEntry
+  // ({ path, scrollY }) instead of a plain string. If the destination has
+  // a non-zero scrollY recorded, write a pending restore so the destination's
+  // useScrollRestore consumes it on mount and scrolls the user back to where
+  // they were when they navigated away.
   const router = useRouter();
   const showBack = shouldShowBackButton(pathname);
 
   const handleBack = () => {
-    const destination = popNavigationHistory("/");
-    router.push(destination);
+    const { path, scrollY } = popNavigationHistory({ path: "/", scrollY: 0 });
+    // Set the pending restore BEFORE pushing — destination's
+    // useScrollRestore consumes it on mount.
+    if (scrollY > 0) {
+      requestScrollRestore(path, scrollY);
+    }
+    router.push(path);
   };
 
   // [Change 2 — #35] Auth state — null = resolving, true/false = resolved.

@@ -8,9 +8,13 @@
 "use client";
 
 import { useTrackNavigationHistory } from "@/lib/navigation-history";
+// [Change 1 — scroll restore] Add scroll restoration on every route mount.
+import { useScrollRestore } from "@/lib/use-scroll-restore";
 
 // [Initial implementation — T31 v2] Mount once in app/layout.tsx.
 export default function NavigationHistoryTracker() {
   useTrackNavigationHistory();
+  // [Change 2 — scroll restore] Restore scroll on back navigation.
+  useScrollRestore();
   return null;
 }
