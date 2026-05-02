@@ -1,6 +1,7 @@
 // apps/web/lib/types.ts
 // Aligned to SlimeLog schema v1.0 — Migration 20260324000001
 // Updated: Migration 20260404000017_add_slime_types — 35 new types added
+// Updated: Migration 20260502000033_brand_claims — brand claim types appended
 
 export type SlimeType =
   | "butter"
@@ -443,3 +444,57 @@ export const EMPTY_LOG_FORM: LogFormData = {
   in_wishlist: false,
   in_collection: true,
 };
+
+// ─── Brand claiming ───────────────────────────────────────────────────────────
+
+export type BrandClaimStatus =
+  | "pending_email_verification"
+  | "pending_review"
+  | "approved"
+  | "rejected"
+  | "auto_rejected";
+
+export type BrandClaimRole = "owner" | "authorized_representative";
+
+export const BRAND_CLAIM_STATUS_LABELS: Record<BrandClaimStatus, string> = {
+  pending_email_verification: "Awaiting Email Verification",
+  pending_review: "Pending Review",
+  approved: "Approved",
+  rejected: "Rejected",
+  auto_rejected: "Auto-Rejected",
+};
+
+export const BRAND_CLAIM_ROLE_LABELS: Record<BrandClaimRole, string> = {
+  owner: "Owner",
+  authorized_representative: "Authorized Representative",
+};
+
+export interface BrandClaim {
+  id: string;
+  brand_id: string;
+  user_id: string;
+  status: BrandClaimStatus;
+
+  full_legal_name: string;
+  role: BrandClaimRole;
+  business_email: string;
+
+  email_verification_code: string | null;
+  email_verification_sent_at: string | null;
+  email_verification_expires_at: string | null;
+  email_verified_at: string | null;
+
+  document_storage_path: string | null;
+  document_filename: string | null;
+  document_uploaded_at: string | null;
+
+  instagram_handle: string | null;
+  additional_notes: string | null;
+
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  rejection_reason: string | null;
+
+  created_at: string;
+  updated_at: string;
+}
