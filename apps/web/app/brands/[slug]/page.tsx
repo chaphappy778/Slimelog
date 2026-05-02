@@ -8,7 +8,9 @@ import { cookies } from "next/headers";
 import PageWrapper from "@/components/PageWrapper";
 import PageHeader from "@/components/PageHeader";
 import FollowBrandButton from "@/components/FollowBrandButton";
+import ClaimBrandButton from "@/components/brand/ClaimBrandButton";
 import { SLIME_TYPE_LABELS } from "@/lib/types";
+import type { BrandClaimStatus } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,6 +27,7 @@ interface Brand {
   shopify_url: string | null;
   is_verified: boolean | null;
   follower_count: number | null;
+  owner_id: string | null;
   created_at: string;
 }
 
@@ -170,6 +173,34 @@ export default async function BrandPage({
   }
 
   const supabase = await getSupabase();
+
+  // [Batch 2 — Brand Claiming] Fetch the current user so ClaimBrandButton can
+  // gate on auth state. Logged-out users see no claim affordance.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // [Batch 2 — Brand Claiming] Fetch the most-recent claim by this user for
+  // this brand. Used to show a status banner in place of the claim button
+  // when one is in flight or has been resolved.
+  let latestClaim: { id: string; status: BrandClaimStatus } | null = null;
+  if (user) {
+    const { data: claimRow } = await supabase
+      .from("brand_claims")
+      .select("id, status")
+      .eq("user_id", user.id)
+      .eq("brand_id", brand.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (claimRow) {
+      latestClaim = {
+        id: claimRow.id as string,
+        status: claimRow.status as BrandClaimStatus,
+      };
+    }
+  }
 
   // Avg rating + log count for the brand
   const { data: ratingRows } = await supabase
@@ -467,6 +498,19 @@ export default async function BrandPage({
                 TikTok
               </a>
             )}
+          </div>
+
+          {/* [Batch 2 — Brand Claiming] Claim affordance — renders the gradient
+              CTA button if this user can claim, a status banner if a claim is
+              in flight, or nothing if the brand is owned / user is logged out. */}
+          <div className="mt-4">
+            <ClaimBrandButton
+              brandId={brand.id}
+              brandSlug={brand.slug}
+              brandOwnerId={brand.owner_id}
+              currentUserId={user?.id ?? null}
+              existingClaim={latestClaim}
+            />
           </div>
         </section>
 
