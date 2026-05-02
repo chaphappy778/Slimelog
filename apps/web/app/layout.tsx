@@ -4,6 +4,9 @@ import "./globals.css";
 import BottomNavWrapper from "@/components/BottomNavWrapper";
 import { ToastProvider } from "@/components/Toast";
 import CookieBanner from "@/components/CookieBanner";
+// [Change 2 — T31 v2] Mount the navigation history tracker once globally
+// so every in-app pathname change gets pushed onto the back-button stack.
+import NavigationHistoryTracker from "@/components/NavigationHistoryTracker";
 
 export const metadata: Metadata = {
   title: "SlimeLog",
@@ -38,6 +41,9 @@ export default function RootLayout({
       <body className="antialiased">
         {/* [Change 1] Wrap with ToastProvider so all consumer pages can call useToast */}
         <ToastProvider>
+          {/* [Change 2 — T31 v2] Renders null — pushes pathname changes
+              onto sessionStorage stack for the back button to consume. */}
+          <NavigationHistoryTracker />
           <main className="page-enter">{children}</main>
           <BottomNavWrapper />
           <CookieBanner />

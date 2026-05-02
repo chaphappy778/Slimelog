@@ -8,6 +8,9 @@ import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import SlimeMenu from "@/components/SlimeMenu";
 import { safeRedirect } from "@/lib/safe-redirect";
+// [Change 8 — T31 v2] Use the in-app navigation history stack instead of
+// the unreliable router.back() / document.referrer approach.
+import { popNavigationHistory } from "@/lib/navigation-history";
 
 // [Change 1 — #35] Module-level client for the auth check.
 const supabase = createBrowserClient(
@@ -36,29 +39,16 @@ export default function PageHeader() {
   const pathname = usePathname();
   const profileActive = pathname === "/profile";
 
-  // [Change 6 — T31] Router + back-button visibility + referrer-aware
-  // handler. Referrer check prevents router.back() from sending users
-  // off-platform (e.g. back to Google) when they arrived via external link.
+  // [Change 6 — T31] Router + back-button visibility.
+  // [Change 9 — T31 v2] handleBack now pops the in-app nav stack and
+  // routes to whatever the user was on before this page. Falls back to
+  // "/" if the stack is empty (fresh tab, external entry, etc.).
   const router = useRouter();
   const showBack = shouldShowBackButton(pathname);
 
   const handleBack = () => {
-    const sameOrigin =
-      typeof document !== "undefined" &&
-      !!document.referrer &&
-      (() => {
-        try {
-          return new URL(document.referrer).origin === window.location.origin;
-        } catch {
-          return false;
-        }
-      })();
-
-    if (window.history.length > 1 && sameOrigin) {
-      router.back();
-    } else {
-      router.push("/");
-    }
+    const destination = popNavigationHistory("/");
+    router.push(destination);
   };
 
   // [Change 2 — #35] Auth state — null = resolving, true/false = resolved.
@@ -92,14 +82,18 @@ export default function PageHeader() {
           detail/leaf routes per BACK_BUTTON_ROUTES. */}
       <div className="flex items-center gap-3">
         {showBack && (
+          // [Change 10 — T31 v2] Rounded-square (borderRadius: 10) to match
+          // the SlimeDetailCard overlay back button. Removed `rounded-full`
+          // class; all other styling unchanged.
           <button
             type="button"
             onClick={handleBack}
             aria-label="Go back"
-            className="flex items-center justify-center rounded-full transition-colors"
+            className="flex items-center justify-center transition-colors"
             style={{
               width: 36,
               height: 36,
+              borderRadius: 10,
               background: "rgba(10,0,20,0.55)",
               border: "1px solid rgba(255,255,255,0.12)",
               color: "#FFFFFF",
