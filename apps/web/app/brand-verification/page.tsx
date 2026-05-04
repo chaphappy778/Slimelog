@@ -22,7 +22,7 @@ export default function BrandVerificationPage() {
           clearance from the fixed PageHeader. The unused `Link` import was
           also removed (all in-page links use raw <a href> tags). */}
       <main className="pt-14 pb-24 max-w-2xl mx-auto px-4">
-        <header className="mt-0">
+        <header className="mt-4">
           <p
             className="text-[10px] uppercase tracking-widest font-bold mb-2"
             style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}

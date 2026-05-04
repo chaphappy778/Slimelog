@@ -89,7 +89,7 @@ export default async function ClaimBrandPage({
           it's still used for "Learn more about verification" and the
           "Back to {brand.name}" CTA on the already-submitted state. */}
       <main className="pt-14 pb-24 max-w-2xl mx-auto px-4">
-        <header className="mt-0">
+        <header className="mt-4">
           <p
             className="text-[10px] uppercase tracking-widest font-bold mb-2"
             style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
