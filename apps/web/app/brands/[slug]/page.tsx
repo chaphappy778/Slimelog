@@ -180,6 +180,10 @@ export default async function BrandPage({
     data: { user },
   } = await supabase.auth.getUser();
 
+  // [Batch 3 — T48] Verified-owner check. When true, the Follow button is
+  // replaced by a "Manage Brand" link that routes to the brand dashboard.
+  const isVerifiedOwner = !!user && brand.owner_id === user.id;
+
   // [Batch 2 — Brand Claiming] Fetch the most-recent claim by this user for
   // this brand. Used to show a status banner in place of the claim button
   // when one is in flight or has been resolved.
@@ -315,11 +319,50 @@ export default async function BrandPage({
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <FollowBrandButton
-                brandId={brand.id}
-                brandSlug={brand.slug}
-                initialFollowerCount={brand.follower_count ?? 0}
-              />
+              {/* [Batch 3 — T48] Verified owner sees a "Manage Brand" link
+                  routing to the brand dashboard; everyone else sees the
+                  existing FollowBrandButton. */}
+              {isVerifiedOwner ? (
+                <Link
+                  href={`/brand-dashboard/${brand.slug}`}
+                  className="inline-flex items-center gap-2 transition-transform active:scale-[0.97]"
+                  style={{
+                    background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                    color: "#0A0A0A",
+                    fontWeight: 600,
+                    padding: "12px 20px",
+                    borderRadius: 10,
+                    fontFamily: "Montserrat, Inter, sans-serif",
+                    fontSize: 14,
+                  }}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <line x1="4" y1="6" x2="20" y2="6" />
+                    <line x1="4" y1="12" x2="20" y2="12" />
+                    <line x1="4" y1="18" x2="20" y2="18" />
+                    <circle cx="9" cy="6" r="2" fill="#0A0A0A" />
+                    <circle cx="15" cy="12" r="2" fill="#0A0A0A" />
+                    <circle cx="7" cy="18" r="2" fill="#0A0A0A" />
+                  </svg>
+                  Manage Brand
+                </Link>
+              ) : (
+                <FollowBrandButton
+                  brandId={brand.id}
+                  brandSlug={brand.slug}
+                  initialFollowerCount={brand.follower_count ?? 0}
+                />
+              )}
             </div>
           </div>
 
