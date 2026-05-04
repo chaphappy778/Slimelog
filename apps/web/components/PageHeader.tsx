@@ -25,6 +25,10 @@ const supabase = createBrowserClient(
 
 // [Change 5 — T31] Route matcher for back button visibility.
 // Detail/leaf pages where users need an affordance to navigate back.
+// [Change 1 — Bundle A] Added /brands/[slug]/claim and /brand-verification
+// so PageHeader renders its own back button on those routes (with scroll
+// restoration via the navigation history stack). The inline back buttons
+// previously rendered on those pages have been removed.
 const BACK_BUTTON_ROUTES = [
   /^\/slimes\/[^/]+$/,
   /^\/drops\/[^/]+$/,
@@ -33,6 +37,8 @@ const BACK_BUTTON_ROUTES = [
   /^\/privacy$/,
   /^\/terms$/,
   /^\/wishlist$/,
+  /^\/brands\/[^/]+\/claim$/,
+  /^\/brand-verification$/,
 ];
 
 function shouldShowBackButton(pathname: string | null): boolean {

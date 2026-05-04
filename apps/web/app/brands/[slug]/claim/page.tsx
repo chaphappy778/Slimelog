@@ -80,41 +80,16 @@ export default async function ClaimBrandPage({
     <PageWrapper dots>
       <PageHeader />
 
+      {/* [Change 3 — Bundle A] Inline back button block removed. PageHeader
+          now matches /brands/[slug]/claim via BACK_BUTTON_ROUTES and renders
+          its own back button with proper navigation-history-stack behavior.
+          The <header> below was previously mt-6 to sit beneath the inline
+          back button; now mt-0 since <main>'s pt-14 already provides
+          clearance from the fixed PageHeader. The `Link` import stays —
+          it's still used for "Learn more about verification" and the
+          "Back to {brand.name}" CTA on the already-submitted state. */}
       <main className="pt-14 pb-24 max-w-2xl mx-auto px-4">
-        {/* Inline back button (T42 — temporary; PageHeader BACK_BUTTON_ROUTES
-            doesn't yet cover /brands/[slug]/claim). Matches the rounded-square
-            styling used elsewhere. */}
-        <div className="mt-4">
-          <Link
-            href={`/brands/${slug}`}
-            aria-label="Back to brand"
-            className="inline-flex items-center justify-center transition-colors"
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 10,
-              background: "rgba(10,0,20,0.55)",
-              border: "1px solid rgba(255,255,255,0.12)",
-              color: "#FFFFFF",
-            }}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="w-5 h-5"
-              aria-hidden="true"
-            >
-              <path d="M19 12H5" />
-              <path d="M12 19l-7-7 7-7" />
-            </svg>
-          </Link>
-        </div>
-
-        <header className="mt-6">
+        <header className="mt-0">
           <p
             className="text-[10px] uppercase tracking-widest font-bold mb-2"
             style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
