@@ -3,6 +3,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  type RejectionReasonCode,
+  REJECTION_REASON_LABELS,
+  STANDARDIZED_REJECTION_CODES,
+} from "@/lib/types";
 
 type Mode = "idle" | "confirming_approve" | "confirming_reject";
 
@@ -15,8 +20,8 @@ interface Props {
   competingClaimsCount: number;
 }
 
-const MIN_REASON_LENGTH = 10;
-const MAX_REASON_LENGTH = 2000;
+const MIN_OTHER_CONTEXT_LENGTH = 10;
+const MAX_CONTEXT_LENGTH = 2000;
 
 export default function ClaimReviewActions({
   claimId,
@@ -28,7 +33,8 @@ export default function ClaimReviewActions({
 }: Props) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("idle");
-  const [rejectionReason, setRejectionReason] = useState("");
+  const [reasonCode, setReasonCode] = useState<RejectionReasonCode | "">("");
+  const [additionalContext, setAdditionalContext] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,26 +68,44 @@ export default function ClaimReviewActions({
   }
 
   async function handleReject() {
-    const trimmed = rejectionReason.trim();
-    if (trimmed.length < MIN_REASON_LENGTH) {
-      setError(
-        `Rejection reason must be at least ${MIN_REASON_LENGTH} characters.`,
-      );
+    if (!reasonCode) {
+      setError("Please select a reason for rejection.");
       return;
     }
-    if (trimmed.length > MAX_REASON_LENGTH) {
-      setError(
-        `Rejection reason must be at most ${MAX_REASON_LENGTH} characters.`,
-      );
-      return;
+
+    const trimmedContext = additionalContext.trim();
+
+    if (reasonCode === "other") {
+      if (trimmedContext.length < MIN_OTHER_CONTEXT_LENGTH) {
+        setError(
+          `Please specify a reason of at least ${MIN_OTHER_CONTEXT_LENGTH} characters.`,
+        );
+        return;
+      }
+      if (trimmedContext.length > MAX_CONTEXT_LENGTH) {
+        setError(`Reason must be at most ${MAX_CONTEXT_LENGTH} characters.`);
+        return;
+      }
+    } else {
+      if (trimmedContext.length > MAX_CONTEXT_LENGTH) {
+        setError(
+          `Additional context must be at most ${MAX_CONTEXT_LENGTH} characters.`,
+        );
+        return;
+      }
     }
+
     setSubmitting(true);
     setError(null);
     try {
       const res = await fetch("/api/admin/brand-claims/reject", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ claim_id: claimId, reason: trimmed }),
+        body: JSON.stringify({
+          claim_id: claimId,
+          reason_code: reasonCode,
+          additional_context: trimmedContext,
+        }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -99,10 +123,20 @@ export default function ClaimReviewActions({
     }
   }
 
-  const trimmedReasonLength = rejectionReason.trim().length;
-  const reasonValid =
-    trimmedReasonLength >= MIN_REASON_LENGTH &&
-    trimmedReasonLength <= MAX_REASON_LENGTH;
+  const trimmedContextLength = additionalContext.trim().length;
+  const isOther = reasonCode === "other";
+  const isStandardized = reasonCode !== "" && reasonCode !== "other";
+
+  const canSubmitReject = (() => {
+    if (!reasonCode) return false;
+    if (isOther) {
+      return (
+        trimmedContextLength >= MIN_OTHER_CONTEXT_LENGTH &&
+        trimmedContextLength <= MAX_CONTEXT_LENGTH
+      );
+    }
+    return trimmedContextLength <= MAX_CONTEXT_LENGTH;
+  })();
 
   return (
     <section
@@ -225,34 +259,78 @@ export default function ClaimReviewActions({
         <div>
           <label className="block">
             <span className="text-xs uppercase tracking-widest text-slime-muted font-semibold">
-              Rejection Reason
+              Reason for rejection
             </span>
-            <textarea
-              value={rejectionReason}
-              onChange={(e) => setRejectionReason(e.target.value)}
-              placeholder="Why is this claim being rejected? This message is sent to the claimant."
-              maxLength={MAX_REASON_LENGTH}
-              rows={5}
+            <select
+              value={reasonCode}
+              onChange={(e) => {
+                setReasonCode(e.target.value as RejectionReasonCode | "");
+                setError(null);
+              }}
               disabled={submitting}
-              className="mt-2 w-full rounded-xl p-3 text-sm text-slime-text resize-y disabled:opacity-60"
+              className="mt-2 w-full rounded-xl p-3 text-sm text-slime-text disabled:opacity-60"
               style={{
                 background: "rgba(10,0,20,0.55)",
                 border: "1px solid rgba(255,255,255,0.12)",
                 outline: "none",
               }}
-            />
-          </label>
-          <div className="flex items-center justify-between mt-2 text-xs">
-            <span
-              className="text-slime-muted"
-              style={{
-                color: reasonValid ? "#39FF14" : "#888",
-              }}
             >
-              {trimmedReasonLength} / {MAX_REASON_LENGTH} (min{" "}
-              {MIN_REASON_LENGTH})
-            </span>
-          </div>
+              <option value="" disabled>
+                Select a reason...
+              </option>
+              {STANDARDIZED_REJECTION_CODES.map((code) => (
+                <option key={code} value={code}>
+                  {REJECTION_REASON_LABELS[code]}
+                </option>
+              ))}
+              <option value="other">
+                {REJECTION_REASON_LABELS.other} (please specify)
+              </option>
+            </select>
+          </label>
+
+          {reasonCode !== "" && (
+            <label className="block mt-4">
+              <span className="text-xs uppercase tracking-widest text-slime-muted font-semibold">
+                {isOther
+                  ? "Please specify reason (required)"
+                  : "Additional context (optional)"}
+              </span>
+              <textarea
+                value={additionalContext}
+                onChange={(e) => setAdditionalContext(e.target.value)}
+                placeholder={
+                  isOther
+                    ? "Explain the reason for rejection. This message is sent to the claimant."
+                    : "Optional details to include with the standardized reason. Sent to the claimant."
+                }
+                maxLength={MAX_CONTEXT_LENGTH}
+                rows={5}
+                disabled={submitting}
+                className="mt-2 w-full rounded-xl p-3 text-sm text-slime-text resize-y disabled:opacity-60"
+                style={{
+                  background: "rgba(10,0,20,0.55)",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  outline: "none",
+                }}
+              />
+              <div className="flex items-center justify-between mt-2 text-xs">
+                <span
+                  className="text-slime-muted"
+                  style={{
+                    color:
+                      isOther && trimmedContextLength < MIN_OTHER_CONTEXT_LENGTH
+                        ? "#888"
+                        : "#39FF14",
+                  }}
+                >
+                  {trimmedContextLength} / {MAX_CONTEXT_LENGTH}
+                  {isOther ? ` (min ${MIN_OTHER_CONTEXT_LENGTH})` : ""}
+                </span>
+              </div>
+            </label>
+          )}
+
           <div className="flex flex-col sm:flex-row gap-3 mt-4">
             <button
               type="button"
@@ -260,6 +338,8 @@ export default function ClaimReviewActions({
               onClick={() => {
                 setError(null);
                 setMode("idle");
+                setReasonCode("");
+                setAdditionalContext("");
               }}
               className="flex-1 py-3 px-5 rounded-xl font-bold text-sm transition-colors disabled:opacity-60"
               style={{
@@ -272,7 +352,7 @@ export default function ClaimReviewActions({
             </button>
             <button
               type="button"
-              disabled={submitting || !reasonValid}
+              disabled={submitting || !canSubmitReject}
               onClick={handleReject}
               className="flex-1 py-3 px-5 rounded-xl font-bold text-sm transition-transform active:scale-[0.97] disabled:opacity-60"
               style={{
@@ -284,6 +364,8 @@ export default function ClaimReviewActions({
               {submitting ? "Rejecting…" : "Reject claim"}
             </button>
           </div>
+          {/* Suppress unused-var noise for isStandardized; kept for readability. */}
+          {isStandardized ? null : null}
         </div>
       )}
     </section>

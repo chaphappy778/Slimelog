@@ -2,6 +2,7 @@
 // Aligned to SlimeLog schema v1.0 — Migration 20260324000001
 // Updated: Migration 20260404000017_add_slime_types — 35 new types added
 // Updated: Migration 20260502000033_brand_claims — brand claim types appended
+// Updated: Bundle C (chat 10) — rejection reason types appended
 
 export type SlimeType =
   | "butter"
@@ -498,3 +499,34 @@ export interface BrandClaim {
   created_at: string;
   updated_at: string;
 }
+
+// ─── Brand claim rejection reasons (Bundle C) ─────────────────────────────────
+
+export type RejectionReasonCode =
+  | "documentation_insufficient"
+  | "email_unverified"
+  | "role_unconfirmed"
+  | "suspected_fraud"
+  | "different_owner_indicated"
+  | "other";
+
+export const REJECTION_REASON_LABELS: Record<RejectionReasonCode, string> = {
+  documentation_insufficient: "Documentation insufficient or unclear",
+  email_unverified:
+    "Business email could not be verified as belonging to the brand",
+  role_unconfirmed:
+    "Claimant role or relationship to brand could not be confirmed",
+  suspected_fraud: "Suspected fraudulent or duplicate claim",
+  different_owner_indicated: "Brand has indicated a different owner",
+  other: "Other",
+};
+
+// All standardized codes (excludes 'other' which always requires free-text)
+export const STANDARDIZED_REJECTION_CODES: ReadonlyArray<RejectionReasonCode> =
+  [
+    "documentation_insufficient",
+    "email_unverified",
+    "role_unconfirmed",
+    "suspected_fraud",
+    "different_owner_indicated",
+  ];

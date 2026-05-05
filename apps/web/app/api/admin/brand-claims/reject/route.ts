@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { type RejectionReasonCode, REJECTION_REASON_LABELS } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -10,13 +11,22 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM_EMAIL =
   process.env.RESEND_FROM_EMAIL ?? "SlimeLog <noreply@slimelog.com>";
 
-const MIN_REASON_LENGTH = 10;
-const MAX_REASON_LENGTH = 2000;
+const MIN_OTHER_CONTEXT_LENGTH = 10;
+const MAX_CONTEXT_LENGTH = 2000;
+
+const VALID_REASON_CODES: ReadonlyArray<RejectionReasonCode> = [
+  "documentation_insufficient",
+  "email_unverified",
+  "role_unconfirmed",
+  "suspected_fraud",
+  "different_owner_indicated",
+  "other",
+];
 
 const FOOTER_HTML = `
   <hr style="border:none;border-top:1px solid #2D0A4E;margin:32px 0 16px 0;" />
   <p style="font-size:11px;color:#888;line-height:1.5;margin:0;">
-    SlimeLog · ChapHaus LLC · Glastonbury, CT, USA<br />
+    SlimeLog · ChapHaus LLC · 2389 Main St. STE 100, Glastonbury, CT 06033, USA<br />
     You're receiving this email because you submitted a brand claim on SlimeLog.<br />
     Questions? Email <a href="mailto:support@slimelog.com" style="color:#00F0FF;">support@slimelog.com</a>.
   </p>
@@ -31,8 +41,42 @@ function escapeHtml(input: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function rejectionEmailHtml(brandName: string, reason: string): string {
-  const safeReason = escapeHtml(reason).replace(/\n/g, "<br />");
+function isValidReasonCode(value: unknown): value is RejectionReasonCode {
+  return (
+    typeof value === "string" &&
+    (VALID_REASON_CODES as ReadonlyArray<string>).includes(value)
+  );
+}
+
+function rejectionEmailHtml(
+  brandName: string,
+  reasonCode: RejectionReasonCode,
+  additionalContext: string,
+): string {
+  // For "other", surface the context as the substantive reason; for
+  // standardized codes, the label is the reason and context (if present)
+  // is supplemental.
+  const reasonLine =
+    reasonCode === "other"
+      ? "Other (see details below)"
+      : REJECTION_REASON_LABELS[reasonCode];
+
+  const escapedContext = additionalContext
+    ? escapeHtml(additionalContext).replace(/\n/g, "<br />")
+    : "";
+
+  const showContextBlock =
+    reasonCode === "other" || additionalContext.length > 0;
+
+  const contextBlock = showContextBlock
+    ? `
+      <p style="margin:0 0 12px 0;font-size:14px;line-height:1.6;color:#e5e5e5;">
+        <strong style="color:#fff;">Additional context from our team:</strong><br />
+        ${escapedContext}
+      </p>
+    `
+    : "";
+
   return `<!DOCTYPE html>
 <html>
 <body style="margin:0;padding:0;background:#0A0A0A;font-family:Inter,Helvetica,Arial,sans-serif;color:#fff;">
@@ -41,15 +85,15 @@ function rejectionEmailHtml(brandName: string, reason: string): string {
       Update on your SlimeLog brand claim
     </h1>
     <p style="font-size:15px;line-height:1.6;color:#e5e5e5;margin:0 0 16px 0;">
-      Thanks for submitting a brand claim for <strong>${escapeHtml(brandName)}</strong>. After reviewing your submission, we weren't able to approve it at this time.
+      Thanks for submitting a brand claim for <strong>${escapeHtml(
+        brandName,
+      )}</strong>. After reviewing your submission, we weren't able to approve it at this time.
     </p>
     <div style="background:#1a0a2e;border:1px solid #2D0A4E;border-radius:10px;padding:16px;margin:0 0 24px 0;">
-      <p style="font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#888;margin:0 0 8px 0;font-weight:700;">
-        Reason
+      <p style="margin:0 0 12px 0;font-size:14px;line-height:1.6;color:#e5e5e5;">
+        <strong style="color:#fff;">Reason:</strong> ${escapeHtml(reasonLine)}
       </p>
-      <p style="font-size:14px;line-height:1.6;color:#e5e5e5;margin:0;">
-        ${safeReason}
-      </p>
+      ${contextBlock}
     </div>
     <p style="font-size:15px;line-height:1.6;color:#e5e5e5;margin:0 0 16px 0;">
       You're welcome to resubmit your claim once the issue above is resolved. If you believe this decision was made in error, reach out to <a href="mailto:support@slimelog.com" style="color:#00F0FF;">support@slimelog.com</a> and we'll take another look.
@@ -72,7 +116,11 @@ export async function POST(req: Request) {
   }
 
   // Parse body
-  let body: { claim_id?: unknown; reason?: unknown };
+  let body: {
+    claim_id?: unknown;
+    reason_code?: unknown;
+    additional_context?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
@@ -80,7 +128,9 @@ export async function POST(req: Request) {
   }
 
   const claimId = typeof body.claim_id === "string" ? body.claim_id : null;
-  const rawReason = typeof body.reason === "string" ? body.reason : null;
+  const reasonCodeRaw = body.reason_code;
+  const additionalContextRaw =
+    typeof body.additional_context === "string" ? body.additional_context : "";
 
   if (!claimId) {
     return NextResponse.json(
@@ -88,26 +138,43 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  if (rawReason === null) {
-    return NextResponse.json({ error: "reason is required" }, { status: 400 });
-  }
 
-  const reason = rawReason.trim();
-  if (reason.length < MIN_REASON_LENGTH) {
+  if (!isValidReasonCode(reasonCodeRaw)) {
     return NextResponse.json(
-      {
-        error: `Rejection reason must be at least ${MIN_REASON_LENGTH} characters.`,
-      },
+      { error: "reason_code must be a valid rejection reason." },
       { status: 400 },
     );
   }
-  if (reason.length > MAX_REASON_LENGTH) {
-    return NextResponse.json(
-      {
-        error: `Rejection reason must be at most ${MAX_REASON_LENGTH} characters.`,
-      },
-      { status: 400 },
-    );
+  const reasonCode: RejectionReasonCode = reasonCodeRaw;
+
+  const additionalContext = additionalContextRaw.trim();
+
+  if (reasonCode === "other") {
+    if (additionalContext.length < MIN_OTHER_CONTEXT_LENGTH) {
+      return NextResponse.json(
+        {
+          error: `When selecting "Other", please specify a reason of at least ${MIN_OTHER_CONTEXT_LENGTH} characters.`,
+        },
+        { status: 400 },
+      );
+    }
+    if (additionalContext.length > MAX_CONTEXT_LENGTH) {
+      return NextResponse.json(
+        {
+          error: `Reason must be at most ${MAX_CONTEXT_LENGTH} characters.`,
+        },
+        { status: 400 },
+      );
+    }
+  } else {
+    if (additionalContext.length > MAX_CONTEXT_LENGTH) {
+      return NextResponse.json(
+        {
+          error: `Additional context must be at most ${MAX_CONTEXT_LENGTH} characters.`,
+        },
+        { status: 400 },
+      );
+    }
   }
 
   const admin = createAdminClient();
@@ -137,12 +204,19 @@ export async function POST(req: Request) {
 
   const nowIso = new Date().toISOString();
 
-  // Reject claim
+  // Persist structured rejection reason as JSON-in-text. The text column
+  // stays unchanged at the schema level — reject route is the only writer
+  // and the email-send is the only reader.
+  const rejectionPayload = JSON.stringify({
+    code: reasonCode,
+    context: additionalContext,
+  });
+
   const { error: updateErr } = await admin
     .from("brand_claims")
     .update({
       status: "rejected",
-      rejection_reason: reason,
+      rejection_reason: rejectionPayload,
       reviewed_by: adminUser.id,
       reviewed_at: nowIso,
       updated_at: nowIso,
@@ -165,13 +239,14 @@ export async function POST(req: Request) {
     ? (brandsField[0]?.name ?? "your brand")
     : (brandsField?.name ?? "your brand");
 
-  // Email — best effort
+  // Email — best effort. DB write is source of truth.
   try {
     await resend.emails.send({
       from: FROM_EMAIL,
       to: claim.business_email as string,
+      replyTo: "support@slimelog.com",
       subject: "Update on your SlimeLog brand claim",
-      html: rejectionEmailHtml(brandName, reason),
+      html: rejectionEmailHtml(brandName, reasonCode, additionalContext),
     });
   } catch (e) {
     console.error("[brand-claims/reject] rejection email failed:", e);
