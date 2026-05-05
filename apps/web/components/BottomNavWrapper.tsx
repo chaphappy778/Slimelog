@@ -33,6 +33,10 @@ export default function BottomNavWrapper() {
     });
   }, []);
 
+  // [Change 2 — Bundle C] Suppress on all admin routes regardless of auth
+  // state. The consumer bottom nav has no place in the admin surface.
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) return null;
+
   // Hide entirely on auth/landing routes regardless of auth state.
   const hideRoutes = ["/login", "/signup", "/landing", "/waitlist"];
   if (hideRoutes.includes(pathname)) return null;
