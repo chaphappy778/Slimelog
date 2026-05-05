@@ -1,6 +1,7 @@
+// apps/web/app/admin/waitlist/page.tsx
 import { redirect } from "next/navigation";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import PageWrapper from "@/components/PageWrapper";
 import ExportCSV from "./ExportCSV";
 
@@ -127,12 +128,9 @@ export default async function WaitlistAdminPage() {
   }
 
   // ── Data fetch (service role — bypasses RLS) ──────────────────────────────
-  const supabase = createSupabaseClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
+  const admin = createAdminClient();
 
-  const { data: waitlist } = await supabase
+  const { data: waitlist } = await admin
     .from("waitlist")
     .select(
       "id, email, created_at, source, marketing_consent, invited_at, notes",
