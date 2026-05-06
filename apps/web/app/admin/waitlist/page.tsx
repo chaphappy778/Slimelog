@@ -234,13 +234,24 @@ export default async function WaitlistAdminPage() {
                         {/* Marketing */}
                         <td className="px-4 py-3 text-center">
                           {row.marketing_consent ? (
-                            <span
-                              className="font-bold text-base"
-                              style={{ color: "#39FF14" }}
-                              title="Opted in"
+                            <svg
+                              aria-label="Opted in"
+                              role="img"
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="#39FF14"
+                              strokeWidth="3"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              style={{
+                                display: "inline-block",
+                                verticalAlign: "middle",
+                              }}
                             >
-                              ✓
-                            </span>
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
                           ) : (
                             <span className="text-slime-muted">—</span>
                           )}
