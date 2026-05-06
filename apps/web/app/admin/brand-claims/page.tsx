@@ -56,10 +56,19 @@ const VALID_STATUSES = [
   "approved",
   "rejected",
   "auto_rejected",
-  "all",
 ] as const;
 
-type StatusFilter = (typeof VALID_STATUSES)[number];
+type StatusFilter = (typeof VALID_STATUSES)[number] | null;
+
+// ─── Status color mapping (LOCKED) ────────────────────────────────────────────
+
+const STATUS_COLORS: Record<BrandClaimStatus, string> = {
+  pending_review: "#00F0FF",
+  pending_email_verification: "#FFB800",
+  approved: "#39FF14",
+  rejected: "#FF00E5",
+  auto_rejected: "#888888",
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -69,47 +78,34 @@ function normaliseRelation<T>(raw: T | T[] | null): T | null {
   return raw;
 }
 
-function formatRelativeTime(isoString: string): string {
-  const diffMs = Date.now() - new Date(isoString).getTime();
-  const diffMins = Math.floor(diffMs / 1000 / 60);
-  if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 30) return `${diffDays}d ago`;
-  const diffMonths = Math.floor(diffDays / 30);
-  if (diffMonths < 12) return `${diffMonths}mo ago`;
-  return `${Math.floor(diffMonths / 12)}y ago`;
-}
-
-function getStatusColor(status: BrandClaimStatus): string {
-  switch (status) {
-    case "pending_review":
-      return "#00F0FF";
-    case "approved":
-      return "#39FF14";
-    case "rejected":
-      return "#CC44FF";
-    case "auto_rejected":
-    case "pending_email_verification":
-    default:
-      return "#888888";
-  }
+function relativeTime(iso: string): string {
+  const d = new Date(iso).getTime();
+  const now = Date.now();
+  const diff = (d - now) / 1000;
+  const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+  const abs = Math.abs(diff);
+  if (abs < 60) return rtf.format(Math.round(diff), "second");
+  if (abs < 3600) return rtf.format(Math.round(diff / 60), "minute");
+  if (abs < 86400) return rtf.format(Math.round(diff / 3600), "hour");
+  if (abs < 86400 * 30) return rtf.format(Math.round(diff / 86400), "day");
+  if (abs < 86400 * 365)
+    return rtf.format(Math.round(diff / 86400 / 30), "month");
+  return rtf.format(Math.round(diff / 86400 / 365), "year");
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function StatusBadge({ status }: { status: BrandClaimStatus }) {
-  const color = getStatusColor(status);
+function StatusPill({ status }: { status: BrandClaimStatus }) {
+  const color = STATUS_COLORS[status];
   const label = BRAND_CLAIM_STATUS_LABELS[status] ?? status;
   return (
     <span
-      className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full"
+      className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full whitespace-nowrap"
       style={{
-        background: "rgba(10,0,20,0.55)",
-        border: `1px solid ${color}40`,
+        background: `${color}1F`,
+        border: `1px solid ${color}66`,
         color,
+        fontFamily: "Montserrat, sans-serif",
       }}
     >
       <svg width="6" height="6" viewBox="0 0 6 6" aria-hidden="true">
@@ -136,47 +132,25 @@ function StatCard({
   return (
     <Link
       href={href}
-      className="flex-1 rounded-2xl px-5 py-4 transition-all hover:scale-[1.02]"
+      className="rounded-2xl px-5 py-4 transition-all hover:scale-[1.02]"
       style={{
         background: "#1a0a2e",
-        border: isActive
-          ? `1px solid ${color}`
-          : "1px solid rgba(45,10,78,0.9)",
-        boxShadow: isActive ? `0 0 12px ${color}40` : "none",
+        border: "1px solid rgba(45,10,78,0.9)",
+        boxShadow: isActive ? `0 0 0 2px ${color}` : "none",
       }}
     >
       <p
-        className="text-xs font-bold uppercase tracking-widest mb-1"
-        style={{ color }}
+        className="text-[10px] sm:text-xs font-bold uppercase tracking-widest mb-1"
+        style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
       >
         {label}
       </p>
-      <p className="text-2xl font-black" style={{ color }}>
+      <p
+        className="text-2xl font-black"
+        style={{ color, fontFamily: "Montserrat, sans-serif" }}
+      >
         {value.toLocaleString()}
       </p>
-    </Link>
-  );
-}
-
-function FilterTab({
-  label,
-  status,
-  active,
-}: {
-  label: string;
-  status: StatusFilter;
-  active: boolean;
-}) {
-  return (
-    <Link
-      href={`/admin/brand-claims?status=${status}`}
-      className="px-4 py-2 text-xs font-bold uppercase tracking-widest transition-colors"
-      style={{
-        color: active ? "#00F0FF" : "#888888",
-        borderBottom: active ? "2px solid #00F0FF" : "2px solid transparent",
-      }}
-    >
-      {label}
     </Link>
   );
 }
@@ -198,41 +172,52 @@ export default async function AdminBrandClaimsPage({
     redirect("/");
   }
 
-  // Resolve filter
+  // Resolve filter — default state is null (show all). No filter shown if
+  // the query param is missing or invalid.
   const params = await searchParams;
-  const requestedStatus = (params.status ?? "pending_review") as StatusFilter;
-  const statusFilter: StatusFilter = (
-    VALID_STATUSES as readonly string[]
-  ).includes(requestedStatus)
-    ? requestedStatus
-    : "pending_review";
+  const requestedStatus = params.status;
+  const statusFilter: StatusFilter =
+    requestedStatus &&
+    (VALID_STATUSES as readonly string[]).includes(requestedStatus)
+      ? (requestedStatus as (typeof VALID_STATUSES)[number])
+      : null;
 
   const admin = createAdminClient();
 
-  // Stats counts (head:true for cheap counts)
-  const [pendingReviewCount, approvedCount, rejectedCount, autoRejectedCount] =
-    await Promise.all([
-      admin
-        .from("brand_claims")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "pending_review")
-        .then((r) => r.count ?? 0),
-      admin
-        .from("brand_claims")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "approved")
-        .then((r) => r.count ?? 0),
-      admin
-        .from("brand_claims")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "rejected")
-        .then((r) => r.count ?? 0),
-      admin
-        .from("brand_claims")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "auto_rejected")
-        .then((r) => r.count ?? 0),
-    ]);
+  // Stats counts — always all 5 statuses regardless of current filter.
+  const [
+    pendingReviewCount,
+    pendingEmailCount,
+    approvedCount,
+    rejectedCount,
+    autoRejectedCount,
+  ] = await Promise.all([
+    admin
+      .from("brand_claims")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "pending_review")
+      .then((r) => r.count ?? 0),
+    admin
+      .from("brand_claims")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "pending_email_verification")
+      .then((r) => r.count ?? 0),
+    admin
+      .from("brand_claims")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "approved")
+      .then((r) => r.count ?? 0),
+    admin
+      .from("brand_claims")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "rejected")
+      .then((r) => r.count ?? 0),
+    admin
+      .from("brand_claims")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "auto_rejected")
+      .then((r) => r.count ?? 0),
+  ]);
 
   // Filtered list
   let listQuery = admin
@@ -245,7 +230,7 @@ export default async function AdminBrandClaimsPage({
     .order("created_at", { ascending: false })
     .limit(100);
 
-  if (statusFilter !== "all") {
+  if (statusFilter !== null) {
     listQuery = listQuery.eq("status", statusFilter);
   }
 
@@ -253,10 +238,9 @@ export default async function AdminBrandClaimsPage({
   const claims = (rawClaims ?? []) as unknown as ClaimRow[];
 
   const filterLabel =
-    statusFilter === "all"
+    statusFilter === null
       ? "all"
-      : (BRAND_CLAIM_STATUS_LABELS[statusFilter as BrandClaimStatus] ??
-        statusFilter);
+      : (BRAND_CLAIM_STATUS_LABELS[statusFilter] ?? statusFilter);
 
   return (
     <PageWrapper dots>
@@ -304,72 +288,62 @@ export default async function AdminBrandClaimsPage({
           </div>
         </div>
 
-        {/* Stats cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+        {/* Stats cards — five cards, also act as filter buttons */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-3">
           <StatCard
             label="Pending Review"
             value={pendingReviewCount}
-            color="#00F0FF"
+            color={STATUS_COLORS.pending_review}
             href="/admin/brand-claims?status=pending_review"
             isActive={statusFilter === "pending_review"}
           />
           <StatCard
+            label="Pending Email"
+            value={pendingEmailCount}
+            color={STATUS_COLORS.pending_email_verification}
+            href="/admin/brand-claims?status=pending_email_verification"
+            isActive={statusFilter === "pending_email_verification"}
+          />
+          <StatCard
             label="Approved"
             value={approvedCount}
-            color="#39FF14"
+            color={STATUS_COLORS.approved}
             href="/admin/brand-claims?status=approved"
             isActive={statusFilter === "approved"}
           />
           <StatCard
             label="Rejected"
             value={rejectedCount}
-            color="#CC44FF"
+            color={STATUS_COLORS.rejected}
             href="/admin/brand-claims?status=rejected"
             isActive={statusFilter === "rejected"}
           />
           <StatCard
             label="Auto-Rejected"
             value={autoRejectedCount}
-            color="#888888"
+            color={STATUS_COLORS.auto_rejected}
             href="/admin/brand-claims?status=auto_rejected"
             isActive={statusFilter === "auto_rejected"}
           />
         </div>
 
-        {/* Filter tabs */}
-        <div
-          className="flex items-center gap-1 mb-4 overflow-x-auto"
-          style={{ borderBottom: "1px solid rgba(45,10,78,0.7)" }}
-        >
-          <FilterTab
-            label="Pending Review"
-            status="pending_review"
-            active={statusFilter === "pending_review"}
-          />
-          <FilterTab
-            label="Approved"
-            status="approved"
-            active={statusFilter === "approved"}
-          />
-          <FilterTab
-            label="Rejected"
-            status="rejected"
-            active={statusFilter === "rejected"}
-          />
-          <FilterTab
-            label="Auto-Rejected"
-            status="auto_rejected"
-            active={statusFilter === "auto_rejected"}
-          />
-          <FilterTab
-            label="Pending Email"
-            status="pending_email_verification"
-            active={statusFilter === "pending_email_verification"}
-          />
-          <FilterTab label="All" status="all" active={statusFilter === "all"} />
+        {/* "View all claims" link — only when a filter is active */}
+        <div className="mb-6 h-5">
+          {statusFilter !== null ? (
+            <Link
+              href="/admin/brand-claims"
+              className="text-xs font-bold uppercase tracking-widest hover:underline"
+              style={{
+                color: "#00F0FF",
+                fontFamily: "Montserrat, sans-serif",
+              }}
+            >
+              View all claims
+            </Link>
+          ) : null}
         </div>
 
-        {/* Claim table / empty state */}
+        {/* Claim list */}
         {claims.length === 0 ? (
           <div
             className="rounded-2xl text-center text-sm text-slime-muted"
@@ -383,9 +357,9 @@ export default async function AdminBrandClaimsPage({
           </div>
         ) : (
           <>
-            {/* Desktop table */}
+            {/* Desktop table (≥640px) */}
             <div
-              className="hidden md:block rounded-2xl overflow-hidden"
+              className="hidden sm:block rounded-2xl overflow-hidden"
               style={{ border: "1px solid rgba(45,10,78,0.9)" }}
             >
               <div className="overflow-x-auto">
@@ -487,10 +461,10 @@ export default async function AdminBrandClaimsPage({
                             {BRAND_CLAIM_ROLE_LABELS[row.role] ?? row.role}
                           </td>
                           <td className="px-4 py-3 text-slime-muted text-xs whitespace-nowrap">
-                            {formatRelativeTime(row.created_at)}
+                            {relativeTime(row.created_at)}
                           </td>
                           <td className="px-4 py-3">
-                            <StatusBadge status={row.status} />
+                            <StatusPill status={row.status} />
                           </td>
                           <td className="px-4 py-3">
                             <Link
@@ -498,7 +472,7 @@ export default async function AdminBrandClaimsPage({
                               className="text-xs font-bold uppercase tracking-widest"
                               style={{ color: "#39FF14" }}
                             >
-                              View →
+                              View
                             </Link>
                           </td>
                         </tr>
@@ -509,8 +483,8 @@ export default async function AdminBrandClaimsPage({
               </div>
             </div>
 
-            {/* Mobile stacked cards */}
-            <div className="md:hidden flex flex-col gap-3">
+            {/* Mobile stacked cards (<640px) */}
+            <div className="sm:hidden flex flex-col gap-3">
               {claims.map((row) => {
                 const brand = normaliseRelation(row.brands);
                 const profile = normaliseRelation(row.profiles_public);
@@ -518,16 +492,17 @@ export default async function AdminBrandClaimsPage({
                   <Link
                     key={row.id}
                     href={`/admin/brand-claims/${row.id}`}
-                    className="block rounded-2xl p-4"
+                    className="block rounded-2xl p-4 transition-colors hover:border-[rgba(57,255,20,0.3)]"
                     style={{
-                      background: "rgba(45,10,78,0.3)",
-                      border: "1px solid rgba(45,10,78,0.9)",
+                      background: "rgba(45,10,78,0.25)",
+                      border: "1px solid rgba(45,10,78,0.7)",
                     }}
                   >
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2 min-w-0">
+                    {/* Top row: logo + brand name + status pill */}
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         <div
-                          className="relative w-8 h-8 rounded-lg overflow-hidden shrink-0"
+                          className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0"
                           style={{ background: "rgba(45,10,78,0.6)" }}
                         >
                           {brand?.logo_url ? (
@@ -535,27 +510,42 @@ export default async function AdminBrandClaimsPage({
                               src={brand.logo_url}
                               alt=""
                               fill
-                              sizes="32px"
+                              sizes="40px"
                               className="object-cover"
                             />
                           ) : null}
                         </div>
-                        <p className="text-sm font-semibold text-slime-text truncate">
+                        <p
+                          className="text-base font-bold text-white truncate"
+                          style={{ fontFamily: "Montserrat, sans-serif" }}
+                        >
                           {brand?.name ?? "Unknown brand"}
                         </p>
                       </div>
-                      <StatusBadge status={row.status} />
+                      <StatusPill status={row.status} />
                     </div>
+
+                    {/* Claimant + relative time */}
                     <p className="text-xs text-slime-muted">
-                      Claimed by{" "}
+                      <span style={{ color: "#888888" }}>Claimed by </span>
                       <span style={{ color: "#FF00E5" }}>
                         @{profile?.username ?? "unknown"}
-                      </span>{" "}
-                      · {formatRelativeTime(row.created_at)}
+                      </span>
+                      <span style={{ color: "#888888" }}>
+                        {" "}
+                        · {relativeTime(row.created_at)}
+                      </span>
                     </p>
-                    <p className="text-xs text-slime-muted mt-1">
-                      {row.business_email} ·{" "}
-                      {BRAND_CLAIM_ROLE_LABELS[row.role] ?? row.role}
+
+                    {/* Email · role */}
+                    <p className="text-xs mt-1">
+                      <span style={{ color: "#888888" }}>
+                        {row.business_email}
+                      </span>
+                      <span style={{ color: "#888888" }}> · </span>
+                      <span style={{ color: "#FFFFFF" }}>
+                        {BRAND_CLAIM_ROLE_LABELS[row.role] ?? row.role}
+                      </span>
                     </p>
                   </Link>
                 );
