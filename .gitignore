@@ -4,3 +4,7 @@ node_modules
 .DS_Store
 .next
 .hub/
+
+# Local-only Word docs (not source of truth — markdown equivalents in repo)
+docs/*.docx
+docs/Project_Summary
