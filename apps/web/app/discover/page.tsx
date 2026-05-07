@@ -135,9 +135,9 @@ export default async function DiscoverPage() {
   );
 
   const [topRatedResult, dropsResult] = await Promise.all([
-    // [Fix 1] — Bypass top_rated_slimes view (requires >= 3 ratings, too strict for dev).
-    // Query slimes table directly joined to brands. Threshold: >= 1 rating.
-    // TODO before launch: raise total_ratings threshold to >= 3 or >= 5 once community data exists.
+    // Top-rated slimes: query slimes table directly joined to brands.
+    // Threshold matches top_rated_slimes view (>= 3 ratings). T61 tracks
+    // refactoring this to read from the view directly.
     supabase
       .from("slimes")
       .select(
