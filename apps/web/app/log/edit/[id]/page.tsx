@@ -301,6 +301,11 @@ function EditLogPageInner() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // [Bundle E] Privacy toggle state. UI-side `isPrivate` is the inverse of
+  // the DB `is_public` column. Initialized to false; the actual value is
+  // hydrated from the loaded log inside the existing useEffect below.
+  const [isPrivate, setIsPrivate] = useState(false);
+
   // [Change 2] Removed order_date, ship_date, received_date from initial state
   const [form, setForm] = useState<FormState>({
     slime_name: "",
@@ -388,6 +393,10 @@ function EditLogPageInner() {
         in_collection: data.in_collection ?? true,
       });
 
+      // [Bundle E] Hydrate privacy toggle from loaded log. is_public is NOT
+      // NULL with default true at the column level, so this is safe.
+      setIsPrivate(!data.is_public);
+
       setLoadingLog(false);
     });
   }, [id, router]);
@@ -447,6 +456,7 @@ function EditLogPageInner() {
         rating_sensory_fit: form.rating_sensory_fit ?? undefined,
         rating_overall: form.rating_overall ?? undefined,
         notes: form.notes.trim() || undefined,
+        is_public: !isPrivate,
       };
 
       const { error } = await supabaseRef.current
@@ -699,6 +709,90 @@ function EditLogPageInner() {
                   onChange={(e) => set("notes", e.target.value)}
                 />
               </Field>
+
+              {/* [Bundle E] Privacy toggle. Amber on-state (#FFB800) is a
+                  deliberate scoped exception to the standard #39FF14 active
+                  CTA green — privacy ON = restricted/private semantics, which
+                  amber communicates correctly. Flipping public->private here
+                  fires the cleanup_activity_on_privacy_flip trigger which
+                  deletes the corresponding activity_feed row server-side. */}
+              <div
+                className="rounded-2xl p-4"
+                style={{
+                  background: "rgba(45,10,78,0.25)",
+                  border: "1px solid rgba(45,10,78,0.7)",
+                }}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke={isPrivate ? "#FFB800" : "#39FF14"}
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="shrink-0"
+                      aria-hidden="true"
+                    >
+                      {isPrivate ? (
+                        <>
+                          <rect x="3" y="11" width="18" height="11" rx="2" />
+                          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                        </>
+                      ) : (
+                        <>
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </>
+                      )}
+                    </svg>
+                    <div className="min-w-0">
+                      <p
+                        className="text-base font-bold text-white"
+                        style={{ fontFamily: "Montserrat, sans-serif" }}
+                      >
+                        {isPrivate ? "Private log" : "Public log"}
+                      </p>
+                      <p
+                        className="text-xs mt-0.5"
+                        style={{ color: "#888888" }}
+                      >
+                        {isPrivate
+                          ? "Only you will see this. It won't appear in the activity feed or on your public profile."
+                          : "This will appear in your followers' activity feed and on your public profile."}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsPrivate((v) => !v)}
+                    role="switch"
+                    aria-checked={isPrivate}
+                    aria-label="Toggle log privacy"
+                    className="relative inline-flex shrink-0 h-7 w-12 rounded-full transition-colors"
+                    style={{
+                      background: isPrivate
+                        ? "#FFB800"
+                        : "rgba(255,255,255,0.12)",
+                      border: "1px solid rgba(255,255,255,0.18)",
+                    }}
+                  >
+                    <span
+                      className="absolute top-0.5 inline-block h-5 w-5 rounded-full bg-white transition-transform"
+                      style={{
+                        transform: isPrivate
+                          ? "translateX(22px)"
+                          : "translateX(2px)",
+                      }}
+                    />
+                  </button>
+                </div>
+              </div>
+
               <div
                 className="rounded-xl px-4 py-4 text-sm text-slime-muted space-y-1"
                 style={{

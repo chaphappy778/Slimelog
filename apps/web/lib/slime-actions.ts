@@ -177,6 +177,7 @@ export async function updateSlimeLog(
       ...(input.in_wishlist !== undefined && {
         in_wishlist: input.in_wishlist,
       }),
+      ...(input.is_public !== undefined && { is_public: input.is_public }),
       ...(input.rating_texture !== undefined && {
         rating_texture: input.rating_texture,
       }),
