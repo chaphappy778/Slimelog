@@ -10,7 +10,7 @@ import { revalidatePath } from "next/cache";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-import type { SlimeType } from "@/lib/types";
+import type { SlimeBaseType } from "@/lib/types";
 
 export interface LogSlimeInput {
   // Catalog references — both optional for free-form entry
@@ -22,7 +22,9 @@ export interface LogSlimeInput {
   brand_name_raw?: string;
   collection_name?: string;
 
-  slime_type: SlimeType;
+  // [G2] Hierarchical taxonomy: base_type is required, subtype_id is optional
+  base_type: SlimeBaseType;
+  subtype_id?: string | null;
 
   // Status flags
   in_collection?: boolean;
@@ -43,15 +45,9 @@ export interface LogSlimeInput {
   colors?: string[];
   image_url?: string;
 
-  // Shipping / fulfillment dates — ISO 8601 date strings (YYYY-MM-DD)
-  order_date?: string;
-  ship_date?: string;
-  received_date?: string;
-
   // Free-form notes
   notes?: string;
   purchase_price?: number;
-  purchase_currency?: string;
 }
 
 // ─── Auth guard ───────────────────────────────────────────────────────────────
@@ -111,7 +107,8 @@ export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
       slime_name: input.slime_name ?? null,
       brand_name_raw: input.brand_name_raw ?? null,
       collection_name: input.collection_name ?? null,
-      slime_type: input.slime_type,
+      base_type: input.base_type,
+      subtype_id: input.subtype_id ?? null,
       in_collection: input.in_collection ?? true,
       in_wishlist: input.in_wishlist ?? false,
       is_public: input.is_public ?? true,
@@ -125,12 +122,8 @@ export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
       scent: input.scent ?? null,
       colors: input.colors ?? null,
       image_url: input.image_url ?? null,
-      order_date: input.order_date ?? null,
-      ship_date: input.ship_date ?? null,
-      received_date: input.received_date ?? null,
       notes: input.notes ?? null,
       purchase_price: input.purchase_price ?? null,
-      purchase_currency: input.purchase_currency ?? "USD",
     })
     .select("id")
     .single();
@@ -170,7 +163,8 @@ export async function updateSlimeLog(
       ...(input.collection_name !== undefined && {
         collection_name: input.collection_name,
       }),
-      ...(input.slime_type !== undefined && { slime_type: input.slime_type }),
+      ...(input.base_type !== undefined && { base_type: input.base_type }),
+      ...(input.subtype_id !== undefined && { subtype_id: input.subtype_id }),
       ...(input.in_collection !== undefined && {
         in_collection: input.in_collection,
       }),
@@ -205,11 +199,6 @@ export async function updateSlimeLog(
       }),
       ...(input.image_url !== undefined && { image_url: input.image_url }),
       ...(input.colors !== undefined && { colors: input.colors }),
-      ...(input.order_date !== undefined && { order_date: input.order_date }),
-      ...(input.ship_date !== undefined && { ship_date: input.ship_date }),
-      ...(input.received_date !== undefined && {
-        received_date: input.received_date,
-      }),
     })
     .eq("id", logId)
     .eq("user_id", userId); // ownership guard in addition to RLS
@@ -256,14 +245,15 @@ export async function getUserCollectionLogs() {
     .from("collection_logs")
     .select(
       `
-      id, slime_type, slime_name, brand_name_raw, collection_name,
+      id, base_type, subtype_id, slime_name, brand_name_raw, collection_name,
       in_collection, in_wishlist,
       rating_overall, rating_texture, rating_scent,
       rating_sound, rating_drizzle, rating_creativity, rating_sensory_fit,
-      notes, purchase_price, purchase_currency,
-      colors, image_url, order_date, ship_date, received_date,
+      notes, purchase_price,
+      colors, image_url,
       created_at, updated_at,
       slimes ( id, name, colors, scent ),
+      subtype:subtypes ( id, name ),
       brands ( id, name, slug )
     `,
     )

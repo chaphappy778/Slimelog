@@ -5,13 +5,14 @@ import { useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { logSlime } from "@/lib/slime-actions";
 import type { LogSlimeInput } from "@/lib/slime-actions";
-import { SLIME_TYPE_LABELS } from "@/lib/types";
-import type { SlimeType } from "@/lib/types";
+import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
+import type { SlimeBaseType } from "@/lib/types";
 import { ImageUpload } from "@/components/ImageUpload";
 import { createBrowserClient } from "@supabase/ssr";
 import PageWrapper from "@/components/PageWrapper";
 import FloatingPills from "@/components/FloatingPills";
 import BrandSearchInput from "@/components/BrandSearchInput";
+import SubtypeAutocomplete from "@/components/SubtypeAutocomplete";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -63,12 +64,15 @@ const COLOR_SWATCHES: ColorSwatch[] = [
 ];
 
 // [Change 2] Removed order_date, ship_date, received_date from FormState
+// [G2 Change 3] slime_type → base_type; added subtype_id and subtype_name
 interface FormState {
   slime_name: string;
   brand_name_raw: string;
   brand_id: string | null;
   collection_name: string;
-  slime_type: SlimeType | "";
+  base_type: SlimeBaseType | "";
+  subtype_id: string | null;
+  subtype_name: string;
   scent: string;
   purchase_price: string;
   selected_color_values: string[];
@@ -310,12 +314,15 @@ function LogPageInner() {
   }
 
   // [Change 2] Removed order_date, ship_date, received_date from initial state
+  // [G2 Change 4] slime_type → base_type; added subtype_id and subtype_name
   const [form, setForm] = useState<FormState>({
     slime_name: searchParams.get("slime_name") ?? "",
     brand_name_raw: searchParams.get("brand") ?? "",
     brand_id: null,
     collection_name: searchParams.get("collection") ?? "",
-    slime_type: (searchParams.get("type") as SlimeType) ?? "",
+    base_type: (searchParams.get("base_type") as SlimeBaseType) ?? "",
+    subtype_id: null,
+    subtype_name: "",
     scent: "",
     purchase_price: "",
     selected_color_values: [],
@@ -357,15 +364,17 @@ function LogPageInner() {
   }
 
   async function handleSubmit() {
-    if (!form.slime_type) {
-      setSaveError("Please select a slime type.");
+    // [G2 Change 8] base_type validation
+    if (!form.base_type) {
+      setSaveError("Please select a base type.");
       return;
     }
     setSaving(true);
     setSaveError(null);
     try {
+      // [G2 Change 10] base_type === "clear" check
       const finalColors =
-        form.slime_type === "clear"
+        form.base_type === "clear"
           ? ["clear"]
           : buildColorsArray(
               form.selected_color_values,
@@ -373,11 +382,13 @@ function LogPageInner() {
             );
 
       // [Change 2] Removed order_date, ship_date, received_date from submit payload
+      // [G2 Change 9] base_type + subtype_id on payload
       const input: LogSlimeInput = {
         slime_name: form.slime_name.trim() || undefined,
         brand_name_raw: form.brand_name_raw.trim() || undefined,
         brand_id: form.brand_id ?? undefined,
-        slime_type: form.slime_type as SlimeType,
+        base_type: form.base_type as SlimeBaseType,
+        subtype_id: form.subtype_id ?? null,
         scent: form.scent.trim() || undefined,
         purchase_price:
           form.purchase_price !== ""
@@ -477,23 +488,54 @@ function LogPageInner() {
                   onChange={(e) => set("collection_name", e.target.value)}
                 />
               </Field>
-              <Field label="Slime Type *">
+              {/* [G2 Change 5/6] Base Type selector — clears subtype on change */}
+              <Field label="Base Type *">
                 <select
                   className={inputCls}
-                  value={form.slime_type}
-                  onChange={(e) =>
-                    set("slime_type", e.target.value as SlimeType | "")
-                  }
+                  value={form.base_type}
+                  onChange={(e) => {
+                    const newBase = e.target.value as SlimeBaseType | "";
+                    setForm((f) => ({
+                      ...f,
+                      base_type: newBase,
+                      subtype_id: null,
+                      subtype_name: "",
+                    }));
+                  }}
                 >
                   <option value="">— Pick a type —</option>
                   {(
-                    Object.entries(SLIME_TYPE_LABELS) as [SlimeType, string][]
+                    Object.entries(SLIME_BASE_TYPE_LABELS) as [
+                      SlimeBaseType,
+                      string,
+                    ][]
                   ).map(([val, label]) => (
                     <option key={val} value={val}>
                       {label}
                     </option>
                   ))}
                 </select>
+              </Field>
+
+              {/* [G2 Change 7] Subtype autocomplete (optional) */}
+              <Field label="Subtype" optional>
+                <SubtypeAutocomplete
+                  baseType={form.base_type}
+                  value={form.subtype_name}
+                  subtypeId={form.subtype_id}
+                  onChange={(id, name) => {
+                    setForm((f) => ({
+                      ...f,
+                      subtype_id: id,
+                      subtype_name: name,
+                    }));
+                  }}
+                  placeholder={
+                    form.base_type
+                      ? "Search subtypes (optional)"
+                      : "Pick a base type first"
+                  }
+                />
               </Field>
 
               {/* Wishlist toggle */}
@@ -566,7 +608,8 @@ function LogPageInner() {
               </Field>
               {/* [Change 2] Shipping Dates section removed entirely */}
               <Field label="Colors" optional>
-                {form.slime_type === "clear" ? (
+                {/* [G2 Change 10] base_type === "clear" check */}
+                {form.base_type === "clear" ? (
                   <p
                     style={{
                       fontSize: 13,
@@ -732,15 +775,26 @@ function LogPageInner() {
                 {form.collection_name && (
                   <p>Collection: {form.collection_name}</p>
                 )}
-                {form.slime_type && (
+                {/* [G2 Change 11] base_type label */}
+                {form.base_type && (
                   <p>
                     Type:{" "}
                     <span className="text-slime-accent">
-                      {SLIME_TYPE_LABELS[form.slime_type as SlimeType]}
+                      {SLIME_BASE_TYPE_LABELS[form.base_type as SlimeBaseType]}
                     </span>
                   </p>
                 )}
-                {form.slime_type === "clear" ? (
+                {/* [G2 Change 11] Subtype line when present */}
+                {form.subtype_name && (
+                  <p>
+                    Subtype:{" "}
+                    <span className="text-slime-accent">
+                      {form.subtype_name}
+                    </span>
+                  </p>
+                )}
+                {/* [G2 Change 10] base_type === "clear" check */}
+                {form.base_type === "clear" ? (
                   <p>
                     Colors: <span className="text-slime-accent">clear</span>
                   </p>
