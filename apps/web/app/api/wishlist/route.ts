@@ -1,3 +1,4 @@
+// apps/web/app/api/wishlist/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -17,7 +18,8 @@ export async function POST(req: NextRequest) {
     user_id: user.id,
     slime_name: body.slime_name,
     brand_name_raw: body.brand_name_raw,
-    slime_type: body.slime_type ?? null,
+    base_type: body.base_type ?? null, // [Change 3a] was slime_type: body.slime_type ?? null
+    subtype_id: body.subtype_id ?? null, // [Change 3a] added
     in_wishlist: true,
     in_collection: false,
     is_public: true,

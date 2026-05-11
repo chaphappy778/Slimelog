@@ -20,7 +20,7 @@ type CommunityQueryRow = {
   updated_at: string;
   slime_name: string | null;
   brand_name_raw: string | null;
-  slime_type: string | null;
+  base_type: string | null; // [Change 2a] was slime_type
   colors: string[] | null;
   rating_overall: number | null;
   image_url: string | null;
@@ -41,7 +41,7 @@ type ActivityFeedQueryRow = {
   log_id: string | null;
   metadata: {
     slime_name?: string | null;
-    slime_type?: string | null;
+    base_type?: string | null; // [Change 2b] was slime_type
     brand_name_raw?: string | null;
     rating_overall?: number | null;
     colors?: string[] | null;
@@ -229,13 +229,13 @@ export default async function HomePage({
          updated_at,
          slime_name,
          brand_name_raw,
-         slime_type,
+         base_type,
          colors,
          rating_overall,
          image_url,
          in_wishlist,
          profiles_public!collection_logs_user_id_fkey ( username, avatar_url )`,
-      )
+      ) // [Change 2c] was slime_type,
       .eq("is_public", true)
       .order("created_at", { ascending: false })
       .limit(20);
@@ -286,7 +286,7 @@ export default async function HomePage({
           updated_at: r.updated_at,
           slime_name: r.slime_name,
           brand_name_raw: r.brand_name_raw,
-          slime_type: r.slime_type,
+          base_type: r.base_type, // [Change 2d] was slime_type: r.slime_type
           colors: r.colors,
           rating_overall: r.rating_overall,
           image_url: r.image_url,
@@ -397,7 +397,7 @@ export default async function HomePage({
               updated_at: updatedAtMap[logId] ?? row.created_at,
               slime_name: meta.slime_name ?? null,
               brand_name_raw: meta.brand_name_raw ?? null,
-              slime_type: meta.slime_type ?? null,
+              base_type: meta.base_type ?? null, // [Change 2e] was slime_type: meta.slime_type ?? null
               colors: meta.colors ?? null,
               rating_overall:
                 meta.rating_overall != null
