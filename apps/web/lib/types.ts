@@ -3,59 +3,7 @@
 // Updated: Migration 20260404000017_add_slime_types — 35 new types added
 // Updated: Migration 20260502000033_brand_claims — brand claim types appended
 // Updated: Bundle C (chat 10) — rejection reason types appended
-
-export type SlimeType =
-  | "butter"
-  | "clear"
-  | "cloud"
-  | "icee"
-  | "fluffy"
-  | "floam"
-  | "snow_fizz"
-  | "thick_and_glossy"
-  | "jelly"
-  | "beaded"
-  | "clay"
-  | "cloud_cream"
-  | "magnetic"
-  | "thermochromic"
-  | "avalanche"
-  | "slay"
-  | "micro_dough"
-  | "sally_butter"
-  | "nougat"
-  | "jelly_cube"
-  | "hybrid"
-  | "fishbowl_beads"
-  | "bead_bomb"
-  | "bingsu"
-  | "cloud_dough"
-  | "float"
-  | "slushee"
-  | "wax_cracking"
-  | "glossy"
-  | "crunchy"
-  | "thicky"
-  | "water"
-  | "cream_cheese"
-  | "mochi"
-  | "jelly_puff"
-  | "cloud_fizz"
-  | "sugar_scrub"
-  | "glow_in_the_dark"
-  | "metallic"
-  | "glitter"
-  | "galaxy"
-  | "jiggly"
-  | "wax"
-  | "sand"
-  | "mousse_fizz"
-  | "chiffon_fizz"
-  | "putty_puff"
-  | "custard"
-  | "holographic"
-  | "pearl"
-  | "thiggly";
+// Updated: Migration 20260509000037_t71_base_type_taxonomy — 51 flat types replaced with 20 base types + extensible subtypes
 
 export type ActivityType =
   | "log_created"
@@ -95,118 +43,87 @@ export type RatingDimension =
 
 // ─── Labels & Colors ──────────────────────────────────────────────────────────
 
-export const SLIME_TYPE_LABELS: Record<SlimeType, string> = {
+export type SlimeBaseType =
+  | "avalanche"
+  | "beaded"
+  | "butter"
+  | "clay"
+  | "clear"
+  | "cloud"
+  | "cloud_cream"
+  | "floam"
+  | "fluffy"
+  | "hybrid"
+  | "icee"
+  | "jelly"
+  | "magnetic"
+  | "sand"
+  | "slay"
+  | "snow_fizz"
+  | "sugar_scrub"
+  | "thick_and_glossy"
+  | "water"
+  | "wax_and_wax_cracking";
+
+export const SLIME_BASE_TYPE_LABELS: Record<SlimeBaseType, string> = {
+  avalanche: "Avalanche",
+  beaded: "Beaded",
   butter: "Butter",
+  clay: "Clay",
   clear: "Clear",
   cloud: "Cloud",
-  icee: "Icee",
-  fluffy: "Fluffy",
-  floam: "Floam",
-  snow_fizz: "Snow Fizz",
-  thick_and_glossy: "Thick & Glossy",
-  jelly: "Jelly",
-  beaded: "Beaded",
-  clay: "Clay",
   cloud_cream: "Cloud Cream",
-  magnetic: "Magnetic",
-  thermochromic: "Thermochromic",
-  avalanche: "Avalanche",
-  slay: "Slay",
-  micro_dough: "Micro Dough",
-  sally_butter: "Sally Butter",
-  nougat: "Nougat",
-  jelly_cube: "Jelly Cube",
+  floam: "Floam",
+  fluffy: "Fluffy",
   hybrid: "Hybrid",
-  fishbowl_beads: "Fishbowl Beads",
-  bead_bomb: "Bead Bomb",
-  bingsu: "Bingsu",
-  cloud_dough: "Cloud Dough",
-  float: "Float",
-  slushee: "Slushee",
-  wax_cracking: "Wax Cracking",
-  glossy: "Glossy",
-  crunchy: "Crunchy",
-  thicky: "Thicky",
-  water: "Water",
-  cream_cheese: "Cream Cheese",
-  mochi: "Mochi",
-  jelly_puff: "Jelly Puff",
-  cloud_fizz: "Cloud Fizz",
-  sugar_scrub: "Sugar Scrub",
-  glow_in_the_dark: "Glow in the Dark",
-  metallic: "Metallic",
-  glitter: "Glitter",
-  galaxy: "Galaxy",
-  jiggly: "Jiggly",
-  wax: "Wax",
+  icee: "Icee",
+  jelly: "Jelly",
+  magnetic: "Magnetic",
   sand: "Sand",
-  mousse_fizz: "Mousse Fizz",
-  chiffon_fizz: "Chiffon Fizz",
-  putty_puff: "Putty Puff",
-  custard: "Custard",
-  holographic: "Holographic",
-  pearl: "Pearl",
-  thiggly: "Thiggly",
+  slay: "Slay",
+  snow_fizz: "Snow Fizz",
+  sugar_scrub: "Sugar Scrub",
+  thick_and_glossy: "Thick & Glossy",
+  water: "Water",
+  wax_and_wax_cracking: "Wax & Wax Cracking",
 };
 
-export const SLIME_TYPE_COLORS: Record<
-  SlimeType,
+export const SLIME_BASE_TYPE_COLORS: Record<
+  SlimeBaseType,
   { bg: string; text: string }
 > = {
-  // Original types — dark-theme aware
+  avalanche: { bg: "rgba(248,250,252,0.08)", text: "#94a3b8" },
+  beaded: { bg: "rgba(254,228,230,0.12)", text: "#fda4af" },
   butter: { bg: "rgba(255,243,205,0.12)", text: "#fde68a" },
+  clay: { bg: "rgba(254,249,195,0.12)", text: "#fef08a" },
   clear: { bg: "rgba(224,247,250,0.10)", text: "#67e8f9" },
   cloud: { bg: "rgba(243,232,255,0.12)", text: "#d8b4fe" },
-  icee: { bg: "rgba(219,234,254,0.12)", text: "#93c5fd" },
-  fluffy: { bg: "rgba(252,231,243,0.12)", text: "#f9a8d4" },
-  floam: { bg: "rgba(209,250,229,0.12)", text: "#6ee7b7" },
-  snow_fizz: { bg: "rgba(240,249,255,0.10)", text: "#bae6fd" },
-  thick_and_glossy: { bg: "rgba(237,233,254,0.12)", text: "#c4b5fd" },
-  jelly: { bg: "rgba(254,243,199,0.12)", text: "#fcd34d" },
-  beaded: { bg: "rgba(254,228,230,0.12)", text: "#fda4af" },
-  clay: { bg: "rgba(254,249,195,0.12)", text: "#fef08a" },
   cloud_cream: { bg: "rgba(253,244,255,0.12)", text: "#e879f9" },
-  magnetic: { bg: "rgba(241,245,249,0.10)", text: "#94a3b8" },
-  thermochromic: { bg: "rgba(255,241,242,0.12)", text: "#fda4af" },
-  avalanche: { bg: "rgba(248,250,252,0.08)", text: "#94a3b8" },
-  slay: { bg: "rgba(253,242,248,0.12)", text: "#f0abfc" },
-  // New types
-  micro_dough: { bg: "rgba(255,200,100,0.12)", text: "#fcd34d" },
-  sally_butter: { bg: "rgba(255,220,150,0.12)", text: "#fde68a" },
-  nougat: { bg: "rgba(210,170,120,0.12)", text: "#d4a96a" },
-  jelly_cube: { bg: "rgba(100,220,200,0.12)", text: "#6ee7b7" },
+  floam: { bg: "rgba(209,250,229,0.12)", text: "#6ee7b7" },
+  fluffy: { bg: "rgba(252,231,243,0.12)", text: "#f9a8d4" },
   hybrid: { bg: "rgba(150,100,255,0.12)", text: "#c4b5fd" },
-  fishbowl_beads: { bg: "rgba(0,240,255,0.10)", text: "#67e8f9" },
-  bead_bomb: { bg: "rgba(255,150,50,0.12)", text: "#fdba74" },
-  bingsu: { bg: "rgba(200,230,255,0.12)", text: "#bae6fd" },
-  cloud_dough: { bg: "rgba(230,220,255,0.12)", text: "#ddd6fe" },
-  float: { bg: "rgba(200,255,200,0.10)", text: "#86efac" },
-  slushee: { bg: "rgba(100,200,255,0.12)", text: "#7dd3fc" },
-  wax_cracking: { bg: "rgba(255,240,200,0.12)", text: "#fef08a" },
-  glossy: { bg: "rgba(0,240,255,0.08)", text: "#a5f3fc" },
-  crunchy: { bg: "rgba(255,200,50,0.12)", text: "#fde047" },
-  thicky: { bg: "rgba(180,100,255,0.12)", text: "#d8b4fe" },
-  water: { bg: "rgba(50,150,255,0.12)", text: "#93c5fd" },
-  cream_cheese: { bg: "rgba(255,245,220,0.12)", text: "#fef3c7" },
-  mochi: { bg: "rgba(255,180,200,0.12)", text: "#fda4af" },
-  jelly_puff: { bg: "rgba(150,255,200,0.10)", text: "#6ee7b7" },
-  cloud_fizz: { bg: "rgba(200,240,255,0.12)", text: "#e0f2fe" },
-  sugar_scrub: { bg: "rgba(255,220,180,0.12)", text: "#fed7aa" },
-  glow_in_the_dark: { bg: "rgba(57,255,20,0.12)", text: "#86efac" },
-  metallic: { bg: "rgba(180,180,200,0.12)", text: "#e2e8f0" },
-  glitter: { bg: "rgba(255,150,255,0.12)", text: "#f0abfc" },
-  galaxy: { bg: "rgba(80,0,120,0.25)", text: "#c084fc" },
-  jiggly: { bg: "rgba(100,255,200,0.10)", text: "#5eead4" },
-  wax: { bg: "rgba(255,230,150,0.12)", text: "#fde68a" },
+  icee: { bg: "rgba(219,234,254,0.12)", text: "#93c5fd" },
+  jelly: { bg: "rgba(254,243,199,0.12)", text: "#fcd34d" },
+  magnetic: { bg: "rgba(241,245,249,0.10)", text: "#94a3b8" },
   sand: { bg: "rgba(210,180,140,0.12)", text: "#d4a96a" },
-  mousse_fizz: { bg: "rgba(255,200,230,0.12)", text: "#fbcfe8" },
-  chiffon_fizz: { bg: "rgba(240,220,255,0.12)", text: "#e9d5ff" },
-  putty_puff: { bg: "rgba(200,255,220,0.10)", text: "#bbf7d0" },
-  custard: { bg: "rgba(255,240,150,0.12)", text: "#fef08a" },
-  holographic: { bg: "rgba(200,100,255,0.12)", text: "#e879f9" },
-  pearl: { bg: "rgba(230,230,255,0.12)", text: "#e0e7ff" },
-  thiggly: { bg: "rgba(100,200,150,0.12)", text: "#6ee7b7" },
+  slay: { bg: "rgba(253,242,248,0.12)", text: "#f0abfc" },
+  snow_fizz: { bg: "rgba(240,249,255,0.10)", text: "#bae6fd" },
+  sugar_scrub: { bg: "rgba(255,220,180,0.12)", text: "#fed7aa" },
+  thick_and_glossy: { bg: "rgba(237,233,254,0.12)", text: "#c4b5fd" },
+  water: { bg: "rgba(50,150,255,0.12)", text: "#93c5fd" },
+  wax_and_wax_cracking: { bg: "rgba(255,240,200,0.12)", text: "#fef08a" },
 };
+
+export interface Subtype {
+  id: string;
+  base_type: SlimeBaseType;
+  name: string;
+  slug: string;
+  created_by: string | null;
+  created_by_brand_id: string | null;
+  is_admin_approved: boolean;
+  created_at: string;
+}
 
 // NOTE: DB column names (rating_drizzle, rating_sensory_fit) are unchanged.
 // Display labels updated: drizzle → Aesthetic, sensory_fit → Quality, sound → Sound / ASMR
@@ -284,7 +201,8 @@ export interface Slime {
   id: string;
   brand_id: string;
   name: string;
-  slime_type: SlimeType;
+  base_type: SlimeBaseType;
+  subtype_id: string | null;
   colors: string[];
   scent: string | null;
   collection_name: string | null;
@@ -295,6 +213,7 @@ export interface Slime {
   created_at: string;
   updated_at: string;
   brand?: Brand;
+  subtype?: Subtype | null;
 }
 
 export interface Drop {
@@ -321,7 +240,8 @@ export interface CollectionLog {
   slime_name: string | null;
   brand_name_raw: string | null;
   collection_name: string | null;
-  slime_type: SlimeType | null;
+  base_type: SlimeBaseType | null;
+  subtype_id: string | null;
   colors: string[] | null;
   scent: string | null;
   cost_paid: number | null;
@@ -345,6 +265,7 @@ export interface CollectionLog {
   // Joined relations
   slime?: Slime | null;
   brand?: Brand | null;
+  subtype?: Subtype | null;
   user?: {
     id: string;
     username: string;
@@ -361,7 +282,8 @@ export interface CollectionLogInsert {
   slime_name?: string | null;
   brand_name_raw?: string | null;
   collection_name?: string | null;
-  slime_type?: SlimeType | null;
+  base_type?: SlimeBaseType | null;
+  subtype_id?: string | null;
   colors?: string[] | null;
   scent?: string | null;
   cost_paid?: number | null;
@@ -411,7 +333,8 @@ export interface ActivityFeedItem {
 export interface LogFormData {
   slime_name: string;
   brand_name_raw: string;
-  slime_type: SlimeType | "";
+  base_type: SlimeBaseType | "";
+  subtype_id: string | null;
   colors: string[];
   scent: string;
   cost_paid: string;
@@ -430,7 +353,8 @@ export interface LogFormData {
 export const EMPTY_LOG_FORM: LogFormData = {
   slime_name: "",
   brand_name_raw: "",
-  slime_type: "",
+  base_type: "",
+  subtype_id: null,
   colors: [],
   scent: "",
   cost_paid: "",
