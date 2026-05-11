@@ -1,18 +1,19 @@
 "use client";
 
 // components/discover/DiscoverSlimesClient.tsx
-// [Fix 2] — Client component handling type/rating/sort filters locally
+// [Change 2] — Subtype join support, drill-down filter row, type="button" sweep
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
 import type { SlimeBaseType } from "@/lib/types";
 
-// [Fix 1] — TopRatedSlime type updated to match direct slimes+brands join shape
+// [Change 2a] — TopRatedSlime type updated with subtype_id and subtypes fields
 export type TopRatedSlime = {
   id: string;
   name: string | null;
   base_type: string | null;
+  subtype_id: string | null;
   image_url: string | null;
   avg_overall: number | null;
   avg_texture: number | null;
@@ -24,6 +25,7 @@ export type TopRatedSlime = {
   total_ratings: number | null;
   brand_id: string | null;
   brands: { name: string; slug: string } | null;
+  subtypes: { name: string } | null;
 };
 
 function RatingBar({ avg }: { avg: number | null }) {
@@ -46,7 +48,6 @@ function RatingBar({ avg }: { avg: number | null }) {
   );
 }
 
-// [Fix 4] — Styled rank badges replacing emoji
 function RankBadge({ rank }: { rank: number }) {
   if (rank === 1) {
     return (
@@ -94,7 +95,7 @@ function RankBadge({ rank }: { rank: number }) {
   );
 }
 
-// [Fix 5] — Card wrapped in Link to /brands/[brand_slug]
+// [Change 2b] — TopRatedCard updated with subtype badge row
 function TopRatedCard({ slime, rank }: { slime: TopRatedSlime; rank: number }) {
   const brandSlug = slime.brands?.slug ?? null;
   const cardContent = (
@@ -115,6 +116,17 @@ function TopRatedCard({ slime, rank }: { slime: TopRatedSlime; rank: number }) {
         <p className="text-xs text-slime-magenta truncate">
           {slime.brands?.name ?? "Unknown brand"}
         </p>
+        {/* Subtype badge — middle-dot suffix on base type label */}
+        {slime.base_type && (
+          <p
+            className="text-[10px] font-semibold mt-0.5"
+            style={{ color: "rgba(0,240,255,0.7)" }}
+          >
+            {SLIME_BASE_TYPE_LABELS[slime.base_type as SlimeBaseType] ??
+              slime.base_type}
+            {slime.subtypes?.name ? ` \u00b7 ${slime.subtypes.name}` : null}
+          </p>
+        )}
         <RatingBar avg={slime.avg_overall} />
       </div>
 
@@ -139,7 +151,6 @@ function TopRatedCard({ slime, rank }: { slime: TopRatedSlime; rank: number }) {
   return cardContent;
 }
 
-// [Fix 2] — Filter controls + filtered list
 const MIN_RATING_OPTIONS: { label: string; value: number | null }[] = [
   { label: "Any", value: null },
   { label: "3+", value: 3 },
@@ -173,6 +184,7 @@ function SegmentedControl<T extends string>({
         return (
           <button
             key={opt.value}
+            type="button"
             onClick={() => onChange(opt.value)}
             className="px-3 py-1.5 text-xs font-semibold transition-colors"
             style={{
@@ -210,7 +222,10 @@ export default function DiscoverSlimesClient({
   const [minRating, setMinRating] = useState<number | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("top_rated");
 
-  // Unique types present in data
+  // [Change 2c] — Subtype drill-down state
+  const [activeSubtype, setActiveSubtype] = useState<string | null>(null);
+
+  // Unique base types present in data
   const availableTypes = useMemo(() => {
     const seen = new Set<string>();
     for (const s of initialSlimes) {
@@ -219,11 +234,28 @@ export default function DiscoverSlimesClient({
     return Array.from(seen).sort();
   }, [initialSlimes]);
 
+  // [Change 2c] — Subtypes available for the currently selected base type
+  const availableSubtypes = useMemo(() => {
+    if (activeType === "all") return [];
+    const seen = new Map<string, string>(); // subtype_id → name
+    for (const s of initialSlimes) {
+      if (s.base_type === activeType && s.subtype_id && s.subtypes?.name) {
+        seen.set(s.subtype_id, s.subtypes.name);
+      }
+    }
+    return Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
+  }, [initialSlimes, activeType]);
+
+  // [Change 2d] — filtered useMemo now includes activeSubtype
   const filtered = useMemo(() => {
     let result = [...initialSlimes];
 
     if (activeType !== "all") {
       result = result.filter((s) => s.base_type === activeType);
+    }
+
+    if (activeSubtype !== null) {
+      result = result.filter((s) => s.subtype_id === activeSubtype);
     }
 
     if (minRating !== null) {
@@ -239,7 +271,7 @@ export default function DiscoverSlimesClient({
     }
 
     return result;
-  }, [initialSlimes, activeType, minRating, sortMode]);
+  }, [initialSlimes, activeType, activeSubtype, minRating, sortMode]);
 
   return (
     <>
@@ -247,9 +279,13 @@ export default function DiscoverSlimesClient({
       <div className="mb-4">
         <p style={sectionLabelStyle}>Slime Type</p>
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-          {/* All pill */}
+          {/* All pill — resets subtype on click */}
           <button
-            onClick={() => setActiveType("all")}
+            type="button"
+            onClick={() => {
+              setActiveType("all");
+              setActiveSubtype(null);
+            }}
             className="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
             style={{
               background:
@@ -268,11 +304,16 @@ export default function DiscoverSlimesClient({
           {availableTypes.map((type) => {
             const active = activeType === type;
             const label =
-              SLIME_BASE_TYPE_LABELS[type as SlimeBaseType] ?? type.replace(/_/g, " ");
+              SLIME_BASE_TYPE_LABELS[type as SlimeBaseType] ??
+              type.replace(/_/g, " ");
             return (
               <button
                 key={type}
-                onClick={() => setActiveType(type)}
+                type="button"
+                onClick={() => {
+                  setActiveType(type);
+                  setActiveSubtype(null);
+                }}
                 className="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
                 style={{
                   background: active
@@ -290,6 +331,56 @@ export default function DiscoverSlimesClient({
           })}
         </div>
       </div>
+
+      {/* [Change 2d] — Subtype drill-down row, only visible when a base type is selected and subtypes exist */}
+      {availableSubtypes.length > 0 && (
+        <div className="mb-4">
+          <p style={sectionLabelStyle}>Subtype</p>
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <button
+              type="button"
+              onClick={() => setActiveSubtype(null)}
+              className="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
+              style={{
+                background:
+                  activeSubtype === null
+                    ? "rgba(57,255,20,0.12)"
+                    : "rgba(45,10,78,0.3)",
+                color:
+                  activeSubtype === null ? "#39FF14" : "rgba(245,245,245,0.4)",
+                border:
+                  activeSubtype === null
+                    ? "1px solid rgba(57,255,20,0.35)"
+                    : "1px solid rgba(45,10,78,0.5)",
+              }}
+            >
+              All
+            </button>
+            {availableSubtypes.map(({ id, name }) => {
+              const active = activeSubtype === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setActiveSubtype(active ? null : id)}
+                  className="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
+                  style={{
+                    background: active
+                      ? "rgba(57,255,20,0.12)"
+                      : "rgba(45,10,78,0.3)",
+                    color: active ? "#39FF14" : "rgba(245,245,245,0.4)",
+                    border: active
+                      ? "1px solid rgba(57,255,20,0.35)"
+                      : "1px solid rgba(45,10,78,0.5)",
+                  }}
+                >
+                  {name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Filter B — Minimum Rating */}
       <div className="mb-4">

@@ -1,4 +1,4 @@
-// app/discover/page.tsx
+// apps/web/app/discover/page.tsx
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import Link from "next/link";
@@ -135,13 +135,14 @@ export default async function DiscoverPage() {
   );
 
   const [topRatedResult, dropsResult] = await Promise.all([
-    // Top-rated slimes: query slimes table directly joined to brands.
+    // Top-rated slimes: query slimes table directly joined to brands and subtypes.
     // Threshold matches top_rated_slimes view (>= 3 ratings). T61 tracks
     // refactoring this to read from the view directly.
+    // [Change 1a] — Added subtype_id and subtypes(name) to select string
     supabase
       .from("slimes")
       .select(
-        "id, name, base_type, image_url, avg_overall, avg_texture, avg_scent, avg_sound, avg_drizzle, avg_creativity, avg_sensory_fit, total_ratings, brand_id, brands(name, slug)",
+        "id, name, base_type, subtype_id, image_url, avg_overall, avg_texture, avg_scent, avg_sound, avg_drizzle, avg_creativity, avg_sensory_fit, total_ratings, brand_id, brands(name, slug), subtypes(name)",
       )
       .not("avg_overall", "is", null)
       .gte("total_ratings", 3)
@@ -156,11 +157,12 @@ export default async function DiscoverPage() {
       .limit(15),
   ]);
 
-  // [Fix 1] — Normalize brands join: PostgREST may return array or object
+  // [Change 1b] — Normalize both brands and subtypes joins: PostgREST may return array or object
   const rawSlimes = topRatedResult.error ? [] : (topRatedResult.data ?? []);
   const topSlimes: TopRatedSlime[] = rawSlimes.map((s) => ({
     ...s,
     brands: Array.isArray(s.brands) ? (s.brands[0] ?? null) : s.brands,
+    subtypes: Array.isArray(s.subtypes) ? (s.subtypes[0] ?? null) : s.subtypes,
   }));
 
   const drops: UpcomingDrop[] = dropsResult.error
@@ -203,7 +205,7 @@ export default async function DiscoverPage() {
         {/* Top Rated */}
         <section className="px-4 mb-8">
           <div className="flex items-center gap-3 mb-4">
-            {/* [Fix 3] — Trophy inline SVG replacing lucide Trophy */}
+            {/* Trophy inline SVG */}
             <div
               className="w-9 h-9 rounded-2xl flex items-center justify-center shrink-0"
               style={{
@@ -236,14 +238,14 @@ export default async function DiscoverPage() {
             </div>
           </div>
 
-          {/* [Fix 2] — Client component handles filters */}
+          {/* Client component handles filters */}
           <DiscoverSlimesClient initialSlimes={topSlimes} />
         </section>
 
         {/* Upcoming Drops */}
         <section className="px-4 pb-24">
           <div className="flex items-center gap-3 mb-4">
-            {/* [Fix 3] — CalendarDays inline SVG replacing lucide CalendarDays */}
+            {/* CalendarDays inline SVG */}
             <div
               className="w-9 h-9 rounded-2xl flex items-center justify-center shrink-0"
               style={{
