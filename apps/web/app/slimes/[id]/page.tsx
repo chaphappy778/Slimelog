@@ -11,7 +11,8 @@ import LikeButton from "@/components/collection/LikeButton";
 import ReportButton from "@/components/ReportButton";
 import ClientComments from "@/components/collection/ClientComments";
 import { safeRedirect } from "@/lib/safe-redirect";
-import type { CollectionLog } from "@/lib/types";
+import { SLIME_BASE_TYPE_COLORS, SLIME_BASE_TYPE_LABELS } from "@/lib/types";
+import type { CollectionLog, SlimeBaseType } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,8 +26,11 @@ interface OwnerProfile {
 // that exists on the DB column but isn't in the lib/types CollectionLog
 // definition. Filed as separate type-cleanup work; cast at fetch boundary
 // instead of mutating the shared type.
+// [Change SD4] subtype join is fetched alongside the log; surface as an
+// optional shape on this local record.
 type SlimeLogRecord = CollectionLog & {
   image_url: string | null;
+  subtype: { name: string } | null;
 };
 
 // ─── Server-side Supabase ─────────────────────────────────────────────────────
@@ -47,9 +51,10 @@ async function getSupabase() {
 
 async function fetchLog(id: string): Promise<SlimeLogRecord | null> {
   const supabase = await getSupabase();
+  // [Change SD4] Join subtype name in the same query.
   const { data } = await supabase
     .from("collection_logs")
-    .select("*")
+    .select("*, subtype:subtypes(name)")
     .eq("id", id)
     .eq("is_public", true)
     .maybeSingle();
@@ -110,17 +115,8 @@ export async function generateMetadata({
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const TYPE_COLORS: Record<string, string> = {
-  butter: "#FFB347",
-  clear: "#00F0FF",
-  cloud: "#F5F5F5",
-  icee: "#4FC3F7",
-  fluffy: "#FF6B9D",
-  floam: "#8BC34A",
-  jelly: "#4ECDC4",
-  beaded: "#FF00E5",
-  clay: "#E74C3C",
-};
+// [Change SD1] Local TYPE_COLORS map removed; colors come from
+// SLIME_BASE_TYPE_COLORS in @/lib/types.
 
 const RATING_DIMENSIONS: Array<{ key: keyof CollectionLog; label: string }> = [
   { key: "rating_texture", label: "Texture" },
@@ -188,9 +184,19 @@ export default async function SlimePage({
       : Promise.resolve({ data: null }),
   ]);
 
-  const typeColor = log.slime_type
-    ? (TYPE_COLORS[log.slime_type] ?? "#39FF14")
+  // [Change SD1 + SD2] Color sourced from SLIME_BASE_TYPE_COLORS by base_type.
+  const typeColor = log.base_type
+    ? (SLIME_BASE_TYPE_COLORS[log.base_type as SlimeBaseType]?.text ??
+      "#39FF14")
     : "#39FF14";
+
+  // [Change SD3] Canonical label via SLIME_BASE_TYPE_LABELS.
+  const baseTypeLabel = log.base_type
+    ? (SLIME_BASE_TYPE_LABELS[log.base_type as SlimeBaseType] ?? log.base_type)
+    : null;
+
+  // [Change SD4] Subtype name from joined row.
+  const subtypeName = log.subtype?.name ?? null;
 
   const activeDimensions = RATING_DIMENSIONS.filter(
     ({ key }) => typeof log[key] === "number",
@@ -304,8 +310,10 @@ export default async function SlimePage({
           </header>
 
           {/* Type + status badges */}
+          {/* [Change SD2 + SD3 + SD4] Render canonical base-type label and,
+              when present, the subtype name as inline middle-dot text. */}
           <div className="flex flex-wrap gap-2 items-center">
-            {log.slime_type && (
+            {baseTypeLabel && (
               <span
                 className="px-3 py-1 rounded-full text-xs font-semibold border"
                 style={{
@@ -314,7 +322,8 @@ export default async function SlimePage({
                   borderColor: `${typeColor}50`,
                 }}
               >
-                {log.slime_type.replace(/_/g, " ")}
+                {baseTypeLabel}
+                {subtypeName ? ` \u00b7 ${subtypeName}` : null}
               </span>
             )}
             {log.in_wishlist ? (

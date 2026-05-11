@@ -1,8 +1,9 @@
+// apps/web/components/collection/TimelineView.tsx
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import SlimeDetailCard from "./SlimeDetailCard";
-import type { CollectionLog } from "@/lib/types";
+import type { CollectionLog, SlimeBaseType } from "@/lib/types";
 import type { LikeDataMap } from "@/app/collection/page";
 
 // [Change 1] Added likeData and currentUserId to Props.
@@ -18,23 +19,31 @@ const PAD_RIGHT = 24;
 const PAD_TOP = 24;
 const PAD_BOTTOM = 48;
 
-const TYPE_COLORS: Record<string, string> = {
+// [Change TV1] Local palette kept for canvas dot fills (saturated hex
+// values for legible chart rendering vs the bg/text pair the badge map
+// provides). Typed Record<SlimeBaseType, string> to catch taxonomy drift
+// at compile time. All 20 base types present; `thermochromic` removed.
+const TYPE_COLORS: Record<SlimeBaseType, string> = {
+  avalanche: "#3498DB",
+  beaded: "#FF00E5",
   butter: "#FFB347",
+  clay: "#E74C3C",
   clear: "#00F0FF",
   cloud: "#F5F5F5",
-  icee: "#4FC3F7",
-  fluffy: "#FF6B9D",
-  floam: "#8BC34A",
-  snow_fizz: "#E0E0E0",
-  thick_and_glossy: "#9B59B6",
-  jelly: "#4ECDC4",
-  beaded: "#FF00E5",
-  clay: "#E74C3C",
   cloud_cream: "#FFE66D",
+  floam: "#8BC34A",
+  fluffy: "#FF6B9D",
+  hybrid: "#B39DDB",
+  icee: "#4FC3F7",
+  jelly: "#4ECDC4",
   magnetic: "#78909C",
-  thermochromic: "#F39C12",
-  avalanche: "#3498DB",
+  sand: "#D2B48C",
   slay: "#39FF14",
+  snow_fizz: "#E0E0E0",
+  sugar_scrub: "#FFC1CC",
+  thick_and_glossy: "#9B59B6",
+  water: "#5DADE2",
+  wax_and_wax_cracking: "#A569BD",
 };
 
 function getBlobColor(log: CollectionLog): string {
@@ -58,8 +67,9 @@ function getBlobColor(log: CollectionLog): string {
       if (c.includes(key)) return val;
     }
   }
-  if (log.slime_type && TYPE_COLORS[log.slime_type])
-    return TYPE_COLORS[log.slime_type];
+  // [Change TV2] base_type replaces slime_type.
+  if (log.base_type && TYPE_COLORS[log.base_type as SlimeBaseType])
+    return TYPE_COLORS[log.base_type as SlimeBaseType];
   return "#39FF14";
 }
 

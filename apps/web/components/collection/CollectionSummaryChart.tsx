@@ -1,8 +1,10 @@
+// apps/web/components/collection/CollectionSummaryChart.tsx
 "use client";
 
 import { useState } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
-import type { CollectionLog } from "@/lib/types";
+import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
+import type { CollectionLog, SlimeBaseType } from "@/lib/types";
 
 interface Props {
   logs: CollectionLog[];
@@ -16,42 +18,32 @@ const GROUP_OPTIONS: { id: GroupBy; label: string }[] = [
   { id: "color", label: "Color" },
 ];
 
-const TYPE_COLORS: Record<string, string> = {
+// [Change CSC1] Local TYPE_COLORS kept as a chart-palette map (saturated
+// hex values are visually distinct on the donut; SLIME_BASE_TYPE_COLORS
+// returns bg/text pairs tuned for badges). Typed Record<SlimeBaseType, string>
+// to catch any future taxonomy drift at compile time. All 20 base types
+// present. Removed `thermochromic` (now a subtype under `clear`).
+const TYPE_COLORS: Record<SlimeBaseType, string> = {
+  avalanche: "#3498DB",
+  beaded: "#FF00E5",
   butter: "#FFB347",
+  clay: "#E74C3C",
   clear: "#00F0FF",
   cloud: "#F5F5F5",
-  icee: "#4FC3F7",
-  fluffy: "#FF6B9D",
-  floam: "#8BC34A",
-  snow_fizz: "#E0E0E0",
-  thick_and_glossy: "#9B59B6",
-  jelly: "#4ECDC4",
-  beaded: "#FF00E5",
-  clay: "#E74C3C",
   cloud_cream: "#FFE66D",
+  floam: "#8BC34A",
+  fluffy: "#FF6B9D",
+  hybrid: "#B39DDB",
+  icee: "#4FC3F7",
+  jelly: "#4ECDC4",
   magnetic: "#78909C",
-  thermochromic: "#F39C12",
-  avalanche: "#3498DB",
+  sand: "#D2B48C",
   slay: "#39FF14",
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  butter: "Butter",
-  clear: "Clear",
-  cloud: "Cloud",
-  icee: "Icee",
-  fluffy: "Fluffy",
-  floam: "Floam",
-  snow_fizz: "Snow Fizz",
-  thick_and_glossy: "Thick & Glossy",
-  jelly: "Jelly",
-  beaded: "Beaded",
-  clay: "Clay",
-  cloud_cream: "Cloud Cream",
-  magnetic: "Magnetic",
-  thermochromic: "Thermo",
-  avalanche: "Avalanche",
-  slay: "Slay",
+  snow_fizz: "#E0E0E0",
+  sugar_scrub: "#FFC1CC",
+  thick_and_glossy: "#9B59B6",
+  water: "#5DADE2",
+  wax_and_wax_cracking: "#A569BD",
 };
 
 const ROTATING_PALETTE = [
@@ -89,7 +81,8 @@ function buildData(logs: CollectionLog[], groupBy: GroupBy): ChartEntry[] {
         key = log.brand_name_raw ?? "Unknown Brand";
         break;
       case "type":
-        key = log.slime_type ?? "unknown";
+        // [Change CSC2] base_type replaces slime_type.
+        key = log.base_type ?? "unknown";
         break;
       case "color":
         key = log.colors?.[0] ?? "No Color";
@@ -107,7 +100,8 @@ function buildData(logs: CollectionLog[], groupBy: GroupBy): ChartEntry[] {
       let color: string;
       if (groupBy === "type") {
         color =
-          TYPE_COLORS[key] ?? ROTATING_PALETTE[index % ROTATING_PALETTE.length];
+          TYPE_COLORS[key as SlimeBaseType] ??
+          ROTATING_PALETTE[index % ROTATING_PALETTE.length];
       } else if (groupBy === "color") {
         const COLOR_NAME_MAP: Record<string, string> = {
           pink: "#FF6B9D",
@@ -133,7 +127,11 @@ function buildData(logs: CollectionLog[], groupBy: GroupBy): ChartEntry[] {
       } else {
         color = ROTATING_PALETTE[index % ROTATING_PALETTE.length];
       }
-      const name = groupBy === "type" ? (TYPE_LABELS[key] ?? key) : key;
+      // [Change CSC1] Labels use canonical SLIME_BASE_TYPE_LABELS.
+      const name =
+        groupBy === "type"
+          ? (SLIME_BASE_TYPE_LABELS[key as SlimeBaseType] ?? key)
+          : key;
       return { name, value, color, key };
     });
 }
@@ -247,6 +245,7 @@ export default function CollectionSummaryChart({ logs }: Props) {
           return (
             <button
               key={id}
+              type="button"
               onClick={() => setGroupBy(id)}
               style={{
                 padding: "4px 12px",

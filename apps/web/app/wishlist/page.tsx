@@ -6,15 +6,15 @@ import PageHeader from "@/components/PageHeader";
 import PageWrapper from "@/components/PageWrapper";
 import BottomNavWrapper from "@/components/BottomNavWrapper";
 import RemoveFromWishlistButton from "@/components/RemoveFromWishlistButton";
-import { SLIME_TYPE_LABELS } from "@/lib/types";
-import type { SlimeType } from "@/lib/types";
+import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
+import type { SlimeBaseType } from "@/lib/types";
 
 type WishlistLog = {
   id: string;
   created_at: string;
   slime_name: string | null;
   brand_name_raw: string | null;
-  slime_type: string | null;
+  base_type: string | null;
   colors: string[] | null;
   scent: string | null;
   cost_paid: number | null;
@@ -31,8 +31,8 @@ function formatDate(iso: string) {
 
 function WishlistCard({ log }: { log: WishlistLog }) {
   const typeLabel =
-    log.slime_type && SLIME_TYPE_LABELS[log.slime_type as SlimeType]
-      ? SLIME_TYPE_LABELS[log.slime_type as SlimeType]
+    log.base_type && SLIME_BASE_TYPE_LABELS[log.base_type as SlimeBaseType]
+      ? SLIME_BASE_TYPE_LABELS[log.base_type as SlimeBaseType]
       : null;
   const primaryColor = log.colors?.[0] ?? null;
   const secondaryColor = log.colors?.[1] ?? null;
@@ -173,7 +173,7 @@ export default async function WishlistPage() {
   const { data: logs, error } = await supabase
     .from("collection_logs")
     .select(
-      "id, created_at, slime_name, brand_name_raw, slime_type, colors, scent, cost_paid, image_url",
+      "id, created_at, slime_name, brand_name_raw, base_type, colors, scent, cost_paid, image_url",
     )
     .eq("user_id", user.id)
     .eq("in_wishlist", true)

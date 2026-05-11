@@ -141,7 +141,7 @@ export default async function DiscoverPage() {
     supabase
       .from("slimes")
       .select(
-        "id, name, slime_type, image_url, avg_overall, avg_texture, avg_scent, avg_sound, avg_drizzle, avg_creativity, avg_sensory_fit, total_ratings, brand_id, brands(name, slug)",
+        "id, name, base_type, image_url, avg_overall, avg_texture, avg_scent, avg_sound, avg_drizzle, avg_creativity, avg_sensory_fit, total_ratings, brand_id, brands(name, slug)",
       )
       .not("avg_overall", "is", null)
       .gte("total_ratings", 3)

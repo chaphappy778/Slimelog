@@ -2,13 +2,13 @@
 "use client";
 
 import Link from "next/link";
-import { SLIME_TYPE_LABELS, type SlimeType } from "@/lib/types";
+import { SLIME_BASE_TYPE_LABELS, type SlimeBaseType } from "@/lib/types";
 
 type FeaturedLog = {
   id: string;
   slime_name: string | null;
   brand_name_raw: string | null;
-  slime_type: string | null;
+  base_type: string | null;
   rating_overall: number | null;
   image_url: string | null;
   colors: string[] | null;
@@ -22,8 +22,8 @@ type Props = {
 
 function FeaturedCard({ log }: { log: FeaturedLog }) {
   const typeLabel =
-    (log.slime_type && SLIME_TYPE_LABELS[log.slime_type as SlimeType]) ??
-    log.slime_type ??
+    (log.base_type && SLIME_BASE_TYPE_LABELS[log.base_type as SlimeBaseType]) ??
+    log.base_type ??
     null;
   const c1 = log.colors?.[0] ?? "#2D0A4E";
   const c2 = log.colors?.[1] ?? c1;

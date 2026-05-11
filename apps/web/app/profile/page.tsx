@@ -8,7 +8,7 @@ import PageWrapper from "@/components/PageWrapper";
 import FloatingPills from "@/components/FloatingPills";
 import ProfileFeaturedSection from "@/components/profile/ProfileFeaturedSection";
 // [Change: replaced local TYPE_LABEL constant with SLIME_TYPE_LABELS from @/lib/types]
-import { SLIME_TYPE_LABELS, type SlimeType } from "@/lib/types";
+import { SLIME_BASE_TYPE_LABELS, type SlimeBaseType } from "@/lib/types";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -27,7 +27,7 @@ type RecentLog = {
   created_at: string;
   slime_name: string | null;
   brand_name_raw: string | null;
-  slime_type: string | null;
+  base_type: string | null;
   rating_overall: number | null;
   brands: { name: string | null }[] | null;
 };
@@ -37,7 +37,7 @@ type FeaturedLog = {
   id: string;
   slime_name: string | null;
   brand_name_raw: string | null;
-  slime_type: string | null;
+  base_type: string | null;
   rating_overall: number | null;
   image_url: string | null;
   colors: string[] | null;
@@ -47,7 +47,7 @@ type CandidateLog = {
   id: string;
   slime_name: string | null;
   brand_name_raw: string | null;
-  slime_type: string | null;
+  base_type: string | null;
   rating_overall: number | null;
   image_url: string | null;
   colors: string[] | null;
@@ -221,7 +221,7 @@ export default async function ProfilePage() {
       supabase
         .from("collection_logs")
         .select(
-          "id, created_at, slime_name, brand_name_raw, slime_type, rating_overall, brands ( name )",
+          "id, created_at, slime_name, brand_name_raw, base_type, rating_overall, brands ( name )",
         )
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
@@ -232,7 +232,7 @@ export default async function ProfilePage() {
       supabase
         .from("collection_logs")
         .select(
-          "id, slime_name, brand_name_raw, slime_type, rating_overall, image_url, colors",
+          "id, slime_name, brand_name_raw, base_type, rating_overall, image_url, colors",
         )
         .eq("user_id", user.id)
         .eq("in_collection", true)
@@ -264,7 +264,7 @@ export default async function ProfilePage() {
     const { data: featuredData } = await supabase
       .from("collection_logs")
       .select(
-        "id, slime_name, brand_name_raw, slime_type, rating_overall, image_url, colors",
+        "id, slime_name, brand_name_raw, base_type, rating_overall, image_url, colors",
       )
       .in("id", featuredIds);
 
@@ -279,13 +279,13 @@ export default async function ProfilePage() {
   // [Change: use SLIME_TYPE_LABELS for fave type computation]
   const typeCounts: Record<string, number> = {};
   for (const log of recentLogs) {
-    if (log.slime_type)
-      typeCounts[log.slime_type] = (typeCounts[log.slime_type] ?? 0) + 1;
+    if (log.base_type)
+      typeCounts[log.base_type] = (typeCounts[log.base_type] ?? 0) + 1;
   }
   const topType =
     Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
   const topTypeLabel = topType
-    ? (SLIME_TYPE_LABELS[topType as SlimeType] ?? topType)
+    ? (SLIME_BASE_TYPE_LABELS[topType as SlimeBaseType] ?? topType)
     : null;
 
   const hasErrors =
@@ -656,9 +656,9 @@ export default async function ProfilePage() {
                   "Unknown brand";
                 // [Change: use SLIME_TYPE_LABELS instead of local TYPE_LABEL]
                 const typeLabel =
-                  (log.slime_type &&
-                    SLIME_TYPE_LABELS[log.slime_type as SlimeType]) ??
-                  log.slime_type ??
+                  (log.base_type &&
+                    SLIME_BASE_TYPE_LABELS[log.base_type as SlimeBaseType]) ??
+                  log.base_type ??
                   null;
                 return (
                   <Link
@@ -683,7 +683,7 @@ export default async function ProfilePage() {
                             {brandName}
                           </p>
                         </div>
-                        {typeLabel && log.slime_type && (
+                        {typeLabel && log.base_type && (
                           <span
                             className="shrink-0 text-xs font-bold px-2 py-0.5 rounded-full"
                             style={{

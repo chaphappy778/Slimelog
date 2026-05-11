@@ -34,7 +34,7 @@ interface RecentLog {
   id: string;
   slime_name: string | null;
   brand_name_raw: string | null;
-  slime_type: string | null;
+  base_type: string | null;
   rating_overall: number | null;
   image_url: string | null;
   created_at: string;
@@ -195,7 +195,7 @@ export default async function UserPage({
     id: string;
     slime_name: string | null;
     brand_name_raw: string | null;
-    slime_type: string | null;
+    base_type: string | null;
     rating_overall: number | null;
     image_url: string | null;
     colors: string[] | null;
@@ -205,7 +205,7 @@ export default async function UserPage({
     const { data: featuredRows } = await supabase
       .from("collection_logs")
       .select(
-        "id, slime_name, brand_name_raw, slime_type, rating_overall, image_url, colors",
+        "id, slime_name, brand_name_raw, base_type, rating_overall, image_url, colors",
       )
       .in("id", profile.featured_log_ids)
       .eq("is_public", true);
@@ -225,7 +225,7 @@ export default async function UserPage({
   const { data: recentRows } = await supabase
     .from("collection_logs")
     .select(
-      "id, slime_name, brand_name_raw, slime_type, rating_overall, image_url, created_at, in_wishlist",
+      "id, slime_name, brand_name_raw, base_type, rating_overall, image_url, created_at, in_wishlist",
     )
     .eq("user_id", profile.id)
     .eq("is_public", true)

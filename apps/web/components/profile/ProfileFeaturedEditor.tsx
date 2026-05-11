@@ -8,7 +8,7 @@
 import { useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
-import { SLIME_TYPE_LABELS, type SlimeType } from "@/lib/types";
+import { SLIME_BASE_TYPE_LABELS, type SlimeBaseType } from "@/lib/types";
 import { useToast } from "@/components/Toast"; // [Change 1] Import useToast
 
 // [Change 2] Module-level client — was inside component body (absolute rule violation)
@@ -21,7 +21,7 @@ type CandidateLog = {
   id: string;
   slime_name: string | null;
   brand_name_raw: string | null;
-  slime_type: string | null;
+  base_type: string | null;
   rating_overall: number | null;
   image_url: string | null;
   colors: string[] | null;
@@ -100,8 +100,8 @@ function CandidateRow({
   saving: boolean;
 }) {
   const typeLabel =
-    (log.slime_type && SLIME_TYPE_LABELS[log.slime_type as SlimeType]) ??
-    log.slime_type ??
+    (log.base_type && SLIME_BASE_TYPE_LABELS[log.base_type as SlimeBaseType]) ??
+    log.base_type ??
     null;
   const disabled = saving || (!featured && atMax);
 

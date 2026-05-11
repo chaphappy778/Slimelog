@@ -1,7 +1,8 @@
+// apps/web/components/collection/SpiralView.tsx
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import type { CollectionLog } from "@/lib/types";
+import type { CollectionLog, SlimeBaseType } from "@/lib/types";
 import SlimeDetailCard from "@/components/collection/SlimeDetailCard";
 import TimelineView from "@/components/collection/TimelineView";
 import type { LikeDataMap } from "@/app/collection/page";
@@ -13,23 +14,31 @@ interface Props {
   currentUserId: string | null;
 }
 
-const TYPE_COLORS: Record<string, string> = {
+// [Change SV1] Local palette kept for canvas blob fills (saturated hex
+// values for legible blob rendering vs the bg/text pair the badge map
+// provides). Typed Record<SlimeBaseType, string> to catch taxonomy drift
+// at compile time. All 20 base types present; `thermochromic` removed.
+const TYPE_COLORS: Record<SlimeBaseType, string> = {
+  avalanche: "#3498DB",
+  beaded: "#FF00E5",
   butter: "#FFB347",
+  clay: "#E74C3C",
   clear: "#00F0FF",
   cloud: "#F5F5F5",
-  icee: "#4FC3F7",
-  fluffy: "#FF6B9D",
-  floam: "#8BC34A",
-  snow_fizz: "#E0E0E0",
-  thick_and_glossy: "#9B59B6",
-  jelly: "#4ECDC4",
-  beaded: "#FF00E5",
-  clay: "#E74C3C",
   cloud_cream: "#FFE66D",
+  floam: "#8BC34A",
+  fluffy: "#FF6B9D",
+  hybrid: "#B39DDB",
+  icee: "#4FC3F7",
+  jelly: "#4ECDC4",
   magnetic: "#78909C",
-  thermochromic: "#F39C12",
-  avalanche: "#3498DB",
+  sand: "#D2B48C",
   slay: "#39FF14",
+  snow_fizz: "#E0E0E0",
+  sugar_scrub: "#FFC1CC",
+  thick_and_glossy: "#9B59B6",
+  water: "#5DADE2",
+  wax_and_wax_cracking: "#A569BD",
 };
 
 const PHI = (1 + Math.sqrt(5)) / 2;
@@ -64,8 +73,9 @@ function getBlobColor(log: CollectionLog): string {
       if (c.includes(key)) return val;
     }
   }
-  if (log.slime_type && TYPE_COLORS[log.slime_type]) {
-    return TYPE_COLORS[log.slime_type];
+  // [Change SV2] base_type replaces slime_type.
+  if (log.base_type && TYPE_COLORS[log.base_type as SlimeBaseType]) {
+    return TYPE_COLORS[log.base_type as SlimeBaseType];
   }
   return "#39FF14";
 }
@@ -313,6 +323,7 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
       {(["spiral", "timeline"] as const).map((t) => (
         <button
           key={t}
+          type="button"
           onClick={() => setTab(t)}
           style={{
             flex: 1,
@@ -337,6 +348,7 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
   const brandFilter = brands.length > 0 && (
     <div style={{ position: "relative" }}>
       <button
+        type="button"
         onClick={() => setBrandDropdownOpen((v) => !v)}
         style={{
           width: "100%",
@@ -379,6 +391,7 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
           }}
         >
           <button
+            type="button"
             onClick={() => {
               setSelectedBrands(new Set());
               setBrandDropdownOpen(false);
@@ -406,6 +419,7 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
             return (
               <button
                 key={brand}
+                type="button"
                 onClick={() => toggleBrand(brand)}
                 style={{
                   width: "100%",
@@ -472,6 +486,7 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
         ].map(({ label, action }) => (
           <button
             key={label}
+            type="button"
             onClick={action}
             style={{
               width: 32,

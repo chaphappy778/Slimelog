@@ -7,7 +7,6 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import PageWrapper from "@/components/PageWrapper";
 import PageHeader from "@/components/PageHeader";
-import { SLIME_TYPE_LABELS } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,7 +33,6 @@ interface DropBrand {
 interface DropSlime {
   id: string;
   slime_name: string;
-  slime_type: string | null;
   description: string | null;
   image_url: string | null;
   price: number | null;
@@ -217,7 +215,7 @@ export default async function DropPage({
   const { data: slimeRows } = await supabase
     .from("drop_slimes")
     .select(
-      "id, slime_name, slime_type, description, image_url, price, display_order",
+      "id, slime_name, description, image_url, price, display_order",
     )
     .eq("drop_id", drop.id)
     .order("display_order", { ascending: true });
@@ -468,11 +466,6 @@ export default async function DropPage({
             </h2>
             <div className="flex flex-col gap-3">
               {slimes.map((slime) => {
-                const typeLabel = slime.slime_type
-                  ? (SLIME_TYPE_LABELS[
-                      slime.slime_type as keyof typeof SLIME_TYPE_LABELS
-                    ] ?? slime.slime_type.replace(/_/g, " "))
-                  : null;
                 return (
                   <article
                     key={slime.id}
@@ -512,14 +505,6 @@ export default async function DropPage({
                         {slime.slime_name}
                       </p>
                       <div className="flex flex-wrap items-center gap-2">
-                        {typeLabel && (
-                          <span
-                            className="text-[10px] uppercase tracking-wider font-semibold"
-                            style={{ color: "#00F0FF" }}
-                          >
-                            {typeLabel}
-                          </span>
-                        )}
                         {typeof slime.price === "number" && (
                           <span
                             className="text-xs font-bold"

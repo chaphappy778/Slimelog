@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { SLIME_TYPE_LABELS } from "@/lib/types";
-import type { SlimeType } from "@/lib/types";
+import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
+import type { SlimeBaseType } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,7 +24,7 @@ interface Drop {
 interface BrandSlime {
   id: string;
   name: string;
-  slime_type: SlimeType;
+  base_type: SlimeBaseType;
   colors: string[] | null;
   image_url: string | null;
 }
@@ -520,7 +520,7 @@ interface CatalogPanelProps {
   onAttach: (slime: BrandSlime) => void;
   onAddNew: (slimeData: {
     name: string;
-    slime_type: SlimeType;
+    base_type: SlimeBaseType;
   }) => Promise<BrandSlime | null>;
   isActive: boolean; // false = empty state, greys out panel
 }
@@ -535,16 +535,16 @@ function CatalogPanel({
   const supabase = createClient();
   const [brandSlimes, setBrandSlimes] = useState<BrandSlime[]>([]);
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<SlimeType | "all">("all");
+  const [typeFilter, setTypeFilter] = useState<SlimeBaseType | "all">("all");
   const [showAddNew, setShowAddNew] = useState(false);
   const [newName, setNewName] = useState("");
-  const [newType, setNewType] = useState<SlimeType>("butter");
+  const [newType, setNewType] = useState<SlimeBaseType>("butter");
   const [addingNew, setAddingNew] = useState(false);
 
   useEffect(() => {
     supabase
       .from("slimes")
-      .select("id, name, slime_type, colors, image_url")
+      .select("id, name, base_type, colors, image_url")
       .eq("brand_id", brandId)
       .eq("is_brand_official", true)
       .order("name")
@@ -555,12 +555,12 @@ function CatalogPanel({
 
   // Unique types present in this brand's catalog for filter pills
   const presentTypes = Array.from(
-    new Set(brandSlimes.map((s) => s.slime_type)),
+    new Set(brandSlimes.map((s) => s.base_type)),
   );
 
   const available = brandSlimes.filter((s) => {
     if (attachedIds.has(s.id)) return false;
-    if (typeFilter !== "all" && s.slime_type !== typeFilter) return false;
+    if (typeFilter !== "all" && s.base_type !== typeFilter) return false;
     if (search && !s.name.toLowerCase().includes(search.toLowerCase()))
       return false;
     return true;
@@ -571,7 +571,7 @@ function CatalogPanel({
     setAddingNew(true);
     const result = await onAddNew({
       name: newName.trim(),
-      slime_type: newType,
+      base_type: newType,
     });
     if (result) {
       setBrandSlimes((prev) => [...prev, result]);
@@ -646,7 +646,7 @@ function CatalogPanel({
                   fontFamily: "Montserrat, sans-serif",
                 }}
               >
-                {SLIME_TYPE_LABELS[t]}
+                {SLIME_BASE_TYPE_LABELS[t]}
               </button>
             ))}
           </div>
@@ -690,7 +690,7 @@ function CatalogPanel({
                 className="text-[11px]"
                 style={{ color: "rgba(245,245,245,0.35)" }}
               >
-                {SLIME_TYPE_LABELS[slime.slime_type]}
+                {SLIME_BASE_TYPE_LABELS[slime.base_type]}
               </p>
             </div>
             <button
@@ -752,11 +752,11 @@ function CatalogPanel({
             />
             <select
               value={newType}
-              onChange={(e) => setNewType(e.target.value as SlimeType)}
+              onChange={(e) => setNewType(e.target.value as SlimeBaseType)}
               className={inputClass}
               style={selectStyle}
             >
-              {(Object.entries(SLIME_TYPE_LABELS) as [SlimeType, string][]).map(
+              {(Object.entries(SLIME_BASE_TYPE_LABELS) as [SlimeBaseType, string][]).map(
                 ([val, label]) => (
                   <option
                     key={val}
@@ -1043,7 +1043,7 @@ function DetailPanel({
                     className="text-[11px]"
                     style={{ color: "rgba(245,245,245,0.35)" }}
                   >
-                    {SLIME_TYPE_LABELS[slime.slime_type]}
+                    {SLIME_BASE_TYPE_LABELS[slime.base_type]}
                   </p>
                 </div>
                 <button
@@ -1293,7 +1293,7 @@ function CreatePanel({
                       className="text-[11px]"
                       style={{ color: "rgba(245,245,245,0.35)" }}
                     >
-                      {SLIME_TYPE_LABELS[slime.slime_type]}
+                      {SLIME_BASE_TYPE_LABELS[slime.base_type]}
                     </p>
                   </div>
                   <button
@@ -1391,7 +1391,7 @@ export default function DropsSplitPanel({
     if (!selectedId || mode !== "detail") return;
     supabase
       .from("drop_slimes")
-      .select("slime_id, slimes(id, name, slime_type, colors, image_url)")
+      .select("slime_id, slimes(id, name, base_type, colors, image_url)")
       .eq("drop_id", selectedId)
       .then(({ data }: { data: Array<Record<string, unknown>> | null }) => {
         const slimes = (data ?? [])
@@ -1521,18 +1521,18 @@ export default function DropsSplitPanel({
 
   const handleAddNewSlime = async (slimeData: {
     name: string;
-    slime_type: SlimeType;
+    base_type: SlimeBaseType;
   }): Promise<BrandSlime | null> => {
     const { data, error: err } = await supabase
       .from("slimes")
       .insert({
         brand_id: brandId,
         name: slimeData.name,
-        slime_type: slimeData.slime_type,
+        base_type: slimeData.base_type,
         is_brand_official: true,
         created_by: userId,
       })
-      .select("id, name, slime_type, colors, image_url")
+      .select("id, name, base_type, colors, image_url")
       .single();
     if (err || !data) return null;
     const newSlime = data as BrandSlime;

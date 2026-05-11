@@ -4,20 +4,22 @@
 import { useState, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { formatDistanceToNow } from "date-fns";
-import type { CollectionLog } from "@/lib/types";
+import type { CollectionLog, SlimeBaseType } from "@/lib/types";
 import SlimeDetailCard from "@/components/collection/SlimeDetailCard";
 import LikeButton from "@/components/collection/LikeButton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+// [Change F1] slime_type → base_type; added optional subtype_name for
+// downstream rendering.
 export type FeedCardLog = {
   id: string;
   created_at: string;
   updated_at: string;
   slime_name: string | null;
   brand_name_raw: string | null;
-  slime_type: string | null;
+  base_type: string | null;
+  subtype_name?: string | null;
   colors: string[] | null;
   rating_overall: number | null;
   image_url: string | null;
@@ -38,55 +40,90 @@ interface FeedCardProps {
   currentUserId: string | null;
 }
 
+// ─── Relative time helper ─────────────────────────────────────────────────────
+// [Change F5] Inline replacement for date-fns formatDistanceToNow.
+// Same shape as the helper used in app/users/[username]/page.tsx.
+
+function formatRelativeTime(isoString: string): string {
+  const diffMs = Date.now() - new Date(isoString).getTime();
+  const diffMins = Math.floor(diffMs / 1000 / 60);
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `${diffDays}d ago`;
+  const diffMonths = Math.floor(diffDays / 30);
+  if (diffMonths < 12) return `${diffMonths}mo ago`;
+  return `${Math.floor(diffMonths / 12)}y ago`;
+}
+
 // ─── Type badge palette ───────────────────────────────────────────────────────
 
-const TYPE_STYLE: Record<string, { bg: string; text: string; label: string }> =
-  {
-    butter: {
-      bg: "bg-yellow-900/40",
-      text: "text-yellow-300",
-      label: "Butter",
-    },
-    clear: { bg: "bg-sky-900/40", text: "text-sky-300", label: "Clear" },
-    cloud: { bg: "bg-slate-800", text: "text-slate-300", label: "Cloud" },
-    icee: { bg: "bg-cyan-900/40", text: "text-cyan-300", label: "Icee" },
-    fluffy: { bg: "bg-pink-900/40", text: "text-pink-300", label: "Fluffy" },
-    floam: { bg: "bg-lime-900/40", text: "text-lime-300", label: "Floam" },
-    snow_fizz: {
-      bg: "bg-blue-900/40",
-      text: "text-blue-300",
-      label: "Snow Fizz",
-    },
-    thick_and_glossy: {
-      bg: "bg-fuchsia-900/40",
-      text: "text-fuchsia-300",
-      label: "Thick & Glossy",
-    },
-    jelly: { bg: "bg-violet-900/40", text: "text-violet-300", label: "Jelly" },
-    beaded: {
-      bg: "bg-orange-900/40",
-      text: "text-orange-300",
-      label: "Beaded",
-    },
-    clay: { bg: "bg-amber-900/40", text: "text-amber-300", label: "Clay" },
-    cloud_cream: {
-      bg: "bg-rose-900/40",
-      text: "text-rose-300",
-      label: "Cloud Cream",
-    },
-    magnetic: { bg: "bg-zinc-800", text: "text-zinc-300", label: "Magnetic" },
-    thermochromic: {
-      bg: "bg-purple-900/40",
-      text: "text-purple-300",
-      label: "Thermochromic",
-    },
-    avalanche: {
-      bg: "bg-indigo-900/40",
-      text: "text-indigo-300",
-      label: "Avalanche",
-    },
-    slay: { bg: "bg-red-900/40", text: "text-red-300", label: "Slay" },
-  };
+// [Change F2] Tailwind class-pair map keyed on SlimeBaseType (compile-time
+// guard against taxonomy drift). 20 base types from the post-G1 enum.
+// `thermochromic` removed (now a subtype under `clear`).
+const TYPE_STYLE: Record<
+  SlimeBaseType,
+  { bg: string; text: string; label: string }
+> = {
+  avalanche: {
+    bg: "bg-indigo-900/40",
+    text: "text-indigo-300",
+    label: "Avalanche",
+  },
+  beaded: {
+    bg: "bg-orange-900/40",
+    text: "text-orange-300",
+    label: "Beaded",
+  },
+  butter: {
+    bg: "bg-yellow-900/40",
+    text: "text-yellow-300",
+    label: "Butter",
+  },
+  clay: { bg: "bg-amber-900/40", text: "text-amber-300", label: "Clay" },
+  clear: { bg: "bg-sky-900/40", text: "text-sky-300", label: "Clear" },
+  cloud: { bg: "bg-slate-800", text: "text-slate-300", label: "Cloud" },
+  cloud_cream: {
+    bg: "bg-rose-900/40",
+    text: "text-rose-300",
+    label: "Cloud Cream",
+  },
+  floam: { bg: "bg-lime-900/40", text: "text-lime-300", label: "Floam" },
+  fluffy: { bg: "bg-pink-900/40", text: "text-pink-300", label: "Fluffy" },
+  hybrid: {
+    bg: "bg-purple-900/40",
+    text: "text-purple-300",
+    label: "Hybrid",
+  },
+  icee: { bg: "bg-cyan-900/40", text: "text-cyan-300", label: "Icee" },
+  jelly: { bg: "bg-violet-900/40", text: "text-violet-300", label: "Jelly" },
+  magnetic: { bg: "bg-zinc-800", text: "text-zinc-300", label: "Magnetic" },
+  sand: { bg: "bg-amber-900/30", text: "text-amber-200", label: "Sand" },
+  slay: { bg: "bg-red-900/40", text: "text-red-300", label: "Slay" },
+  snow_fizz: {
+    bg: "bg-blue-900/40",
+    text: "text-blue-300",
+    label: "Snow Fizz",
+  },
+  sugar_scrub: {
+    bg: "bg-pink-900/30",
+    text: "text-pink-200",
+    label: "Sugar Scrub",
+  },
+  thick_and_glossy: {
+    bg: "bg-fuchsia-900/40",
+    text: "text-fuchsia-300",
+    label: "Thick & Glossy",
+  },
+  water: { bg: "bg-blue-900/30", text: "text-blue-200", label: "Water" },
+  wax_and_wax_cracking: {
+    bg: "bg-purple-900/30",
+    text: "text-purple-200",
+    label: "Wax & Wax Cracking",
+  },
+};
 
 const fallbackType = {
   bg: "bg-slime-surface",
@@ -235,6 +272,8 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
 // ─── CollectionLog builder ────────────────────────────────────────────────────
 
 function buildCollectionLog(log: FeedCardLog): CollectionLog {
+  // [Change F4] base_type + subtype_id replace slime_type. We don't have
+  // a subtype_id on the feed card data; pass null.
   return {
     id: log.id,
     user_id: log.actor_id,
@@ -243,7 +282,8 @@ function buildCollectionLog(log: FeedCardLog): CollectionLog {
     slime_name: log.slime_name,
     brand_name_raw: log.brand_name_raw,
     collection_name: null,
-    slime_type: log.slime_type as CollectionLog["slime_type"],
+    base_type: log.base_type as CollectionLog["base_type"],
+    subtype_id: null,
     colors: log.colors,
     scent: null,
     cost_paid: null,
@@ -290,14 +330,15 @@ export default function FeedCard({
   const isWishlist =
     log.activity_type === "wishlist_added" || log.in_wishlist === true;
 
+  // [Change F3] TYPE_STYLE lookup keyed by base_type cast to SlimeBaseType.
   const typeStyle =
-    (log.slime_type && TYPE_STYLE[log.slime_type]) || fallbackType;
+    (log.base_type && TYPE_STYLE[log.base_type as SlimeBaseType]) ||
+    fallbackType;
   const slimeName = log.slime_name ?? "Untitled Slime";
   const brandName = log.brand_name_raw ?? null;
   const brandSlug = brandName ? (brandSlugMap[brandName] ?? null) : null;
-  const timeAgo = formatDistanceToNow(new Date(log.created_at), {
-    addSuffix: true,
-  });
+  // [Change F5] Inline relative time replaces formatDistanceToNow.
+  const timeAgo = formatRelativeTime(log.created_at);
 
   return (
     <>
@@ -432,6 +473,7 @@ export default function FeedCard({
               className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${typeStyle.bg} ${typeStyle.text}`}
             >
               {typeStyle.label}
+              {log.subtype_name ? ` \u00b7 ${log.subtype_name}` : null}
             </span>
             {log.colors &&
               log.colors.length > 0 &&

@@ -5,14 +5,14 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { SLIME_TYPE_LABELS } from "@/lib/types";
-import type { SlimeType } from "@/lib/types";
+import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
+import type { SlimeBaseType } from "@/lib/types";
 
 // [Fix 1] — TopRatedSlime type updated to match direct slimes+brands join shape
 export type TopRatedSlime = {
   id: string;
   name: string | null;
-  slime_type: string | null;
+  base_type: string | null;
   image_url: string | null;
   avg_overall: number | null;
   avg_texture: number | null;
@@ -214,7 +214,7 @@ export default function DiscoverSlimesClient({
   const availableTypes = useMemo(() => {
     const seen = new Set<string>();
     for (const s of initialSlimes) {
-      if (s.slime_type) seen.add(s.slime_type);
+      if (s.base_type) seen.add(s.base_type);
     }
     return Array.from(seen).sort();
   }, [initialSlimes]);
@@ -223,7 +223,7 @@ export default function DiscoverSlimesClient({
     let result = [...initialSlimes];
 
     if (activeType !== "all") {
-      result = result.filter((s) => s.slime_type === activeType);
+      result = result.filter((s) => s.base_type === activeType);
     }
 
     if (minRating !== null) {
@@ -268,7 +268,7 @@ export default function DiscoverSlimesClient({
           {availableTypes.map((type) => {
             const active = activeType === type;
             const label =
-              SLIME_TYPE_LABELS[type as SlimeType] ?? type.replace(/_/g, " ");
+              SLIME_BASE_TYPE_LABELS[type as SlimeBaseType] ?? type.replace(/_/g, " ");
             return (
               <button
                 key={type}

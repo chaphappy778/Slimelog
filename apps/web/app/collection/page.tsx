@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
 import { getUserCollectionLogs } from "@/lib/slime-actions";
-import { SLIME_TYPE_LABELS } from "@/lib/types";
-import type { CollectionLog, SlimeType } from "@/lib/types";
+import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
+import type { CollectionLog, SlimeBaseType } from "@/lib/types";
 import PageHeader from "@/components/PageHeader";
 import PageWrapper from "@/components/PageWrapper";
 import CollectionSummaryChart from "@/components/collection/CollectionSummaryChart";
@@ -44,10 +44,17 @@ function RatingDots({ value }: { value: number | null }) {
 }
 
 function SlimeCard({ log }: { log: CollectionLog }) {
-  const typeLabel =
-    log.slime_type && SLIME_TYPE_LABELS[log.slime_type as SlimeType]
-      ? SLIME_TYPE_LABELS[log.slime_type as SlimeType]
+  // [Change C2] Compose typeLabel from base_type + optional subtype name.
+  const baseLabel =
+    log.base_type && SLIME_BASE_TYPE_LABELS[log.base_type as SlimeBaseType]
+      ? SLIME_BASE_TYPE_LABELS[log.base_type as SlimeBaseType]
       : null;
+  const subtypeName =
+    (log as CollectionLog & { subtype?: { name: string } | null }).subtype
+      ?.name ?? null;
+  const typeLabel =
+    baseLabel && subtypeName ? `${baseLabel} \u00b7 ${subtypeName}` : baseLabel;
+
   const hasRatings =
     log.rating_overall !== null ||
     log.rating_texture !== null ||

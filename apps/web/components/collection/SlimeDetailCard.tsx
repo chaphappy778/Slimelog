@@ -6,7 +6,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
-import type { CollectionLog } from "@/lib/types";
+import { SLIME_BASE_TYPE_COLORS, SLIME_BASE_TYPE_LABELS } from "@/lib/types";
+import type { CollectionLog, SlimeBaseType } from "@/lib/types";
 import LikeButton from "@/components/collection/LikeButton";
 import CommentSection from "@/components/collection/CommentSection";
 import BrandMiniSheet from "@/components/BrandMiniSheet";
@@ -23,24 +24,8 @@ const supabase = createBrowserClient(
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TYPE_COLORS: Record<string, string> = {
-  butter: "#FFB347",
-  clear: "#00F0FF",
-  cloud: "#F5F5F5",
-  icee: "#4FC3F7",
-  fluffy: "#FF6B9D",
-  floam: "#8BC34A",
-  snow_fizz: "#E0E0E0",
-  thick_and_glossy: "#9B59B6",
-  jelly: "#4ECDC4",
-  beaded: "#FF00E5",
-  clay: "#E74C3C",
-  cloud_cream: "#FFE66D",
-  magnetic: "#78909C",
-  thermochromic: "#F39C12",
-  avalanche: "#3498DB",
-  slay: "#39FF14",
-};
+// [Change SDC1] Local TYPE_COLORS map removed. Colors come from
+// SLIME_BASE_TYPE_COLORS in @/lib/types.
 
 const COLOR_SWATCHES: Record<string, string> = {
   pink: "#FF6B9D",
@@ -208,6 +193,9 @@ export default function SlimeDetailCard({
 
   // [Change 1 — #35] Wishlist click now handles logged-out users by routing
   // to signup. Previously the entire button was hidden when no user.
+  // [Change SDC3] POST body uses base_type + subtype_id matching the new
+  // collection_logs schema. The /api/wishlist route may still expect
+  // slime_type; surfaced in the notes section. tsc won't catch this.
   async function handleAddToWishlist() {
     if (!currentUserId) {
       const next = safeRedirect(pathname ?? `/slimes/${log.id}`, "/landing");
@@ -218,13 +206,18 @@ export default function SlimeDetailCard({
     if (wishlistLoading || isWishlisted) return;
     setWishlistLoading(true);
 
+    const subtypeId =
+      (log as CollectionLog & { subtype_id?: string | null }).subtype_id ??
+      null;
+
     const res = await fetch("/api/wishlist", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         slime_name: log.slime_name,
         brand_name_raw: log.brand_name_raw,
-        slime_type: log.slime_type,
+        base_type: log.base_type,
+        subtype_id: subtypeId,
       }),
     });
 
@@ -238,9 +231,22 @@ export default function SlimeDetailCard({
     }
   }
 
-  const typeColor = log.slime_type
-    ? (TYPE_COLORS[log.slime_type] ?? "#39FF14")
+  // [Change SDC1 + SDC2] typeColor sourced from SLIME_BASE_TYPE_COLORS.text
+  // by base_type.
+  const typeColor = log.base_type
+    ? (SLIME_BASE_TYPE_COLORS[log.base_type as SlimeBaseType]?.text ??
+      "#39FF14")
     : "#39FF14";
+
+  // [Change SDC2] Canonical label via SLIME_BASE_TYPE_LABELS.
+  const baseTypeLabel = log.base_type
+    ? (SLIME_BASE_TYPE_LABELS[log.base_type as SlimeBaseType] ?? log.base_type)
+    : null;
+
+  // [Change SDC4] Subtype name from joined row (if present).
+  const subtypeName =
+    (log as CollectionLog & { subtype?: { name: string } | null }).subtype
+      ?.name ?? null;
 
   const activeDimensions = RATING_DIMENSIONS.filter(
     ({ key }) => typeof log[key] === "number",
@@ -649,6 +655,8 @@ export default function SlimeDetailCard({
           )}
 
           {/* Type badge + collection status + color swatches */}
+          {/* [Change SDC2 + SDC4] Render canonical base-type label and,
+              when present, the subtype as inline middle-dot text. */}
           <div
             style={{
               display: "flex",
@@ -657,7 +665,7 @@ export default function SlimeDetailCard({
               alignItems: "center",
             }}
           >
-            {log.slime_type && (
+            {baseTypeLabel && (
               <span
                 style={{
                   padding: "3px 11px",
@@ -669,7 +677,8 @@ export default function SlimeDetailCard({
                   fontWeight: 600,
                 }}
               >
-                {log.slime_type.replace(/_/g, " ")}
+                {baseTypeLabel}
+                {subtypeName ? ` \u00b7 ${subtypeName}` : null}
               </span>
             )}
             {log.in_wishlist ? (

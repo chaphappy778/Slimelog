@@ -9,7 +9,8 @@ import PageWrapper from "@/components/PageWrapper";
 import PageHeader from "@/components/PageHeader";
 import FollowBrandButton from "@/components/FollowBrandButton";
 import ClaimBrandButton from "@/components/brand/ClaimBrandButton";
-import { SLIME_TYPE_LABELS } from "@/lib/types";
+import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
+import type { SlimeBaseType } from "@/lib/types";
 import type { BrandClaimStatus } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -35,7 +36,8 @@ interface BrandSlimeRow {
   id: string;
   user_id: string;
   slime_name: string | null;
-  slime_type: string | null;
+  base_type: string | null;
+  subtype: { name: string } | { name: string }[] | null;
   rating_overall: number | null;
   image_url: string | null;
   created_at: string;
@@ -229,7 +231,8 @@ export default async function BrandPage({
   const { data: communityRows } = await supabase
     .from("collection_logs")
     .select(
-      `id, user_id, slime_name, slime_type, rating_overall, image_url, created_at,
+      `id, user_id, slime_name, base_type, rating_overall, image_url, created_at,
+       subtype:subtypes ( name ),
        profiles_public!collection_logs_user_id_fkey ( username, avatar_url )`,
     )
     .eq("brand_name_raw", brand.name)
@@ -670,11 +673,15 @@ export default async function BrandPage({
             <div className="grid grid-cols-2 gap-3">
               {communityLogs.map((row) => {
                 const profile = normaliseProfile(row.profiles_public);
-                const typeLabel = row.slime_type
-                  ? (SLIME_TYPE_LABELS[
-                      row.slime_type as keyof typeof SLIME_TYPE_LABELS
-                    ] ?? row.slime_type.replace(/_/g, " "))
+                const baseLabel = row.base_type
+                  ? (SLIME_BASE_TYPE_LABELS[
+                      row.base_type as SlimeBaseType
+                    ] ?? row.base_type.replace(/_/g, " "))
                   : null;
+                const sub = Array.isArray(row.subtype) ? row.subtype[0] : row.subtype;
+                const typeLabel = baseLabel && sub?.name
+                  ? `${baseLabel} \u00b7 ${sub.name}`
+                  : baseLabel;
                 return (
                   <Link
                     key={row.id}

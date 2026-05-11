@@ -1,11 +1,9 @@
+// apps/web/components/SlimeCard.tsx
 "use client";
 
-import {
-  Slime,
-  CollectionLog,
-  SLIME_TYPE_LABELS,
-  SLIME_TYPE_COLORS,
-} from "@/lib/types";
+// [Change S1] Removed SLIME_TYPE_LABELS and SLIME_TYPE_COLORS imports —
+// leftover from the pre-G1 enum. Only Slime + CollectionLog needed.
+import { Slime, CollectionLog } from "@/lib/types";
 import { TypeBadge } from "./TypeBadge";
 import { RatingDisplay } from "./RatingInput";
 
@@ -25,6 +23,12 @@ export function SlimeCard({
   className = "",
 }: SlimeCardProps) {
   const primaryColor = slime.colors[0] ?? "#F9A8D4";
+
+  // [Change S2 + S4] TypeBadge prop renamed; subtype passthrough if present
+  // on the Slime row. brand?.name reference preserved (existing shape).
+  const subtypeName =
+    (slime as Slime & { subtype?: { name: string } | null }).subtype?.name ??
+    undefined;
 
   return (
     <button
@@ -48,7 +52,22 @@ export function SlimeCard({
             LIMITED
           </div>
         )}
-        <div className="text-5xl select-none">🫧</div>
+        {/* [Change S5] Emoji 🫧 replaced with inline slime blob SVG icon. */}
+        <svg
+          width="56"
+          height="56"
+          viewBox="0 0 24 24"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M12 2 L14 9 L21 12 L14 15 L12 22 L10 15 L3 12 L10 9 Z"
+            fill="rgba(255,255,255,0.55)"
+            stroke="rgba(255,255,255,0.85)"
+            strokeWidth="0.75"
+            strokeLinejoin="round"
+          />
+        </svg>
       </div>
 
       <div className="p-3">
@@ -61,11 +80,17 @@ export function SlimeCard({
               {slime.brand?.name}
             </p>
           </div>
-          <TypeBadge type={slime.slime_type} size="sm" />
+          {/* [Change S2] type → baseType, plus optional subtypeName passthrough. */}
+          <TypeBadge
+            baseType={slime.base_type}
+            subtypeName={subtypeName}
+            size="sm"
+          />
         </div>
 
+        {/* [Change S5] Emoji 🌸 removed; scent label stands alone. */}
         {slime.scent && (
-          <p className="text-xs text-gray-500 mb-2">🌸 {slime.scent}</p>
+          <p className="text-xs text-gray-500 mb-2">{slime.scent}</p>
         )}
 
         <div className="flex items-center justify-between">
@@ -109,6 +134,13 @@ export function LogCard({
     "Unknown Brand";
   const primaryColor = slime?.colors?.[0] ?? "#F9A8D4";
 
+  // [Change S3] base_type replaces slime_type for the TypeBadge gate.
+  // Subtype passthrough via narrow cast since CollectionLog may not yet
+  // declare a top-level subtype shape.
+  const logSubtypeName =
+    (log as CollectionLog & { subtype?: { name: string } | null }).subtype
+      ?.name ?? undefined;
+
   return (
     <article
       className={`bg-white rounded-2xl overflow-hidden shadow-sm border border-pink-50 ${className}`}
@@ -132,7 +164,13 @@ export function LogCard({
             </p>
           </div>
           <div className="ml-auto">
-            {log.slime_type && <TypeBadge type={log.slime_type} size="sm" />}
+            {log.base_type && (
+              <TypeBadge
+                baseType={log.base_type}
+                subtypeName={logSubtypeName}
+                size="sm"
+              />
+            )}
           </div>
         </div>
       )}
@@ -143,9 +181,22 @@ export function LogCard({
           background: `linear-gradient(160deg, ${primaryColor}44, ${slime?.colors?.[1] ?? primaryColor}22)`,
         }}
       >
-        <div className="text-center">
-          <div className="text-6xl mb-1">🫧</div>
-        </div>
+        {/* [Change S5] Emoji 🫧 replaced with inline slime blob SVG icon. */}
+        <svg
+          width="72"
+          height="72"
+          viewBox="0 0 24 24"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M12 2 L14 9 L21 12 L14 15 L12 22 L10 15 L3 12 L10 9 Z"
+            fill="rgba(255,255,255,0.55)"
+            stroke="rgba(255,255,255,0.85)"
+            strokeWidth="0.75"
+            strokeLinejoin="round"
+          />
+        </svg>
       </div>
 
       <div className="px-4 pt-3 pb-1">
@@ -158,7 +209,16 @@ export function LogCard({
           </div>
           {log.rating_overall && (
             <div className="flex items-center gap-1 bg-pink-50 rounded-xl px-2.5 py-1 shrink-0">
-              <span className="text-pink-400 text-sm">⭐</span>
+              {/* [Change S5] Emoji ⭐ replaced with inline star SVG. */}
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="#F472B6"
+                aria-hidden="true"
+              >
+                <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+              </svg>
               <span className="text-sm font-black text-pink-600">
                 {log.rating_overall}/5
               </span>
