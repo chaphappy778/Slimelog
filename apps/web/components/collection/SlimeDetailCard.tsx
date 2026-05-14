@@ -14,6 +14,7 @@ import BrandMiniSheet from "@/components/BrandMiniSheet";
 import ReportButton from "@/components/ReportButton";
 import { useToast } from "@/components/Toast";
 import { safeRedirect } from "@/lib/safe-redirect";
+import { deleteSlimeLog } from "@/lib/slime-actions";
 
 // ─── Supabase (module-level) ──────────────────────────────────────────────────
 
@@ -161,6 +162,10 @@ export default function SlimeDetailCard({
   const [isWishlisted, setIsWishlisted] = useState<boolean | null>(null);
   const [wishlistLoading, setWishlistLoading] = useState(false);
 
+  // [T67b] Delete confirmation state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   useEffect(() => {
     if (!currentUserId || !log.slime_name) {
       setIsWishlisted(false);
@@ -230,6 +235,20 @@ export default function SlimeDetailCard({
     }
   }
 
+  // [T67b] Delete handler
+  async function handleDelete() {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await deleteSlimeLog(log.id);
+      router.push("/collection");
+    } catch {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+      showToast("Could not delete log", "error");
+    }
+  }
+
   // [Change SDC1 + SDC2] typeColor sourced from SLIME_BASE_TYPE_COLORS.text
   // by base_type.
   const typeColor = log.base_type
@@ -269,6 +288,9 @@ export default function SlimeDetailCard({
   // logged-out (the ReportButton component itself handles the route-to-
   // signup behavior on click). Previously gated by currentUserId !== null.
   const showReport = currentUserId !== log.user_id;
+
+  // [T67a/b] Owner check — drives footer branch
+  const isOwner = currentUserId !== null && currentUserId === log.user_id;
 
   const IMAGE_HEIGHT = "28vh";
   const OVERLAP = imageUrl ? 56 : 0;
@@ -1013,9 +1035,98 @@ export default function SlimeDetailCard({
         </div>
       </div>
 
-      {/* Fixed footer */}
-      {/* [Change 1 — #35] Wishlist button always renders. The handler
-          handles auth state internally. */}
+      {/* [T67b] Delete confirmation overlay — z-index 120 (above card z-index 100) */}
+      {showDeleteConfirm && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 120,
+            background: "rgba(0,0,0,0.75)",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+            padding: "0 16px 40px",
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 480,
+              background: "#0F0018",
+              borderRadius: 20,
+              border: "1px solid rgba(204,68,255,0.3)",
+              padding: "24px 20px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontSize: 16,
+                fontWeight: 700,
+                color: "#fff",
+                fontFamily: "Montserrat, Inter, sans-serif",
+              }}
+            >
+              Delete this log?
+            </p>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 13,
+                color: "rgba(255,255,255,0.45)",
+              }}
+            >
+              This cannot be undone.
+            </p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                style={{
+                  flex: 1,
+                  padding: "13px 0",
+                  borderRadius: 12,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  background: "rgba(45,10,78,0.4)",
+                  color: "rgba(255,255,255,0.6)",
+                  border: "1px solid rgba(45,10,78,0.6)",
+                  cursor: "pointer",
+                  fontFamily: "Montserrat, Inter, sans-serif",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleting}
+                style={{
+                  flex: 1,
+                  padding: "13px 0",
+                  borderRadius: 12,
+                  fontSize: 14,
+                  fontWeight: 700,
+                  background: deleting ? "rgba(204,68,255,0.15)" : "#CC44FF",
+                  color: deleting ? "#CC44FF" : "#0A0A0A",
+                  border: "none",
+                  cursor: deleting ? "default" : "pointer",
+                  fontFamily: "Montserrat, Inter, sans-serif",
+                }}
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fixed footer — owner vs non-owner */}
+      {/* [T67a/b] Owner sees Edit + Delete. Non-owner sees Wishlist + View Full Review. */}
       <div
         style={{
           position: "fixed",
@@ -1030,55 +1141,100 @@ export default function SlimeDetailCard({
           gap: 10,
         }}
       >
-        <button
-          type="button"
-          onClick={handleAddToWishlist}
-          disabled={isWishlisted === true || wishlistLoading}
-          style={{
-            flex: 1,
-            padding: "15px 0",
-            borderRadius: 14,
-            fontSize: 14,
-            fontWeight: 700,
-            fontFamily: "Montserrat, Inter, sans-serif",
-            cursor:
-              isWishlisted === true || wishlistLoading ? "default" : "pointer",
-            transition: "opacity 0.15s",
-            ...(wishlistIsCta
-              ? {
-                  background: "#CC44FF",
-                  color: "#0A0A0A",
-                  border: "none",
-                }
-              : {
-                  background: "rgba(204,68,255,0.1)",
-                  color: "#CC44FF",
-                  border: "1px solid rgba(204,68,255,0.3)",
-                }),
-          }}
-        >
-          {wishlistLabel}
-        </button>
+        {isOwner ? (
+          <>
+            <button
+              type="button"
+              onClick={() => router.push(`/log/edit/${log.id}`)}
+              style={{
+                flex: 1,
+                padding: "15px 0",
+                borderRadius: 14,
+                fontSize: 14,
+                fontWeight: 700,
+                fontFamily: "Montserrat, Inter, sans-serif",
+                cursor: "pointer",
+                background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                color: "#0A0A0A",
+                border: "none",
+              }}
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirm(true)}
+              style={{
+                flex: 1,
+                padding: "15px 0",
+                borderRadius: 14,
+                fontSize: 14,
+                fontWeight: 700,
+                fontFamily: "Montserrat, Inter, sans-serif",
+                cursor: "pointer",
+                background: "rgba(204,68,255,0.1)",
+                color: "#CC44FF",
+                border: "1px solid rgba(204,68,255,0.3)",
+              }}
+            >
+              Delete
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={handleAddToWishlist}
+              disabled={isWishlisted === true || wishlistLoading}
+              style={{
+                flex: 1,
+                padding: "15px 0",
+                borderRadius: 14,
+                fontSize: 14,
+                fontWeight: 700,
+                fontFamily: "Montserrat, Inter, sans-serif",
+                cursor:
+                  isWishlisted === true || wishlistLoading
+                    ? "default"
+                    : "pointer",
+                transition: "opacity 0.15s",
+                ...(wishlistIsCta
+                  ? {
+                      background: "#CC44FF",
+                      color: "#0A0A0A",
+                      border: "none",
+                    }
+                  : {
+                      background: "rgba(204,68,255,0.1)",
+                      color: "#CC44FF",
+                      border: "1px solid rgba(204,68,255,0.3)",
+                    }),
+              }}
+            >
+              {wishlistLabel}
+            </button>
 
-        <Link
-          href={`/slimes/${log.id}`}
-          style={{
-            flex: 1,
-            display: "block",
-            textAlign: "center",
-            padding: "15px 0",
-            borderRadius: 14,
-            background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-            color: "#0A0A0A",
-            fontSize: 14,
-            fontWeight: 700,
-            textDecoration: "none",
-            letterSpacing: "0.02em",
-            fontFamily: "Montserrat, Inter, sans-serif",
-          }}
-        >
-          View Full Review
-        </Link>
+            <Link
+              href={`/slimes/${log.id}`}
+              style={{
+                flex: 1,
+                display: "block",
+                textAlign: "center",
+                padding: "15px 0",
+                borderRadius: 14,
+                background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                color: "#0A0A0A",
+                fontSize: 14,
+                fontWeight: 700,
+                textDecoration: "none",
+                letterSpacing: "0.02em",
+                fontFamily: "Montserrat, Inter, sans-serif",
+              }}
+            >
+              View Full Review
+            </Link>
+          </>
+        )}
       </div>
 
       {showBrandSheet && brandSlug && (

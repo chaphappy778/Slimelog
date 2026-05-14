@@ -10,6 +10,7 @@ import PageHeader from "@/components/PageHeader";
 import LikeButton from "@/components/collection/LikeButton";
 import ReportButton from "@/components/ReportButton";
 import ClientComments from "@/components/collection/ClientComments";
+import DeleteLogButton from "@/components/DeleteLogButton";
 import { safeRedirect } from "@/lib/safe-redirect";
 import { SLIME_BASE_TYPE_COLORS, SLIME_BASE_TYPE_LABELS } from "@/lib/types";
 import type { CollectionLog, SlimeBaseType } from "@/lib/types";
@@ -210,6 +211,9 @@ export default async function SlimePage({
     ? `/log?prefill=${encodeURIComponent(log.slime_name ?? "")}&brand=${encodeURIComponent(log.brand_name_raw ?? "")}`
     : `/signup?next=${encodeURIComponent(ctaNext)}`;
 
+  // [T67a/b] Owner flag — drives edit link + delete button visibility
+  const isOwner = currentUserId === log.user_id;
+
   return (
     <PageWrapper dots>
       <PageHeader />
@@ -388,7 +392,40 @@ export default async function SlimePage({
             </div>
           )}
 
-          {/* Action bar — Like + Report */}
+          {/* [T67a/b] Owner action row — Edit link + Delete button */}
+          {isOwner && (
+            <div className="flex gap-3 mb-3">
+              <Link
+                href={`/log/edit/${log.id}`}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold"
+                style={{
+                  background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                  color: "#0A0A0A",
+                }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+                Edit
+              </Link>
+              <div className="flex-1 flex items-center justify-center">
+                <DeleteLogButton logId={log.id} />
+              </div>
+            </div>
+          )}
+
+          {/* Action bar — Like + Report (non-owner only for report) */}
           <div
             className="flex items-stretch border-y"
             style={{

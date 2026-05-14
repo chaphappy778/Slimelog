@@ -429,9 +429,10 @@ function EditLogPageInner() {
         .select("tags(name)")
         .eq("log_id", id);
 
+      // [T67] Fix: PostgREST to-one join returns plain object, not array
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const existingKeywords = (tagData ?? [])
-        .map((row: any) => row.tags?.[0]?.name as string | undefined)
+        .map((row: any) => row.tags?.name as string | undefined)
         .filter((n): n is string => Boolean(n));
 
       setForm((f) => ({ ...f, keywords: existingKeywords }));
