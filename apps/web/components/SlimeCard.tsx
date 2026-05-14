@@ -88,11 +88,6 @@ export function SlimeCard({
           />
         </div>
 
-        {/* [Change S5] Emoji 🌸 removed; scent label stands alone. */}
-        {slime.scent && (
-          <p className="text-xs text-gray-500 mb-2">{slime.scent}</p>
-        )}
-
         <div className="flex items-center justify-between">
           <RatingDisplay value={slime.avg_overall} size="sm" />
           <span className="text-xs text-gray-400">
@@ -230,7 +225,6 @@ export function LogCard({
           <div className="flex gap-1 my-2">
             {[
               { label: "Texture", val: log.rating_texture },
-              { label: "Scent", val: log.rating_scent },
               { label: "Sound", val: log.rating_sound },
               { label: "Drizzle", val: log.rating_drizzle },
             ].map(({ label, val }) =>

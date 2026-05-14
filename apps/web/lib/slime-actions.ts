@@ -2,15 +2,15 @@
 // Server Actions for Slimelog collection logging.
 // Every insert into collection_logs now requires an authenticated session.
 // user_id is read from the validated session — never trusted from the client.
+// Updated: Bundle T72+T73+T75 — keywords + scent_strength added; scent + rating_scent removed
 
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import type { SlimeBaseType, ScentStrength } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-import type { SlimeBaseType } from "@/lib/types";
 
 export interface LogSlimeInput {
   // Catalog references — both optional for free-form entry
@@ -33,7 +33,6 @@ export interface LogSlimeInput {
 
   // Ratings — all optional, smallint 1–5
   rating_texture?: number;
-  rating_scent?: number;
   rating_sound?: number;
   rating_drizzle?: number;
   rating_creativity?: number;
@@ -41,7 +40,8 @@ export interface LogSlimeInput {
   rating_overall?: number;
 
   // Details
-  scent?: string;
+  scent_strength?: ScentStrength | null;
+  keywords?: string[];
   colors?: string[];
   image_url?: string;
 
@@ -52,10 +52,6 @@ export interface LogSlimeInput {
 
 // ─── Auth guard ───────────────────────────────────────────────────────────────
 
-/**
- * Returns the authenticated user's id, or throws if no session exists.
- * Called at the top of every mutating action — never trust user_id from args.
- */
 async function requireAuthUserId(): Promise<string> {
   const supabase = await createClient();
   const {
@@ -72,10 +68,6 @@ async function requireAuthUserId(): Promise<string> {
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
-/**
- * Inserts a new collection_logs row for the authenticated user.
- * Throws if unauthenticated or if the insert fails.
- */
 export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
   const userId = await requireAuthUserId();
   const supabase = await createClient();
@@ -83,7 +75,6 @@ export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
   // Validate ratings are in range 1–5 if provided
   const ratingFields = [
     "rating_texture",
-    "rating_scent",
     "rating_sound",
     "rating_drizzle",
     "rating_creativity",
@@ -101,7 +92,7 @@ export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
   const { data, error } = await supabase
     .from("collection_logs")
     .insert({
-      user_id: userId, // ← always from session, never from client input
+      user_id: userId,
       slime_id: input.slime_id ?? null,
       brand_id: input.brand_id ?? null,
       slime_name: input.slime_name ?? null,
@@ -113,13 +104,12 @@ export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
       in_wishlist: input.in_wishlist ?? false,
       is_public: input.is_public ?? true,
       rating_texture: input.rating_texture ?? null,
-      rating_scent: input.rating_scent ?? null,
       rating_sound: input.rating_sound ?? null,
       rating_drizzle: input.rating_drizzle ?? null,
       rating_creativity: input.rating_creativity ?? null,
       rating_sensory_fit: input.rating_sensory_fit ?? null,
       rating_overall: input.rating_overall ?? null,
-      scent: input.scent ?? null,
+      scent_strength: input.scent_strength ?? null,
       colors: input.colors ?? null,
       image_url: input.image_url ?? null,
       notes: input.notes ?? null,
@@ -133,17 +123,40 @@ export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
     throw new Error(`Failed to log slime: ${error.message}`);
   }
 
+  // Wire keywords — upsert tags, insert log_tags
+  if (input.keywords && input.keywords.length > 0) {
+    const normalized = input.keywords
+      .map((k) => k.toLowerCase().trim())
+      .filter(Boolean)
+      .slice(0, 10);
+
+    const { data: tagRows, error: tagError } = await supabase
+      .from("tags")
+      .upsert(
+        normalized.map((name) => ({ name })),
+        { onConflict: "name", ignoreDuplicates: false },
+      )
+      .select("id, name");
+
+    if (tagError) {
+      console.error("[logSlime] tag upsert error:", tagError.message);
+      // Non-fatal — log proceeds without tags
+    } else if (tagRows && tagRows.length > 0) {
+      const { error: ltError } = await supabase
+        .from("log_tags")
+        .insert(tagRows.map((t) => ({ log_id: data.id, tag_id: t.id })));
+      if (ltError) {
+        console.error("[logSlime] log_tags insert error:", ltError.message);
+      }
+    }
+  }
+
   revalidatePath("/collection");
   revalidatePath("/");
 
   return { id: data.id };
 }
 
-/**
- * Updates an existing collection_logs row.
- * Enforces ownership — RLS will reject if user_id doesn't match, and we
- * double-check by filtering on user_id in the UPDATE query.
- */
 export async function updateSlimeLog(
   logId: string,
   input: Partial<LogSlimeInput>,
@@ -175,9 +188,6 @@ export async function updateSlimeLog(
       ...(input.rating_texture !== undefined && {
         rating_texture: input.rating_texture,
       }),
-      ...(input.rating_scent !== undefined && {
-        rating_scent: input.rating_scent,
-      }),
       ...(input.rating_sound !== undefined && {
         rating_sound: input.rating_sound,
       }),
@@ -193,6 +203,9 @@ export async function updateSlimeLog(
       ...(input.rating_overall !== undefined && {
         rating_overall: input.rating_overall,
       }),
+      ...(input.scent_strength !== undefined && {
+        scent_strength: input.scent_strength,
+      }),
       ...(input.notes !== undefined && { notes: input.notes }),
       ...(input.purchase_price !== undefined && {
         purchase_price: input.purchase_price,
@@ -201,20 +214,43 @@ export async function updateSlimeLog(
       ...(input.colors !== undefined && { colors: input.colors }),
     })
     .eq("id", logId)
-    .eq("user_id", userId); // ownership guard in addition to RLS
+    .eq("user_id", userId);
 
   if (error) {
     console.error("[updateSlimeLog] update error:", error.message);
     throw new Error(`Failed to update log: ${error.message}`);
   }
 
+  // Keywords: full replace strategy
+  if (input.keywords !== undefined) {
+    await supabase.from("log_tags").delete().eq("log_id", logId);
+
+    if (input.keywords.length > 0) {
+      const normalized = input.keywords
+        .map((k) => k.toLowerCase().trim())
+        .filter(Boolean)
+        .slice(0, 10);
+
+      const { data: tagRows } = await supabase
+        .from("tags")
+        .upsert(
+          normalized.map((name) => ({ name })),
+          { onConflict: "name", ignoreDuplicates: false },
+        )
+        .select("id");
+
+      if (tagRows && tagRows.length > 0) {
+        await supabase
+          .from("log_tags")
+          .insert(tagRows.map((t) => ({ log_id: logId, tag_id: t.id })));
+      }
+    }
+  }
+
   revalidatePath("/collection");
   revalidatePath("/");
 }
 
-/**
- * Deletes a collection_logs row owned by the authenticated user.
- */
 export async function deleteSlimeLog(logId: string): Promise<void> {
   const userId = await requireAuthUserId();
   const supabase = await createClient();
@@ -223,7 +259,7 @@ export async function deleteSlimeLog(logId: string): Promise<void> {
     .from("collection_logs")
     .delete()
     .eq("id", logId)
-    .eq("user_id", userId); // ownership guard in addition to RLS
+    .eq("user_id", userId);
 
   if (error) {
     console.error("[deleteSlimeLog] delete error:", error.message);
@@ -234,9 +270,6 @@ export async function deleteSlimeLog(logId: string): Promise<void> {
   revalidatePath("/");
 }
 
-/**
- * Fetches collection_logs for the authenticated user.
- */
 export async function getUserCollectionLogs() {
   const userId = await requireAuthUserId();
   const supabase = await createClient();
@@ -247,14 +280,16 @@ export async function getUserCollectionLogs() {
       `
       id, base_type, subtype_id, slime_name, brand_name_raw, collection_name,
       in_collection, in_wishlist,
-      rating_overall, rating_texture, rating_scent,
+      rating_overall, rating_texture,
       rating_sound, rating_drizzle, rating_creativity, rating_sensory_fit,
+      scent_strength,
       notes, purchase_price,
       colors, image_url,
       created_at, updated_at,
-      slimes ( id, name, colors, scent ),
+      slimes ( id, name, colors ),
       subtype:subtypes ( id, name ),
-      brands ( id, name, slug )
+      brands ( id, name, slug ),
+      log_tags ( tag_id, tags ( name ) )
     `,
     )
     .eq("user_id", userId)

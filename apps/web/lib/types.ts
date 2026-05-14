@@ -4,6 +4,7 @@
 // Updated: Migration 20260502000033_brand_claims — brand claim types appended
 // Updated: Bundle C (chat 10) — rejection reason types appended
 // Updated: Migration 20260509000037_t71_base_type_taxonomy — 51 flat types replaced with 20 base types + extensible subtypes
+// Updated: Bundle T72+T73+T75 — ScentStrength added; scent + rating_scent removed; keywords added to LogFormData
 
 export type ActivityType =
   | "log_created"
@@ -40,6 +41,17 @@ export type RatingDimension =
   | "creativity"
   | "sensory_fit"
   | "overall";
+
+// ─── Scent Strength ───────────────────────────────────────────────────────────
+
+export type ScentStrength = "unscented" | "weak" | "medium" | "strong";
+
+export const SCENT_STRENGTH_LABELS: Record<ScentStrength, string> = {
+  unscented: "Unscented",
+  weak: "Weak",
+  medium: "Medium",
+  strong: "Strong",
+};
 
 // ─── Labels & Colors ──────────────────────────────────────────────────────────
 
@@ -204,7 +216,6 @@ export interface Slime {
   base_type: SlimeBaseType;
   subtype_id: string | null;
   colors: string[];
-  scent: string | null;
   collection_name: string | null;
   is_limited: boolean;
   image_url: string | null;
@@ -243,7 +254,7 @@ export interface CollectionLog {
   base_type: SlimeBaseType | null;
   subtype_id: string | null;
   colors: string[] | null;
-  scent: string | null;
+  scent_strength: ScentStrength | null;
   cost_paid: number | null;
   purchased_from: string | null;
   purchased_at: string | null;
@@ -253,7 +264,6 @@ export interface CollectionLog {
   in_collection: boolean;
   in_wishlist: boolean;
   rating_texture: number | null;
-  rating_scent: number | null;
   rating_sound: number | null;
   rating_drizzle: number | null;
   rating_creativity: number | null;
@@ -285,7 +295,7 @@ export interface CollectionLogInsert {
   base_type?: SlimeBaseType | null;
   subtype_id?: string | null;
   colors?: string[] | null;
-  scent?: string | null;
+  scent_strength?: ScentStrength | null;
   cost_paid?: number | null;
   purchased_from?: string | null;
   purchased_at?: string | null;
@@ -295,7 +305,6 @@ export interface CollectionLogInsert {
   in_collection?: boolean;
   in_wishlist?: boolean;
   rating_texture?: number | null;
-  rating_scent?: number | null;
   rating_sound?: number | null;
   rating_drizzle?: number | null;
   rating_creativity?: number | null;
@@ -336,10 +345,10 @@ export interface LogFormData {
   base_type: SlimeBaseType | "";
   subtype_id: string | null;
   colors: string[];
-  scent: string;
+  scent_strength: ScentStrength | null;
+  keywords: string[];
   cost_paid: string;
   rating_texture: number | null;
-  rating_scent: number | null;
   rating_sound: number | null;
   rating_drizzle: number | null;
   rating_creativity: number | null;
@@ -356,10 +365,10 @@ export const EMPTY_LOG_FORM: LogFormData = {
   base_type: "",
   subtype_id: null,
   colors: [],
-  scent: "",
+  scent_strength: null,
+  keywords: [],
   cost_paid: "",
   rating_texture: null,
-  rating_scent: null,
   rating_sound: null,
   rating_drizzle: null,
   rating_creativity: null,

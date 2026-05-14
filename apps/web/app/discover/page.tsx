@@ -1,4 +1,6 @@
 // apps/web/app/discover/page.tsx
+// [T72] Added trendingTags query; passes trendingTags to DiscoverSlimesClient
+
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import Link from "next/link";
@@ -7,8 +9,6 @@ import PageWrapper from "@/components/PageWrapper";
 import FloatingPills from "@/components/FloatingPills";
 import DiscoverSlimesClient from "@/components/discover/DiscoverSlimesClient";
 import type { TopRatedSlime } from "@/components/discover/DiscoverSlimesClient";
-
-// TopRatedSlime type now lives in DiscoverSlimesClient — imported above
 
 type UpcomingDrop = {
   id: string;
@@ -118,7 +118,7 @@ function DropCard({ drop }: { drop: UpcomingDrop }) {
             className="text-slime-muted text-xs group-hover:text-slime-accent transition-colors"
             aria-hidden="true"
           >
-            ›
+            &rsaquo;
           </span>
         </div>
       </article>
@@ -134,10 +134,7 @@ export default async function DiscoverPage() {
     { cookies: { get: (name) => cookieStore.get(name)?.value } },
   );
 
-  const [topRatedResult, dropsResult] = await Promise.all([
-    // Top-rated slimes: query slimes table directly joined to brands and subtypes.
-    // Threshold matches top_rated_slimes view (>= 3 ratings). T61 tracks
-    // refactoring this to read from the view directly.
+  const [topRatedResult, dropsResult, tagsResult] = await Promise.all([
     // [Change 1a] — Added subtype_id and subtypes(name) to select string
     supabase
       .from("slimes")
@@ -155,9 +152,15 @@ export default async function DiscoverPage() {
       .in("status", ["announced", "live"])
       .order("drop_at", { ascending: true })
       .limit(15),
+    // [T72] Trending tags for keyword pill row
+    supabase
+      .from("tags")
+      .select("id, name, use_count")
+      .order("use_count", { ascending: false })
+      .limit(20),
   ]);
 
-  // [Change 1b] — Normalize both brands and subtypes joins: PostgREST may return array or object
+  // [Change 1b] — Normalize both brands and subtypes joins
   const rawSlimes = topRatedResult.error ? [] : (topRatedResult.data ?? []);
   const topSlimes: TopRatedSlime[] = rawSlimes.map((s) => ({
     ...s,
@@ -168,6 +171,12 @@ export default async function DiscoverPage() {
   const drops: UpcomingDrop[] = dropsResult.error
     ? []
     : (dropsResult.data ?? []);
+
+  // [T72] Trending tags — pass only id + name to client
+  const trendingTags = tagsResult.error
+    ? []
+    : (tagsResult.data ?? []).map(({ id, name }) => ({ id, name }));
+
   const hasErrors = topRatedResult.error || dropsResult.error;
 
   return (
@@ -198,14 +207,13 @@ export default async function DiscoverPage() {
 
         {hasErrors && (
           <div className="mx-4 mb-4 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-xs text-red-400">
-            Some data couldn&apos;t load — try refreshing.
+            Some data couldn&apos;t load &mdash; try refreshing.
           </div>
         )}
 
         {/* Top Rated */}
         <section className="px-4 mb-8">
           <div className="flex items-center gap-3 mb-4">
-            {/* Trophy inline SVG */}
             <div
               className="w-9 h-9 rounded-2xl flex items-center justify-center shrink-0"
               style={{
@@ -238,14 +246,16 @@ export default async function DiscoverPage() {
             </div>
           </div>
 
-          {/* Client component handles filters */}
-          <DiscoverSlimesClient initialSlimes={topSlimes} />
+          {/* [T72] Pass trendingTags to client */}
+          <DiscoverSlimesClient
+            initialSlimes={topSlimes}
+            trendingTags={trendingTags}
+          />
         </section>
 
         {/* Upcoming Drops */}
         <section className="px-4 pb-24">
           <div className="flex items-center gap-3 mb-4">
-            {/* CalendarDays inline SVG */}
             <div
               className="w-9 h-9 rounded-2xl flex items-center justify-center shrink-0"
               style={{
@@ -287,7 +297,7 @@ export default async function DiscoverPage() {
           </div>
           {drops.length === 0 ? (
             <div className="text-center py-10 text-slime-muted text-sm">
-              No drops announced yet — check back soon.
+              No drops announced yet &mdash; check back soon.
             </div>
           ) : (
             <div className="flex flex-col gap-3">

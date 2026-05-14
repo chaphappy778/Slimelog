@@ -1,14 +1,14 @@
 "use client";
 
-// components/discover/DiscoverSlimesClient.tsx
+// apps/web/components/discover/DiscoverSlimesClient.tsx
 // [Change 2] — Subtype join support, drill-down filter row, type="button" sweep
+// [T72] — trendingTags prop + keyword pill row above Slime Type filter
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
 import type { SlimeBaseType } from "@/lib/types";
 
-// [Change 2a] — TopRatedSlime type updated with subtype_id and subtypes fields
 export type TopRatedSlime = {
   id: string;
   name: string | null;
@@ -42,7 +42,7 @@ function RatingBar({ avg }: { avg: number | null }) {
         />
       </div>
       <span className="text-xs font-semibold text-slime-accent tabular-nums w-7 text-right">
-        {avg ? avg.toFixed(1) : "—"}
+        {avg ? avg.toFixed(1) : "\u2014"}
       </span>
     </div>
   );
@@ -95,7 +95,6 @@ function RankBadge({ rank }: { rank: number }) {
   );
 }
 
-// [Change 2b] — TopRatedCard updated with subtype badge row
 function TopRatedCard({ slime, rank }: { slime: TopRatedSlime; rank: number }) {
   const brandSlug = slime.brands?.slug ?? null;
   const cardContent = (
@@ -116,7 +115,6 @@ function TopRatedCard({ slime, rank }: { slime: TopRatedSlime; rank: number }) {
         <p className="text-xs text-slime-magenta truncate">
           {slime.brands?.name ?? "Unknown brand"}
         </p>
-        {/* Subtype badge — middle-dot suffix on base type label */}
         {slime.base_type && (
           <p
             className="text-[10px] font-semibold mt-0.5"
@@ -203,7 +201,6 @@ function SegmentedControl<T extends string>({
   );
 }
 
-// label style matching existing section-label class
 const sectionLabelStyle: React.CSSProperties = {
   fontSize: "10px",
   fontWeight: 700,
@@ -215,17 +212,19 @@ const sectionLabelStyle: React.CSSProperties = {
 
 export default function DiscoverSlimesClient({
   initialSlimes,
+  trendingTags = [],
 }: {
   initialSlimes: TopRatedSlime[];
+  trendingTags?: { id: string; name: string }[];
 }) {
   const [activeType, setActiveType] = useState<string>("all");
   const [minRating, setMinRating] = useState<number | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("top_rated");
-
-  // [Change 2c] — Subtype drill-down state
   const [activeSubtype, setActiveSubtype] = useState<string | null>(null);
 
-  // Unique base types present in data
+  // [T72] Keyword tag filter state — UI only for now
+  const [activeTag, setActiveTag] = useState<string | null>(null);
+
   const availableTypes = useMemo(() => {
     const seen = new Set<string>();
     for (const s of initialSlimes) {
@@ -234,10 +233,9 @@ export default function DiscoverSlimesClient({
     return Array.from(seen).sort();
   }, [initialSlimes]);
 
-  // [Change 2c] — Subtypes available for the currently selected base type
   const availableSubtypes = useMemo(() => {
     if (activeType === "all") return [];
-    const seen = new Map<string, string>(); // subtype_id → name
+    const seen = new Map<string, string>();
     for (const s of initialSlimes) {
       if (s.base_type === activeType && s.subtype_id && s.subtypes?.name) {
         seen.set(s.subtype_id, s.subtypes.name);
@@ -246,7 +244,6 @@ export default function DiscoverSlimesClient({
     return Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
   }, [initialSlimes, activeType]);
 
-  // [Change 2d] — filtered useMemo now includes activeSubtype
   const filtered = useMemo(() => {
     let result = [...initialSlimes];
 
@@ -264,6 +261,9 @@ export default function DiscoverSlimesClient({
       );
     }
 
+    // T74-keywords: wire activeTag to server query
+    // (tag filtering requires join through log_tags — deferred to T74 dispatch)
+
     if (sortMode === "top_rated") {
       result.sort((a, b) => (b.avg_overall ?? 0) - (a.avg_overall ?? 0));
     } else {
@@ -275,11 +275,41 @@ export default function DiscoverSlimesClient({
 
   return (
     <>
+      {/* [T72] Trending keywords pill row — UI only, server wiring deferred to T74 */}
+      {trendingTags.length > 0 && (
+        <div className="mb-4">
+          <p style={sectionLabelStyle}>Keywords</p>
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+            {trendingTags.map((tag) => {
+              const active = activeTag === tag.id;
+              return (
+                <button
+                  key={tag.id}
+                  type="button"
+                  onClick={() => setActiveTag(active ? null : tag.id)}
+                  className="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
+                  style={{
+                    background: active
+                      ? "rgba(57,255,20,0.12)"
+                      : "rgba(45,10,78,0.3)",
+                    color: active ? "#39FF14" : "rgba(245,245,245,0.4)",
+                    border: active
+                      ? "1px solid rgba(57,255,20,0.35)"
+                      : "1px solid rgba(45,10,78,0.5)",
+                  }}
+                >
+                  {tag.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Filter A — Slime Type */}
       <div className="mb-4">
         <p style={sectionLabelStyle}>Slime Type</p>
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-          {/* All pill — resets subtype on click */}
           <button
             type="button"
             onClick={() => {
@@ -332,7 +362,7 @@ export default function DiscoverSlimesClient({
         </div>
       </div>
 
-      {/* [Change 2d] — Subtype drill-down row, only visible when a base type is selected and subtypes exist */}
+      {/* Subtype drill-down row */}
       {availableSubtypes.length > 0 && (
         <div className="mb-4">
           <p style={sectionLabelStyle}>Subtype</p>

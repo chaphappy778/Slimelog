@@ -120,7 +120,6 @@ export async function generateMetadata({
 
 const RATING_DIMENSIONS: Array<{ key: keyof CollectionLog; label: string }> = [
   { key: "rating_texture", label: "Texture" },
-  { key: "rating_scent", label: "Scent" },
   { key: "rating_sound", label: "Sound / ASMR" },
   { key: "rating_drizzle", label: "Aesthetic" },
   { key: "rating_creativity", label: "Creativity" },

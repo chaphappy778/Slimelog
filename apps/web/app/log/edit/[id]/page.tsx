@@ -1,17 +1,21 @@
 "use client";
 // apps/web/app/log/edit/[id]/page.tsx
+// Updated: Bundle T72+T73+T75 — scent_strength pill picker, KeywordTagInput,
+// removed scent text input, removed rating_scent from RATING_FIELDS,
+// removed color_description, SVG checkmark in StepIndicator
 
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import type { LogSlimeInput } from "@/lib/slime-actions";
-import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
-import type { SlimeBaseType } from "@/lib/types";
+import { SLIME_BASE_TYPE_LABELS, SCENT_STRENGTH_LABELS } from "@/lib/types";
+import type { SlimeBaseType, ScentStrength } from "@/lib/types";
 import { ImageUpload } from "@/components/ImageUpload";
 import PageWrapper from "@/components/PageWrapper";
 import FloatingPills from "@/components/FloatingPills";
 import BrandSearchInput from "@/components/BrandSearchInput";
 import SubtypeAutocomplete from "@/components/SubtypeAutocomplete";
+import { KeywordTagInput } from "@/components/KeywordTagInput";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -20,7 +24,6 @@ type Step = 0 | 1 | 2 | 3;
 
 type RatingKey =
   | "rating_texture"
-  | "rating_scent"
   | "rating_sound"
   | "rating_drizzle"
   | "rating_creativity"
@@ -28,9 +31,9 @@ type RatingKey =
   | "rating_overall";
 
 // [Change 1] Updated labels: Sound → Sound / ASMR, Drizzle → Aesthetic, Sensory Fit → Quality
+// [T75] Removed rating_scent entry
 const RATING_FIELDS: { key: RatingKey; label: string }[] = [
   { key: "rating_texture", label: "Texture" },
-  { key: "rating_scent", label: "Scent" },
   { key: "rating_sound", label: "Sound / ASMR" },
   { key: "rating_drizzle", label: "Aesthetic" },
   { key: "rating_creativity", label: "Creativity" },
@@ -66,6 +69,7 @@ const KNOWN_COLOR_VALUES = COLOR_SWATCHES.map((s) => s.value);
 
 // [Change 2] Removed order_date, ship_date, received_date from FormState
 // [G2 Change 3] slime_type → base_type; added subtype_id and subtype_name
+// [T72+T73+T75] removed scent, color_description, rating_scent; added scent_strength, keywords
 interface FormState {
   slime_name: string;
   brand_name_raw: string;
@@ -74,13 +78,12 @@ interface FormState {
   base_type: SlimeBaseType | "";
   subtype_id: string | null;
   subtype_name: string;
-  scent: string;
+  scent_strength: ScentStrength | null;
+  keywords: string[];
   purchase_price: string;
   selected_color_values: string[];
-  color_description: string;
   image_url: string | null;
   rating_texture: number | null;
-  rating_scent: number | null;
   rating_sound: number | null;
   rating_drizzle: number | null;
   rating_creativity: number | null;
@@ -91,13 +94,8 @@ interface FormState {
   in_collection: boolean;
 }
 
-function buildColorsArray(
-  selectedValues: string[],
-  description: string,
-): string[] | undefined {
-  const trimmed = description.trim();
-  const parts = [...selectedValues, ...(trimmed ? [trimmed] : [])];
-  return parts.length > 0 ? parts : undefined;
+function buildColorsArray(selectedValues: string[]): string[] | undefined {
+  return selectedValues.length > 0 ? selectedValues : undefined;
 }
 
 // ─── Star Rating ──────────────────────────────────────────────────────────────
@@ -134,7 +132,7 @@ function StarRating({
               className={`w-8 h-8 rounded-full text-lg transition-all duration-100 ${filled ? "text-slime-accent scale-110" : "text-slime-muted hover:text-slime-accent"}`}
               aria-label={`${star} star`}
             >
-              {filled ? "●" : "○"}
+              {filled ? "\u25cf" : "\u25cb"}
             </button>
           );
         })}
@@ -145,6 +143,7 @@ function StarRating({
 
 // ─── Step Indicator ───────────────────────────────────────────────────────────
 
+// [T72+T73+T75] Replaced ✓ glyph with inline SVG checkmark
 function StepIndicator({ step }: { step: Step }) {
   return (
     <div className="flex items-center justify-center gap-2 mb-8">
@@ -164,7 +163,23 @@ function StepIndicator({ step }: { step: Step }) {
                 : undefined
             }
           >
-            {i < step ? "✓" : i + 1}
+            {i < step ? (
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 12 12"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <polyline points="2,6 5,9 10,3" />
+              </svg>
+            ) : (
+              i + 1
+            )}
           </div>
           {i < STEPS.length - 1 && (
             <div
@@ -211,16 +226,14 @@ const inputCls =
 
 // ─── Color Picker ─────────────────────────────────────────────────────────────
 
+// [T72+T73+T75] Removed description + onDescriptionChange props
+// [T72+T73+T75] Replaced ✓ glyph with inline SVG checkmark
 function ColorPicker({
   selectedValues,
   onToggle,
-  description,
-  onDescriptionChange,
 }: {
   selectedValues: string[];
   onToggle: (value: string) => void;
-  description: string;
-  onDescriptionChange: (v: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -245,10 +258,22 @@ function ColorPicker({
             >
               {isSelected && (
                 <span
-                  className="absolute inset-0 flex items-center justify-center text-xs font-bold"
+                  className="absolute inset-0 flex items-center justify-center"
                   style={{ color: swatch.dark ? "#1A1A1A" : "#FFFFFF" }}
                 >
-                  ✓
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 12 12"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <polyline points="2,6 5,9 10,3" />
+                  </svg>
                 </span>
               )}
             </button>
@@ -269,18 +294,12 @@ function ColorPicker({
                 className="ml-0.5 hover:text-slime-text transition"
                 aria-label={`Remove ${val}`}
               >
-                ×
+                &times;
               </button>
             </span>
           ))}
         </div>
       )}
-      <input
-        className={inputCls}
-        placeholder='e.g. "galaxy swirl" or "mint chocolate chip"'
-        value={description}
-        onChange={(e) => onDescriptionChange(e.target.value)}
-      />
     </div>
   );
 }
@@ -305,13 +324,12 @@ function EditLogPageInner() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // [Bundle E] Privacy toggle state. UI-side `isPrivate` is the inverse of
-  // the DB `is_public` column. Initialized to false; the actual value is
-  // hydrated from the loaded log inside the existing useEffect below.
+  // [Bundle E] Privacy toggle state
   const [isPrivate, setIsPrivate] = useState(false);
 
   // [Change 2] Removed order_date, ship_date, received_date from initial state
   // [G2 Change 3] slime_type → base_type; added subtype_id and subtype_name
+  // [T72+T73+T75] removed scent, color_description, rating_scent; added scent_strength, keywords
   const [form, setForm] = useState<FormState>({
     slime_name: "",
     brand_name_raw: "",
@@ -320,13 +338,12 @@ function EditLogPageInner() {
     base_type: "",
     subtype_id: null,
     subtype_name: "",
-    scent: "",
+    scent_strength: null,
+    keywords: [],
     purchase_price: "",
     selected_color_values: [],
-    color_description: "",
     image_url: null,
     rating_texture: null,
-    rating_scent: null,
     rating_sound: null,
     rating_drizzle: null,
     rating_creativity: null,
@@ -354,8 +371,7 @@ function EditLogPageInner() {
       }
       setUserId(user.id);
 
-      // [G2 Change H2] Join subtypes(name) so we can hydrate subtype_name.
-      // PostgREST returns a to-one join as a plain object (or null), not array.
+      // [G2 Change H2] Join subtypes(name)
       const { data, error } = await supabase
         .from("collection_logs")
         .select("*, subtype:subtypes(name)")
@@ -369,22 +385,17 @@ function EditLogPageInner() {
         return;
       }
 
-      // Split stored colors into known swatches vs free-text description
+      // Split stored colors into known swatches vs free-text
+      // [T72+T73+T75] freeText no longer used in setForm
       const storedColors: string[] = data.colors ?? [];
       const knownSelected = storedColors.filter((c) =>
         KNOWN_COLOR_VALUES.includes(c),
       );
-      const freeText = storedColors
-        .filter((c) => !KNOWN_COLOR_VALUES.includes(c))
-        .join(", ");
 
-      // [G2 Change H2] Plain-object to-one join shape (or null if no subtype_id)
       const joinedSubtype = (data as { subtype?: { name: string } | null })
         .subtype;
       const subtypeName = joinedSubtype?.name ?? "";
 
-      // [Change 2] Removed order_date, ship_date, received_date from setForm populate
-      // [G2 Change H1] slime_type → base_type; populate subtype_id and subtype_name
       setForm({
         slime_name: data.slime_name ?? "",
         brand_name_raw: data.brand_name_raw ?? "",
@@ -393,13 +404,12 @@ function EditLogPageInner() {
         base_type: (data.base_type as SlimeBaseType) ?? "",
         subtype_id: data.subtype_id ?? null,
         subtype_name: subtypeName,
-        scent: data.scent ?? "",
+        scent_strength: (data.scent_strength as ScentStrength) ?? null,
+        keywords: [], // hydrated below from log_tags
         purchase_price: data.cost_paid != null ? String(data.cost_paid) : "",
         selected_color_values: knownSelected,
-        color_description: freeText,
         image_url: data.image_url ?? null,
         rating_texture: data.rating_texture ?? null,
-        rating_scent: data.rating_scent ?? null,
         rating_sound: data.rating_sound ?? null,
         rating_drizzle: data.rating_drizzle ?? null,
         rating_creativity: data.rating_creativity ?? null,
@@ -410,9 +420,21 @@ function EditLogPageInner() {
         in_collection: data.in_collection ?? true,
       });
 
-      // [Bundle E] Hydrate privacy toggle from loaded log. is_public is NOT
-      // NULL with default true at the column level, so this is safe.
+      // [Bundle E] Hydrate privacy toggle
       setIsPrivate(!data.is_public);
+
+      // [T72] Fetch existing tags for this log
+      const { data: tagData } = await supabase
+        .from("log_tags")
+        .select("tags(name)")
+        .eq("log_id", id);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const existingKeywords = (tagData ?? [])
+        .map((row: any) => row.tags?.[0]?.name as string | undefined)
+        .filter((n): n is string => Boolean(n));
+
+      setForm((f) => ({ ...f, keywords: existingKeywords }));
 
       setLoadingLog(false);
     });
@@ -435,7 +457,6 @@ function EditLogPageInner() {
   }
 
   async function handleSubmit() {
-    // [G2 Change 8] base_type validation
     if (!form.base_type) {
       setSaveError("Please select a base type.");
       return;
@@ -443,24 +464,20 @@ function EditLogPageInner() {
     setSaving(true);
     setSaveError(null);
     try {
-      // [G2 Change 10] base_type === "clear" check
       const finalColors =
         form.base_type === "clear"
           ? ["clear"]
-          : buildColorsArray(
-              form.selected_color_values,
-              form.color_description,
-            );
+          : buildColorsArray(form.selected_color_values);
 
-      // [Change 2] Removed order_date, ship_date, received_date from update payload
       // [G2 Change H3] base_type + subtype_id on payload (raw .update() pattern preserved per T63)
+      // [T72+T73+T75] removed scent + rating_scent; added scent_strength
       const updates: Partial<LogSlimeInput> & { colors?: string[] } = {
         slime_name: form.slime_name.trim() || undefined,
         brand_name_raw: form.brand_name_raw.trim() || undefined,
         brand_id: form.brand_id ?? undefined,
         base_type: form.base_type as SlimeBaseType,
         subtype_id: form.subtype_id,
-        scent: form.scent.trim() || undefined,
+        scent_strength: form.scent_strength,
         purchase_price:
           form.purchase_price !== ""
             ? parseFloat(form.purchase_price)
@@ -470,7 +487,6 @@ function EditLogPageInner() {
         colors: finalColors,
         image_url: form.image_url ?? undefined,
         rating_texture: form.rating_texture ?? undefined,
-        rating_scent: form.rating_scent ?? undefined,
         rating_sound: form.rating_sound ?? undefined,
         rating_drizzle: form.rating_drizzle ?? undefined,
         rating_creativity: form.rating_creativity ?? undefined,
@@ -487,6 +503,31 @@ function EditLogPageInner() {
 
       if (error) throw new Error(error.message);
 
+      // [T72] Keywords: full replace strategy
+      const supabase = supabaseRef.current;
+      await supabase.from("log_tags").delete().eq("log_id", id);
+
+      if (form.keywords.length > 0) {
+        const normalized = form.keywords
+          .map((k) => k.toLowerCase().trim())
+          .filter(Boolean)
+          .slice(0, 10);
+
+        const { data: tagRows } = await supabase
+          .from("tags")
+          .upsert(
+            normalized.map((name) => ({ name })),
+            { onConflict: "name", ignoreDuplicates: false },
+          )
+          .select("id");
+
+        if (tagRows && tagRows.length > 0) {
+          await supabase
+            .from("log_tags")
+            .insert(tagRows.map((t) => ({ log_id: id, tag_id: t.id })));
+        }
+      }
+
       router.push(`/slimes/${id}`);
     } catch (err) {
       setSaveError(
@@ -502,7 +543,7 @@ function EditLogPageInner() {
       <PageWrapper dots glow="cyan">
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-slime-accent text-sm font-medium animate-pulse">
-            Loading…
+            Loading\u2026
           </div>
         </div>
       </PageWrapper>
@@ -516,6 +557,7 @@ function EditLogPageInner() {
           <div className="text-center">
             <p className="text-slime-muted text-sm">Log not found.</p>
             <button
+              type="button"
               onClick={() => router.back()}
               className="mt-4 text-slime-accent text-sm font-semibold"
             >
@@ -593,6 +635,7 @@ function EditLogPageInner() {
                   onChange={(e) => set("collection_name", e.target.value)}
                 />
               </Field>
+
               {/* [G2 Change 5/6] Base Type selector — clears subtype on change */}
               <Field label="Base Type *">
                 <select
@@ -690,14 +733,39 @@ function EditLogPageInner() {
                   <div className="w-full aspect-[4/3] rounded-2xl bg-slime-surface border border-slime-border animate-pulse" />
                 )}
               </Field>
-              <Field label="Scent" optional>
-                <input
-                  className={inputCls}
-                  placeholder="e.g. Watermelon candy"
-                  value={form.scent}
-                  onChange={(e) => set("scent", e.target.value)}
-                />
+
+              {/* [T73] Scent Strength 4-pill picker */}
+              <Field label="Scent Strength" optional>
+                <div className="flex gap-2 flex-wrap">
+                  {(
+                    ["unscented", "weak", "medium", "strong"] as ScentStrength[]
+                  ).map((level) => {
+                    const active = form.scent_strength === level;
+                    return (
+                      <button
+                        key={level}
+                        type="button"
+                        onClick={() =>
+                          set("scent_strength", active ? null : level)
+                        }
+                        className="px-4 py-2 rounded-full text-sm font-semibold transition-all"
+                        style={{
+                          background: active
+                            ? "rgba(57,255,20,0.15)"
+                            : "rgba(45,10,78,0.3)",
+                          border: active
+                            ? "1px solid rgba(57,255,20,0.4)"
+                            : "1px solid rgba(45,10,78,0.5)",
+                          color: active ? "#39FF14" : "rgba(245,245,245,0.4)",
+                        }}
+                      >
+                        {SCENT_STRENGTH_LABELS[level]}
+                      </button>
+                    );
+                  })}
+                </div>
               </Field>
+
               <Field label="Purchase Price ($)" optional>
                 <input
                   className={inputCls}
@@ -709,9 +777,8 @@ function EditLogPageInner() {
                   onChange={(e) => set("purchase_price", e.target.value)}
                 />
               </Field>
-              {/* [Change 2] Shipping Dates section removed entirely */}
+
               <Field label="Colors" optional>
-                {/* [G2 Change 10] base_type === "clear" check */}
                 {form.base_type === "clear" ? (
                   <p
                     style={{
@@ -726,10 +793,21 @@ function EditLogPageInner() {
                   <ColorPicker
                     selectedValues={form.selected_color_values}
                     onToggle={toggleColor}
-                    description={form.color_description}
-                    onDescriptionChange={(v) => set("color_description", v)}
                   />
                 )}
+              </Field>
+
+              {/* [T72] Keywords tag input */}
+              <Field
+                label="Keywords"
+                optional
+                hint="Tag your slime \u2014 up to 10 keywords"
+              >
+                <KeywordTagInput
+                  value={form.keywords}
+                  onChange={(tags) => set("keywords", tags)}
+                  placeholder="e.g. pastel, glitter, kawaii"
+                />
               </Field>
             </div>
           )}
@@ -758,18 +836,13 @@ function EditLogPageInner() {
               <Field label="Notes" optional>
                 <textarea
                   className={`${inputCls} resize-none h-36`}
-                  placeholder="Texture thoughts, storage tips, first impressions…"
+                  placeholder="Texture thoughts, storage tips, first impressions\u2026"
                   value={form.notes}
                   onChange={(e) => set("notes", e.target.value)}
                 />
               </Field>
 
-              {/* [Bundle E] Privacy toggle. Amber on-state (#FFB800) is a
-                  deliberate scoped exception to the standard #39FF14 active
-                  CTA green — privacy ON = restricted/private semantics, which
-                  amber communicates correctly. Flipping public->private here
-                  fires the cleanup_activity_on_privacy_flip trigger which
-                  deletes the corresponding activity_feed row server-side. */}
+              {/* [Bundle E] Privacy toggle */}
               <div
                 className="rounded-2xl p-4"
                 style={{
@@ -815,8 +888,8 @@ function EditLogPageInner() {
                         style={{ color: "#888888" }}
                       >
                         {isPrivate
-                          ? "Only you will see this. It won't appear in the activity feed or on your public profile."
-                          : "This will appear in your followers' activity feed and on your public profile."}
+                          ? "Only you will see this. It won\u2019t appear in the activity feed or on your public profile."
+                          : "This will appear in your followers\u2019 activity feed and on your public profile."}
                       </p>
                     </div>
                   </div>
@@ -847,6 +920,7 @@ function EditLogPageInner() {
                 </div>
               </div>
 
+              {/* Summary card */}
               <div
                 className="rounded-xl px-4 py-4 text-sm text-slime-muted space-y-1"
                 style={{
@@ -878,7 +952,6 @@ function EditLogPageInner() {
                 {form.collection_name && (
                   <p>Collection: {form.collection_name}</p>
                 )}
-                {/* [G2 Change 11] base_type label */}
                 {form.base_type && (
                   <p>
                     Type:{" "}
@@ -887,7 +960,6 @@ function EditLogPageInner() {
                     </span>
                   </p>
                 )}
-                {/* [G2 Change 11] Subtype line when present */}
                 {form.subtype_name && (
                   <p>
                     Subtype:{" "}
@@ -896,22 +968,35 @@ function EditLogPageInner() {
                     </span>
                   </p>
                 )}
-                {/* [G2 Change 10] base_type === "clear" check */}
                 {form.base_type === "clear" ? (
                   <p>
                     Colors: <span className="text-slime-accent">clear</span>
                   </p>
                 ) : (
-                  (form.selected_color_values.length > 0 ||
-                    form.color_description.trim()) && (
+                  form.selected_color_values.length > 0 && (
                     <p>
                       Colors:{" "}
-                      {buildColorsArray(
-                        form.selected_color_values,
-                        form.color_description,
-                      )?.join(", ")}
+                      <span className="text-slime-accent">
+                        {form.selected_color_values.join(", ")}
+                      </span>
                     </p>
                   )
+                )}
+                {form.scent_strength && (
+                  <p>
+                    Scent:{" "}
+                    <span className="text-slime-accent">
+                      {SCENT_STRENGTH_LABELS[form.scent_strength]}
+                    </span>
+                  </p>
+                )}
+                {form.keywords.length > 0 && (
+                  <p>
+                    Keywords:{" "}
+                    <span className="text-slime-accent">
+                      {form.keywords.join(", ")}
+                    </span>
+                  </p>
                 )}
                 {form.rating_overall && (
                   <p>
@@ -922,6 +1007,7 @@ function EditLogPageInner() {
                   </p>
                 )}
               </div>
+
               {saveError && (
                 <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">
                   {saveError}
@@ -968,7 +1054,7 @@ function EditLogPageInner() {
                   background: "linear-gradient(135deg, #39FF14, #00F0FF)",
                 }}
               >
-                Next →
+                Next
               </button>
             ) : (
               <button
@@ -980,7 +1066,7 @@ function EditLogPageInner() {
                   background: "linear-gradient(135deg, #39FF14, #00F0FF)",
                 }}
               >
-                {saving ? "Saving…" : "Save Changes"}
+                {saving ? "Saving\u2026" : "Save Changes"}
               </button>
             )}
           </div>
@@ -1002,13 +1088,13 @@ function EditLogPageLoading() {
       }}
     >
       <div className="text-slime-accent text-sm font-medium animate-pulse">
-        Loading…
+        Loading\u2026
       </div>
     </div>
   );
 }
 
-// ─── Default export ───────────────────────────────────────────────────────────────────────
+// ─── Default export ───────────────────────────────────────────────────────────
 
 export default function EditLogPage() {
   return (

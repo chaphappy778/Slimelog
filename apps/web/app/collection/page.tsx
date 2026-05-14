@@ -55,10 +55,7 @@ function SlimeCard({ log }: { log: CollectionLog }) {
   const typeLabel =
     baseLabel && subtypeName ? `${baseLabel} \u00b7 ${subtypeName}` : baseLabel;
 
-  const hasRatings =
-    log.rating_overall !== null ||
-    log.rating_texture !== null ||
-    log.rating_scent !== null;
+  const hasRatings = log.rating_overall !== null || log.rating_texture !== null;
   const primaryColor = log.colors?.[0] ?? null;
   const displayPrice =
     (log as any).purchase_price != null
@@ -139,11 +136,7 @@ function SlimeCard({ log }: { log: CollectionLog }) {
                 {primaryColor}
               </span>
             )}
-            {log.scent && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-slime-surface border border-slime-border text-slime-muted">
-                {log.scent}
-              </span>
-            )}
+
             {displayPrice != null && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-slime-surface border border-slime-border text-slime-muted">
                 ${Number(displayPrice).toFixed(2)}
@@ -169,7 +162,6 @@ function SlimeCard({ log }: { log: CollectionLog }) {
               {/* [Change 1] Updated labels: Sound → Sound / ASMR, Drizzle → Aesthetic, Sensory Fit → Quality */}
               {[
                 { key: "rating_texture", label: "Texture" },
-                { key: "rating_scent", label: "Scent" },
                 { key: "rating_sound", label: "Sound / ASMR" },
                 { key: "rating_drizzle", label: "Aesthetic" },
                 { key: "rating_creativity", label: "Creativity" },
