@@ -12,8 +12,12 @@ import ReportButton from "@/components/ReportButton";
 import ClientComments from "@/components/collection/ClientComments";
 import DeleteLogButton from "@/components/DeleteLogButton";
 import { safeRedirect } from "@/lib/safe-redirect";
-import { SLIME_BASE_TYPE_COLORS, SLIME_BASE_TYPE_LABELS } from "@/lib/types";
-import type { CollectionLog, SlimeBaseType } from "@/lib/types";
+import {
+  SLIME_BASE_TYPE_COLORS,
+  SLIME_BASE_TYPE_LABELS,
+  SCENT_STRENGTH_LABELS,
+} from "@/lib/types";
+import type { CollectionLog, SlimeBaseType, ScentStrength } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,15 +27,10 @@ interface OwnerProfile {
   avatar_url: string | null;
 }
 
-// SlimeLogRecord — local extension of CollectionLog with image_url field
-// that exists on the DB column but isn't in the lib/types CollectionLog
-// definition. Filed as separate type-cleanup work; cast at fetch boundary
-// instead of mutating the shared type.
-// [Change SD4] subtype join is fetched alongside the log; surface as an
-// optional shape on this local record.
 type SlimeLogRecord = CollectionLog & {
   image_url: string | null;
   subtype: { name: string } | null;
+  scent_strength: string | null;
 };
 
 // ─── Server-side Supabase ─────────────────────────────────────────────────────
@@ -45,14 +44,8 @@ async function getSupabase() {
   );
 }
 
-// ─── Log fetch ────────────────────────────────────────────────────────────────
-// RLS on collection_logs (post-#35 migration) allows anon SELECT only when
-// is_public = true. We still filter explicitly in the query as defense in
-// depth. If the log isn't public, the query returns null and we 404.
-
 async function fetchLog(id: string): Promise<SlimeLogRecord | null> {
   const supabase = await getSupabase();
-  // [Change SD4] Join subtype name in the same query.
   const { data } = await supabase
     .from("collection_logs")
     .select("*, subtype:subtypes(name)")
@@ -62,7 +55,7 @@ async function fetchLog(id: string): Promise<SlimeLogRecord | null> {
   return (data as SlimeLogRecord | null) ?? null;
 }
 
-// ─── Metadata (#35) ───────────────────────────────────────────────────────────
+// ─── Metadata ─────────────────────────────────────────────────────────────────
 
 export async function generateMetadata({
   params,
@@ -116,9 +109,6 @@ export async function generateMetadata({
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// [Change SD1] Local TYPE_COLORS map removed; colors come from
-// SLIME_BASE_TYPE_COLORS in @/lib/types.
-
 const RATING_DIMENSIONS: Array<{ key: keyof CollectionLog; label: string }> = [
   { key: "rating_texture", label: "Texture" },
   { key: "rating_sound", label: "Sound / ASMR" },
@@ -143,13 +133,11 @@ export default async function SlimePage({
 
   const supabase = await getSupabase();
 
-  // Current viewer
   const {
     data: { user },
   } = await supabase.auth.getUser();
   const currentUserId = user?.id ?? null;
 
-  // Owner profile via profiles_public
   const { data: ownerData } = await supabase
     .from("profiles_public")
     .select("username, display_name, avatar_url")
@@ -157,7 +145,6 @@ export default async function SlimePage({
     .maybeSingle();
   const owner = ownerData as OwnerProfile | null;
 
-  // Brand slug for linking
   let brandSlug: string | null = null;
   if (log.brand_name_raw) {
     const { data: brandRow } = await supabase
@@ -168,7 +155,6 @@ export default async function SlimePage({
     brandSlug = (brandRow?.slug as string | undefined) ?? null;
   }
 
-  // Like info — bulk
   const [{ count: likeCount }, { data: userLikeRow }] = await Promise.all([
     supabase
       .from("likes")
@@ -184,34 +170,37 @@ export default async function SlimePage({
       : Promise.resolve({ data: null }),
   ]);
 
-  // [Change SD1 + SD2] Color sourced from SLIME_BASE_TYPE_COLORS by base_type.
+  // [T72+T73] Fetch keywords for this log
+  const { data: logTagsData } = await supabase
+    .from("log_tags")
+    .select("tag_id, tags(name)")
+    .eq("log_id", log.id);
+
+  const keywords = (logTagsData ?? [])
+    .map((lt: any) => (lt.tags as { name: string } | null)?.name)
+    .filter((n): n is string => Boolean(n));
+
   const typeColor = log.base_type
     ? (SLIME_BASE_TYPE_COLORS[log.base_type as SlimeBaseType]?.text ??
       "#39FF14")
     : "#39FF14";
 
-  // [Change SD3] Canonical label via SLIME_BASE_TYPE_LABELS.
   const baseTypeLabel = log.base_type
     ? (SLIME_BASE_TYPE_LABELS[log.base_type as SlimeBaseType] ?? log.base_type)
     : null;
 
-  // [Change SD4] Subtype name from joined row.
   const subtypeName = log.subtype?.name ?? null;
 
   const activeDimensions = RATING_DIMENSIONS.filter(
     ({ key }) => typeof log[key] === "number",
   );
 
-  // [Change 1 — #35] "Log this slime" CTA appears for any non-owner
-  // viewer (logged-in or out). Wishlist intent is a real conversion
-  // hook for shareable pages.
   const showCTA = currentUserId !== log.user_id;
   const ctaNext = safeRedirect(`/slimes/${log.id}`, "/landing");
   const ctaHref = currentUserId
     ? `/log?prefill=${encodeURIComponent(log.slime_name ?? "")}&brand=${encodeURIComponent(log.brand_name_raw ?? "")}`
     : `/signup?next=${encodeURIComponent(ctaNext)}`;
 
-  // [T67a/b] Owner flag — drives edit link + delete button visibility
   const isOwner = currentUserId === log.user_id;
 
   return (
@@ -313,8 +302,6 @@ export default async function SlimePage({
           </header>
 
           {/* Type + status badges */}
-          {/* [Change SD2 + SD3 + SD4] Render canonical base-type label and,
-              when present, the subtype name as inline middle-dot text. */}
           <div className="flex flex-wrap gap-2 items-center">
             {baseTypeLabel && (
               <span
@@ -353,6 +340,37 @@ export default async function SlimePage({
               </span>
             ) : null}
           </div>
+
+          {/* [T72+T73] Scent strength + keyword pills */}
+          {(log.scent_strength || keywords.length > 0) && (
+            <div className="flex flex-wrap gap-2">
+              {log.scent_strength && (
+                <span
+                  className="px-3 py-1 rounded-full text-xs font-semibold border"
+                  style={{
+                    background: "rgba(57,255,20,0.1)",
+                    color: "#39FF14",
+                    borderColor: "rgba(57,255,20,0.3)",
+                  }}
+                >
+                  {SCENT_STRENGTH_LABELS[log.scent_strength as ScentStrength]}
+                </span>
+              )}
+              {keywords.map((kw) => (
+                <span
+                  key={kw}
+                  className="px-3 py-1 rounded-full text-xs font-medium border"
+                  style={{
+                    background: "rgba(0,240,255,0.08)",
+                    color: "#00F0FF",
+                    borderColor: "rgba(0,240,255,0.2)",
+                  }}
+                >
+                  {kw}
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* Overall rating */}
           {typeof log.rating_overall === "number" && (
@@ -425,7 +443,7 @@ export default async function SlimePage({
             </div>
           )}
 
-          {/* Action bar — Like + Report (non-owner only for report) */}
+          {/* Action bar — Like + Report */}
           <div
             className="flex items-stretch border-y"
             style={{
@@ -565,9 +583,6 @@ export default async function SlimePage({
           )}
         </div>
 
-        {/* Comments — client-only mount so they're not in the SSR HTML.
-            [Change 2 — #35] Defers comment thread to hydration so logged-out
-            comment text doesn't appear in indexable page source. */}
         <ClientComments logId={log.id} />
       </main>
     </PageWrapper>

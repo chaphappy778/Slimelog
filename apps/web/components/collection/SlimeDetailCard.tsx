@@ -6,8 +6,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
-import { SLIME_BASE_TYPE_COLORS, SLIME_BASE_TYPE_LABELS } from "@/lib/types";
-import type { CollectionLog, SlimeBaseType } from "@/lib/types";
+import {
+  SLIME_BASE_TYPE_COLORS,
+  SLIME_BASE_TYPE_LABELS,
+  SCENT_STRENGTH_LABELS,
+} from "@/lib/types";
+import type { CollectionLog, SlimeBaseType, ScentStrength } from "@/lib/types";
 import LikeButton from "@/components/collection/LikeButton";
 import CommentSection from "@/components/collection/CommentSection";
 import BrandMiniSheet from "@/components/BrandMiniSheet";
@@ -24,9 +28,6 @@ const supabase = createBrowserClient(
 );
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-// [Change SDC1] Local TYPE_COLORS map removed. Colors come from
-// SLIME_BASE_TYPE_COLORS in @/lib/types.
 
 const COLOR_SWATCHES: Record<string, string> = {
   pink: "#FF6B9D",
@@ -127,10 +128,6 @@ interface Props {
   commentCount: number;
   isLikedByCurrentUser: boolean;
   currentUserId: string | null;
-  // [Change 1 — T30] Optional log creator props. When omitted (e.g. collection
-  // views where the viewer is browsing their own logs) the user row is not
-  // rendered. When provided, surfaces avatar + @username at the top of the
-  // info card body.
   ownerUsername?: string | null;
   ownerAvatarUrl?: string | null;
 }
@@ -148,7 +145,6 @@ export default function SlimeDetailCard({
   commentCount,
   isLikedByCurrentUser,
   currentUserId,
-  // [Change 2 — T30] Destructure new owner props. Default to undefined.
   ownerUsername,
   ownerAvatarUrl,
 }: Props) {
@@ -161,8 +157,6 @@ export default function SlimeDetailCard({
   const [showBrandSheet, setShowBrandSheet] = useState(false);
   const [isWishlisted, setIsWishlisted] = useState<boolean | null>(null);
   const [wishlistLoading, setWishlistLoading] = useState(false);
-
-  // [T67b] Delete confirmation state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -195,11 +189,6 @@ export default function SlimeDetailCard({
     };
   }, [currentUserId, log.slime_name]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // [Change 1 — #35] Wishlist click now handles logged-out users by routing
-  // to signup. Previously the entire button was hidden when no user.
-  // [Change SDC3] POST body uses base_type + subtype_id matching the new
-  // collection_logs schema. The /api/wishlist route may still expect
-  // slime_type; surfaced in the notes section. tsc won't catch this.
   async function handleAddToWishlist() {
     if (!currentUserId) {
       const next = safeRedirect(pathname ?? `/slimes/${log.id}`, "/landing");
@@ -235,7 +224,6 @@ export default function SlimeDetailCard({
     }
   }
 
-  // [T67b] Delete handler
   async function handleDelete() {
     if (deleting) return;
     setDeleting(true);
@@ -249,22 +237,32 @@ export default function SlimeDetailCard({
     }
   }
 
-  // [Change SDC1 + SDC2] typeColor sourced from SLIME_BASE_TYPE_COLORS.text
-  // by base_type.
   const typeColor = log.base_type
     ? (SLIME_BASE_TYPE_COLORS[log.base_type as SlimeBaseType]?.text ??
       "#39FF14")
     : "#39FF14";
 
-  // [Change SDC2] Canonical label via SLIME_BASE_TYPE_LABELS.
   const baseTypeLabel = log.base_type
     ? (SLIME_BASE_TYPE_LABELS[log.base_type as SlimeBaseType] ?? log.base_type)
     : null;
 
-  // [Change SDC4] Subtype name from joined row (if present).
   const subtypeName =
     (log as CollectionLog & { subtype?: { name: string } | null }).subtype
       ?.name ?? null;
+
+  // [T72+T73] Scent strength + keywords from log data
+  const scentStrength =
+    (log as CollectionLog & { scent_strength?: ScentStrength | null })
+      .scent_strength ?? null;
+  const logTags =
+    (
+      log as CollectionLog & {
+        log_tags?: { tag_id: string; tags?: { name: string } | null }[];
+      }
+    ).log_tags ?? [];
+  const keywords = logTags
+    .map((lt) => lt.tags?.name)
+    .filter((n): n is string => Boolean(n));
 
   const activeDimensions = RATING_DIMENSIONS.filter(
     ({ key }) => typeof log[key] === "number",
@@ -274,7 +272,6 @@ export default function SlimeDetailCard({
     ? log.brand_name_raw.charAt(0).toUpperCase()
     : "?";
 
-  // [Change 3 — T30] Owner row rendering helpers.
   const showOwnerRow = !!ownerUsername;
   const ownerInitial = ownerUsername
     ? ownerUsername.charAt(0).toUpperCase()
@@ -284,21 +281,12 @@ export default function SlimeDetailCard({
     commentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  // [Change 2 — #35] Show Report for any non-owner viewer, including
-  // logged-out (the ReportButton component itself handles the route-to-
-  // signup behavior on click). Previously gated by currentUserId !== null.
   const showReport = currentUserId !== log.user_id;
-
-  // [T67a/b] Owner check — drives footer branch
   const isOwner = currentUserId !== null && currentUserId === log.user_id;
 
   const IMAGE_HEIGHT = "28vh";
   const OVERLAP = imageUrl ? 56 : 0;
 
-  // [Change 3 — #35] Wishlist button label/logic for the three states:
-  // - Logged-out: "Add to Wishlist" (routes to signup)
-  // - Logged-in, not wishlisted: "Add to Wishlist" (real action)
-  // - Logged-in, already wishlisted: "In Wishlist" (disabled)
   const wishlistLabel = (() => {
     if (!currentUserId) return "Add to Wishlist";
     if (isWishlisted === null) return "...";
@@ -322,7 +310,6 @@ export default function SlimeDetailCard({
       }}
     >
       {/* Floating header */}
-      {/* [Change 4 — T30] Header is unchanged. Back button only. */}
       <div
         style={{
           position: "sticky",
@@ -522,10 +509,7 @@ export default function SlimeDetailCard({
             gap: 14,
           }}
         >
-          {/* [Change 3 — T30] Owner row. Renders only when ownerUsername is
-              provided (i.e. feed/social contexts). Collection views omit the
-              prop and this row is skipped. Sits as the first child in the
-              info card body, above the slime name heading. */}
+          {/* Owner row */}
           {showOwnerRow && (
             <div
               style={{
@@ -626,7 +610,6 @@ export default function SlimeDetailCard({
                       fontSize: 15,
                       fontWeight: 600,
                       color: "#00F0FF",
-                      textDecoration: "none",
                     }}
                   >
                     {log.brand_name_raw}
@@ -676,8 +659,6 @@ export default function SlimeDetailCard({
           )}
 
           {/* Type badge + collection status + color swatches */}
-          {/* [Change SDC2 + SDC4] Render canonical base-type label and,
-              when present, the subtype as inline middle-dot text. */}
           <div
             style={{
               display: "flex",
@@ -762,6 +743,43 @@ export default function SlimeDetailCard({
                 </div>
               ))}
           </div>
+
+          {/* [T72+T73] Scent strength + keyword pills */}
+          {(scentStrength || keywords.length > 0) && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {scentStrength && (
+                <span
+                  style={{
+                    padding: "3px 11px",
+                    borderRadius: 20,
+                    fontSize: 12,
+                    background: "rgba(57,255,20,0.1)",
+                    color: "#39FF14",
+                    border: "1px solid rgba(57,255,20,0.3)",
+                    fontWeight: 600,
+                  }}
+                >
+                  {SCENT_STRENGTH_LABELS[scentStrength as ScentStrength]}
+                </span>
+              )}
+              {keywords.map((kw) => (
+                <span
+                  key={kw}
+                  style={{
+                    padding: "3px 11px",
+                    borderRadius: 20,
+                    fontSize: 12,
+                    background: "rgba(0,240,255,0.08)",
+                    color: "#00F0FF",
+                    border: "1px solid rgba(0,240,255,0.2)",
+                    fontWeight: 500,
+                  }}
+                >
+                  {kw}
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* Overall rating */}
           {typeof log.rating_overall === "number" && (
@@ -863,9 +881,6 @@ export default function SlimeDetailCard({
               )}
             </button>
 
-            {/* [Change 2 — #35] Report slot now shows for all non-owner
-                viewers including logged-out. ReportButton handles the
-                signup-redirect on click internally. */}
             {showReport && (
               <>
                 <div
@@ -1035,7 +1050,7 @@ export default function SlimeDetailCard({
         </div>
       </div>
 
-      {/* [T67b] Delete confirmation overlay — z-index 120 (above card z-index 100) */}
+      {/* Delete confirmation overlay */}
       {showDeleteConfirm && (
         <div
           style={{
@@ -1126,7 +1141,6 @@ export default function SlimeDetailCard({
       )}
 
       {/* Fixed footer — owner vs non-owner */}
-      {/* [T67a/b] Owner sees Edit + Delete. Non-owner sees Wishlist + View Full Review. */}
       <div
         style={{
           position: "fixed",
@@ -1199,11 +1213,7 @@ export default function SlimeDetailCard({
                     : "pointer",
                 transition: "opacity 0.15s",
                 ...(wishlistIsCta
-                  ? {
-                      background: "#CC44FF",
-                      color: "#0A0A0A",
-                      border: "none",
-                    }
+                  ? { background: "#CC44FF", color: "#0A0A0A", border: "none" }
                   : {
                       background: "rgba(204,68,255,0.1)",
                       color: "#CC44FF",
@@ -1213,7 +1223,6 @@ export default function SlimeDetailCard({
             >
               {wishlistLabel}
             </button>
-
             <Link
               href={`/slimes/${log.id}`}
               style={{
