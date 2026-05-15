@@ -1,4 +1,6 @@
 // apps/web/app/brands/[slug]/page.tsx
+// [Change 1 — Brands Redesign D3] Hero upgrade, stats pills, catalog section, drops/logs query fixes
+
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -10,27 +12,9 @@ import PageHeader from "@/components/PageHeader";
 import FollowBrandButton from "@/components/FollowBrandButton";
 import ClaimBrandButton from "@/components/brand/ClaimBrandButton";
 import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
-import type { SlimeBaseType } from "@/lib/types";
-import type { BrandClaimStatus } from "@/lib/types";
+import type { Brand, SlimeBaseType, BrandClaimStatus } from "@/lib/types";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface Brand {
-  id: string;
-  slug: string;
-  name: string;
-  bio: string | null;
-  logo_url: string | null;
-  banner_url: string | null;
-  website_url: string | null;
-  instagram_handle: string | null;
-  tiktok_handle: string | null;
-  shopify_url: string | null;
-  is_verified: boolean | null;
-  follower_count: number | null;
-  owner_id: string | null;
-  created_at: string;
-}
+// ─── Local interfaces (not in @/lib/types) ────────────────────────────────────
 
 interface BrandSlimeRow {
   id: string;
@@ -41,7 +25,6 @@ interface BrandSlimeRow {
   rating_overall: number | null;
   image_url: string | null;
   created_at: string;
-  // [Change 1 — #35] Profile join swapped to profiles_public.
   profiles_public:
     | { username: string | null; avatar_url: string | null }
     | { username: string | null; avatar_url: string | null }[]
@@ -50,11 +33,20 @@ interface BrandSlimeRow {
 
 interface UpcomingDrop {
   id: string;
-  drop_name: string;
+  name: string;
   description: string | null;
-  drop_date: string;
+  drop_at: string;
   status: string | null;
   cover_image_url: string | null;
+}
+
+interface CatalogSlime {
+  id: string;
+  name: string;
+  image_url: string | null;
+  base_type: string | null;
+  avg_overall: number | null;
+  total_ratings: number;
 }
 
 // ─── Server Supabase ──────────────────────────────────────────────────────────
@@ -78,7 +70,7 @@ async function fetchBrand(slug: string): Promise<Brand | null> {
   return (data as Brand | null) ?? null;
 }
 
-// ─── Profile normaliser ───────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function normaliseProfile(
   raw:
@@ -91,7 +83,21 @@ function normaliseProfile(
   return raw;
 }
 
-// ─── Metadata (#35) ───────────────────────────────────────────────────────────
+function formatRelativeTime(isoString: string): string {
+  const diffMs = Date.now() - new Date(isoString).getTime();
+  const diffMins = Math.floor(diffMs / 1000 / 60);
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `${diffDays}d ago`;
+  const diffMonths = Math.floor(diffDays / 30);
+  if (diffMonths < 12) return `${diffMonths}mo ago`;
+  return `${Math.floor(diffMonths / 12)}y ago`;
+}
+
+// ─── Metadata ─────────────────────────────────────────────────────────────────
 
 export async function generateMetadata({
   params,
@@ -125,39 +131,15 @@ export async function generateMetadata({
       title,
       description,
       siteName: "SlimeLog",
-      ...(brand.banner_url
-        ? { images: [{ url: brand.banner_url }] }
-        : brand.logo_url
-          ? { images: [{ url: brand.logo_url }] }
-          : {}),
+      ...(brand.logo_url ? { images: [{ url: brand.logo_url }] } : {}),
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
-      ...(brand.banner_url
-        ? { images: [brand.banner_url] }
-        : brand.logo_url
-          ? { images: [brand.logo_url] }
-          : {}),
+      ...(brand.logo_url ? { images: [brand.logo_url] } : {}),
     },
   };
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatRelativeTime(isoString: string): string {
-  const diffMs = Date.now() - new Date(isoString).getTime();
-  const diffMins = Math.floor(diffMs / 1000 / 60);
-  if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 30) return `${diffDays}d ago`;
-  const diffMonths = Math.floor(diffDays / 30);
-  if (diffMonths < 12) return `${diffMonths}mo ago`;
-  return `${Math.floor(diffMonths / 12)}y ago`;
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -176,19 +158,12 @@ export default async function BrandPage({
 
   const supabase = await getSupabase();
 
-  // [Batch 2 — Brand Claiming] Fetch the current user so ClaimBrandButton can
-  // gate on auth state. Logged-out users see no claim affordance.
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // [Batch 3 — T48] Verified-owner check. When true, the Follow button is
-  // replaced by a "Manage Brand" link that routes to the brand dashboard.
   const isVerifiedOwner = !!user && brand.owner_id === user.id;
 
-  // [Batch 2 — Brand Claiming] Fetch the most-recent claim by this user for
-  // this brand. Used to show a status banner in place of the claim button
-  // when one is in flight or has been resolved.
   let latestClaim: { id: string; status: BrandClaimStatus } | null = null;
   if (user) {
     const { data: claimRow } = await supabase
@@ -208,26 +183,11 @@ export default async function BrandPage({
     }
   }
 
-  // Avg rating + log count for the brand
-  const { data: ratingRows } = await supabase
-    .from("collection_logs")
-    .select("rating_overall")
-    .eq("brand_name_raw", brand.name)
-    .eq("is_public", true)
-    .not("rating_overall", "is", null);
+  // Denormalized stats from brands table
+  const avgRating = brand.avg_slime_rating;
+  const logCount = brand.total_slime_ratings;
 
-  const ratings = (ratingRows ?? [])
-    .map((r) => r.rating_overall as number | null)
-    .filter((r): r is number => r !== null);
-  const avgRating =
-    ratings.length > 0
-      ? ratings.reduce((sum, r) => sum + r, 0) / ratings.length
-      : null;
-  const logCount = ratings.length;
-
-  // [Change 2 — #35] Recent community logs query — ADDED is_public = true
-  // filter (was missing — pre-existing privacy bug). Profile join swapped
-  // to profiles_public.
+  // Community logs — filter by brand_id FK, public only
   const { data: communityRows } = await supabase
     .from("collection_logs")
     .select(
@@ -235,54 +195,66 @@ export default async function BrandPage({
        subtype:subtypes ( name ),
        profiles_public!collection_logs_user_id_fkey ( username, avatar_url )`,
     )
-    .eq("brand_name_raw", brand.name)
+    .eq("brand_id", brand.id)
     .eq("is_public", true)
     .order("created_at", { ascending: false })
     .limit(12);
 
   const communityLogs = (communityRows ?? []) as unknown as BrandSlimeRow[];
 
-  // Upcoming drops (only active / scheduled, not cancelled)
+  // Upcoming drops — fix column names to match schema
   const { data: dropRows } = await supabase
     .from("drops")
-    .select("id, drop_name, description, drop_date, status, cover_image_url")
+    .select("id, name, description, drop_at, status, cover_image_url")
     .eq("brand_id", brand.id)
     .neq("status", "cancelled")
-    .gte("drop_date", new Date().toISOString())
-    .order("drop_date", { ascending: true })
+    .gte("drop_at", new Date().toISOString())
+    .order("drop_at", { ascending: true })
     .limit(3);
 
   const upcomingDrops = (dropRows ?? []) as UpcomingDrop[];
+
+  // Slime catalog from slimes table
+  const { data: catalogRows } = await supabase
+    .from("slimes")
+    .select("id, name, image_url, base_type, avg_overall, total_ratings")
+    .eq("brand_id", brand.id)
+    .order("avg_overall", { ascending: false, nullsFirst: false })
+    .limit(20);
+
+  const catalogSlimes = (catalogRows ?? []) as CatalogSlime[];
+
+  const initials = brand.name.slice(0, 2).toUpperCase();
 
   return (
     <PageWrapper dots>
       <PageHeader />
 
       <main className="pt-14 pb-24 max-w-2xl mx-auto">
-        {/* Banner */}
-        <div
-          className="relative w-full h-40 sm:h-56"
-          style={{
-            background: brand.banner_url
-              ? undefined
-              : "linear-gradient(135deg, rgba(45,10,78,0.5), rgba(0,240,255,0.15))",
-          }}
-        >
-          {brand.banner_url && (
-            <Image
-              src={brand.banner_url}
-              alt={`${brand.name} banner`}
-              fill
-              sizes="100vw"
-              className="object-cover"
-              priority
-            />
-          )}
+        {/* Hero gradient */}
+        <div className="relative w-full" style={{ height: 160 }}>
           <div
-            className="absolute inset-0 pointer-events-none"
+            className="absolute inset-0"
             style={{
               background:
-                "linear-gradient(to bottom, rgba(0,0,0,0) 50%, rgba(10,10,10,0.85) 100%)",
+                "linear-gradient(135deg, rgba(45,10,78,0.9) 0%, rgba(0,240,255,0.08) 50%, rgba(255,0,229,0.08) 100%)",
+            }}
+          />
+          {/* Dot pattern overlay */}
+          <div
+            className="absolute inset-0 opacity-20"
+            style={{
+              backgroundImage:
+                "radial-gradient(circle, rgba(57,255,20,0.3) 1px, transparent 1px)",
+              backgroundSize: "24px 24px",
+            }}
+          />
+          {/* Bottom fade */}
+          <div
+            className="absolute inset-x-0 bottom-0"
+            style={{
+              height: 60,
+              background: "linear-gradient(to bottom, transparent, #0A0A0A)",
             }}
           />
         </div>
@@ -309,7 +281,7 @@ export default async function BrandPage({
                 />
               ) : (
                 <div
-                  className="w-full h-full flex items-center justify-center text-3xl font-black"
+                  className="w-full h-full flex items-center justify-center text-2xl font-black"
                   style={{
                     background: "linear-gradient(135deg, #39FF14, #00F0FF)",
                     color: "#0A0A0A",
@@ -317,14 +289,11 @@ export default async function BrandPage({
                   }}
                   aria-hidden="true"
                 >
-                  {brand.name.charAt(0).toUpperCase()}
+                  {initials}
                 </div>
               )}
             </div>
             <div className="flex-1 min-w-0">
-              {/* [Batch 3 — T48] Verified owner sees a "Manage Brand" link
-                  routing to the brand dashboard; everyone else sees the
-                  existing FollowBrandButton. */}
               {isVerifiedOwner ? (
                 <Link
                   href={`/brand-dashboard/${brand.slug}`}
@@ -398,57 +367,91 @@ export default async function BrandPage({
             </p>
           )}
 
-          {/* Stats row */}
-          <div className="mt-4 flex items-center gap-6">
-            {avgRating !== null && (
-              <div className="flex flex-col">
-                <span
-                  className="text-xl font-black leading-none"
-                  style={{
-                    color: "#39FF14",
-                    fontFamily: "Montserrat, sans-serif",
-                  }}
+          {/* Stats pills row */}
+          <div className="mt-4 flex items-center gap-3 flex-wrap">
+            <div
+              className="flex items-center gap-2 px-3 py-2 rounded-xl"
+              style={{
+                background: "rgba(45,10,78,0.4)",
+                border: "1px solid rgba(45,10,78,0.7)",
+              }}
+            >
+              <svg
+                viewBox="0 0 12 12"
+                className="w-3 h-3 fill-current"
+                style={{ color: "#39FF14" }}
+              >
+                <polygon points="6,1 7.5,4.5 11,4.5 8.5,7 9.5,11 6,9 2.5,11 3.5,7 1,4.5 4.5,4.5" />
+              </svg>
+              <div>
+                <p
+                  className="text-sm font-black leading-none"
+                  style={{ color: "#39FF14" }}
                 >
-                  {avgRating.toFixed(1)}
-                </span>
-                <span className="text-[10px] uppercase tracking-wider text-slime-muted font-semibold mt-1">
-                  Avg Rating
-                </span>
+                  {avgRating != null ? avgRating.toFixed(1) : "—"}
+                </p>
+                <p className="text-[9px] uppercase tracking-wider text-slime-muted font-semibold mt-0.5">
+                  Rating
+                </p>
               </div>
-            )}
-            <div className="flex flex-col">
-              <span
-                className="text-xl font-black leading-none"
-                style={{
-                  color: "#00F0FF",
-                  fontFamily: "Montserrat, sans-serif",
-                }}
-              >
-                {logCount}
-              </span>
-              <span className="text-[10px] uppercase tracking-wider text-slime-muted font-semibold mt-1">
-                Logs
-              </span>
             </div>
-            <div className="flex flex-col">
-              <span
-                className="text-xl font-black leading-none"
-                style={{
-                  color: "#FF00E5",
-                  fontFamily: "Montserrat, sans-serif",
-                }}
+
+            <div
+              className="flex items-center gap-2 px-3 py-2 rounded-xl"
+              style={{
+                background: "rgba(45,10,78,0.4)",
+                border: "1px solid rgba(45,10,78,0.7)",
+              }}
+            >
+              <svg
+                viewBox="0 0 12 12"
+                className="w-3 h-3 fill-current"
+                style={{ color: "#00F0FF" }}
               >
-                {brand.follower_count ?? 0}
-              </span>
-              <span className="text-[10px] uppercase tracking-wider text-slime-muted font-semibold mt-1">
-                Followers
-              </span>
+                <path d="M2 2h8a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm1 2v1h6V4H3zm0 2v1h4V6H3z" />
+              </svg>
+              <div>
+                <p
+                  className="text-sm font-black leading-none"
+                  style={{ color: "#00F0FF" }}
+                >
+                  {logCount ?? 0}
+                </p>
+                <p className="text-[9px] uppercase tracking-wider text-slime-muted font-semibold mt-0.5">
+                  Logs
+                </p>
+              </div>
+            </div>
+
+            <div
+              className="flex items-center gap-2 px-3 py-2 rounded-xl"
+              style={{
+                background: "rgba(45,10,78,0.4)",
+                border: "1px solid rgba(45,10,78,0.7)",
+              }}
+            >
+              <svg
+                viewBox="0 0 12 12"
+                className="w-3 h-3 fill-current"
+                style={{ color: "#FF00E5" }}
+              >
+                <path d="M6 6a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zm-4 5c0-2.2 1.8-4 4-4s4 1.8 4 4H2z" />
+              </svg>
+              <div>
+                <p
+                  className="text-sm font-black leading-none"
+                  style={{ color: "#FF00E5" }}
+                >
+                  {(brand.follower_count ?? 0).toLocaleString()}
+                </p>
+                <p className="text-[9px] uppercase tracking-wider text-slime-muted font-semibold mt-0.5">
+                  Followers
+                </p>
+              </div>
             </div>
           </div>
 
-          {/* Social links — [Boyscout #35] Replaced emoji with SVG icons.
-              Was: 🌐 🛍️ 📸 🎵
-              Now: globe / shopping bag / camera-square / music-note */}
+          {/* Social links */}
           <div className="mt-3 flex items-center gap-3 flex-wrap">
             {brand.website_url && (
               <a
@@ -475,9 +478,9 @@ export default async function BrandPage({
                 Website
               </a>
             )}
-            {brand.shopify_url && (
+            {brand.shop_url && (
               <a
-                href={brand.shopify_url}
+                href={brand.shop_url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-slime-muted hover:text-slime-accent transition-colors flex items-center gap-1.5 text-xs"
@@ -546,9 +549,7 @@ export default async function BrandPage({
             )}
           </div>
 
-          {/* [Batch 2 — Brand Claiming] Claim affordance — renders the gradient
-              CTA button if this user can claim, a status banner if a claim is
-              in flight, or nothing if the brand is owned / user is logged out. */}
+          {/* Claim button */}
           <div className="mt-4">
             <ClaimBrandButton
               brandId={brand.id}
@@ -560,32 +561,124 @@ export default async function BrandPage({
           </div>
         </section>
 
+        {/* Slime catalog */}
+        {catalogSlimes.length > 0 && (
+          <section className="mt-8">
+            <p
+              className="text-[11px] font-black tracking-widest uppercase mb-3 px-4"
+              style={{ color: "#00F0FF" }}
+            >
+              Slime Catalog
+            </p>
+            <div
+              className="flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-none"
+              style={{ msOverflowStyle: "none", scrollbarWidth: "none" }}
+            >
+              {catalogSlimes.map((slime) => {
+                const baseLabel = slime.base_type
+                  ? (SLIME_BASE_TYPE_LABELS[slime.base_type as SlimeBaseType] ??
+                    slime.base_type.replace(/_/g, " "))
+                  : null;
+                return (
+                  <Link
+                    key={slime.id}
+                    href={`/slimes/${slime.id}`}
+                    className="shrink-0 block active:scale-[0.98] transition-all"
+                    style={{ width: "calc(62vw - 16px)", maxWidth: 220 }}
+                  >
+                    <div
+                      className="rounded-2xl overflow-hidden"
+                      style={{
+                        background: "rgba(45,10,78,0.3)",
+                        border: "1px solid rgba(45,10,78,0.7)",
+                      }}
+                    >
+                      {/* Image */}
+                      <div
+                        className="relative w-full"
+                        style={{ aspectRatio: "1 / 1" }}
+                      >
+                        {slime.image_url ? (
+                          <Image
+                            src={slime.image_url}
+                            alt={slime.name}
+                            fill
+                            sizes="220px"
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div
+                            className="w-full h-full flex items-center justify-center"
+                            style={{
+                              background:
+                                "linear-gradient(135deg, rgba(45,10,78,0.4), rgba(0,240,255,0.1))",
+                            }}
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              className="w-8 h-8"
+                              fill="none"
+                            >
+                              <circle
+                                cx="12"
+                                cy="12"
+                                r="9"
+                                stroke="rgba(45,10,78,0.8)"
+                                strokeWidth="1.5"
+                              />
+                              <circle
+                                cx="9"
+                                cy="9"
+                                r="1.5"
+                                fill="rgba(45,10,78,0.8)"
+                              />
+                            </svg>
+                          </div>
+                        )}
+                        {slime.avg_overall != null && (
+                          <span
+                            className="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded font-bold"
+                            style={{
+                              background: "rgba(10,10,10,0.75)",
+                              color: "#39FF14",
+                            }}
+                          >
+                            {slime.avg_overall.toFixed(1)}
+                          </span>
+                        )}
+                      </div>
+                      {/* Info */}
+                      <div className="p-2.5">
+                        <p className="text-xs font-bold text-slime-text truncate">
+                          {slime.name}
+                        </p>
+                        {baseLabel && (
+                          <p className="text-[10px] text-slime-muted mt-0.5 capitalize">
+                            {baseLabel}
+                          </p>
+                        )}
+                        <p className="text-[10px] text-slime-muted mt-0.5">
+                          {slime.total_ratings}{" "}
+                          {slime.total_ratings === 1 ? "rating" : "ratings"}
+                        </p>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         {/* Upcoming drops */}
         {upcomingDrops.length > 0 && (
           <section className="px-4 mt-8">
-            <h2
-              className="text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2"
-              style={{ color: "#39FF14", fontFamily: "Montserrat, sans-serif" }}
+            <p
+              className="text-[11px] font-black tracking-widest uppercase mb-3"
+              style={{ color: "#00F0FF" }}
             >
-              {/* [Boyscout #35] Replaced 📦 emoji with package SVG */}
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M16.5 9.4l-9-5.19" />
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                <line x1="12" y1="22.08" x2="12" y2="12" />
-              </svg>
               Upcoming Drops
-            </h2>
+            </p>
             <div className="flex flex-col gap-3">
               {upcomingDrops.map((drop) => (
                 <Link
@@ -597,7 +690,7 @@ export default async function BrandPage({
                     {drop.cover_image_url ? (
                       <Image
                         src={drop.cover_image_url}
-                        alt={drop.drop_name}
+                        alt={drop.name}
                         fill
                         sizes="64px"
                         className="object-cover"
@@ -626,14 +719,14 @@ export default async function BrandPage({
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-slime-text line-clamp-1">
-                      {drop.drop_name}
+                      {drop.name}
                     </p>
                     <p className="text-xs text-slime-muted line-clamp-1">
                       {new Intl.DateTimeFormat("en-US", {
                         month: "short",
                         day: "numeric",
                         year: "numeric",
-                      }).format(new Date(drop.drop_date))}
+                      }).format(new Date(drop.drop_at))}
                     </p>
                   </div>
                 </Link>
@@ -644,27 +737,12 @@ export default async function BrandPage({
 
         {/* Community logs */}
         <section className="px-4 mt-8">
-          <h2
-            className="text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2"
-            style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
+          <p
+            className="text-[11px] font-black tracking-widest uppercase mb-3"
+            style={{ color: "#00F0FF" }}
           >
-            {/* [Boyscout #35] Replaced 📋 emoji with clipboard SVG */}
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M9 2h6a2 2 0 0 1 2 2v2H7V4a2 2 0 0 1 2-2z" />
-              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-            </svg>
             Recent Community Logs
-          </h2>
+          </p>
           {communityLogs.length === 0 ? (
             <p className="text-sm text-slime-muted text-center py-12">
               No public logs for {brand.name} yet. Be the first.
@@ -674,14 +752,16 @@ export default async function BrandPage({
               {communityLogs.map((row) => {
                 const profile = normaliseProfile(row.profiles_public);
                 const baseLabel = row.base_type
-                  ? (SLIME_BASE_TYPE_LABELS[
-                      row.base_type as SlimeBaseType
-                    ] ?? row.base_type.replace(/_/g, " "))
+                  ? (SLIME_BASE_TYPE_LABELS[row.base_type as SlimeBaseType] ??
+                    row.base_type.replace(/_/g, " "))
                   : null;
-                const sub = Array.isArray(row.subtype) ? row.subtype[0] : row.subtype;
-                const typeLabel = baseLabel && sub?.name
-                  ? `${baseLabel} \u00b7 ${sub.name}`
-                  : baseLabel;
+                const sub = Array.isArray(row.subtype)
+                  ? row.subtype[0]
+                  : row.subtype;
+                const typeLabel =
+                  baseLabel && sub?.name
+                    ? `${baseLabel} \u00b7 ${sub.name}`
+                    : baseLabel;
                 return (
                   <Link
                     key={row.id}
@@ -726,7 +806,7 @@ export default async function BrandPage({
                             color: "#39FF14",
                           }}
                         >
-                          {row.rating_overall}/5
+                          {row.rating_overall.toFixed(1)}
                         </span>
                       )}
                     </div>
