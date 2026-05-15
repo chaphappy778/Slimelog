@@ -89,7 +89,13 @@ export default function FeaturedDropsCarousel({
       ) : (
         <div
           className="flex gap-3 overflow-x-auto scrollbar-none px-4"
-          style={{ WebkitOverflowScrolling: "touch" }}
+          style={
+            {
+              WebkitOverflowScrolling: "touch",
+              msOverflowStyle: "none",
+              scrollbarWidth: "none",
+            } as React.CSSProperties
+          }
         >
           {filtered.map((drop) => {
             const brandInitial = (drop.brand_name?.[0] ?? "?").toUpperCase();
@@ -139,15 +145,16 @@ export default function FeaturedDropsCarousel({
                     )}
                   </div>
 
-                  {/* Brand logo overlapping cover/body */}
+                  {/* Brand logo — sits high in cover image, clear of body text */}
                   <div
                     className="absolute rounded-full overflow-hidden"
                     style={{
                       width: 44,
                       height: 44,
-                      bottom: 58,
+                      top: 98,
                       left: 12,
                       border: "2px solid #0F0018",
+                      zIndex: 2,
                     }}
                   >
                     {drop.logo_url ? (
@@ -172,7 +179,7 @@ export default function FeaturedDropsCarousel({
                     )}
                   </div>
 
-                  {/* Body */}
+                  {/* Body — paddingTop gives clearance below logo */}
                   <div style={{ padding: "12px", paddingTop: 28 }}>
                     <div className="flex items-center gap-1.5 mb-1">
                       <span

@@ -1,4 +1,5 @@
 // apps/web/components/discover/TypeCarousel.tsx
+// [T74-A polish v2] Cards match drop card size, no scrollbar
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -10,8 +11,8 @@ const SLIME_TYPES = Object.keys(SLIME_BASE_TYPE_LABELS) as SlimeBaseType[];
 function BlobIcon({ color }: { color: string }) {
   return (
     <svg
-      width="40"
-      height="32"
+      width="48"
+      height="38"
       viewBox="0 0 28 22"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
@@ -38,7 +39,13 @@ export default function TypeCarousel() {
   return (
     <div
       className="flex gap-3 overflow-x-auto scrollbar-none px-4"
-      style={{ WebkitOverflowScrolling: "touch" }}
+      style={
+        {
+          WebkitOverflowScrolling: "touch",
+          msOverflowStyle: "none",
+          scrollbarWidth: "none",
+        } as React.CSSProperties
+      }
     >
       {SLIME_TYPES.map((type) => {
         const colors = SLIME_BASE_TYPE_COLORS[type];
@@ -50,24 +57,29 @@ export default function TypeCarousel() {
             key={type}
             type="button"
             onClick={() => router.push(`/discover/type/${type}`)}
-            className="shrink-0 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all duration-150 active:scale-95 hover:scale-[1.02]"
+            className="shrink-0 rounded-2xl overflow-hidden transition-all duration-150 active:scale-95 hover:scale-[1.02]"
             style={{
               width: "calc(62vw - 16px)",
               maxWidth: 260,
-              height: 120,
               background: `linear-gradient(135deg, ${typeColor}26 0%, rgba(45,10,78,0.5) 100%)`,
               border: `1px solid ${typeColor}40`,
-              padding: "14px 12px",
             }}
             aria-label={`Browse ${label} slimes`}
           >
-            <BlobIcon color={typeColor} />
-            <span
-              className="text-sm font-bold text-center leading-tight"
-              style={{ color: typeColor }}
+            <div
+              className="w-full flex items-center justify-center"
+              style={{ height: 120 }}
             >
-              {label}
-            </span>
+              <BlobIcon color={typeColor} />
+            </div>
+            <div style={{ padding: "12px", paddingTop: 8 }}>
+              <p
+                className="text-sm font-bold text-left leading-tight"
+                style={{ color: typeColor }}
+              >
+                {label}
+              </p>
+            </div>
           </button>
         );
       })}

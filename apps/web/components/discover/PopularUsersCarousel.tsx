@@ -21,7 +21,13 @@ export default function PopularUsersCarousel({
   return (
     <div
       className="flex gap-4 overflow-x-auto scrollbar-none px-4"
-      style={{ WebkitOverflowScrolling: "touch" }}
+      style={
+        {
+          WebkitOverflowScrolling: "touch",
+          msOverflowStyle: "none",
+          scrollbarWidth: "none",
+        } as React.CSSProperties
+      }
     >
       {users.map((user) => {
         const initial = (user.username[0] ?? "?").toUpperCase();
@@ -36,7 +42,6 @@ export default function PopularUsersCarousel({
             style={{ width: 88 }}
             aria-label={`View profile: ${user.username}`}
           >
-            {/* Avatar circle */}
             <div
               className="rounded-full overflow-hidden relative"
               style={{
@@ -68,8 +73,6 @@ export default function PopularUsersCarousel({
                 </div>
               )}
             </div>
-
-            {/* Username */}
             <span
               className="text-[11px] font-semibold truncate text-center w-full"
               style={{ color: "rgba(245,245,245,0.5)" }}

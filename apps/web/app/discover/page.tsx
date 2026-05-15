@@ -154,7 +154,15 @@ export default async function DiscoverPage() {
 
           {/* Keywords row — lives below type carousel, inside same section */}
           {trendingTags.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto scrollbar-none px-4 mt-3">
+            <div
+              className="flex gap-2 overflow-x-auto scrollbar-none px-4 mt-4"
+              style={
+                {
+                  msOverflowStyle: "none",
+                  scrollbarWidth: "none",
+                } as React.CSSProperties
+              }
+            >
               {/* Search icon pill — routes to keyword search page */}
               <Link
                 href="/discover/keyword"

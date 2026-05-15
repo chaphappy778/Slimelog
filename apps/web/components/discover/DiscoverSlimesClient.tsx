@@ -3,8 +3,9 @@
 // apps/web/components/discover/DiscoverSlimesClient.tsx
 // [Change 2] — Subtype join support, drill-down filter row, type="button" sweep
 // [T72] — trendingTags prop + keyword pill row above Slime Type filter
+// [T74-A polish] — Condensed filter bar: single row with sort + filter dropdown
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import Link from "next/link";
 import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
 import type { SlimeBaseType } from "@/lib/types";
@@ -107,7 +108,6 @@ function TopRatedCard({ slime, rank }: { slime: TopRatedSlime; rank: number }) {
       }}
     >
       <RankBadge rank={rank} />
-
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-slime-text truncate leading-tight">
           {slime.name ?? "Unnamed slime"}
@@ -127,7 +127,6 @@ function TopRatedCard({ slime, rank }: { slime: TopRatedSlime; rank: number }) {
         )}
         <RatingBar avg={slime.avg_overall} />
       </div>
-
       <div className="text-right shrink-0">
         <p className="text-xs text-slime-muted">{slime.total_ratings ?? 0}</p>
         <p className="text-[10px] text-slime-muted/60">ratings</p>
@@ -149,66 +148,255 @@ function TopRatedCard({ slime, rank }: { slime: TopRatedSlime; rank: number }) {
   return cardContent;
 }
 
+type SortMode = "top_rated" | "most_reviewed";
+
 const MIN_RATING_OPTIONS: { label: string; value: number | null }[] = [
-  { label: "Any", value: null },
+  { label: "Any rating", value: null },
   { label: "3+", value: 3 },
   { label: "4+", value: 4 },
   { label: "4.5+", value: 4.5 },
 ];
 
-type SortMode = "top_rated" | "most_reviewed";
+// ─── Compact filter bar ───────────────────────────────────────────────────────
 
-const SORT_OPTIONS: { label: string; value: SortMode }[] = [
-  { label: "Top Rated", value: "top_rated" },
-  { label: "Most Reviewed", value: "most_reviewed" },
-];
-
-function SegmentedControl<T extends string>({
-  options,
-  value,
-  onChange,
+function FilterBar({
+  sortMode,
+  onSortChange,
+  minRating,
+  onMinRatingChange,
+  activeType,
+  onTypeChange,
+  availableTypes,
 }: {
-  options: { label: string; value: T }[];
-  value: T;
-  onChange: (v: T) => void;
+  sortMode: SortMode;
+  onSortChange: (v: SortMode) => void;
+  minRating: number | null;
+  onMinRatingChange: (v: number | null) => void;
+  activeType: string;
+  onTypeChange: (v: string) => void;
+  availableTypes: string[];
 }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const hasActiveFilters = minRating !== null || activeType !== "all";
+  const minRatingLabel =
+    MIN_RATING_OPTIONS.find((o) => o.value === minRating)?.label ??
+    "Any rating";
+  const typeLabel =
+    activeType === "all"
+      ? "All types"
+      : (SLIME_BASE_TYPE_LABELS[activeType as SlimeBaseType] ?? activeType);
+
   return (
-    <div
-      className="inline-flex rounded-xl overflow-hidden"
-      style={{ border: "1px solid rgba(45,10,78,0.5)" }}
-    >
-      {options.map((opt) => {
-        const active = opt.value === value;
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => onChange(opt.value)}
-            className="px-3 py-1.5 text-xs font-semibold transition-colors"
-            style={{
-              background: active
-                ? "rgba(0,240,255,0.15)"
-                : "rgba(45,10,78,0.3)",
-              color: active ? "#00F0FF" : "rgba(245,245,245,0.4)",
-              borderRight: "1px solid rgba(45,10,78,0.5)",
-            }}
-          >
-            {opt.label}
-          </button>
-        );
-      })}
+    <div className="flex items-center gap-2 mb-4 relative" ref={ref}>
+      {/* Sort segmented control */}
+      <div
+        className="inline-flex rounded-xl overflow-hidden shrink-0"
+        style={{ border: "1px solid rgba(45,10,78,0.5)" }}
+      >
+        {(["top_rated", "most_reviewed"] as SortMode[]).map((mode) => {
+          const active = sortMode === mode;
+          return (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => onSortChange(mode)}
+              className="px-3 py-1.5 text-xs font-semibold transition-colors"
+              style={{
+                background: active
+                  ? "rgba(0,240,255,0.15)"
+                  : "rgba(45,10,78,0.3)",
+                color: active ? "#00F0FF" : "rgba(245,245,245,0.4)",
+                borderRight: "1px solid rgba(45,10,78,0.5)",
+              }}
+            >
+              {mode === "top_rated" ? "Top Rated" : "Most Reviewed"}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Filter pill — opens dropdown */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-colors"
+        style={{
+          background: hasActiveFilters
+            ? "rgba(0,240,255,0.12)"
+            : "rgba(45,10,78,0.3)",
+          border: hasActiveFilters
+            ? "1px solid rgba(0,240,255,0.35)"
+            : "1px solid rgba(45,10,78,0.5)",
+          color: hasActiveFilters ? "#00F0FF" : "rgba(245,245,245,0.4)",
+        }}
+        aria-expanded={open}
+      >
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <line x1="4" y1="6" x2="20" y2="6" />
+          <line x1="8" y1="12" x2="16" y2="12" />
+          <line x1="11" y1="18" x2="13" y2="18" />
+        </svg>
+        Filter
+        {hasActiveFilters && (
+          <span
+            className="w-1.5 h-1.5 rounded-full shrink-0"
+            style={{ background: "#00F0FF" }}
+          />
+        )}
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div
+          className="absolute top-full left-0 mt-2 z-50 rounded-2xl p-4 flex flex-col gap-4"
+          style={{
+            background: "#0F0018",
+            border: "1px solid rgba(45,10,78,0.8)",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+            minWidth: 220,
+          }}
+        >
+          {/* Min rating */}
+          <div>
+            <p
+              className="text-[10px] font-bold uppercase tracking-wider mb-2"
+              style={{ color: "rgba(245,245,245,0.35)" }}
+            >
+              Min Rating
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {MIN_RATING_OPTIONS.map((opt) => {
+                const active = minRating === opt.value;
+                return (
+                  <button
+                    key={String(opt.value)}
+                    type="button"
+                    onClick={() => onMinRatingChange(opt.value)}
+                    className="px-2.5 py-1 rounded-full text-xs font-semibold transition-colors"
+                    style={{
+                      background: active
+                        ? "rgba(0,240,255,0.15)"
+                        : "rgba(45,10,78,0.4)",
+                      color: active ? "#00F0FF" : "rgba(245,245,245,0.45)",
+                      border: active
+                        ? "1px solid rgba(0,240,255,0.4)"
+                        : "1px solid rgba(45,10,78,0.5)",
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Type filter */}
+          {availableTypes.length > 0 && (
+            <div>
+              <p
+                className="text-[10px] font-bold uppercase tracking-wider mb-2"
+                style={{ color: "rgba(245,245,245,0.35)" }}
+              >
+                Slime Type
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onTypeChange("all")}
+                  className="px-2.5 py-1 rounded-full text-xs font-semibold transition-colors"
+                  style={{
+                    background:
+                      activeType === "all"
+                        ? "rgba(0,240,255,0.15)"
+                        : "rgba(45,10,78,0.4)",
+                    color:
+                      activeType === "all"
+                        ? "#00F0FF"
+                        : "rgba(245,245,245,0.45)",
+                    border:
+                      activeType === "all"
+                        ? "1px solid rgba(0,240,255,0.4)"
+                        : "1px solid rgba(45,10,78,0.5)",
+                  }}
+                >
+                  All
+                </button>
+                {availableTypes.map((type) => {
+                  const active = activeType === type;
+                  const label =
+                    SLIME_BASE_TYPE_LABELS[type as SlimeBaseType] ??
+                    type.replace(/_/g, " ");
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => onTypeChange(type)}
+                      className="px-2.5 py-1 rounded-full text-xs font-semibold transition-colors"
+                      style={{
+                        background: active
+                          ? "rgba(0,240,255,0.15)"
+                          : "rgba(45,10,78,0.4)",
+                        color: active ? "#00F0FF" : "rgba(245,245,245,0.45)",
+                        border: active
+                          ? "1px solid rgba(0,240,255,0.4)"
+                          : "1px solid rgba(45,10,78,0.5)",
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Clear */}
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={() => {
+                onMinRatingChange(null);
+                onTypeChange("all");
+                setOpen(false);
+              }}
+              className="text-xs font-semibold text-center py-1.5 rounded-lg transition-colors"
+              style={{
+                color: "#CC44FF",
+                background: "rgba(204,68,255,0.08)",
+                border: "1px solid rgba(204,68,255,0.2)",
+              }}
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
-
-const sectionLabelStyle: React.CSSProperties = {
-  fontSize: "10px",
-  fontWeight: 700,
-  letterSpacing: "0.08em",
-  textTransform: "uppercase",
-  color: "rgba(245,245,245,0.35)",
-  marginBottom: "6px",
-};
 
 export default function DiscoverSlimesClient({
   initialSlimes,
@@ -221,9 +409,6 @@ export default function DiscoverSlimesClient({
   const [minRating, setMinRating] = useState<number | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("top_rated");
   const [activeSubtype, setActiveSubtype] = useState<string | null>(null);
-
-  // [T72] Keyword tag filter state — UI only for now
-  const [activeTag, setActiveTag] = useState<string | null>(null);
 
   const availableTypes = useMemo(() => {
     const seen = new Set<string>();
@@ -261,9 +446,6 @@ export default function DiscoverSlimesClient({
       );
     }
 
-    // T74-keywords: wire activeTag to server query
-    // (tag filtering requires join through log_tags — deferred to T74 dispatch)
-
     if (sortMode === "top_rated") {
       result.sort((a, b) => (b.avg_overall ?? 0) - (a.avg_overall ?? 0));
     } else {
@@ -275,165 +457,66 @@ export default function DiscoverSlimesClient({
 
   return (
     <>
-      {/* [T72] Trending keywords pill row — UI only, server wiring deferred to T74 */}
-      {trendingTags.length > 0 && (
-        <div className="mb-4">
-          <p style={sectionLabelStyle}>Keywords</p>
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-            {trendingTags.map((tag) => {
-              const active = activeTag === tag.id;
-              return (
-                <button
-                  key={tag.id}
-                  type="button"
-                  onClick={() => setActiveTag(active ? null : tag.id)}
-                  className="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
-                  style={{
-                    background: active
-                      ? "rgba(57,255,20,0.12)"
-                      : "rgba(45,10,78,0.3)",
-                    color: active ? "#39FF14" : "rgba(245,245,245,0.4)",
-                    border: active
-                      ? "1px solid rgba(57,255,20,0.35)"
-                      : "1px solid rgba(45,10,78,0.5)",
-                  }}
-                >
-                  {tag.name}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* Compact filter bar */}
+      <FilterBar
+        sortMode={sortMode}
+        onSortChange={setSortMode}
+        minRating={minRating}
+        onMinRatingChange={setMinRating}
+        activeType={activeType}
+        onTypeChange={(t) => {
+          setActiveType(t);
+          setActiveSubtype(null);
+        }}
+        availableTypes={availableTypes}
+      />
 
-      {/* Filter A — Slime Type */}
-      <div className="mb-4">
-        <p style={sectionLabelStyle}>Slime Type</p>
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+      {/* Subtype drill-down — only when a type is selected and subtypes exist */}
+      {availableSubtypes.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto scrollbar-none mb-4">
           <button
             type="button"
-            onClick={() => {
-              setActiveType("all");
-              setActiveSubtype(null);
-            }}
+            onClick={() => setActiveSubtype(null)}
             className="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
             style={{
               background:
-                activeType === "all"
-                  ? "rgba(0,240,255,0.15)"
+                activeSubtype === null
+                  ? "rgba(57,255,20,0.12)"
                   : "rgba(45,10,78,0.3)",
-              color: activeType === "all" ? "#00F0FF" : "rgba(245,245,245,0.4)",
+              color:
+                activeSubtype === null ? "#39FF14" : "rgba(245,245,245,0.4)",
               border:
-                activeType === "all"
-                  ? "1px solid rgba(0,240,255,0.4)"
+                activeSubtype === null
+                  ? "1px solid rgba(57,255,20,0.35)"
                   : "1px solid rgba(45,10,78,0.5)",
             }}
           >
             All
           </button>
-          {availableTypes.map((type) => {
-            const active = activeType === type;
-            const label =
-              SLIME_BASE_TYPE_LABELS[type as SlimeBaseType] ??
-              type.replace(/_/g, " ");
+          {availableSubtypes.map(({ id, name }) => {
+            const active = activeSubtype === id;
             return (
               <button
-                key={type}
+                key={id}
                 type="button"
-                onClick={() => {
-                  setActiveType(type);
-                  setActiveSubtype(null);
-                }}
+                onClick={() => setActiveSubtype(active ? null : id)}
                 className="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
                 style={{
                   background: active
-                    ? "rgba(0,240,255,0.15)"
+                    ? "rgba(57,255,20,0.12)"
                     : "rgba(45,10,78,0.3)",
-                  color: active ? "#00F0FF" : "rgba(245,245,245,0.4)",
+                  color: active ? "#39FF14" : "rgba(245,245,245,0.4)",
                   border: active
-                    ? "1px solid rgba(0,240,255,0.4)"
+                    ? "1px solid rgba(57,255,20,0.35)"
                     : "1px solid rgba(45,10,78,0.5)",
                 }}
               >
-                {label}
+                {name}
               </button>
             );
           })}
         </div>
-      </div>
-
-      {/* Subtype drill-down row */}
-      {availableSubtypes.length > 0 && (
-        <div className="mb-4">
-          <p style={sectionLabelStyle}>Subtype</p>
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-            <button
-              type="button"
-              onClick={() => setActiveSubtype(null)}
-              className="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
-              style={{
-                background:
-                  activeSubtype === null
-                    ? "rgba(57,255,20,0.12)"
-                    : "rgba(45,10,78,0.3)",
-                color:
-                  activeSubtype === null ? "#39FF14" : "rgba(245,245,245,0.4)",
-                border:
-                  activeSubtype === null
-                    ? "1px solid rgba(57,255,20,0.35)"
-                    : "1px solid rgba(45,10,78,0.5)",
-              }}
-            >
-              All
-            </button>
-            {availableSubtypes.map(({ id, name }) => {
-              const active = activeSubtype === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setActiveSubtype(active ? null : id)}
-                  className="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
-                  style={{
-                    background: active
-                      ? "rgba(57,255,20,0.12)"
-                      : "rgba(45,10,78,0.3)",
-                    color: active ? "#39FF14" : "rgba(245,245,245,0.4)",
-                    border: active
-                      ? "1px solid rgba(57,255,20,0.35)"
-                      : "1px solid rgba(45,10,78,0.5)",
-                  }}
-                >
-                  {name}
-                </button>
-              );
-            })}
-          </div>
-        </div>
       )}
-
-      {/* Filter B — Minimum Rating */}
-      <div className="mb-4">
-        <p style={sectionLabelStyle}>Minimum Rating</p>
-        <SegmentedControl
-          options={MIN_RATING_OPTIONS.map((o) => ({
-            label: o.label,
-            value: String(o.value ?? "null") as string,
-          }))}
-          value={String(minRating ?? "null")}
-          onChange={(v) => setMinRating(v === "null" ? null : parseFloat(v))}
-        />
-      </div>
-
-      {/* Filter C — Sort By */}
-      <div className="mb-5">
-        <p style={sectionLabelStyle}>Sort By</p>
-        <SegmentedControl
-          options={SORT_OPTIONS}
-          value={sortMode}
-          onChange={setSortMode}
-        />
-      </div>
 
       {/* Results */}
       {filtered.length === 0 ? (
