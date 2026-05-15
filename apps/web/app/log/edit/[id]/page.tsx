@@ -3,6 +3,7 @@
 // Updated: Bundle T72+T73+T75 — scent_strength pill picker, KeywordTagInput,
 // removed scent text input, removed rating_scent from RATING_FIELDS,
 // removed color_description, SVG checkmark in StepIndicator
+// Updated: [T64] purchase_price fix, [scent_notes]
 
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useParams } from "next/navigation";
@@ -30,7 +31,6 @@ type RatingKey =
   | "rating_sensory_fit"
   | "rating_overall";
 
-// [Change 1] Updated labels: Sound → Sound / ASMR, Drizzle → Aesthetic, Sensory Fit → Quality
 // [T75] Removed rating_scent entry
 const RATING_FIELDS: { key: RatingKey; label: string }[] = [
   { key: "rating_texture", label: "Texture" },
@@ -67,9 +67,7 @@ const COLOR_SWATCHES: ColorSwatch[] = [
 
 const KNOWN_COLOR_VALUES = COLOR_SWATCHES.map((s) => s.value);
 
-// [Change 2] Removed order_date, ship_date, received_date from FormState
-// [G2 Change 3] slime_type → base_type; added subtype_id and subtype_name
-// [T72+T73+T75] removed scent, color_description, rating_scent; added scent_strength, keywords
+// [Change 2 — scent_notes] Added scent_notes: string to FormState
 interface FormState {
   slime_name: string;
   brand_name_raw: string;
@@ -79,6 +77,7 @@ interface FormState {
   subtype_id: string | null;
   subtype_name: string;
   scent_strength: ScentStrength | null;
+  scent_notes: string;
   keywords: string[];
   purchase_price: string;
   selected_color_values: string[];
@@ -143,7 +142,6 @@ function StarRating({
 
 // ─── Step Indicator ───────────────────────────────────────────────────────────
 
-// [T72+T73+T75] Replaced ✓ glyph with inline SVG checkmark
 function StepIndicator({ step }: { step: Step }) {
   return (
     <div className="flex items-center justify-center gap-2 mb-8">
@@ -226,8 +224,6 @@ const inputCls =
 
 // ─── Color Picker ─────────────────────────────────────────────────────────────
 
-// [T72+T73+T75] Removed description + onDescriptionChange props
-// [T72+T73+T75] Replaced ✓ glyph with inline SVG checkmark
 function ColorPicker({
   selectedValues,
   onToggle,
@@ -327,9 +323,7 @@ function EditLogPageInner() {
   // [Bundle E] Privacy toggle state
   const [isPrivate, setIsPrivate] = useState(false);
 
-  // [Change 2] Removed order_date, ship_date, received_date from initial state
-  // [G2 Change 3] slime_type → base_type; added subtype_id and subtype_name
-  // [T72+T73+T75] removed scent, color_description, rating_scent; added scent_strength, keywords
+  // [Change 3 — scent_notes] Added scent_notes: "" to initial state
   const [form, setForm] = useState<FormState>({
     slime_name: "",
     brand_name_raw: "",
@@ -339,6 +333,7 @@ function EditLogPageInner() {
     subtype_id: null,
     subtype_name: "",
     scent_strength: null,
+    scent_notes: "",
     keywords: [],
     purchase_price: "",
     selected_color_values: [],
@@ -371,7 +366,6 @@ function EditLogPageInner() {
       }
       setUserId(user.id);
 
-      // [G2 Change H2] Join subtypes(name)
       const { data, error } = await supabase
         .from("collection_logs")
         .select("*, subtype:subtypes(name)")
@@ -385,8 +379,6 @@ function EditLogPageInner() {
         return;
       }
 
-      // Split stored colors into known swatches vs free-text
-      // [T72+T73+T75] freeText no longer used in setForm
       const storedColors: string[] = data.colors ?? [];
       const knownSelected = storedColors.filter((c) =>
         KNOWN_COLOR_VALUES.includes(c),
@@ -405,8 +397,12 @@ function EditLogPageInner() {
         subtype_id: data.subtype_id ?? null,
         subtype_name: subtypeName,
         scent_strength: (data.scent_strength as ScentStrength) ?? null,
-        keywords: [], // hydrated below from log_tags
-        purchase_price: data.cost_paid != null ? String(data.cost_paid) : "",
+        // [Change 4 — scent_notes] Hydrate from DB
+        scent_notes: data.scent_notes ?? "",
+        keywords: [],
+        // [Change 1 — T64] Fix: use purchase_price not cost_paid
+        purchase_price:
+          data.purchase_price != null ? String(data.purchase_price) : "",
         selected_color_values: knownSelected,
         image_url: data.image_url ?? null,
         rating_texture: data.rating_texture ?? null,
@@ -470,8 +466,7 @@ function EditLogPageInner() {
           ? ["clear"]
           : buildColorsArray(form.selected_color_values);
 
-      // [G2 Change H3] base_type + subtype_id on payload (raw .update() pattern preserved per T63)
-      // [T72+T73+T75] removed scent + rating_scent; added scent_strength
+      // [Change 6 — scent_notes] Added scent_notes to updates payload
       const updates: Partial<LogSlimeInput> & { colors?: string[] } = {
         slime_name: form.slime_name.trim() || undefined,
         brand_name_raw: form.brand_name_raw.trim() || undefined,
@@ -494,6 +489,7 @@ function EditLogPageInner() {
         rating_sensory_fit: form.rating_sensory_fit ?? undefined,
         rating_overall: form.rating_overall ?? undefined,
         notes: form.notes.trim() || undefined,
+        scent_notes: form.scent_notes.trim() || undefined,
         is_public: !isPrivate,
       };
 
@@ -637,7 +633,7 @@ function EditLogPageInner() {
                 />
               </Field>
 
-              {/* [G2 Change 5/6] Base Type selector — clears subtype on change */}
+              {/* [G2] Base Type selector — clears subtype on change */}
               <Field label="Base Type *">
                 <select
                   className={inputCls}
@@ -666,7 +662,7 @@ function EditLogPageInner() {
                 </select>
               </Field>
 
-              {/* [G2 Change 7] Subtype autocomplete (optional) */}
+              {/* [G2] Subtype autocomplete (optional) */}
               <Field label="Subtype" optional>
                 <SubtypeAutocomplete
                   baseType={form.base_type}
@@ -765,6 +761,20 @@ function EditLogPageInner() {
                     );
                   })}
                 </div>
+              </Field>
+
+              {/* [Change 5 — scent_notes] Scent Description textarea below Scent Strength */}
+              <Field label="Scent Description" optional>
+                <textarea
+                  className={`${inputCls} resize-none h-20`}
+                  placeholder="e.g. warm vanilla with a hint of brown sugar"
+                  maxLength={100}
+                  value={form.scent_notes}
+                  onChange={(e) => set("scent_notes", e.target.value)}
+                />
+                <p className="text-right text-[11px] text-slime-muted">
+                  {form.scent_notes.length}/100
+                </p>
               </Field>
 
               <Field label="Purchase Price ($)" optional>
@@ -988,6 +998,15 @@ function EditLogPageInner() {
                     Scent:{" "}
                     <span className="text-slime-accent">
                       {SCENT_STRENGTH_LABELS[form.scent_strength]}
+                    </span>
+                  </p>
+                )}
+                {/* [Change 7 — scent_notes] Summary line */}
+                {form.scent_notes.trim() && (
+                  <p>
+                    Scent notes:{" "}
+                    <span className="text-slime-accent">
+                      {form.scent_notes.trim()}
                     </span>
                   </p>
                 )}

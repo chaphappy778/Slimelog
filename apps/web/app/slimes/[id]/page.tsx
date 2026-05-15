@@ -27,10 +27,13 @@ interface OwnerProfile {
   avatar_url: string | null;
 }
 
+// [Change 1 — scent_notes] Added scent_notes to SlimeLogRecord
 type SlimeLogRecord = CollectionLog & {
   image_url: string | null;
   subtype: { name: string } | null;
   scent_strength: string | null;
+  scent_notes: string | null;
+  purchase_price: number | null;
 };
 
 // ─── Server-side Supabase ─────────────────────────────────────────────────────
@@ -44,6 +47,7 @@ async function getSupabase() {
   );
 }
 
+// [Change 2 — scent_notes] select("*") already includes scent_notes — no query change needed
 async function fetchLog(id: string): Promise<SlimeLogRecord | null> {
   const supabase = await getSupabase();
   const { data } = await supabase
@@ -341,21 +345,9 @@ export default async function SlimePage({
             ) : null}
           </div>
 
-          {/* [T72+T73] Scent strength + keyword pills */}
-          {(log.scent_strength || keywords.length > 0) && (
+          {/* [Change 4 — scent_notes] Keywords pills only (scent strength moved to ratings grid) */}
+          {keywords.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {log.scent_strength && (
-                <span
-                  className="px-3 py-1 rounded-full text-xs font-semibold border"
-                  style={{
-                    background: "rgba(57,255,20,0.1)",
-                    color: "#39FF14",
-                    borderColor: "rgba(57,255,20,0.3)",
-                  }}
-                >
-                  {SCENT_STRENGTH_LABELS[log.scent_strength as ScentStrength]}
-                </span>
-              )}
               {keywords.map((kw) => (
                 <span
                   key={kw}
@@ -476,8 +468,8 @@ export default async function SlimePage({
             )}
           </div>
 
-          {/* Dimension grid */}
-          {activeDimensions.length > 0 && (
+          {/* [Change 4 — scent_notes] Dimension grid — 5 numeric dims + scent strength as 6th item */}
+          {(activeDimensions.length > 0 || log.scent_strength) && (
             <div
               className="grid grid-cols-2 gap-x-4 gap-y-2.5 p-4 rounded-xl border"
               style={{
@@ -512,6 +504,34 @@ export default async function SlimePage({
                   </div>
                 </div>
               ))}
+              {log.scent_strength && (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wider text-slime-muted font-semibold">
+                    Scent
+                  </span>
+                  <span
+                    className="text-xs font-bold"
+                    style={{ color: "#39FF14" }}
+                  >
+                    {SCENT_STRENGTH_LABELS[log.scent_strength as ScentStrength]}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* [Change 5 — scent_notes] Scent notes block between ratings and notes */}
+          {log.scent_notes && (
+            <div className="flex flex-col gap-1.5">
+              <p
+                className="text-[11px] font-black tracking-widest uppercase"
+                style={{ color: "#00F0FF" }}
+              >
+                Scent
+              </p>
+              <p className="text-sm leading-relaxed text-slime-text/80">
+                {log.scent_notes}
+              </p>
             </div>
           )}
 
@@ -540,7 +560,8 @@ export default async function SlimePage({
                 }).format(new Date(log.created_at))}
               </span>
             )}
-            {typeof log.cost_paid === "number" && (
+            {/* [Change 3 — T64] Fix: use purchase_price not cost_paid */}
+            {typeof log.purchase_price === "number" && (
               <span
                 className="px-2.5 py-1 rounded-full text-[11px]"
                 style={{
@@ -551,7 +572,7 @@ export default async function SlimePage({
                 {new Intl.NumberFormat("en-US", {
                   style: "currency",
                   currency: "USD",
-                }).format(log.cost_paid)}
+                }).format(log.purchase_price)}
               </span>
             )}
             {log.purchased_from && (

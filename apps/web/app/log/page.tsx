@@ -3,6 +3,7 @@
 // Updated: Bundle T72+T73+T75 — scent_strength pill picker, KeywordTagInput,
 // removed scent text input, removed rating_scent from RATING_FIELDS,
 // removed color_description, SVG checkmark in StepIndicator
+// Updated: [scent_notes]
 
 import { useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -31,7 +32,6 @@ type RatingKey =
   | "rating_sensory_fit"
   | "rating_overall";
 
-// [Change 1] Updated labels: Sound → Sound / ASMR, Drizzle → Aesthetic, Sensory Fit → Quality
 // [T75] Removed rating_scent entry
 const RATING_FIELDS: { key: RatingKey; label: string }[] = [
   { key: "rating_texture", label: "Texture" },
@@ -66,9 +66,7 @@ const COLOR_SWATCHES: ColorSwatch[] = [
   { label: "Black", hex: "#1A1A1A", value: "black" },
 ];
 
-// [Change 2] Removed order_date, ship_date, received_date from FormState
-// [G2 Change 3] slime_type → base_type; added subtype_id and subtype_name
-// [T72+T73+T75] removed scent, color_description, rating_scent; added scent_strength, keywords
+// [Change 1 — scent_notes] Added scent_notes: string to FormState
 interface FormState {
   slime_name: string;
   brand_name_raw: string;
@@ -78,6 +76,7 @@ interface FormState {
   subtype_id: string | null;
   subtype_name: string;
   scent_strength: ScentStrength | null;
+  scent_notes: string;
   keywords: string[];
   purchase_price: string;
   selected_color_values: string[];
@@ -142,7 +141,6 @@ function StarRating({
 
 // ─── Step Indicator ───────────────────────────────────────────────────────────
 
-// [T72+T73+T75] Replaced ✓ glyph with inline SVG checkmark
 function StepIndicator({ step }: { step: Step }) {
   return (
     <div className="flex items-center justify-center gap-2 mb-8">
@@ -225,8 +223,6 @@ const inputCls =
 
 // ─── Color Picker ─────────────────────────────────────────────────────────────
 
-// [T72+T73+T75] Removed description + onDescriptionChange props
-// [T72+T73+T75] Replaced ✓ glyph with inline SVG checkmark
 function ColorPicker({
   selectedValues,
   onToggle,
@@ -332,9 +328,7 @@ function LogPageInner() {
     });
   }
 
-  // [Change 2] Removed order_date, ship_date, received_date from initial state
-  // [G2 Change 4] slime_type → base_type; added subtype_id and subtype_name
-  // [T72+T73+T75] removed scent, color_description, rating_scent; added scent_strength, keywords
+  // [Change 2 — scent_notes] Added scent_notes: "" to initial state
   const [form, setForm] = useState<FormState>({
     slime_name: searchParams.get("slime_name") ?? "",
     brand_name_raw: searchParams.get("brand") ?? "",
@@ -344,6 +338,7 @@ function LogPageInner() {
     subtype_id: null,
     subtype_name: "",
     scent_strength: null,
+    scent_notes: "",
     keywords: [],
     purchase_price: "",
     selected_color_values: [],
@@ -417,6 +412,8 @@ function LogPageInner() {
         rating_sensory_fit: form.rating_sensory_fit ?? undefined,
         rating_overall: form.rating_overall ?? undefined,
         notes: form.notes.trim() || undefined,
+        // [Change 4 — scent_notes]
+        scent_notes: form.scent_notes.trim() || undefined,
         is_public: !isPrivate,
       };
       await logSlime(input);
@@ -500,7 +497,7 @@ function LogPageInner() {
                 />
               </Field>
 
-              {/* [G2 Change 5/6] Base Type selector — clears subtype on change */}
+              {/* [G2] Base Type selector — clears subtype on change */}
               <Field label="Base Type *">
                 <select
                   className={inputCls}
@@ -529,7 +526,7 @@ function LogPageInner() {
                 </select>
               </Field>
 
-              {/* [G2 Change 7] Subtype autocomplete (optional) */}
+              {/* [G2] Subtype autocomplete (optional) */}
               <Field label="Subtype" optional>
                 <SubtypeAutocomplete
                   baseType={form.base_type}
@@ -600,7 +597,7 @@ function LogPageInner() {
                 )}
               </Field>
 
-              {/* [T73] Scent Strength 4-pill picker replaces scent text input */}
+              {/* [T73] Scent Strength 4-pill picker */}
               <Field label="Scent Strength" optional>
                 <div className="flex gap-2 flex-wrap">
                   {(
@@ -632,6 +629,20 @@ function LogPageInner() {
                 </div>
               </Field>
 
+              {/* [Change 3 — scent_notes] Scent Description textarea below Scent Strength */}
+              <Field label="Scent Description" optional>
+                <textarea
+                  className={`${inputCls} resize-none h-20`}
+                  placeholder="e.g. warm vanilla with a hint of brown sugar"
+                  maxLength={100}
+                  value={form.scent_notes}
+                  onChange={(e) => set("scent_notes", e.target.value)}
+                />
+                <p className="text-right text-[11px] text-slime-muted">
+                  {form.scent_notes.length}/100
+                </p>
+              </Field>
+
               <Field label="Purchase Price ($)" optional>
                 <input
                   className={inputCls}
@@ -644,9 +655,7 @@ function LogPageInner() {
                 />
               </Field>
 
-              {/* [Change 2] Shipping Dates section removed entirely */}
-
-              {/* [G2 Change 10] base_type === "clear" check */}
+              {/* [G2] base_type === "clear" check */}
               <Field label="Colors" optional>
                 {form.base_type === "clear" ? (
                   <p
@@ -857,6 +866,15 @@ function LogPageInner() {
                     Scent:{" "}
                     <span className="text-slime-accent">
                       {SCENT_STRENGTH_LABELS[form.scent_strength]}
+                    </span>
+                  </p>
+                )}
+                {/* [Change 5 — scent_notes] Summary line */}
+                {form.scent_notes.trim() && (
+                  <p>
+                    Scent notes:{" "}
+                    <span className="text-slime-accent">
+                      {form.scent_notes.trim()}
                     </span>
                   </p>
                 )}

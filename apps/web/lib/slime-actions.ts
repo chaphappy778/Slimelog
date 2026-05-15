@@ -3,6 +3,7 @@
 // Every insert into collection_logs now requires an authenticated session.
 // user_id is read from the validated session — never trusted from the client.
 // Updated: Bundle T72+T73+T75 — keywords + scent_strength added; scent + rating_scent removed
+// Updated: [scent_notes] + [T64] purchase_price fix
 
 "use server";
 
@@ -41,6 +42,8 @@ export interface LogSlimeInput {
 
   // Details
   scent_strength?: ScentStrength | null;
+  // [Change 1 — scent_notes]
+  scent_notes?: string | null;
   keywords?: string[];
   colors?: string[];
   image_url?: string;
@@ -110,6 +113,8 @@ export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
       rating_sensory_fit: input.rating_sensory_fit ?? null,
       rating_overall: input.rating_overall ?? null,
       scent_strength: input.scent_strength ?? null,
+      // [Change 2 — scent_notes]
+      scent_notes: input.scent_notes ?? null,
       colors: input.colors ?? null,
       image_url: input.image_url ?? null,
       notes: input.notes ?? null,
@@ -206,6 +211,10 @@ export async function updateSlimeLog(
       ...(input.scent_strength !== undefined && {
         scent_strength: input.scent_strength,
       }),
+      // [Change 3 — scent_notes]
+      ...(input.scent_notes !== undefined && {
+        scent_notes: input.scent_notes,
+      }),
       ...(input.notes !== undefined && { notes: input.notes }),
       ...(input.purchase_price !== undefined && {
         purchase_price: input.purchase_price,
@@ -282,7 +291,7 @@ export async function getUserCollectionLogs() {
       in_collection, in_wishlist,
       rating_overall, rating_texture,
       rating_sound, rating_drizzle, rating_creativity, rating_sensory_fit,
-      scent_strength,
+      scent_strength, scent_notes,
       notes, purchase_price,
       colors, image_url,
       created_at, updated_at,
