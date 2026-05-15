@@ -3,24 +3,15 @@
 
 import { useState, useMemo } from "react";
 import { BrandCard } from "@/components/BrandCard";
+import type { Brand } from "@/lib/types";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-export interface Brand {
-  id: string;
-  name: string;
-  slug: string;
-  location: string | null;
-  verification_tier: string | null;
-  restock_schedule: string | null;
-  total_logs: number;
-  avg_shipping: number | null;
-  logo_url: string | null;
-  owner_name: string | null;
-}
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface BrandsClientProps {
-  brands: Brand[];
+  featuredBrand: Brand | null;
+  popularBrands: Brand[];
+  verifiedBrands: Brand[];
+  communityBrands: Brand[];
 }
 
 // ─── Toggle Row ───────────────────────────────────────────────────────────────
@@ -104,7 +95,7 @@ function FilterPill({
         className="hover:opacity-70 transition-opacity ml-0.5"
         aria-label={`Remove ${label} filter`}
       >
-        ×
+        &times;
       </button>
     </span>
   );
@@ -112,7 +103,13 @@ function FilterPill({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function BrandsClient({ brands }: BrandsClientProps) {
+export default function BrandsClient({
+  featuredBrand,
+  popularBrands,
+  verifiedBrands,
+  communityBrands,
+}: BrandsClientProps) {
+  // [Change 3 — Brands Redesign D1] Props updated; full section render in Dispatch 2
   const [searchQuery, setSearchQuery] = useState("");
   const [filterVerified, setFilterVerified] = useState(false);
   const [filterHasRestock, setFilterHasRestock] = useState(false);
@@ -124,6 +121,11 @@ export default function BrandsClient({ brands }: BrandsClientProps) {
   const [pendingHasRestock, setPendingHasRestock] = useState(false);
   const [pendingMostLogs, setPendingMostLogs] = useState(false);
   const [pendingTopRated, setPendingTopRated] = useState(false);
+
+  // Suppress unused-variable warnings until Dispatch 2 uses these props
+  void featuredBrand;
+  void popularBrands;
+  void verifiedBrands;
 
   const activeFilterCount = [
     filterVerified,
@@ -161,7 +163,7 @@ export default function BrandsClient({ brands }: BrandsClientProps) {
   }
 
   const filtered = useMemo(() => {
-    let list = [...brands];
+    let list = [...communityBrands];
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -175,11 +177,13 @@ export default function BrandsClient({ brands }: BrandsClientProps) {
     if (filterMostLogs)
       list.sort((a, b) => (b.total_logs ?? 0) - (a.total_logs ?? 0));
     if (filterTopRated && !filterMostLogs)
-      list.sort((a, b) => (b.avg_shipping ?? 0) - (a.avg_shipping ?? 0));
+      list.sort(
+        (a, b) => (b.avg_slime_rating ?? 0) - (a.avg_slime_rating ?? 0),
+      );
 
     return list;
   }, [
-    brands,
+    communityBrands,
     searchQuery,
     filterVerified,
     filterHasRestock,
@@ -215,7 +219,7 @@ export default function BrandsClient({ brands }: BrandsClientProps) {
             />
           </div>
 
-          {/* Filter button — matches removed hero button style */}
+          {/* Filter button */}
           <button
             type="button"
             onClick={openSheet}
@@ -273,11 +277,20 @@ export default function BrandsClient({ brands }: BrandsClientProps) {
         </div>
       )}
 
-      {/* ── Brand list ── */}
+      {/* ── Community brand list ── */}
       <div className="max-w-[390px] mx-auto px-4 pt-1 pb-28 space-y-3">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-            <div className="text-4xl">🫧</div>
+            <svg viewBox="0 0 24 24" className="w-10 h-10" fill="none">
+              <circle
+                cx="12"
+                cy="12"
+                r="9"
+                stroke="rgba(45,10,78,0.8)"
+                strokeWidth="1.5"
+              />
+              <circle cx="9" cy="9" r="1.5" fill="rgba(45,10,78,0.8)" />
+            </svg>
             <p className="text-sm font-semibold text-slime-text">
               No brands found
             </p>

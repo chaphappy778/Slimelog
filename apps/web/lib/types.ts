@@ -5,6 +5,7 @@
 // Updated: Bundle C (chat 10) — rejection reason types appended
 // Updated: Migration 20260509000037_t71_base_type_taxonomy — 51 flat types replaced with 20 base types + extensible subtypes
 // Updated: Bundle T72+T73+T75 — ScentStrength added; scent + rating_scent removed; keywords added to LogFormData
+// Updated: Migration 20260515000040 — Brand interface extended (Brands Redesign D1)
 
 export type ActivityType =
   | "log_created"
@@ -192,19 +193,35 @@ export const RATING_DIMENSIONS: {
 
 // ─── Core entities ────────────────────────────────────────────────────────────
 
+// [Change 1 — Brands Redesign D1] Extended with is_featured, avg_slime_rating, total_slime_ratings, and missing display fields
 export interface Brand {
   id: string;
   slug: string;
   name: string;
+  description: string | null;
+  bio: string | null;
   logo_url: string | null;
   shop_url: string | null;
+  website_url: string | null;
   instagram_handle: string | null;
   tiktok_handle: string | null;
   is_verified: boolean;
+  is_featured: boolean;
   owner_id: string | null;
+  owner_name: string | null;
+  location: string | null;
+  restock_schedule: string | null;
+  follower_count: number;
+  total_logs: number;
   avg_shipping: number | null;
   avg_customer_service: number | null;
+  avg_slime_rating: number | null;
+  total_slime_ratings: number;
   total_brand_ratings: number;
+  verification_tier: string | null;
+  verified_at: string | null;
+  subscription_tier: string | null;
+  subscription_status: string | null;
   created_at: string;
   updated_at: string;
 }
