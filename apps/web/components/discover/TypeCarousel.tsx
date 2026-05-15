@@ -10,8 +10,8 @@ const SLIME_TYPES = Object.keys(SLIME_BASE_TYPE_LABELS) as SlimeBaseType[];
 function BlobIcon({ color }: { color: string }) {
   return (
     <svg
-      width="28"
-      height="22"
+      width="40"
+      height="32"
       viewBox="0 0 28 22"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
@@ -37,7 +37,7 @@ export default function TypeCarousel() {
 
   return (
     <div
-      className="flex gap-3 overflow-x-auto pb-2 scrollbar-none px-4"
+      className="flex gap-3 overflow-x-auto scrollbar-none px-4"
       style={{ WebkitOverflowScrolling: "touch" }}
     >
       {SLIME_TYPES.map((type) => {
@@ -50,19 +50,20 @@ export default function TypeCarousel() {
             key={type}
             type="button"
             onClick={() => router.push(`/discover/type/${type}`)}
-            className="shrink-0 rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all duration-150 active:scale-95 hover:scale-[1.03]"
+            className="shrink-0 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all duration-150 active:scale-95 hover:scale-[1.02]"
             style={{
-              width: 120,
-              height: 88,
+              width: "calc(62vw - 16px)",
+              maxWidth: 260,
+              height: 120,
               background: `linear-gradient(135deg, ${typeColor}26 0%, rgba(45,10,78,0.5) 100%)`,
               border: `1px solid ${typeColor}40`,
-              padding: "10px 8px",
+              padding: "14px 12px",
             }}
             aria-label={`Browse ${label} slimes`}
           >
             <BlobIcon color={typeColor} />
             <span
-              className="text-xs font-bold text-center leading-tight"
+              className="text-sm font-bold text-center leading-tight"
               style={{ color: typeColor }}
             >
               {label}

@@ -1,5 +1,6 @@
 // apps/web/app/discover/page.tsx
 // [T74-A] Discover page redesign — type carousel, popular users, featured drops
+// [T74-A polish] Keywords merged into Slime Types section, carousel sizes increased, scrollbars removed
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
@@ -115,7 +116,7 @@ export default async function DiscoverPage() {
         <div className="flex justify-center px-4 pt-6 pb-4">
           <Link
             href="/search"
-            className="flex items-center gap-2 px-6 py-3 rounded-full text-sm font-semibold"
+            className="flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold"
             style={{
               background: "rgba(45,10,78,0.4)",
               border: "1px solid rgba(45,10,78,0.7)",
@@ -142,21 +143,48 @@ export default async function DiscoverPage() {
           </Link>
         </div>
 
-        {/* Section: Slime Types */}
+        {/* Section: Slime Types + Keywords combined */}
         <section className="mb-6">
           <div className="flex items-center justify-between px-4 mb-3">
             <p className="section-label">Slime Types</p>
           </div>
-          <TypeCarousel />
-        </section>
 
-        {/* Section: Trending Keywords */}
-        {trendingTags.length > 0 && (
-          <section className="mb-6">
-            <div className="flex items-center justify-between px-4 mb-3">
-              <p className="section-label">Trending Keywords</p>
-            </div>
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none px-4">
+          {/* Type cards carousel */}
+          <TypeCarousel />
+
+          {/* Keywords row — lives below type carousel, inside same section */}
+          {trendingTags.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto scrollbar-none px-4 mt-3">
+              {/* Search icon pill — routes to keyword search page */}
+              <Link
+                href="/discover/keyword"
+                className="shrink-0 flex items-center justify-center rounded-full transition-colors"
+                style={{
+                  width: 36,
+                  height: 32,
+                  background: "rgba(45,10,78,0.4)",
+                  border: "1px solid rgba(0,240,255,0.3)",
+                  color: "#00F0FF",
+                }}
+                aria-label="Search keywords"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.35-4.35" />
+                </svg>
+              </Link>
+
+              {/* Keyword pills */}
               {trendingTags.map((tag) => (
                 <Link
                   key={tag.id}
@@ -173,8 +201,8 @@ export default async function DiscoverPage() {
                 </Link>
               ))}
             </div>
-          </section>
-        )}
+          )}
+        </section>
 
         {/* Section: Popular Collectors */}
         {popularUsers.length > 0 && (

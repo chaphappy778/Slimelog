@@ -1,5 +1,4 @@
 // apps/web/components/discover/PopularUsersCarousel.tsx
-
 import Image from "next/image";
 import Link from "next/link";
 
@@ -21,28 +20,28 @@ export default function PopularUsersCarousel({
 }: PopularUsersCarouselProps) {
   return (
     <div
-      className="flex gap-4 overflow-x-auto pb-2 scrollbar-none px-4"
+      className="flex gap-4 overflow-x-auto scrollbar-none px-4"
       style={{ WebkitOverflowScrolling: "touch" }}
     >
       {users.map((user) => {
         const initial = (user.username[0] ?? "?").toUpperCase();
         const displayLabel =
-          user.username.length > 8 ? user.username.slice(0, 8) : user.username;
+          user.username.length > 9 ? user.username.slice(0, 9) : user.username;
 
         return (
           <Link
             key={user.id}
             href={`/users/${user.username}`}
-            className="flex flex-col items-center gap-1.5 shrink-0"
-            style={{ width: 72 }}
+            className="flex flex-col items-center gap-2 shrink-0"
+            style={{ width: 88 }}
             aria-label={`View profile: ${user.username}`}
           >
             {/* Avatar circle */}
             <div
               className="rounded-full overflow-hidden relative"
               style={{
-                width: 56,
-                height: 56,
+                width: 72,
+                height: 72,
                 boxShadow: user.is_premium
                   ? "0 0 0 2px #39FF14"
                   : "0 0 0 1px rgba(45,10,78,0.6)",
@@ -55,11 +54,11 @@ export default function PopularUsersCarousel({
                   alt={user.username}
                   fill
                   className="object-cover"
-                  sizes="56px"
+                  sizes="72px"
                 />
               ) : (
                 <div
-                  className="w-full h-full flex items-center justify-center text-lg font-black"
+                  className="w-full h-full flex items-center justify-center text-xl font-black"
                   style={{
                     background: "linear-gradient(135deg, #39FF14, #00F0FF)",
                     color: "#0A0A0A",
@@ -72,7 +71,7 @@ export default function PopularUsersCarousel({
 
             {/* Username */}
             <span
-              className="text-[10px] font-semibold truncate text-center w-full"
+              className="text-[11px] font-semibold truncate text-center w-full"
               style={{ color: "rgba(245,245,245,0.5)" }}
             >
               {displayLabel}

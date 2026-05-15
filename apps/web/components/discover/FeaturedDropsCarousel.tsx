@@ -88,7 +88,7 @@ export default function FeaturedDropsCarousel({
         </p>
       ) : (
         <div
-          className="flex gap-3 overflow-x-auto pb-2 scrollbar-none px-4"
+          className="flex gap-3 overflow-x-auto scrollbar-none px-4"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
           {filtered.map((drop) => {
@@ -106,15 +106,16 @@ export default function FeaturedDropsCarousel({
                 <article
                   className="rounded-2xl overflow-hidden relative transition-all duration-150 active:scale-95 hover:scale-[1.02]"
                   style={{
-                    width: 160,
+                    width: "calc(62vw - 16px)",
+                    maxWidth: 260,
                     background: "rgba(45,10,78,0.3)",
                     border: "1px solid rgba(45,10,78,0.7)",
                   }}
                 >
-                  {/* Cover image / placeholder */}
+                  {/* Cover image */}
                   <div
                     className="relative w-full overflow-hidden"
-                    style={{ height: 80 }}
+                    style={{ height: 120 }}
                   >
                     {drop.cover_image_url ? (
                       <Image
@@ -122,11 +123,11 @@ export default function FeaturedDropsCarousel({
                         alt={drop.name ?? "Drop cover"}
                         fill
                         className="object-cover"
-                        sizes="160px"
+                        sizes="(max-width: 640px) 62vw, 260px"
                       />
                     ) : (
                       <div
-                        className="w-full h-full flex items-center justify-center text-2xl font-black"
+                        className="w-full h-full flex items-center justify-center text-4xl font-black"
                         style={{
                           background:
                             "linear-gradient(135deg, rgba(255,0,229,0.3), rgba(0,240,255,0.2))",
@@ -142,10 +143,10 @@ export default function FeaturedDropsCarousel({
                   <div
                     className="absolute rounded-full overflow-hidden"
                     style={{
-                      width: 36,
-                      height: 36,
-                      bottom: 52,
-                      left: 10,
+                      width: 44,
+                      height: 44,
+                      bottom: 58,
+                      left: 12,
                       border: "2px solid #0F0018",
                     }}
                   >
@@ -155,11 +156,11 @@ export default function FeaturedDropsCarousel({
                         alt={drop.brand_name ?? "Brand"}
                         fill
                         className="object-cover"
-                        sizes="36px"
+                        sizes="44px"
                       />
                     ) : (
                       <div
-                        className="w-full h-full flex items-center justify-center text-xs font-black"
+                        className="w-full h-full flex items-center justify-center text-sm font-black"
                         style={{
                           background:
                             "linear-gradient(135deg, #39FF14, #00F0FF)",
@@ -172,9 +173,8 @@ export default function FeaturedDropsCarousel({
                   </div>
 
                   {/* Body */}
-                  <div style={{ padding: "10px", paddingTop: 24 }}>
-                    {/* Status dot + name row */}
-                    <div className="flex items-center gap-1.5 mb-0.5">
+                  <div style={{ padding: "12px", paddingTop: 28 }}>
+                    <div className="flex items-center gap-1.5 mb-1">
                       <span
                         className="rounded-full shrink-0"
                         style={{
@@ -185,20 +185,20 @@ export default function FeaturedDropsCarousel({
                         }}
                       />
                       <p
-                        className="text-xs font-bold truncate"
+                        className="text-sm font-bold truncate"
                         style={{ color: "rgba(245,245,245,0.9)" }}
                       >
                         {drop.name ?? "Unnamed drop"}
                       </p>
                     </div>
                     <p
-                      className="text-[10px] truncate"
+                      className="text-xs truncate"
                       style={{ color: "#FF00E5" }}
                     >
                       {drop.brand_name ?? "Unknown brand"}
                     </p>
                     <p
-                      className="text-[10px] mt-0.5"
+                      className="text-[11px] mt-0.5"
                       style={{ color: "rgba(245,245,245,0.35)" }}
                     >
                       {formatDropDate(drop.drop_at)}
