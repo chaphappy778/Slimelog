@@ -4,6 +4,12 @@
 import { useRef, useState, useCallback } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 
+// Module-level client — absolute rule
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+);
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface ImageUploadProps {
@@ -229,11 +235,6 @@ export function ImageUpload({
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
-
   const handleFileChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -283,7 +284,7 @@ export function ImageUpload({
         if (inputRef.current) inputRef.current.value = "";
       }
     },
-    [bucket, userId, existingUrl, onUploadComplete, supabase],
+    [bucket, userId, existingUrl, onUploadComplete],
   );
 
   const handleRemove = useCallback(() => {
