@@ -12,6 +12,7 @@ import PublicFeaturedSlimes from "@/components/profile/PublicFeaturedSlimes";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+// [Change 1] — Added youtube_handle, pinterest_handle, twitter_handle to PublicProfile
 interface PublicProfile {
   id: string;
   username: string | null;
@@ -26,6 +27,9 @@ interface PublicProfile {
   instagram_handle: string | null;
   tiktok_handle: string | null;
   shop_url: string | null;
+  youtube_handle: string | null;
+  pinterest_handle: string | null;
+  twitter_handle: string | null;
   is_premium: boolean | null;
   created_at: string;
 }
@@ -52,18 +56,15 @@ async function getSupabase() {
   );
 }
 
-// ─── Profile fetch — uses profiles_public view (#35) ──────────────────────────
-// [Change 1 — #35] Profile fetch swapped from `profiles` table to
-// `profiles_public` view. The view filters out `profile_visibility = 'private'`
-// rows automatically and exposes only safe columns. Owner self-reads
-// elsewhere in the app keep using the base table.
+// ─── Profile fetch — uses profiles_public view ────────────────────────────────
 
 async function fetchProfile(username: string): Promise<PublicProfile | null> {
   const supabase = await getSupabase();
+  // [Change 2] — Added youtube_handle, pinterest_handle, twitter_handle to select
   const { data } = await supabase
     .from("profiles_public")
     .select(
-      "id, username, display_name, avatar_url, bio, location, website_url, is_verified, is_brand, featured_log_ids, instagram_handle, tiktok_handle, shop_url, is_premium, created_at",
+      "id, username, display_name, avatar_url, bio, location, website_url, is_verified, is_brand, featured_log_ids, instagram_handle, tiktok_handle, shop_url, youtube_handle, pinterest_handle, twitter_handle, is_premium, created_at",
     )
     .eq("username", username)
     .maybeSingle();
@@ -71,8 +72,7 @@ async function fetchProfile(username: string): Promise<PublicProfile | null> {
   return (data as PublicProfile | null) ?? null;
 }
 
-// ─── Metadata (#35) ───────────────────────────────────────────────────────────
-// [Change 2 — #35] Added generateMetadata for OG / Twitter cards.
+// ─── Metadata ─────────────────────────────────────────────────────────────────
 
 export async function generateMetadata({
   params,
@@ -143,7 +143,6 @@ export default async function UserPage({
   const { username } = await params;
   const supabase = await getSupabase();
 
-  // [Change 3 — #35] Fetch via profiles_public.
   const profile = await fetchProfile(username);
   if (!profile) {
     notFound();
@@ -388,22 +387,26 @@ export default async function UserPage({
             />
           </div>
 
-          {/* Social links */}
+          {/* [Change 3] — Social links with always-on brand colors */}
           {(profile.instagram_handle ||
             profile.tiktok_handle ||
-            profile.shop_url) && (
-            <div className="flex items-center gap-3 mt-2">
+            profile.shop_url ||
+            profile.youtube_handle ||
+            profile.pinterest_handle ||
+            profile.twitter_handle) && (
+            <div className="flex items-center gap-4 mt-2">
               {profile.instagram_handle && (
                 <a
                   href={`https://instagram.com/${profile.instagram_handle}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="Instagram"
-                  className="text-slime-muted hover:text-slime-magenta transition-colors"
+                  className="transition-opacity active:opacity-70"
+                  style={{ color: "#E1306C" }}
                 >
                   <svg
-                    width="18"
-                    height="18"
+                    width="20"
+                    height="20"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -418,17 +421,19 @@ export default async function UserPage({
                   </svg>
                 </a>
               )}
+
               {profile.tiktok_handle && (
                 <a
                   href={`https://tiktok.com/@${profile.tiktok_handle}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="TikTok"
-                  className="text-slime-muted hover:text-slime-cyan transition-colors"
+                  className="transition-opacity active:opacity-70"
+                  style={{ color: "#ffffff" }}
                 >
                   <svg
-                    width="18"
-                    height="18"
+                    width="20"
+                    height="20"
                     viewBox="0 0 24 24"
                     fill="currentColor"
                     aria-hidden="true"
@@ -437,17 +442,82 @@ export default async function UserPage({
                   </svg>
                 </a>
               )}
+
+              {profile.youtube_handle && (
+                <a
+                  href={`https://youtube.com/@${profile.youtube_handle}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="YouTube"
+                  className="transition-opacity active:opacity-70"
+                  style={{ color: "#FF0000" }}
+                >
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+                  </svg>
+                </a>
+              )}
+
+              {profile.pinterest_handle && (
+                <a
+                  href={`https://pinterest.com/${profile.pinterest_handle}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Pinterest"
+                  className="transition-opacity active:opacity-70"
+                  style={{ color: "#E60023" }}
+                >
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z" />
+                  </svg>
+                </a>
+              )}
+
+              {profile.twitter_handle && (
+                <a
+                  href={`https://x.com/${profile.twitter_handle}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Twitter / X"
+                  className="transition-opacity active:opacity-70"
+                  style={{ color: "#ffffff" }}
+                >
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.743l7.737-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                  </svg>
+                </a>
+              )}
+
               {profile.shop_url && (
                 <a
                   href={profile.shop_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="Shop"
-                  className="text-slime-muted hover:text-slime-accent transition-colors"
+                  className="transition-opacity active:opacity-70"
+                  style={{ color: "#39FF14" }}
                 >
                   <svg
-                    width="18"
-                    height="18"
+                    width="20"
+                    height="20"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"

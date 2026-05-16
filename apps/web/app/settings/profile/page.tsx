@@ -91,6 +91,7 @@ function generateFilePath(userId: string): string {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+// [Change 1] — Added youtube_handle, pinterest_handle, twitter_handle to FormState
 type FormState = {
   username: string;
   bio: string;
@@ -100,6 +101,9 @@ type FormState = {
   instagram_handle: string;
   tiktok_handle: string;
   shop_url: string;
+  youtube_handle: string;
+  pinterest_handle: string;
+  twitter_handle: string;
 };
 
 type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid";
@@ -286,6 +290,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  // [Change 2] — Initial state includes all three new fields
   const [originalForm, setOriginalForm] = useState<FormState>({
     username: "",
     bio: "",
@@ -295,6 +300,9 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     instagram_handle: "",
     tiktok_handle: "",
     shop_url: "",
+    youtube_handle: "",
+    pinterest_handle: "",
+    twitter_handle: "",
   });
   const [form, setForm] = useState<FormState>({
     username: "",
@@ -305,6 +313,9 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     instagram_handle: "",
     tiktok_handle: "",
     shop_url: "",
+    youtube_handle: "",
+    pinterest_handle: "",
+    twitter_handle: "",
   });
   const [profileLoading, setProfileLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -341,15 +352,17 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
 
   // ── profile fetch ──────────────────────────────────────────────────────────
   useEffect(() => {
+    // [Change 4] — Added youtube_handle, pinterest_handle, twitter_handle to select
     supabase
       .from("profiles")
       .select(
-        "username, bio, location, website_url, avatar_url, instagram_handle, tiktok_handle, shop_url",
+        "username, bio, location, website_url, avatar_url, instagram_handle, tiktok_handle, shop_url, youtube_handle, pinterest_handle, twitter_handle",
       )
       .eq("id", userId)
       .maybeSingle()
       .then(({ data }) => {
         if (data) {
+          // [Change 3] — Load new fields from profile data
           const loaded: FormState = {
             username: data.username ?? "",
             bio: data.bio ?? "",
@@ -359,6 +372,9 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
             instagram_handle: data.instagram_handle ?? "",
             tiktok_handle: data.tiktok_handle ?? "",
             shop_url: data.shop_url ?? "",
+            youtube_handle: data.youtube_handle ?? "",
+            pinterest_handle: data.pinterest_handle ?? "",
+            twitter_handle: data.twitter_handle ?? "",
           };
           setOriginalForm(loaded);
           setForm(loaded);
@@ -455,6 +471,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     }
   };
 
+  // [Change 5] — hasChanges includes the three new fields
   const hasChanges =
     form.username !== originalForm.username ||
     form.bio !== originalForm.bio ||
@@ -463,7 +480,10 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     form.avatar_url !== originalForm.avatar_url ||
     form.instagram_handle !== originalForm.instagram_handle ||
     form.tiktok_handle !== originalForm.tiktok_handle ||
-    form.shop_url !== originalForm.shop_url;
+    form.shop_url !== originalForm.shop_url ||
+    form.youtube_handle !== originalForm.youtube_handle ||
+    form.pinterest_handle !== originalForm.pinterest_handle ||
+    form.twitter_handle !== originalForm.twitter_handle;
 
   const instagramValid =
     form.instagram_handle === "" || INSTAGRAM_RE.test(form.instagram_handle);
@@ -471,6 +491,18 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     form.tiktok_handle === "" || TIKTOK_RE.test(form.tiktok_handle);
   const shopUrlValid = form.shop_url === "" || SHOP_URL_RE.test(form.shop_url);
 
+  // [Change 6] — Validation booleans for new fields
+  const youtubeValid =
+    form.youtube_handle === "" ||
+    /^[a-zA-Z0-9_.-]{1,50}$/.test(form.youtube_handle);
+  const pinterestValid =
+    form.pinterest_handle === "" ||
+    /^[a-zA-Z0-9_.+-]{1,30}$/.test(form.pinterest_handle);
+  const twitterValid =
+    form.twitter_handle === "" ||
+    /^[a-zA-Z0-9_]{1,15}$/.test(form.twitter_handle);
+
+  // [Change 7] — isFormValid includes new field validations
   const isFormValid =
     hasChanges &&
     form.username.length >= 3 &&
@@ -481,12 +513,16 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     form.bio.length <= 150 &&
     instagramValid &&
     tiktokValid &&
-    shopUrlValid;
+    shopUrlValid &&
+    youtubeValid &&
+    pinterestValid &&
+    twitterValid;
 
   const handleSave = async () => {
     if (!isFormValid) return;
     setSaving(true);
 
+    // [Change 8] — Pass new handle fields to updateProfile
     const result = await updateProfile({
       username: form.username,
       bio: form.bio || undefined,
@@ -496,6 +532,9 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
       instagram_handle: form.instagram_handle || undefined,
       tiktok_handle: form.tiktok_handle || undefined,
       shop_url: form.shop_url || undefined,
+      youtube_handle: form.youtube_handle || undefined,
+      pinterest_handle: form.pinterest_handle || undefined,
+      twitter_handle: form.twitter_handle || undefined,
     });
 
     setSaving(false);
@@ -767,7 +806,8 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
           </div>
         </div>
 
-        {/* Contact & Links card */}
+        {/* Contact & Links card — Location, Website, Shop URL only */}
+        {/* [Change 9] — Instagram and TikTok moved to Social Links section below */}
         <div>
           <p
             className="text-[11px] font-black tracking-widest uppercase mb-2 px-1"
@@ -825,6 +865,48 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
 
             <RowDivider />
 
+            {/* Shop URL */}
+            <EditRow
+              label="Shop URL"
+              value={form.shop_url}
+              expanded={expandedField === "shop_url"}
+              onToggle={() => toggleField("shop_url")}
+            >
+              <div className="pt-3">
+                <input
+                  id="shop_url"
+                  type="url"
+                  inputMode="url"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  value={form.shop_url}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, shop_url: e.target.value }))
+                  }
+                  onBlur={handleShopUrlBlur}
+                  maxLength={200}
+                  placeholder="https://myshop.etsy.com"
+                  className={inputCls}
+                />
+                {form.shop_url !== "" && !SHOP_URL_RE.test(form.shop_url) && (
+                  <p className="text-xs text-red-400 mt-1.5">
+                    Must be a valid URL starting with https://
+                  </p>
+                )}
+              </div>
+            </EditRow>
+          </div>
+        </div>
+
+        {/* [Change 9] — Social Links card (new section) */}
+        <div>
+          <p
+            className="text-[11px] font-black tracking-widest uppercase mb-2 px-1"
+            style={{ color: "#00F0FF" }}
+          >
+            Social Links
+          </p>
+          <div className="rounded-2xl overflow-hidden" style={sectionStyle}>
             {/* Instagram */}
             <EditRow
               label="Instagram"
@@ -905,34 +987,142 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
 
             <RowDivider />
 
-            {/* Shop URL */}
+            {/* YouTube */}
             <EditRow
-              label="Shop URL"
-              value={form.shop_url}
-              expanded={expandedField === "shop_url"}
-              onToggle={() => toggleField("shop_url")}
+              label="YouTube"
+              value={form.youtube_handle ? `@${form.youtube_handle}` : ""}
+              expanded={expandedField === "youtube_handle"}
+              onToggle={() => toggleField("youtube_handle")}
             >
               <div className="pt-3">
-                <input
-                  id="shop_url"
-                  type="url"
-                  inputMode="url"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  value={form.shop_url}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, shop_url: e.target.value }))
-                  }
-                  onBlur={handleShopUrlBlur}
-                  maxLength={200}
-                  placeholder="https://myshop.etsy.com"
-                  className={inputCls}
-                />
-                {form.shop_url !== "" && !SHOP_URL_RE.test(form.shop_url) && (
-                  <p className="text-xs text-red-400 mt-1.5">
-                    Must be a valid URL starting with https://
-                  </p>
-                )}
+                <div className="relative flex items-center">
+                  <span className="absolute left-3 text-slime-muted text-sm font-medium select-none">
+                    @
+                  </span>
+                  <input
+                    id="youtube_handle"
+                    type="text"
+                    autoComplete="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    value={form.youtube_handle}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        youtube_handle: e.target.value.startsWith("@")
+                          ? e.target.value.slice(1)
+                          : e.target.value,
+                      }))
+                    }
+                    maxLength={50}
+                    placeholder="yourchannel"
+                    className={`${inputCls} pl-7`}
+                  />
+                </div>
+                {form.youtube_handle !== "" &&
+                  (/^[a-zA-Z0-9_.-]{1,50}$/.test(form.youtube_handle) ? (
+                    <p className="text-[10px] text-slime-muted mt-1.5">
+                      Links to youtube.com/@{form.youtube_handle}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-red-400 mt-1.5">
+                      Letters, numbers, hyphens, underscores, and periods only.
+                    </p>
+                  ))}
+              </div>
+            </EditRow>
+
+            <RowDivider />
+
+            {/* Pinterest */}
+            <EditRow
+              label="Pinterest"
+              value={form.pinterest_handle ? `@${form.pinterest_handle}` : ""}
+              expanded={expandedField === "pinterest_handle"}
+              onToggle={() => toggleField("pinterest_handle")}
+            >
+              <div className="pt-3">
+                <div className="relative flex items-center">
+                  <span className="absolute left-3 text-slime-muted text-sm font-medium select-none">
+                    @
+                  </span>
+                  <input
+                    id="pinterest_handle"
+                    type="text"
+                    autoComplete="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    value={form.pinterest_handle}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        pinterest_handle: e.target.value.startsWith("@")
+                          ? e.target.value.slice(1)
+                          : e.target.value,
+                      }))
+                    }
+                    maxLength={30}
+                    placeholder="yourprofile"
+                    className={`${inputCls} pl-7`}
+                  />
+                </div>
+                {form.pinterest_handle !== "" &&
+                  (/^[a-zA-Z0-9_.+-]{1,30}$/.test(form.pinterest_handle) ? (
+                    <p className="text-[10px] text-slime-muted mt-1.5">
+                      Links to pinterest.com/{form.pinterest_handle}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-red-400 mt-1.5">
+                      Letters, numbers, underscores, hyphens, and periods only.
+                    </p>
+                  ))}
+              </div>
+            </EditRow>
+
+            <RowDivider />
+
+            {/* Twitter/X */}
+            <EditRow
+              label="Twitter / X"
+              value={form.twitter_handle ? `@${form.twitter_handle}` : ""}
+              expanded={expandedField === "twitter_handle"}
+              onToggle={() => toggleField("twitter_handle")}
+            >
+              <div className="pt-3">
+                <div className="relative flex items-center">
+                  <span className="absolute left-3 text-slime-muted text-sm font-medium select-none">
+                    @
+                  </span>
+                  <input
+                    id="twitter_handle"
+                    type="text"
+                    autoComplete="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    value={form.twitter_handle}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        twitter_handle: e.target.value.startsWith("@")
+                          ? e.target.value.slice(1)
+                          : e.target.value,
+                      }))
+                    }
+                    maxLength={15}
+                    placeholder="yourhandle"
+                    className={`${inputCls} pl-7`}
+                  />
+                </div>
+                {form.twitter_handle !== "" &&
+                  (/^[a-zA-Z0-9_]{1,15}$/.test(form.twitter_handle) ? (
+                    <p className="text-[10px] text-slime-muted mt-1.5">
+                      Links to x.com/{form.twitter_handle}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-red-400 mt-1.5">
+                      Letters, numbers, and underscores only. Max 15 characters.
+                    </p>
+                  ))}
               </div>
             </EditRow>
           </div>

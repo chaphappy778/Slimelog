@@ -6,7 +6,7 @@ import { cookies } from "next/headers";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-// [Change 8] — UpdateProfileInput extended with instagram_handle, tiktok_handle, shop_url
+// [Change 1] — UpdateProfileInput extended with youtube_handle, pinterest_handle, twitter_handle
 type UpdateProfileInput = {
   username: string;
   bio?: string;
@@ -16,6 +16,9 @@ type UpdateProfileInput = {
   instagram_handle?: string;
   tiktok_handle?: string;
   shop_url?: string;
+  youtube_handle?: string;
+  pinterest_handle?: string;
+  twitter_handle?: string;
 };
 
 type UpdateProfileResult = {
@@ -47,10 +50,15 @@ async function getSupabaseServerClient() {
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
 
-// [Change 8] — Server-side validation regexes mirror the client
+// Server-side validation regexes mirror the client
 const INSTAGRAM_RE = /^[a-zA-Z0-9._]{1,30}$/;
 const TIKTOK_RE = /^[a-zA-Z0-9._]{1,24}$/;
 const SHOP_URL_RE = /^https?:\/\/.+/;
+
+// [Change 2] — Validation regexes for the three new social fields
+const YOUTUBE_RE = /^[a-zA-Z0-9_.-]{1,50}$/;
+const PINTEREST_RE = /^[a-zA-Z0-9_.+-]{1,30}$/;
+const TWITTER_RE = /^[a-zA-Z0-9_]{1,15}$/;
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
@@ -85,7 +93,7 @@ export async function updateProfile(
     return { success: false, error: "Bio must be 150 characters or fewer." };
   }
 
-  // [Change 8] — Server-side validation for the three new social fields.
+  // Server-side validation for instagram/tiktok/shop fields.
   // Strip leading @ on handles as defense-in-depth (the client already does this).
   let instagramHandle: string | undefined = input.instagram_handle;
   if (instagramHandle !== undefined && instagramHandle !== "") {
@@ -114,6 +122,32 @@ export async function updateProfile(
         success: false,
         error: "Shop URL must start with http:// or https://.",
       };
+    }
+  }
+
+  // [Change 3] — Server-side validation for youtube, pinterest, twitter
+  let youtubeHandle: string | undefined = input.youtube_handle;
+  if (youtubeHandle !== undefined && youtubeHandle !== "") {
+    if (youtubeHandle.startsWith("@")) youtubeHandle = youtubeHandle.slice(1);
+    if (!YOUTUBE_RE.test(youtubeHandle)) {
+      return { success: false, error: "Invalid YouTube handle." };
+    }
+  }
+
+  let pinterestHandle: string | undefined = input.pinterest_handle;
+  if (pinterestHandle !== undefined && pinterestHandle !== "") {
+    if (pinterestHandle.startsWith("@"))
+      pinterestHandle = pinterestHandle.slice(1);
+    if (!PINTEREST_RE.test(pinterestHandle)) {
+      return { success: false, error: "Invalid Pinterest handle." };
+    }
+  }
+
+  let twitterHandle: string | undefined = input.twitter_handle;
+  if (twitterHandle !== undefined && twitterHandle !== "") {
+    if (twitterHandle.startsWith("@")) twitterHandle = twitterHandle.slice(1);
+    if (!TWITTER_RE.test(twitterHandle)) {
+      return { success: false, error: "Invalid Twitter/X handle." };
     }
   }
 
@@ -166,12 +200,20 @@ export async function updateProfile(
   if (input.website_url !== undefined)
     payload.website_url = input.website_url || null;
 
-  // [Change 8] — Persist the three new social fields with null-coalesce for empty strings
+  // Persist social fields with null-coalesce for empty strings
   if (input.instagram_handle !== undefined)
     payload.instagram_handle = instagramHandle || null;
   if (input.tiktok_handle !== undefined)
     payload.tiktok_handle = tiktokHandle || null;
   if (input.shop_url !== undefined) payload.shop_url = shopUrl || null;
+
+  // [Change 4] — Persist youtube, pinterest, twitter fields
+  if (input.youtube_handle !== undefined)
+    payload.youtube_handle = youtubeHandle || null;
+  if (input.pinterest_handle !== undefined)
+    payload.pinterest_handle = pinterestHandle || null;
+  if (input.twitter_handle !== undefined)
+    payload.twitter_handle = twitterHandle || null;
 
   // ── 5. Persist — RLS ensures user can only update their own row ──
   const { error: updateError } = await supabase
