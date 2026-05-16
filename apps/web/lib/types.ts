@@ -273,6 +273,7 @@ export interface CollectionLog {
   colors: string[] | null;
   scent_strength: ScentStrength | null;
   cost_paid: number | null;
+  purchase_price: number | null;
   purchased_from: string | null;
   purchased_at: string | null;
   likes: string | null;
