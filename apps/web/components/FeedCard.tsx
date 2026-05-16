@@ -287,6 +287,7 @@ function buildCollectionLog(log: FeedCardLog): CollectionLog {
     scent_strength: null,
     colors: log.colors,
     cost_paid: null,
+    purchase_price: null,
     purchased_from: null,
     purchased_at: null,
     likes: null,
