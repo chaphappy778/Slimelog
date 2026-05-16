@@ -9,7 +9,6 @@ import { updateProfile, checkUsernameAvailable } from "@/lib/profile-actions";
 import { ImageUpload } from "@/components/ImageUpload";
 import PageWrapper from "@/components/PageWrapper";
 import { useToast } from "@/components/Toast";
-import UpgradeButton from "@/components/UpgradeButton";
 
 // Module-level client — absolute rule
 const supabase = createBrowserClient(
@@ -38,24 +37,6 @@ function validateUsername(value: string): "invalid" | "valid" {
 const INSTAGRAM_RE = /^[a-zA-Z0-9._]{1,30}$/;
 const TIKTOK_RE = /^[a-zA-Z0-9._]{1,24}$/;
 const SHOP_URL_RE = /^https?:\/\/.+/;
-
-// [Fix C] Module-scoped formatter so it isn't recreated on every render of
-// SubscriptionSection. Returns null for any bad / missing / unparseable input
-// so the caller can skip rendering entirely.
-function formatPeriodEnd(iso: string | null): string | null {
-  if (!iso) return null;
-  try {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return null;
-    return new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }).format(d);
-  } catch {
-    return null;
-  }
-}
 
 function UsernameStatusIcon({ status }: { status: UsernameStatus }) {
   if (status === "idle") return null;
@@ -174,309 +155,7 @@ const sectionStyle = {
   boxShadow: "inset 0 0 16px rgba(45,10,78,0.1)",
 };
 
-function SubscriptionSection({
-  subscriptionTier,
-  periodEnd,
-  cancelAtPeriodEnd,
-}: {
-  subscriptionTier: string;
-  periodEnd: string | null;
-  cancelAtPeriodEnd: boolean;
-}) {
-  const [portalLoading, setPortalLoading] = useState(false);
-  // [Fix 43] Hover state for the Manage Subscription button — needed because the
-  // styling is inline (not a Tailwind class) and inline :hover can't be expressed.
-  const [manageHover, setManageHover] = useState(false);
-
-  // [Fix C] Format the incoming ISO timestamp once per render into a short
-  // human-readable string like "Apr 16, 2027". null means "don't render the
-  // secondary text at all" — no em-dash, no placeholder.
-  const formattedDate = formatPeriodEnd(periodEnd);
-
-  const handleManage = async () => {
-    if (portalLoading) return;
-    setPortalLoading(true);
-    try {
-      const res = await fetch("/api/stripe/portal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          return_url: window.location.href,
-          mode: "user",
-        }),
-      });
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    } catch (err) {
-      console.error("Portal error:", err);
-    } finally {
-      setPortalLoading(false);
-    }
-  };
-
-  return (
-    <section className="rounded-2xl p-4 space-y-3" style={sectionStyle}>
-      <p className="section-label">Subscription</p>
-
-      {subscriptionTier === "pro" ? (
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <span
-              style={{
-                background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-                color: "#0A0A0A",
-                fontSize: "11px",
-                fontWeight: 800,
-                padding: "3px 10px",
-                borderRadius: "9999px",
-                fontFamily: "Montserrat, sans-serif",
-                letterSpacing: "0.04em",
-              }}
-            >
-              PRO
-            </span>
-            {formattedDate && (
-              <span className="text-xs text-slime-muted font-medium">
-                {cancelAtPeriodEnd ? "Ends" : "Renews"} {formattedDate}
-              </span>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={handleManage}
-            onMouseEnter={() => setManageHover(true)}
-            onMouseLeave={() => setManageHover(false)}
-            disabled={portalLoading}
-            className="w-full"
-            style={{
-              background:
-                !portalLoading && manageHover
-                  ? "rgba(45,10,78,0.7)"
-                  : "rgba(45,10,78,0.5)",
-              border: "1px solid rgba(45,10,78,0.9)",
-              color: portalLoading
-                ? "rgba(245,245,245,0.4)"
-                : manageHover
-                  ? "#FFFFFF"
-                  : "rgba(245,245,245,0.85)",
-              opacity: portalLoading ? 0.5 : 1,
-              cursor: portalLoading ? "not-allowed" : "pointer",
-              paddingTop: "12px",
-              paddingBottom: "12px",
-              borderRadius: "9999px",
-              fontSize: "13px",
-              fontWeight: 700,
-              transition: "all 0.15s ease",
-            }}
-          >
-            {portalLoading ? "Loading..." : "Manage Subscription"}
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <p className="text-xs text-slime-muted leading-relaxed">
-            Upgrade to Pro for unlimited logging, advanced stats, custom
-            categories, ad-free experience, and a Pro badge.
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <UpgradeButton
-              priceId={process.env.NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID!}
-              label="Go Pro — $2.99/mo"
-              mode="user"
-              currentPath="/settings/profile"
-            />
-            <UpgradeButton
-              priceId={process.env.NEXT_PUBLIC_STRIPE_PRO_YEARLY_PRICE_ID!}
-              label="Go Pro — $14.99/yr"
-              mode="user"
-              currentPath="/settings/profile"
-            />
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
-
-// [Change 3] — AccountSection: collapsible card for changing email address
-function AccountSection({ currentEmail }: { currentEmail: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const [newEmail, setNewEmail] = useState("");
-  const [status, setStatus] = useState<
-    "idle" | "loading" | "success" | "error"
-  >("idle");
-  const [errorMsg, setErrorMsg] = useState("");
-
-  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-  async function handleChangeEmail() {
-    const trimmed = newEmail.trim();
-    if (!EMAIL_RE.test(trimmed)) {
-      setErrorMsg("Please enter a valid email address.");
-      setStatus("error");
-      return;
-    }
-    if (trimmed.toLowerCase() === currentEmail.toLowerCase()) {
-      setErrorMsg("That's already your current email.");
-      setStatus("error");
-      return;
-    }
-    setStatus("loading");
-    setErrorMsg("");
-    const { error } = await supabase.auth.updateUser({ email: trimmed });
-    if (error) {
-      setErrorMsg(error.message);
-      setStatus("error");
-    } else {
-      setStatus("success");
-    }
-  }
-
-  return (
-    <section className="rounded-2xl overflow-hidden" style={sectionStyle}>
-      {/* Header row — always visible */}
-      <button
-        type="button"
-        onClick={() => {
-          setExpanded((v) => !v);
-          setStatus("idle");
-          setNewEmail("");
-          setErrorMsg("");
-        }}
-        className="w-full flex items-center justify-between px-4 py-4 active:opacity-70 transition-opacity"
-      >
-        <p className="section-label mb-0">Account</p>
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="text-slime-muted transition-transform duration-200"
-          style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}
-          aria-hidden="true"
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
-
-      {/* Expandable body */}
-      {expanded && (
-        <div
-          className="px-4 pb-4 flex flex-col gap-3"
-          style={{ borderTop: "1px solid rgba(45,10,78,0.5)" }}
-        >
-          {status === "success" ? (
-            <div className="flex flex-col gap-2 pt-3">
-              <div className="flex items-center gap-2">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#39FF14"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-                <p
-                  className="text-sm font-semibold"
-                  style={{ color: "#39FF14" }}
-                >
-                  Confirmation sent
-                </p>
-              </div>
-              <p className="text-xs text-slime-muted leading-relaxed">
-                Check your inbox at{" "}
-                <span className="text-slime-text font-medium">
-                  {newEmail.trim()}
-                </span>{" "}
-                and click the link to confirm your new email address.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setStatus("idle");
-                  setNewEmail("");
-                  setExpanded(false);
-                }}
-                className="mt-1 text-xs text-slime-muted font-medium text-left active:opacity-70 transition-opacity"
-              >
-                Done
-              </button>
-            </div>
-          ) : (
-            <>
-              <div className="pt-3">
-                <p className={subLabelCls}>CURRENT EMAIL</p>
-                <p className="text-sm text-slime-text font-medium px-3 py-2.5 rounded-xl border border-slime-border bg-slime-surface/50">
-                  {currentEmail}
-                </p>
-              </div>
-
-              <div>
-                <label htmlFor="new-email" className={subLabelCls}>
-                  NEW EMAIL
-                </label>
-                <input
-                  id="new-email"
-                  type="email"
-                  inputMode="email"
-                  autoCapitalize="none"
-                  autoComplete="email"
-                  spellCheck={false}
-                  value={newEmail}
-                  onChange={(e) => {
-                    setNewEmail(e.target.value);
-                    if (status === "error") {
-                      setStatus("idle");
-                      setErrorMsg("");
-                    }
-                  }}
-                  placeholder="new@email.com"
-                  className={inputCls}
-                />
-                {status === "error" && errorMsg && (
-                  <p className="text-xs text-red-400 mt-1.5">{errorMsg}</p>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={handleChangeEmail}
-                disabled={status === "loading" || newEmail.trim() === ""}
-                className="w-full py-3 rounded-xl text-sm font-bold transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{
-                  background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-                  color: "#0A0A0A",
-                }}
-              >
-                {status === "loading" ? "Sending\u2026" : "Send Confirmation"}
-              </button>
-            </>
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
-
-// [Change 2] — ProfileSettingsContent now accepts userEmail prop
-function ProfileSettingsContent({
-  userId,
-  userEmail,
-}: {
-  userId: string;
-  userEmail: string;
-}) {
+function ProfileSettingsContent({ userId }: { userId: string }) {
   const { showToast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -501,12 +180,6 @@ function ProfileSettingsContent({
     tiktok_handle: "",
     shop_url: "",
   });
-  const [subscriptionTier, setSubscriptionTier] = useState<string>("free");
-  const [subscriptionPeriodEnd, setSubscriptionPeriodEnd] = useState<
-    string | null
-  >(null);
-  const [subscriptionCancelAtPeriodEnd, setSubscriptionCancelAtPeriodEnd] =
-    useState<boolean>(false);
   const [profileLoading, setProfileLoading] = useState(true);
 
   useEffect(() => {
@@ -528,7 +201,7 @@ function ProfileSettingsContent({
     supabase
       .from("profiles")
       .select(
-        "username, bio, location, website_url, avatar_url, subscription_tier, subscription_current_period_end, subscription_cancel_at_period_end, instagram_handle, tiktok_handle, shop_url",
+        "username, bio, location, website_url, avatar_url, instagram_handle, tiktok_handle, shop_url",
       )
       .eq("id", userId)
       .maybeSingle()
@@ -546,13 +219,6 @@ function ProfileSettingsContent({
           };
           setOriginalForm(loaded);
           setForm(loaded);
-          setSubscriptionTier(data.subscription_tier ?? "free");
-          setSubscriptionPeriodEnd(
-            data.subscription_current_period_end ?? null,
-          );
-          setSubscriptionCancelAtPeriodEnd(
-            data.subscription_cancel_at_period_end ?? false,
-          );
         }
         setProfileLoading(false);
       });
@@ -686,9 +352,9 @@ function ProfileSettingsContent({
     <>
       <header className="px-4 pt-10 pb-6 flex items-center gap-3">
         <Link
-          href="/profile"
+          href="/settings"
           className="w-8 h-8 rounded-xl bg-slime-surface border border-slime-border flex items-center justify-center active:scale-90 transition-transform"
-          aria-label="Back to profile"
+          aria-label="Back to settings"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -974,17 +640,6 @@ function ProfileSettingsContent({
           </div>
         </section>
 
-        {/* CARD 4 — Subscription */}
-        <SubscriptionSection
-          subscriptionTier={subscriptionTier}
-          periodEnd={subscriptionPeriodEnd}
-          cancelAtPeriodEnd={subscriptionCancelAtPeriodEnd}
-        />
-
-        {/* CARD 5 — Account */}
-        {/* [Change 4] — AccountSection wired in between Subscription and Save button */}
-        <AccountSection currentEmail={userEmail} />
-
         <button
           type="button"
           onClick={handleSave}
@@ -1007,8 +662,6 @@ export default function ProfileSettingsPage() {
   const router = useRouter();
   const [authChecked, setAuthChecked] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
-  // [Change 1] — capture email from auth session
-  const [userEmail, setUserEmail] = useState<string>("");
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -1016,8 +669,6 @@ export default function ProfileSettingsPage() {
         router.replace("/login");
       } else {
         setUserId(data.user.id);
-        // [Change 1] — store email alongside userId
-        setUserEmail(data.user.email ?? "");
         setAuthChecked(true);
       }
     });
@@ -1039,8 +690,7 @@ export default function ProfileSettingsPage() {
 
   return (
     <PageWrapper dots>
-      {/* [Change 1] — pass userEmail down to content component */}
-      <ProfileSettingsContent userId={userId} userEmail={userEmail} />
+      <ProfileSettingsContent userId={userId} />
     </PageWrapper>
   );
 }

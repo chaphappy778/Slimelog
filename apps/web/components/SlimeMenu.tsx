@@ -8,7 +8,7 @@ import { createBrowserClient } from "@supabase/ssr";
 import {
   Layers,
   Heart,
-  UserPen,
+  Settings,
   Home,
   Compass,
   Store,
@@ -309,9 +309,9 @@ export default function SlimeMenu() {
                 onClose={handleClose}
               />
               <NavItem
-                href="/settings/profile"
-                icon={<UserPen className="w-5 h-5" />}
-                label="Edit Profile"
+                href="/settings"
+                icon={<Settings className="w-5 h-5" />}
+                label="Settings"
                 onClose={handleClose}
               />
             </NavSection>
