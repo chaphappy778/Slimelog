@@ -6,7 +6,6 @@ import { createBrowserClient } from "@supabase/ssr";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { updateProfile, checkUsernameAvailable } from "@/lib/profile-actions";
-import { ImageUpload } from "@/components/ImageUpload";
 import PageWrapper from "@/components/PageWrapper";
 import { useToast } from "@/components/Toast";
 
@@ -15,6 +14,82 @@ const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
 );
+
+const MAX_DIMENSION = 1200;
+const COMPRESS_QUALITY = 0.8;
+
+const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
+const INSTAGRAM_RE = /^[a-zA-Z0-9._]{1,30}$/;
+const TIKTOK_RE = /^[a-zA-Z0-9._]{1,24}$/;
+const SHOP_URL_RE = /^https?:\/\/.+/;
+
+function validateUsername(value: string): "invalid" | "valid" {
+  return USERNAME_RE.test(value) ? "valid" : "invalid";
+}
+
+const inputCls =
+  "w-full px-3 py-2.5 rounded-xl border border-slime-border bg-slime-surface text-sm text-slime-text placeholder:text-slime-muted outline-none focus:border-slime-accent/50 focus:ring-1 focus:ring-slime-accent/30 transition-colors";
+
+const sectionStyle = {
+  background: "rgba(45,10,78,0.25)",
+  border: "1px solid rgba(45,10,78,0.7)",
+  boxShadow: "inset 0 0 16px rgba(45,10,78,0.1)",
+};
+
+// ─── Image compression helpers ───────────────────────────────────────────────
+
+async function compressImage(file: File): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      let { width, height } = img;
+      if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+        if (width >= height) {
+          height = Math.round((height * MAX_DIMENSION) / width);
+          width = MAX_DIMENSION;
+        } else {
+          width = Math.round((width * MAX_DIMENSION) / height);
+          height = MAX_DIMENSION;
+        }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Canvas context unavailable"));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error("Canvas toBlob failed"));
+            return;
+          }
+          resolve(blob);
+        },
+        "image/webp",
+        COMPRESS_QUALITY,
+      );
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Failed to load image"));
+    };
+    img.src = objectUrl;
+  });
+}
+
+function generateFilePath(userId: string): string {
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).slice(2, 8);
+  return `${userId}/${timestamp}-${random}.webp`;
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type FormState = {
   username: string;
@@ -29,14 +104,7 @@ type FormState = {
 
 type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid";
 
-const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
-function validateUsername(value: string): "invalid" | "valid" {
-  return USERNAME_RE.test(value) ? "valid" : "invalid";
-}
-
-const INSTAGRAM_RE = /^[a-zA-Z0-9._]{1,30}$/;
-const TIKTOK_RE = /^[a-zA-Z0-9._]{1,24}$/;
-const SHOP_URL_RE = /^https?:\/\/.+/;
+// ─── Helper components ────────────────────────────────────────────────────────
 
 function UsernameStatusIcon({ status }: { status: UsernameStatus }) {
   if (status === "idle") return null;
@@ -50,6 +118,7 @@ function UsernameStatusIcon({ status }: { status: UsernameStatus }) {
           viewBox="0 0 24 24"
           width={16}
           height={16}
+          aria-hidden="true"
         >
           <circle
             className="opacity-25"
@@ -78,6 +147,7 @@ function UsernameStatusIcon({ status }: { status: UsernameStatus }) {
           width={12}
           height={12}
           className="text-slime-accent"
+          aria-hidden="true"
         >
           <path
             fillRule="evenodd"
@@ -97,6 +167,7 @@ function UsernameStatusIcon({ status }: { status: UsernameStatus }) {
         width={12}
         height={12}
         className="text-red-400"
+        aria-hidden="true"
       >
         <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
       </svg>
@@ -143,17 +214,72 @@ function UsernameHint({
   return null;
 }
 
-const inputCls =
-  "w-full px-3 py-2.5 rounded-xl border border-slime-border bg-slime-surface text-sm text-slime-text placeholder:text-slime-muted outline-none focus:border-slime-accent/50 focus:ring-1 focus:ring-slime-accent/30 transition-colors";
+function RowDivider() {
+  return <div style={{ borderTop: "1px solid rgba(45,10,78,0.4)" }} />;
+}
 
-const subLabelCls =
-  "text-[10px] font-semibold uppercase tracking-wider text-slime-muted mb-1.5";
+function EditRow({
+  label,
+  value,
+  expanded,
+  onToggle,
+  children,
+}: {
+  label: string;
+  value: string;
+  expanded: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center gap-3 px-4 py-3.5 active:bg-slime-surface/50 transition-colors"
+      >
+        <span className="flex-1 text-left">
+          <span className="block text-[10px] font-semibold uppercase tracking-wider text-slime-muted mb-0.5">
+            {label}
+          </span>
+          <span
+            className="block text-sm font-medium"
+            style={{
+              color: value ? "rgba(245,245,245,0.85)" : "rgba(245,245,245,0.3)",
+            }}
+          >
+            {value || "Not set"}
+          </span>
+        </span>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="text-slime-muted shrink-0 transition-transform duration-200"
+          style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}
+          aria-hidden="true"
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {expanded && (
+        <div
+          className="px-4 pb-4"
+          style={{ borderTop: "1px solid rgba(45,10,78,0.4)" }}
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
 
-const sectionStyle = {
-  background: "rgba(45,10,78,0.25)",
-  border: "1px solid rgba(45,10,78,0.7)",
-  boxShadow: "inset 0 0 16px rgba(45,10,78,0.1)",
-};
+// ─── ProfileSettingsContent ───────────────────────────────────────────────────
 
 function ProfileSettingsContent({ userId }: { userId: string }) {
   const { showToast } = useToast();
@@ -181,7 +307,23 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     shop_url: "",
   });
   const [profileLoading, setProfileLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
 
+  // Accordion — only one row open at a time
+  const [expandedField, setExpandedField] = useState<string | null>(null);
+
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>("idle");
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  function toggleField(field: string) {
+    setExpandedField((prev) => (prev === field ? null : field));
+  }
+
+  // ── upgrade toast ──────────────────────────────────────────────────────────
   useEffect(() => {
     const upgraded = searchParams.get("upgraded") === "true";
     const alreadyPro = searchParams.get("already_pro") === "true";
@@ -197,6 +339,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── profile fetch ──────────────────────────────────────────────────────────
   useEffect(() => {
     supabase
       .from("profiles")
@@ -224,9 +367,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
       });
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>("idle");
-  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
+  // ── username handlers ──────────────────────────────────────────────────────
   const checkUsername = useCallback(
     async (value: string) => {
       if (value === originalForm.username) {
@@ -260,6 +401,40 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     debounceTimer.current = setTimeout(() => checkUsername(value), 500);
   };
 
+  // ── avatar upload ──────────────────────────────────────────────────────────
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarError(null);
+    setAvatarUploading(true);
+    const localPreview = URL.createObjectURL(file);
+    setForm((f) => ({ ...f, avatar_url: localPreview }));
+    try {
+      const compressed = await compressImage(file);
+      const filePath = generateFilePath(userId);
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, compressed, {
+          contentType: "image/webp",
+          upsert: false,
+        });
+      if (uploadError) throw new Error(uploadError.message);
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("avatars").getPublicUrl(filePath);
+      URL.revokeObjectURL(localPreview);
+      setForm((f) => ({ ...f, avatar_url: publicUrl }));
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : "Upload failed.");
+      setForm((f) => ({ ...f, avatar_url: originalForm.avatar_url }));
+      URL.revokeObjectURL(localPreview);
+    } finally {
+      setAvatarUploading(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
+    }
+  }
+
+  // ── validation helpers ─────────────────────────────────────────────────────
   const stripLeadingAt = (value: string) =>
     value.startsWith("@") ? value.slice(1) : value;
 
@@ -279,8 +454,6 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
       setForm((f) => ({ ...f, shop_url: `https://${value}` }));
     }
   };
-
-  const [saving, setSaving] = useState(false);
 
   const hasChanges =
     form.username !== originalForm.username ||
@@ -336,21 +509,23 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     }
   };
 
+  // ── loading skeleton ───────────────────────────────────────────────────────
   if (profileLoading) {
     return (
       <div className="px-4 pt-10 space-y-4 animate-pulse">
         <div className="h-6 w-32 bg-slime-surface rounded-xl" />
-        <div className="h-28 w-28 bg-slime-surface rounded-2xl" />
-        <div className="h-12 rounded-2xl" style={sectionStyle} />
-        <div className="h-24 rounded-2xl" style={sectionStyle} />
-        <div className="h-12 rounded-2xl" style={sectionStyle} />
+        <div className="w-20 h-20 rounded-full bg-slime-surface mx-auto" />
+        <div className="h-32 rounded-2xl" style={sectionStyle} />
+        <div className="h-64 rounded-2xl" style={sectionStyle} />
       </div>
     );
   }
 
+  // ── render ─────────────────────────────────────────────────────────────────
   return (
     <>
-      <header className="px-4 pt-10 pb-6 flex items-center gap-3">
+      {/* Header */}
+      <header className="px-4 pt-10 pb-4 flex items-center gap-3">
         <Link
           href="/settings"
           className="w-8 h-8 rounded-xl bg-slime-surface border border-slime-border flex items-center justify-center active:scale-90 transition-transform"
@@ -363,6 +538,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
             width={16}
             height={16}
             className="text-slime-muted"
+            aria-hidden="true"
           >
             <path
               fillRule="evenodd"
@@ -381,270 +557,397 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
         </div>
       </header>
 
-      <div className="px-4 pb-28 space-y-5">
-        {/* CARD 1 — Profile Photo */}
-        <section className="rounded-2xl p-4 space-y-2" style={sectionStyle}>
-          <p className="section-label">Profile Photo</p>
-          <div className="flex items-start gap-4 mt-2">
-            <div className="w-24 shrink-0">
-              <ImageUpload
-                bucket="avatars"
-                userId={userId}
-                existingUrl={form.avatar_url}
-                onUploadComplete={(url) =>
-                  setForm((f) => ({ ...f, avatar_url: url }))
-                }
-                onRemove={() => setForm((f) => ({ ...f, avatar_url: null }))}
-                label="Add photo"
-                aspectRatio="square"
-              />
-            </div>
-            <div className="flex-1 flex flex-col justify-center gap-1 pt-1">
-              <p className="text-sm font-semibold text-slime-text leading-tight">
-                {form.username || "Your Name"}
-              </p>
-              <p className="text-xs text-slime-muted">
-                Tap to upload or change your avatar. Max 2 MB.
-              </p>
-              {form.avatar_url && (
-                <button
-                  type="button"
-                  onClick={() => setForm((f) => ({ ...f, avatar_url: null }))}
-                  className="mt-1 text-xs text-red-400 font-medium text-left active:opacity-70 transition-opacity"
+      <div className="px-4 pb-28 space-y-4">
+        {/* Hidden file input */}
+        <input
+          ref={avatarInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          className="hidden"
+          onChange={handleAvatarChange}
+          aria-label="Change profile photo"
+        />
+
+        {/* Avatar section */}
+        <div className="flex flex-col items-center gap-2 py-4">
+          <button
+            type="button"
+            onClick={() => avatarInputRef.current?.click()}
+            disabled={avatarUploading}
+            className="relative active:opacity-80 transition-opacity"
+            aria-label="Change profile photo"
+          >
+            <div
+              className="w-20 h-20 rounded-full overflow-hidden"
+              style={{
+                background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                opacity: avatarUploading ? 0.6 : 1,
+                transition: "opacity 0.2s",
+              }}
+            >
+              {form.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={form.avatar_url}
+                  alt="Profile photo"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div
+                  className="w-full h-full flex items-center justify-center font-black text-2xl"
+                  style={{
+                    color: "#0A0A0A",
+                    fontFamily: "Montserrat, sans-serif",
+                  }}
                 >
-                  Remove photo
-                </button>
+                  {form.username ? form.username.charAt(0).toUpperCase() : "S"}
+                </div>
               )}
             </div>
-          </div>
-        </section>
 
-        {/* CARD 2 — About You */}
-        <section className="rounded-2xl p-4" style={sectionStyle}>
-          <p className="section-label">About You</p>
-
-          <div className="flex flex-col gap-4 mt-3">
-            {/* Username */}
-            <div>
-              <label htmlFor="username" className={subLabelCls}>
-                USERNAME
-              </label>
-              <div className="relative flex items-center">
-                <span className="absolute left-3 text-slime-muted text-sm font-medium select-none">
-                  @
-                </span>
-                <input
-                  id="username"
-                  type="text"
-                  autoComplete="off"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  value={form.username}
-                  onChange={handleUsernameChange}
-                  maxLength={20}
-                  placeholder="your_username"
-                  className={`w-full pl-7 pr-10 py-2.5 rounded-xl border text-sm font-semibold placeholder:text-slime-muted outline-none transition-colors bg-slime-surface text-slime-text ${
-                    usernameStatus === "taken" || usernameStatus === "invalid"
-                      ? "border-red-500/40 focus:border-red-500/60"
-                      : usernameStatus === "available"
-                        ? "border-slime-accent/40 focus:border-slime-accent/60"
-                        : "border-slime-border focus:border-slime-accent/50"
-                  }`}
-                />
-                <div className="absolute right-3">
-                  <UsernameStatusIcon status={usernameStatus} />
-                </div>
-              </div>
-              <UsernameHint status={usernameStatus} username={form.username} />
-            </div>
-
-            {/* Bio */}
-            <div>
-              <div className="flex items-center justify-between">
-                <label htmlFor="bio" className={subLabelCls}>
-                  BIO
-                </label>
-                <span
-                  className={`text-[10px] font-medium tabular-nums transition-colors mb-1.5 ${
-                    form.bio.length > 140
-                      ? form.bio.length > 150
-                        ? "text-red-400"
-                        : "text-amber-400"
-                      : "text-slime-muted"
-                  }`}
+            {/* Camera badge */}
+            <span
+              className="absolute bottom-0 right-0 w-6 h-6 rounded-full flex items-center justify-center"
+              style={{
+                background: avatarUploading
+                  ? "rgba(45,10,78,0.8)"
+                  : "rgba(57,255,20,0.9)",
+                border: "2px solid #0A0A0A",
+              }}
+            >
+              {avatarUploading ? (
+                <svg
+                  className="animate-spin"
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
                 >
-                  {form.bio.length}/150
-                </span>
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="#0A0A0A"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="#0A0A0A"
+                    d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                  />
+                </svg>
+              ) : (
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#0A0A0A"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                  <circle cx="12" cy="13" r="4" />
+                </svg>
+              )}
+            </span>
+          </button>
+
+          {form.avatar_url && !avatarUploading && (
+            <button
+              type="button"
+              onClick={() => setForm((f) => ({ ...f, avatar_url: null }))}
+              className="text-xs font-medium active:opacity-70 transition-opacity"
+              style={{ color: "rgba(245,245,245,0.35)" }}
+            >
+              Remove photo
+            </button>
+          )}
+
+          {avatarError && (
+            <p className="text-xs text-red-400 text-center px-4">
+              {avatarError}
+            </p>
+          )}
+        </div>
+
+        {/* About You card */}
+        <div>
+          <p
+            className="text-[11px] font-black tracking-widest uppercase mb-2 px-1"
+            style={{ color: "#00F0FF" }}
+          >
+            About You
+          </p>
+          <div className="rounded-2xl overflow-hidden" style={sectionStyle}>
+            {/* Username row */}
+            <EditRow
+              label="Username"
+              value={form.username ? `@${form.username}` : ""}
+              expanded={expandedField === "username"}
+              onToggle={() => toggleField("username")}
+            >
+              <div className="pt-3">
+                <div className="relative flex items-center">
+                  <span className="absolute left-3 text-slime-muted text-sm font-medium select-none">
+                    @
+                  </span>
+                  <input
+                    id="username"
+                    type="text"
+                    autoComplete="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    value={form.username}
+                    onChange={handleUsernameChange}
+                    maxLength={20}
+                    placeholder="your_username"
+                    className={`w-full pl-7 pr-10 py-2.5 rounded-xl border text-sm font-semibold placeholder:text-slime-muted outline-none transition-colors bg-slime-surface text-slime-text ${
+                      usernameStatus === "taken" || usernameStatus === "invalid"
+                        ? "border-red-500/40 focus:border-red-500/60"
+                        : usernameStatus === "available"
+                          ? "border-slime-accent/40 focus:border-slime-accent/60"
+                          : "border-slime-border focus:border-slime-accent/50"
+                    }`}
+                  />
+                  <div className="absolute right-3">
+                    <UsernameStatusIcon status={usernameStatus} />
+                  </div>
+                </div>
+                <UsernameHint
+                  status={usernameStatus}
+                  username={form.username}
+                />
               </div>
-              <textarea
-                id="bio"
-                rows={3}
-                value={form.bio}
-                maxLength={150}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, bio: e.target.value }))
-                }
-                placeholder="Tell the slime world about yourself…"
-                className={`${inputCls} resize-none`}
-              />
-            </div>
+            </EditRow>
+
+            <RowDivider />
+
+            {/* Bio row */}
+            <EditRow
+              label="Bio"
+              value={form.bio}
+              expanded={expandedField === "bio"}
+              onToggle={() => toggleField("bio")}
+            >
+              <div className="pt-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slime-muted">
+                    Bio
+                  </span>
+                  <span
+                    className={`text-[10px] font-medium tabular-nums transition-colors ${
+                      form.bio.length > 140
+                        ? form.bio.length > 150
+                          ? "text-red-400"
+                          : "text-amber-400"
+                        : "text-slime-muted"
+                    }`}
+                  >
+                    {form.bio.length}/150
+                  </span>
+                </div>
+                <textarea
+                  id="bio"
+                  rows={4}
+                  value={form.bio}
+                  maxLength={150}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, bio: e.target.value }))
+                  }
+                  placeholder="Tell the slime world about yourself…"
+                  className={`${inputCls} resize-none`}
+                />
+              </div>
+            </EditRow>
           </div>
-        </section>
+        </div>
 
-        {/* CARD 3 — Contact & Links */}
-        <section className="rounded-2xl p-4" style={sectionStyle}>
-          <p className="section-label">Contact &amp; Links</p>
-
-          <div className="flex flex-col gap-4 mt-3">
+        {/* Contact & Links card */}
+        <div>
+          <p
+            className="text-[11px] font-black tracking-widest uppercase mb-2 px-1"
+            style={{ color: "#00F0FF" }}
+          >
+            Contact &amp; Links
+          </p>
+          <div className="rounded-2xl overflow-hidden" style={sectionStyle}>
             {/* Location */}
-            <div>
-              <label htmlFor="location" className={subLabelCls}>
-                LOCATION
-              </label>
-              <input
-                id="location"
-                type="text"
-                value={form.location}
-                maxLength={100}
-                placeholder="e.g. Austin, TX"
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, location: e.target.value }))
-                }
-                className={inputCls}
-              />
-            </div>
+            <EditRow
+              label="Location"
+              value={form.location}
+              expanded={expandedField === "location"}
+              onToggle={() => toggleField("location")}
+            >
+              <div className="pt-3">
+                <input
+                  id="location"
+                  type="text"
+                  value={form.location}
+                  maxLength={100}
+                  placeholder="e.g. Austin, TX"
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, location: e.target.value }))
+                  }
+                  className={inputCls}
+                />
+              </div>
+            </EditRow>
+
+            <RowDivider />
 
             {/* Website */}
-            <div>
-              <label htmlFor="website_url" className={subLabelCls}>
-                WEBSITE
-              </label>
-              <input
-                id="website_url"
-                type="url"
-                inputMode="url"
-                value={form.website_url}
-                maxLength={200}
-                placeholder="https://yourshop.com"
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, website_url: e.target.value }))
-                }
-                className={inputCls}
-              />
-            </div>
+            <EditRow
+              label="Website"
+              value={form.website_url}
+              expanded={expandedField === "website_url"}
+              onToggle={() => toggleField("website_url")}
+            >
+              <div className="pt-3">
+                <input
+                  id="website_url"
+                  type="url"
+                  inputMode="url"
+                  value={form.website_url}
+                  maxLength={200}
+                  placeholder="https://yourshop.com"
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, website_url: e.target.value }))
+                  }
+                  className={inputCls}
+                />
+              </div>
+            </EditRow>
+
+            <RowDivider />
 
             {/* Instagram */}
-            <div>
-              <label htmlFor="instagram_handle" className={subLabelCls}>
-                INSTAGRAM
-              </label>
-              <div className="relative flex items-center">
-                <span className="absolute left-3 text-slime-muted text-sm font-medium select-none">
-                  @
-                </span>
-                <input
-                  id="instagram_handle"
-                  type="text"
-                  autoComplete="off"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  value={form.instagram_handle}
-                  onChange={handleInstagramChange}
-                  maxLength={30}
-                  placeholder="slimelogapp"
-                  className={`${inputCls} pl-7`}
-                />
+            <EditRow
+              label="Instagram"
+              value={form.instagram_handle ? `@${form.instagram_handle}` : ""}
+              expanded={expandedField === "instagram_handle"}
+              onToggle={() => toggleField("instagram_handle")}
+            >
+              <div className="pt-3">
+                <div className="relative flex items-center">
+                  <span className="absolute left-3 text-slime-muted text-sm font-medium select-none">
+                    @
+                  </span>
+                  <input
+                    id="instagram_handle"
+                    type="text"
+                    autoComplete="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    value={form.instagram_handle}
+                    onChange={handleInstagramChange}
+                    maxLength={30}
+                    placeholder="slimelogapp"
+                    className={`${inputCls} pl-7`}
+                  />
+                </div>
+                {form.instagram_handle !== "" &&
+                  (INSTAGRAM_RE.test(form.instagram_handle) ? (
+                    <p className="text-[10px] text-slime-muted mt-1.5">
+                      Links to instagram.com/{form.instagram_handle}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-red-400 mt-1.5">
+                      Letters, numbers, periods, and underscores only.
+                    </p>
+                  ))}
               </div>
-              {form.instagram_handle === "" ? (
-                <p className="text-xs text-slime-muted mt-1">
-                  Your Instagram username (without @)
-                </p>
-              ) : INSTAGRAM_RE.test(form.instagram_handle) ? (
-                <p className="text-[10px] text-slime-muted mt-1">
-                  Links to instagram.com/{form.instagram_handle}
-                </p>
-              ) : (
-                <p className="text-xs text-red-400 mt-1">
-                  Letters, numbers, periods, and underscores only.
-                </p>
-              )}
-            </div>
+            </EditRow>
+
+            <RowDivider />
 
             {/* TikTok */}
-            <div>
-              <label htmlFor="tiktok_handle" className={subLabelCls}>
-                TIKTOK
-              </label>
-              <div className="relative flex items-center">
-                <span className="absolute left-3 text-slime-muted text-sm font-medium select-none">
-                  @
-                </span>
-                <input
-                  id="tiktok_handle"
-                  type="text"
-                  autoComplete="off"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  value={form.tiktok_handle}
-                  onChange={handleTiktokChange}
-                  maxLength={24}
-                  placeholder="slimelogapp"
-                  className={`${inputCls} pl-7`}
-                />
+            <EditRow
+              label="TikTok"
+              value={form.tiktok_handle ? `@${form.tiktok_handle}` : ""}
+              expanded={expandedField === "tiktok_handle"}
+              onToggle={() => toggleField("tiktok_handle")}
+            >
+              <div className="pt-3">
+                <div className="relative flex items-center">
+                  <span className="absolute left-3 text-slime-muted text-sm font-medium select-none">
+                    @
+                  </span>
+                  <input
+                    id="tiktok_handle"
+                    type="text"
+                    autoComplete="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    value={form.tiktok_handle}
+                    onChange={handleTiktokChange}
+                    maxLength={24}
+                    placeholder="slimelogapp"
+                    className={`${inputCls} pl-7`}
+                  />
+                </div>
+                {form.tiktok_handle !== "" &&
+                  (TIKTOK_RE.test(form.tiktok_handle) ? (
+                    <p className="text-[10px] text-slime-muted mt-1.5">
+                      Links to tiktok.com/@{form.tiktok_handle}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-red-400 mt-1.5">
+                      Letters, numbers, periods, and underscores only.
+                    </p>
+                  ))}
               </div>
-              {form.tiktok_handle === "" ? (
-                <p className="text-xs text-slime-muted mt-1">
-                  Your TikTok username (without @)
-                </p>
-              ) : TIKTOK_RE.test(form.tiktok_handle) ? (
-                <p className="text-[10px] text-slime-muted mt-1">
-                  Links to tiktok.com/@{form.tiktok_handle}
-                </p>
-              ) : (
-                <p className="text-xs text-red-400 mt-1">
-                  Letters, numbers, periods, and underscores only.
-                </p>
-              )}
-            </div>
+            </EditRow>
+
+            <RowDivider />
 
             {/* Shop URL */}
-            <div>
-              <label htmlFor="shop_url" className={subLabelCls}>
-                SHOP URL
-              </label>
-              <input
-                id="shop_url"
-                type="url"
-                inputMode="url"
-                autoCapitalize="none"
-                spellCheck={false}
-                value={form.shop_url}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, shop_url: e.target.value }))
-                }
-                onBlur={handleShopUrlBlur}
-                maxLength={200}
-                placeholder="https://myshop.etsy.com"
-                className={inputCls}
-              />
-              {form.shop_url === "" ? (
-                <p className="text-xs text-slime-muted mt-1">
-                  Your Etsy, Shopify, or other shop link
-                </p>
-              ) : SHOP_URL_RE.test(form.shop_url) ? null : (
-                <p className="text-xs text-red-400 mt-1">
-                  Must be a valid URL starting with https://
-                </p>
-              )}
-            </div>
+            <EditRow
+              label="Shop URL"
+              value={form.shop_url}
+              expanded={expandedField === "shop_url"}
+              onToggle={() => toggleField("shop_url")}
+            >
+              <div className="pt-3">
+                <input
+                  id="shop_url"
+                  type="url"
+                  inputMode="url"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  value={form.shop_url}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, shop_url: e.target.value }))
+                  }
+                  onBlur={handleShopUrlBlur}
+                  maxLength={200}
+                  placeholder="https://myshop.etsy.com"
+                  className={inputCls}
+                />
+                {form.shop_url !== "" && !SHOP_URL_RE.test(form.shop_url) && (
+                  <p className="text-xs text-red-400 mt-1.5">
+                    Must be a valid URL starting with https://
+                  </p>
+                )}
+              </div>
+            </EditRow>
           </div>
-        </section>
+        </div>
 
+        {/* Save button */}
         <button
           type="button"
           onClick={handleSave}
           disabled={!isFormValid || saving}
-          className={`w-full py-3.5 rounded-2xl text-sm font-black tracking-wide transition-all active:scale-95 ${isFormValid && !saving ? "text-slime-bg shadow-glow-green" : "bg-slime-surface text-slime-muted cursor-not-allowed"}`}
+          className={`w-full py-3.5 rounded-2xl text-sm font-black tracking-wide transition-all active:scale-95 ${
+            isFormValid && !saving
+              ? "text-slime-bg shadow-glow-green"
+              : "bg-slime-surface text-slime-muted cursor-not-allowed"
+          }`}
           style={
             isFormValid && !saving
               ? { background: "linear-gradient(135deg, #39FF14, #00F0FF)" }
@@ -657,6 +960,8 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     </>
   );
 }
+
+// ─── Default export ───────────────────────────────────────────────────────────
 
 export default function ProfileSettingsPage() {
   const router = useRouter();
@@ -679,10 +984,9 @@ export default function ProfileSettingsPage() {
       <PageWrapper>
         <div className="px-4 pt-10 space-y-4 animate-pulse">
           <div className="h-6 w-32 bg-slime-surface rounded-xl" />
-          <div className="h-28 w-28 bg-slime-surface rounded-2xl" />
-          <div className="h-12 rounded-2xl" style={sectionStyle} />
-          <div className="h-24 rounded-2xl" style={sectionStyle} />
-          <div className="h-12 rounded-2xl" style={sectionStyle} />
+          <div className="w-20 h-20 rounded-full bg-slime-surface mx-auto" />
+          <div className="h-32 rounded-2xl" style={sectionStyle} />
+          <div className="h-64 rounded-2xl" style={sectionStyle} />
         </div>
       </PageWrapper>
     );
