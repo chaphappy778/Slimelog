@@ -221,12 +221,6 @@ function SubscriptionSection({
       <p className="section-label">Subscription</p>
 
       {subscriptionTier === "pro" ? (
-        // [Fix C] Pro-tier view restructured:
-        //   Row 1: PRO pill + renewal/end date (horizontal, compact).
-        //          "SlimeLog Pro" text has been removed — the pill carries the
-        //          tier signal, and the date communicates lifecycle state.
-        //   Row 2: Full-width Manage Subscription button (unchanged).
-        // Free-tier branch (else) is unchanged.
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <span
@@ -257,12 +251,6 @@ function SubscriptionSection({
             disabled={portalLoading}
             className="w-full"
             style={{
-              // [Fix 43] Full-width button styling per spec:
-              //   bg rgba(45,10,78,0.5) default, rgba(45,10,78,0.7) on hover
-              //   border 1px solid rgba(45,10,78,0.9)
-              //   color rgba(245,245,245,0.85) default, #FFFFFF on hover
-              //   13px / 700 weight, rounded-full, py-3
-              //   Disabled: opacity 0.5, muted text, not-allowed cursor
               background:
                 !portalLoading && manageHover
                   ? "rgba(45,10,78,0.7)"
@@ -312,9 +300,185 @@ function SubscriptionSection({
   );
 }
 
-function ProfileSettingsContent({ userId }: { userId: string }) {
+// [Change 3] — AccountSection: collapsible card for changing email address
+function AccountSection({ currentEmail }: { currentEmail: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [status, setStatus] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  async function handleChangeEmail() {
+    const trimmed = newEmail.trim();
+    if (!EMAIL_RE.test(trimmed)) {
+      setErrorMsg("Please enter a valid email address.");
+      setStatus("error");
+      return;
+    }
+    if (trimmed.toLowerCase() === currentEmail.toLowerCase()) {
+      setErrorMsg("That's already your current email.");
+      setStatus("error");
+      return;
+    }
+    setStatus("loading");
+    setErrorMsg("");
+    const { error } = await supabase.auth.updateUser({ email: trimmed });
+    if (error) {
+      setErrorMsg(error.message);
+      setStatus("error");
+    } else {
+      setStatus("success");
+    }
+  }
+
+  return (
+    <section className="rounded-2xl overflow-hidden" style={sectionStyle}>
+      {/* Header row — always visible */}
+      <button
+        type="button"
+        onClick={() => {
+          setExpanded((v) => !v);
+          setStatus("idle");
+          setNewEmail("");
+          setErrorMsg("");
+        }}
+        className="w-full flex items-center justify-between px-4 py-4 active:opacity-70 transition-opacity"
+      >
+        <p className="section-label mb-0">Account</p>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="text-slime-muted transition-transform duration-200"
+          style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}
+          aria-hidden="true"
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {/* Expandable body */}
+      {expanded && (
+        <div
+          className="px-4 pb-4 flex flex-col gap-3"
+          style={{ borderTop: "1px solid rgba(45,10,78,0.5)" }}
+        >
+          {status === "success" ? (
+            <div className="flex flex-col gap-2 pt-3">
+              <div className="flex items-center gap-2">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#39FF14"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <p
+                  className="text-sm font-semibold"
+                  style={{ color: "#39FF14" }}
+                >
+                  Confirmation sent
+                </p>
+              </div>
+              <p className="text-xs text-slime-muted leading-relaxed">
+                Check your inbox at{" "}
+                <span className="text-slime-text font-medium">
+                  {newEmail.trim()}
+                </span>{" "}
+                and click the link to confirm your new email address.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setStatus("idle");
+                  setNewEmail("");
+                  setExpanded(false);
+                }}
+                className="mt-1 text-xs text-slime-muted font-medium text-left active:opacity-70 transition-opacity"
+              >
+                Done
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="pt-3">
+                <p className={subLabelCls}>CURRENT EMAIL</p>
+                <p className="text-sm text-slime-text font-medium px-3 py-2.5 rounded-xl border border-slime-border bg-slime-surface/50">
+                  {currentEmail}
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="new-email" className={subLabelCls}>
+                  NEW EMAIL
+                </label>
+                <input
+                  id="new-email"
+                  type="email"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  spellCheck={false}
+                  value={newEmail}
+                  onChange={(e) => {
+                    setNewEmail(e.target.value);
+                    if (status === "error") {
+                      setStatus("idle");
+                      setErrorMsg("");
+                    }
+                  }}
+                  placeholder="new@email.com"
+                  className={inputCls}
+                />
+                {status === "error" && errorMsg && (
+                  <p className="text-xs text-red-400 mt-1.5">{errorMsg}</p>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleChangeEmail}
+                disabled={status === "loading" || newEmail.trim() === ""}
+                className="w-full py-3 rounded-xl text-sm font-bold transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{
+                  background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                  color: "#0A0A0A",
+                }}
+              >
+                {status === "loading" ? "Sending\u2026" : "Send Confirmation"}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// [Change 2] — ProfileSettingsContent now accepts userEmail prop
+function ProfileSettingsContent({
+  userId,
+  userEmail,
+}: {
+  userId: string;
+  userEmail: string;
+}) {
   const { showToast } = useToast();
-  const router = useRouter(); // [Fix 1] router needed here to strip query params after toast
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   const [originalForm, setOriginalForm] = useState<FormState>({
@@ -338,7 +502,6 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     shop_url: "",
   });
   const [subscriptionTier, setSubscriptionTier] = useState<string>("free");
-  // [Fix C] New state for the renewal/end date display on the subscription card.
   const [subscriptionPeriodEnd, setSubscriptionPeriodEnd] = useState<
     string | null
   >(null);
@@ -346,8 +509,6 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     useState<boolean>(false);
   const [profileLoading, setProfileLoading] = useState(true);
 
-  // [Fix 1] Show upgrade toast once, then strip ?upgraded / ?already_pro from the URL
-  // so a remount or client-side navigation back to this page does not re-fire.
   useEffect(() => {
     const upgraded = searchParams.get("upgraded") === "true";
     const alreadyPro = searchParams.get("already_pro") === "true";
@@ -367,9 +528,6 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     supabase
       .from("profiles")
       .select(
-        // [Fix C] Added subscription_current_period_end and
-        // subscription_cancel_at_period_end to the select list so the
-        // SubscriptionSection has the data it needs to render the renewal date.
         "username, bio, location, website_url, avatar_url, subscription_tier, subscription_current_period_end, subscription_cancel_at_period_end, instagram_handle, tiktok_handle, shop_url",
       )
       .eq("id", userId)
@@ -389,8 +547,6 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
           setOriginalForm(loaded);
           setForm(loaded);
           setSubscriptionTier(data.subscription_tier ?? "free");
-          // [Fix C] Default missing/null values safely — null period end means
-          // "don't render secondary text", false cancel flag means "Renews".
           setSubscriptionPeriodEnd(
             data.subscription_current_period_end ?? null,
           );
@@ -819,13 +975,15 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
         </section>
 
         {/* CARD 4 — Subscription */}
-        {/* [Fix C] New periodEnd + cancelAtPeriodEnd props drive the "Renews"
-            / "Ends" text next to the PRO pill. */}
         <SubscriptionSection
           subscriptionTier={subscriptionTier}
           periodEnd={subscriptionPeriodEnd}
           cancelAtPeriodEnd={subscriptionCancelAtPeriodEnd}
         />
+
+        {/* CARD 5 — Account */}
+        {/* [Change 4] — AccountSection wired in between Subscription and Save button */}
+        <AccountSection currentEmail={userEmail} />
 
         <button
           type="button"
@@ -849,6 +1007,8 @@ export default function ProfileSettingsPage() {
   const router = useRouter();
   const [authChecked, setAuthChecked] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  // [Change 1] — capture email from auth session
+  const [userEmail, setUserEmail] = useState<string>("");
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -856,6 +1016,8 @@ export default function ProfileSettingsPage() {
         router.replace("/login");
       } else {
         setUserId(data.user.id);
+        // [Change 1] — store email alongside userId
+        setUserEmail(data.user.email ?? "");
         setAuthChecked(true);
       }
     });
@@ -877,7 +1039,8 @@ export default function ProfileSettingsPage() {
 
   return (
     <PageWrapper dots>
-      <ProfileSettingsContent userId={userId} />
+      {/* [Change 1] — pass userEmail down to content component */}
+      <ProfileSettingsContent userId={userId} userEmail={userEmail} />
     </PageWrapper>
   );
 }
