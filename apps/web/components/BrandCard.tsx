@@ -8,7 +8,7 @@ interface BrandCardProps {
   verificationTier: string | null;
   restockSchedule: string | null;
   totalLogs: number;
-  avgShipping: number | null;
+  avgSlimeRating: number | null;
   logoUrl?: string | null;
   ownerName?: string | null;
 }
@@ -103,7 +103,7 @@ export function BrandCard({
   verificationTier,
   restockSchedule,
   totalLogs,
-  avgShipping,
+  avgSlimeRating,
   logoUrl,
   ownerName,
 }: BrandCardProps) {
@@ -224,8 +224,8 @@ export function BrandCard({
               <span className="font-semibold text-slime-text">{totalLogs}</span>{" "}
               logs
             </span>
-            {avgShipping != null ? (
-              <StarRating value={avgShipping} />
+            {avgSlimeRating != null ? (
+              <StarRating value={avgSlimeRating} />
             ) : (
               <span className="text-[11px] text-slime-muted">
                 No ratings yet

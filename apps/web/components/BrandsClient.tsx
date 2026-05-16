@@ -514,7 +514,7 @@ export default function BrandsClient({
               verificationTier={brand.verification_tier}
               restockSchedule={brand.restock_schedule}
               totalLogs={brand.total_logs ?? 0}
-              avgShipping={brand.avg_shipping}
+              avgSlimeRating={brand.avg_slime_rating}
               logoUrl={brand.logo_url}
               ownerName={brand.owner_name}
             />
