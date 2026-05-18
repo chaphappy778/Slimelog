@@ -46,11 +46,10 @@ type PanelMode = "empty" | "detail" | "add" | "edit";
 
 const DIMENSIONS = [
   { key: "avg_texture", label: "Texture" },
-  { key: "avg_scent", label: "Scent" },
-  { key: "avg_sound", label: "Sound" },
-  { key: "avg_drizzle", label: "Drizzle" },
+  { key: "avg_sound", label: "Sound / ASMR" },
+  { key: "avg_drizzle", label: "Aesthetic" },
+  { key: "avg_sensory_fit", label: "Quality" },
   { key: "avg_creativity", label: "Creativity" },
-  { key: "avg_sensory_fit", label: "Sensory Fit" },
 ];
 
 function RatingBar({ label, value }: { label: string; value: number | null }) {
