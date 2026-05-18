@@ -5,13 +5,14 @@ import { useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
 
-// [Change 18] Module-level createBrowserClient — not inside component
+// Module-level createBrowserClient — not inside component
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
 );
 
-// [Change 7] Local prop interface — Brand is not exported from @/lib/types
+// [Change 3] Local prop interface — Brand is not exported from @/lib/types
+// Added youtube_handle, pinterest_handle, twitter_handle
 interface BrandProps {
   id: string;
   name: string;
@@ -21,6 +22,9 @@ interface BrandProps {
   shop_url: string | null;
   instagram_handle: string | null;
   tiktok_handle: string | null;
+  youtube_handle: string | null;
+  pinterest_handle: string | null;
+  twitter_handle: string | null;
   contact_email: string | null;
   location: string | null;
   founded_year: number | null;
@@ -36,7 +40,7 @@ interface BrandSettingsFormProps {
   userId: string;
 }
 
-// [Change 2] compressImage helper — canvas → WebP at 0.85 quality
+// compressImage helper — canvas → WebP at 0.85 quality
 async function compressImage(file: File, maxDimension: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -82,13 +86,13 @@ async function compressImage(file: File, maxDimension: number): Promise<Blob> {
   });
 }
 
-// [Change 3] generateFilePath helper
+// generateFilePath helper
 function generateFilePath(userId: string, prefix: string): string {
   const random = Math.random().toString(36).slice(2, 8);
   return `brands/${userId}/${prefix}-${Date.now()}-${random}.webp`;
 }
 
-// [Change 9] RowDivider component
+// RowDivider component
 function RowDivider() {
   return (
     <div
@@ -98,7 +102,7 @@ function RowDivider() {
   );
 }
 
-// [Change 8] EditRow component — label, value display, expandable inline input
+// EditRow component — label, value display, expandable inline input
 interface EditRowProps {
   label: string;
   value: string;
@@ -167,30 +171,24 @@ function EditRow({ label, value, expanded, onToggle, children }: EditRowProps) {
   );
 }
 
-// Section header
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <div className="px-4 pt-5 pb-2">
-      <span
-        className="text-[11px] font-black tracking-widest uppercase"
-        style={{ color: "#00F0FF" }} // ← was rgba(245,245,245,0.3)
-      >
-        {title}
-      </span>
-    </div>
-  );
-}
-
 // Input style helper
 const inputStyle: React.CSSProperties = {
   background: "rgba(45,10,78,0.4)",
   border: "1px solid rgba(45,10,78,0.9)",
 };
 
+// [Change 2] Shared card style helper
+const cardStyle: React.CSSProperties = {
+  background: "rgba(45,10,78,0.25)",
+  border: "1px solid rgba(45,10,78,0.7)",
+  boxShadow: "inset 0 0 16px rgba(45,10,78,0.1)",
+};
+
 export default function BrandSettingsForm({
   brand,
   userId,
 }: BrandSettingsFormProps) {
+  // [Change 3] Added youtube_handle, pinterest_handle, twitter_handle to form state
   const [form, setForm] = useState({
     name: brand.name ?? "",
     bio: brand.bio ?? "",
@@ -199,6 +197,9 @@ export default function BrandSettingsForm({
     shop_url: brand.shop_url ?? "",
     instagram_handle: brand.instagram_handle ?? "",
     tiktok_handle: brand.tiktok_handle ?? "",
+    youtube_handle: brand.youtube_handle ?? "",
+    pinterest_handle: brand.pinterest_handle ?? "",
+    twitter_handle: brand.twitter_handle ?? "",
     contact_email: brand.contact_email ?? "",
     location: brand.location ?? "",
     founded_year: brand.founded_year?.toString() ?? "",
@@ -210,7 +211,6 @@ export default function BrandSettingsForm({
     brand.banner_url ?? null,
   );
 
-  // [Change 4] Upload boolean states
   const [bannerUploading, setBannerUploading] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
 
@@ -219,7 +219,7 @@ export default function BrandSettingsForm({
   const [error, setError] = useState<string | null>(null);
   const [openRow, setOpenRow] = useState<string | null>(null);
 
-  // Track original to detect changes
+  // [Change 3] Added youtube_handle, pinterest_handle, twitter_handle to original ref
   const original = useRef({
     form: {
       name: brand.name ?? "",
@@ -229,6 +229,9 @@ export default function BrandSettingsForm({
       shop_url: brand.shop_url ?? "",
       instagram_handle: brand.instagram_handle ?? "",
       tiktok_handle: brand.tiktok_handle ?? "",
+      youtube_handle: brand.youtube_handle ?? "",
+      pinterest_handle: brand.pinterest_handle ?? "",
+      twitter_handle: brand.twitter_handle ?? "",
       contact_email: brand.contact_email ?? "",
       location: brand.location ?? "",
       founded_year: brand.founded_year?.toString() ?? "",
@@ -238,14 +241,13 @@ export default function BrandSettingsForm({
     bannerUrl: brand.banner_url ?? null,
   });
 
+  // hasChanges uses JSON.stringify — all new fields covered automatically
   const hasChanges =
     JSON.stringify(form) !== JSON.stringify(original.current.form) ||
     logoUrl !== original.current.logoUrl ||
     bannerUrl !== original.current.bannerUrl;
 
-  // [Change 5] Banner file input ref
   const bannerInputRef = useRef<HTMLInputElement>(null);
-  // [Change 6] Logo file input ref
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   const showToast = (msg: string) => {
@@ -257,7 +259,7 @@ export default function BrandSettingsForm({
     setOpenRow((prev) => (prev === key ? null : key));
   }, []);
 
-  // [Change 5] Banner upload handler
+  // Banner upload handler
   const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -281,7 +283,7 @@ export default function BrandSettingsForm({
     }
   };
 
-  // [Change 6] Logo upload handler
+  // Logo upload handler
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -305,7 +307,7 @@ export default function BrandSettingsForm({
     }
   };
 
-  // [Change 17] handleSave
+  // [Change 3] handleSave — added youtube_handle, pinterest_handle, twitter_handle to payload
   const handleSave = async () => {
     if (!form.name.trim()) {
       setError("Brand name is required.");
@@ -323,6 +325,9 @@ export default function BrandSettingsForm({
         shop_url: form.shop_url || null,
         instagram_handle: form.instagram_handle.replace(/^@/, "") || null,
         tiktok_handle: form.tiktok_handle.replace(/^@/, "") || null,
+        youtube_handle: form.youtube_handle.replace(/^@/, "") || null,
+        pinterest_handle: form.pinterest_handle.replace(/^@/, "") || null,
+        twitter_handle: form.twitter_handle.replace(/^@/, "") || null,
         contact_email: form.contact_email || null,
         location: form.location || null,
         founded_year: form.founded_year
@@ -353,8 +358,9 @@ export default function BrandSettingsForm({
   const isPro = tier === "verified" || tier === "partner";
 
   return (
-    <div className="max-w-xl pb-20">
-      {/* [Change 10] Page header */}
+    // [Change 1] Removed max-w-xl — dashboard layout constrains width on desktop
+    <div className="pb-20">
+      {/* Page header */}
       <div className="flex items-center gap-3 px-4 pt-5 pb-4">
         <Link
           href={`/brand-dashboard/${brand.slug}`}
@@ -394,7 +400,7 @@ export default function BrandSettingsForm({
         </div>
       </div>
 
-      {/* [Change 11] Brand hero */}
+      {/* Brand hero */}
       <div className="relative mb-10">
         {/* Banner */}
         <button
@@ -612,17 +618,14 @@ export default function BrandSettingsForm({
         </p>
       </div>
 
-      {/* [Change 12] BRAND IDENTITY section */}
-      <div
-        className="rounded-xl overflow-hidden mb-3"
-        style={{
-          background: "rgba(45,10,78,0.25)",
-          border: "1px solid rgba(45,10,78,0.7)",
-          boxShadow: "inset 0 0 16px rgba(45,10,78,0.1)",
-        }}
+      {/* [Change 2] BRAND IDENTITY — section label outside card */}
+      <p
+        className="text-[11px] font-black tracking-widest uppercase mb-2 px-1"
+        style={{ color: "#00F0FF" }}
       >
-        <SectionHeader title="Brand Identity" />
-
+        Brand Identity
+      </p>
+      <div className="rounded-2xl overflow-hidden mb-4" style={cardStyle}>
         <EditRow
           label="Brand Name"
           value={form.name}
@@ -684,17 +687,14 @@ export default function BrandSettingsForm({
         </EditRow>
       </div>
 
-      {/* [Change 13] CONTACT & LINKS section */}
-      <div
-        className="rounded-xl overflow-hidden mb-3"
-        style={{
-          background: "rgba(45,10,78,0.25)",
-          border: "1px solid rgba(45,10,78,0.7)",
-          boxShadow: "inset 0 0 16px rgba(45,10,78,0.1)",
-        }}
+      {/* [Change 2] CONTACT & LINKS — section label outside card */}
+      <p
+        className="text-[11px] font-black tracking-widest uppercase mb-2 px-1"
+        style={{ color: "#00F0FF" }}
       >
-        <SectionHeader title="Contact & Links" />
-
+        Contact &amp; Links
+      </p>
+      <div className="rounded-2xl overflow-hidden mb-4" style={cardStyle}>
         <EditRow
           label="Contact Email"
           value={form.contact_email}
@@ -806,17 +806,15 @@ export default function BrandSettingsForm({
         </EditRow>
       </div>
 
-      {/* [Change 14] SOCIAL section */}
-      <div
-        className="rounded-xl overflow-hidden mb-3"
-        style={{
-          background: "rgba(45,10,78,0.25)",
-          border: "1px solid rgba(45,10,78,0.7)",
-          boxShadow: "inset 0 0 16px rgba(45,10,78,0.1)",
-        }}
+      {/* [Change 2] SOCIAL — section label outside card */}
+      {/* [Change 3] Added YouTube, Pinterest, Twitter/X rows */}
+      <p
+        className="text-[11px] font-black tracking-widest uppercase mb-2 px-1"
+        style={{ color: "#00F0FF" }}
       >
-        <SectionHeader title="Social" />
-
+        Social
+      </p>
+      <div className="rounded-2xl overflow-hidden mb-4" style={cardStyle}>
         <EditRow
           label="Instagram Handle"
           value={form.instagram_handle ? `@${form.instagram_handle}` : ""}
@@ -872,19 +870,109 @@ export default function BrandSettingsForm({
             Enter without the @ symbol
           </p>
         </EditRow>
+
+        <RowDivider />
+
+        <EditRow
+          label="YouTube Handle"
+          value={form.youtube_handle ? `@${form.youtube_handle}` : ""}
+          expanded={openRow === "youtube_handle"}
+          onToggle={() => toggleRow("youtube_handle")}
+        >
+          <input
+            type="text"
+            value={form.youtube_handle}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                youtube_handle: e.target.value.replace(/^@/, ""),
+              })
+            }
+            placeholder="yourchannel"
+            className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-1 focus:ring-[#39FF14]/40"
+            style={inputStyle}
+          />
+          {form.youtube_handle && (
+            <p
+              className="text-xs mt-1"
+              style={{ color: "rgba(245,245,245,0.3)" }}
+            >
+              Links to youtube.com/@{form.youtube_handle}
+            </p>
+          )}
+        </EditRow>
+
+        <RowDivider />
+
+        <EditRow
+          label="Pinterest Handle"
+          value={form.pinterest_handle ? `@${form.pinterest_handle}` : ""}
+          expanded={openRow === "pinterest_handle"}
+          onToggle={() => toggleRow("pinterest_handle")}
+        >
+          <input
+            type="text"
+            value={form.pinterest_handle}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                pinterest_handle: e.target.value.replace(/^@/, ""),
+              })
+            }
+            placeholder="yourprofile"
+            className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-1 focus:ring-[#39FF14]/40"
+            style={inputStyle}
+          />
+          {form.pinterest_handle && (
+            <p
+              className="text-xs mt-1"
+              style={{ color: "rgba(245,245,245,0.3)" }}
+            >
+              Links to pinterest.com/{form.pinterest_handle}
+            </p>
+          )}
+        </EditRow>
+
+        <RowDivider />
+
+        <EditRow
+          label="Twitter / X Handle"
+          value={form.twitter_handle ? `@${form.twitter_handle}` : ""}
+          expanded={openRow === "twitter_handle"}
+          onToggle={() => toggleRow("twitter_handle")}
+        >
+          <input
+            type="text"
+            value={form.twitter_handle}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                twitter_handle: e.target.value.replace(/^@/, ""),
+              })
+            }
+            placeholder="yourhandle"
+            className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-1 focus:ring-[#39FF14]/40"
+            style={inputStyle}
+          />
+          {form.twitter_handle && (
+            <p
+              className="text-xs mt-1"
+              style={{ color: "rgba(245,245,245,0.3)" }}
+            >
+              Links to x.com/{form.twitter_handle}
+            </p>
+          )}
+        </EditRow>
       </div>
 
-      {/* [Change 15] SUBSCRIPTION section — non-accordion */}
-      <div
-        className="rounded-xl overflow-hidden mb-6"
-        style={{
-          background: "rgba(45,10,78,0.25)",
-          border: "1px solid rgba(45,10,78,0.7)",
-          boxShadow: "inset 0 0 16px rgba(45,10,78,0.1)",
-        }}
+      {/* [Change 2] SUBSCRIPTION — section label outside card */}
+      <p
+        className="text-[11px] font-black tracking-widest uppercase mb-2 px-1"
+        style={{ color: "#00F0FF" }}
       >
-        <SectionHeader title="Subscription" />
-
+        Subscription
+      </p>
+      <div className="rounded-2xl overflow-hidden mb-6" style={cardStyle}>
         <Link
           href={`/brand-dashboard/${brand.slug}/subscription`}
           className="flex items-center justify-between px-4 py-3.5"
@@ -954,7 +1042,7 @@ export default function BrandSettingsForm({
         </div>
       )}
 
-      {/* [Change 16] Save Profile CTA */}
+      {/* Save Profile CTA */}
       <button
         type="button"
         onClick={handleSave}

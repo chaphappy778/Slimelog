@@ -17,11 +17,11 @@ export default async function SettingsPage({ params }: PageProps) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login");
 
-  // [Change 3] Select string unchanged — already fetches all needed columns
+  // [Change 1] Added youtube_handle, pinterest_handle, twitter_handle to select
   const { data: brand } = await supabase
     .from("brands")
     .select(
-      "id, name, bio, description, website_url, shop_url, instagram_handle, tiktok_handle, contact_email, location, founded_year, restock_schedule, logo_url, banner_url, slug, verification_tier",
+      "id, name, bio, description, website_url, shop_url, instagram_handle, tiktok_handle, youtube_handle, pinterest_handle, twitter_handle, contact_email, location, founded_year, restock_schedule, logo_url, banner_url, slug, verification_tier",
     )
     .eq("slug", slug)
     .eq("owner_id", user.id)
@@ -37,8 +37,6 @@ export default async function SettingsPage({ params }: PageProps) {
     verification_tier: brand.verification_tier ?? "community",
   };
 
-  // [Change 1] Page h1 "Settings" removed — header now lives inside BrandSettingsForm
-  // [Change 2] Wrapping card div removed — BrandSettingsForm renders its own layout
   return (
     <DashboardLayout brand={layoutBrand} active="settings">
       <BrandSettingsForm brand={brand} userId={user.id} />
