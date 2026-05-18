@@ -1,9 +1,11 @@
+// apps/web/components/dashboard/BrandSettingsForm.tsx
 "use client";
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { ImageUpload } from "@/components/ImageUpload";
 
+// [Change 1] Added banner_url to Brand interface
 interface Brand {
   id: string;
   name: string;
@@ -18,6 +20,7 @@ interface Brand {
   founded_year: number | null;
   restock_schedule: string | null;
   logo_url: string | null;
+  banner_url: string | null;
 }
 
 interface BrandSettingsFormProps {
@@ -43,6 +46,10 @@ export default function BrandSettingsForm({
     restock_schedule: brand.restock_schedule ?? "",
   });
   const [logoUrl, setLogoUrl] = useState<string | null>(brand.logo_url ?? null);
+  // [Change 2] bannerUrl state
+  const [bannerUrl, setBannerUrl] = useState<string | null>(
+    brand.banner_url ?? null,
+  );
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +82,8 @@ export default function BrandSettingsForm({
         founded_year: form.founded_year ? parseInt(form.founded_year) : null,
         restock_schedule: form.restock_schedule || null,
         logo_url: logoUrl,
+        // [Change 4] banner_url in update payload
+        banner_url: bannerUrl,
       })
       .eq("id", brand.id)
       .eq("owner_id", userId);
@@ -155,6 +164,29 @@ export default function BrandSettingsForm({
       </div>
 
       <div className="space-y-4">
+        {/* [Change 3] Brand Banner — above Brand Logo */}
+        <div>
+          <label className="text-xs font-bold uppercase tracking-widest text-[#6B5A7E] block mb-1.5">
+            Brand Banner
+          </label>
+          <p
+            className="text-xs mb-3"
+            style={{ color: "rgba(245,245,245,0.35)" }}
+          >
+            Displayed as the cover image on your brand page. Recommended:
+            1200x400px.
+          </p>
+          <ImageUpload
+            bucket="slime-photos"
+            userId={userId}
+            existingUrl={bannerUrl}
+            onUploadComplete={(url: string) => setBannerUrl(url)}
+            onRemove={() => setBannerUrl(null)}
+            label="Upload Banner"
+            aspectRatio="4:3"
+          />
+        </div>
+
         <div>
           <label className="text-xs font-bold uppercase tracking-widest text-[#6B5A7E] block mb-3">
             Brand Logo
@@ -180,7 +212,7 @@ export default function BrandSettingsForm({
             </label>
             <input
               type={field.type}
-              value={(form as any)[field.key]}
+              value={(form as Record<string, string>)[field.key]}
               onChange={(e) =>
                 setForm({ ...form, [field.key]: e.target.value })
               }
@@ -257,6 +289,7 @@ export default function BrandSettingsForm({
         )}
 
         <button
+          type="button"
           onClick={handleSave}
           disabled={saving}
           className="w-full py-3.5 rounded-xl font-bold text-[#0A0A0A] disabled:opacity-50 transition-opacity"

@@ -1,14 +1,17 @@
+// apps/web/components/dashboard/DropsSplitPanel.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
 import type { SlimeBaseType } from "@/lib/types";
+import { ImageUpload } from "@/components/ImageUpload";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type DropStatus = "announced" | "live" | "sold_out" | "restocked" | "cancelled";
 
+// [Change 1] Updated Drop interface
 interface Drop {
   id: string;
   name: string;
@@ -19,13 +22,28 @@ interface Drop {
   cover_image_url: string | null;
   recurrence_pattern: RecurrencePattern | null;
   parent_drop_id: string | null;
+  drop_type: "new_drop" | "restock" | null;
+  discount_code: string | null;
+  free_shipping_threshold: number | null;
 }
 
-interface BrandSlime {
+// [Change 2] Replaced BrandSlime with two interfaces
+// Used internally by CatalogPanel only
+interface CatalogSlime {
   id: string;
   name: string;
   base_type: SlimeBaseType;
   colors: string[] | null;
+  image_url: string | null;
+}
+
+// Used for attached slimes in create/detail panels
+interface DropSlimeEntry {
+  slime_id: string | null;
+  name: string;
+  base_type: SlimeBaseType | "";
+  price: string; // string for input, parseFloat on save
+  scent_notes: string;
   image_url: string | null;
 }
 
@@ -510,19 +528,19 @@ function RecurrenceBuilder({
   );
 }
 
-// ─── CatalogPanel — RIGHT column ─────────────────────────────────────────────
-// Always-visible right panel. Shows brand slimes not yet in the drop.
-// "Create New Slime" form lives here.
+// ─── CatalogPanel — RIGHT column ──────────────────────────────────────────────
 
+// [Change 14] Added dropType prop
 interface CatalogPanelProps {
   brandId: string;
   attachedIds: Set<string>;
-  onAttach: (slime: BrandSlime) => void;
+  onAttach: (slime: CatalogSlime) => void;
   onAddNew: (slimeData: {
     name: string;
     base_type: SlimeBaseType;
-  }) => Promise<BrandSlime | null>;
-  isActive: boolean; // false = empty state, greys out panel
+  }) => Promise<CatalogSlime | null>;
+  isActive: boolean;
+  dropType: "new_drop" | "restock";
 }
 
 function CatalogPanel({
@@ -531,9 +549,10 @@ function CatalogPanel({
   onAttach,
   onAddNew,
   isActive,
+  dropType,
 }: CatalogPanelProps) {
   const supabase = createClient();
-  const [brandSlimes, setBrandSlimes] = useState<BrandSlime[]>([]);
+  const [brandSlimes, setBrandSlimes] = useState<CatalogSlime[]>([]);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<SlimeBaseType | "all">("all");
   const [showAddNew, setShowAddNew] = useState(false);
@@ -548,15 +567,12 @@ function CatalogPanel({
       .eq("brand_id", brandId)
       .eq("is_brand_official", true)
       .order("name")
-      .then(({ data }: { data: BrandSlime[] | null }) => {
+      .then(({ data }: { data: CatalogSlime[] | null }) => {
         setBrandSlimes(data ?? []);
       });
   }, [brandId]); // eslint-disable-line
 
-  // Unique types present in this brand's catalog for filter pills
-  const presentTypes = Array.from(
-    new Set(brandSlimes.map((s) => s.base_type)),
-  );
+  const presentTypes = Array.from(new Set(brandSlimes.map((s) => s.base_type)));
 
   const available = brandSlimes.filter((s) => {
     if (attachedIds.has(s.id)) return false;
@@ -569,10 +585,7 @@ function CatalogPanel({
   const handleAddNew = async () => {
     if (!newName.trim()) return;
     setAddingNew(true);
-    const result = await onAddNew({
-      name: newName.trim(),
-      base_type: newType,
-    });
+    const result = await onAddNew({ name: newName.trim(), base_type: newType });
     if (result) {
       setBrandSlimes((prev) => [...prev, result]);
       setNewName("");
@@ -598,13 +611,15 @@ function CatalogPanel({
         className="px-4 pt-4 pb-3 flex-shrink-0"
         style={{ borderBottom: "1px solid rgba(45,10,78,0.5)" }}
       >
+        {/* [Change 14] Dynamic header label */}
         <p
           className="text-xs font-bold uppercase tracking-widest mb-3"
           style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
         >
-          Brand Catalog
+          {dropType === "restock"
+            ? "Select Slimes to Restock"
+            : "Brand Catalog"}
         </p>
-        {/* Search */}
         <input
           className={inputClass}
           style={{ ...inputStyle, marginBottom: 8 }}
@@ -612,10 +627,10 @@ function CatalogPanel({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        {/* Type filter pills — only show types that exist in catalog */}
         {presentTypes.length > 1 && (
           <div className="flex flex-wrap gap-1.5 mt-2">
             <button
+              type="button"
               onClick={() => setTypeFilter("all")}
               className="px-2.5 py-1 rounded-full text-[10px] font-bold transition-all"
               style={{
@@ -634,6 +649,7 @@ function CatalogPanel({
             {presentTypes.map((t) => (
               <button
                 key={t}
+                type="button"
                 onClick={() => setTypeFilter(t === typeFilter ? "all" : t)}
                 className="px-2.5 py-1 rounded-full text-[10px] font-bold transition-all"
                 style={{
@@ -693,7 +709,9 @@ function CatalogPanel({
                 {SLIME_BASE_TYPE_LABELS[slime.base_type]}
               </p>
             </div>
+            {/* [Change 14] Dynamic attach button label */}
             <button
+              type="button"
               onClick={() => onAttach(slime)}
               className="flex-shrink-0 text-xs px-2.5 py-1 rounded-md transition-all"
               style={{
@@ -704,13 +722,13 @@ function CatalogPanel({
                 fontWeight: 700,
               }}
             >
-              + Add
+              {dropType === "restock" ? "Restock" : "+ Add"}
             </button>
           </div>
         ))}
       </div>
 
-      {/* Create New Slime — bottom of right panel */}
+      {/* Create New Slime */}
       <div
         className="px-3 pb-4 pt-2 flex-shrink-0"
         style={{ borderTop: "1px solid rgba(45,10,78,0.5)" }}
@@ -756,17 +774,16 @@ function CatalogPanel({
               className={inputClass}
               style={selectStyle}
             >
-              {(Object.entries(SLIME_BASE_TYPE_LABELS) as [SlimeBaseType, string][]).map(
-                ([val, label]) => (
-                  <option
-                    key={val}
-                    value={val}
-                    style={{ background: "#0F0A1A" }}
-                  >
-                    {label}
-                  </option>
-                ),
-              )}
+              {(
+                Object.entries(SLIME_BASE_TYPE_LABELS) as [
+                  SlimeBaseType,
+                  string,
+                ][]
+              ).map(([val, label]) => (
+                <option key={val} value={val} style={{ background: "#0F0A1A" }}>
+                  {label}
+                </option>
+              ))}
             </select>
             <div className="flex gap-2">
               <button
@@ -868,17 +885,211 @@ function generateRecurringDrops(
   return results;
 }
 
-// ─── DetailPanel — extracted, receives all state as props ─────────────────────
-// CRITICAL FIX: Defined OUTSIDE DropsSplitPanel to prevent remount on parent re-render.
+// ─── Expandable slime rows (shared by CreatePanel and DetailPanel) ─────────────
 
+interface SlimeRowsProps {
+  attachedSlimes: DropSlimeEntry[];
+  expandedSlimeIdx: number | null;
+  setExpandedSlimeIdx: (idx: number | null) => void;
+  onUpdateSlime: (idx: number, updates: Partial<DropSlimeEntry>) => void;
+  onDetach: (slimeId: string | null, idx: number) => void;
+}
+
+function SlimeRows({
+  attachedSlimes,
+  expandedSlimeIdx,
+  setExpandedSlimeIdx,
+  onUpdateSlime,
+  onDetach,
+}: SlimeRowsProps) {
+  return (
+    <div className="space-y-1.5">
+      {attachedSlimes.map((slime, idx) => (
+        <div
+          key={idx}
+          className="rounded-lg overflow-hidden"
+          style={{
+            background: "rgba(57,255,20,0.07)",
+            border: "1px solid rgba(57,255,20,0.18)",
+          }}
+        >
+          {/* Collapsed row header */}
+          <div className="flex items-center justify-between px-3 py-2">
+            <button
+              type="button"
+              className="flex-1 text-left"
+              onClick={() =>
+                setExpandedSlimeIdx(expandedSlimeIdx === idx ? null : idx)
+              }
+            >
+              <p
+                className="text-sm font-medium text-white"
+                style={{ fontFamily: "Inter, sans-serif" }}
+              >
+                {slime.name || "Unnamed"}
+              </p>
+              <p
+                className="text-[11px]"
+                style={{ color: "rgba(245,245,245,0.35)" }}
+              >
+                {slime.base_type
+                  ? SLIME_BASE_TYPE_LABELS[slime.base_type as SlimeBaseType]
+                  : "—"}
+                {slime.price ? ` · $${slime.price}` : ""}
+              </p>
+            </button>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {/* Expand/collapse chevron */}
+              <button
+                type="button"
+                onClick={() =>
+                  setExpandedSlimeIdx(expandedSlimeIdx === idx ? null : idx)
+                }
+                className="w-6 h-6 flex items-center justify-center rounded"
+                style={{ color: "rgba(245,245,245,0.4)" }}
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path
+                    d={
+                      expandedSlimeIdx === idx ? "M2 8l4-4 4 4" : "M2 4l4 4 4-4"
+                    }
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+              {/* Remove button */}
+              <button
+                type="button"
+                onClick={() => onDetach(slime.slime_id, idx)}
+                className="w-6 h-6 flex items-center justify-center rounded-md flex-shrink-0"
+                style={{
+                  color: "#FF4444",
+                  background: "rgba(255,68,68,0.08)",
+                  border: "1px solid rgba(255,68,68,0.2)",
+                }}
+                title="Remove"
+              >
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <path
+                    d="M1 1l8 8M9 1L1 9"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Expanded mini-form */}
+          {expandedSlimeIdx === idx && (
+            <div
+              className="px-3 pb-3 space-y-2"
+              style={{ borderTop: "1px solid rgba(57,255,20,0.15)" }}
+            >
+              <div className="pt-2">
+                <FormLabel>Name</FormLabel>
+                <input
+                  type="text"
+                  value={slime.name}
+                  onChange={(e) => onUpdateSlime(idx, { name: e.target.value })}
+                  className={inputClass}
+                  style={inputStyle}
+                  placeholder="Slime name"
+                />
+              </div>
+              <div>
+                <FormLabel>Base Type</FormLabel>
+                <select
+                  value={slime.base_type}
+                  onChange={(e) =>
+                    onUpdateSlime(idx, {
+                      base_type: e.target.value as SlimeBaseType,
+                    })
+                  }
+                  className={inputClass}
+                  style={selectStyle}
+                >
+                  <option value="" style={{ background: "#0F0A1A" }}>
+                    Select type
+                  </option>
+                  {(
+                    Object.entries(SLIME_BASE_TYPE_LABELS) as [
+                      SlimeBaseType,
+                      string,
+                    ][]
+                  ).map(([val, label]) => (
+                    <option
+                      key={val}
+                      value={val}
+                      style={{ background: "#0F0A1A" }}
+                    >
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <FormLabel>Price</FormLabel>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="text-sm"
+                    style={{ color: "rgba(245,245,245,0.4)" }}
+                  >
+                    $
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={slime.price}
+                    onChange={(e) =>
+                      onUpdateSlime(idx, { price: e.target.value })
+                    }
+                    className={inputClass}
+                    style={inputStyle}
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              <div>
+                <FormLabel>Scent Notes</FormLabel>
+                <input
+                  type="text"
+                  value={slime.scent_notes}
+                  onChange={(e) =>
+                    onUpdateSlime(idx, { scent_notes: e.target.value })
+                  }
+                  maxLength={100}
+                  className={inputClass}
+                  style={inputStyle}
+                  placeholder="e.g. Strawberry shortcake"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── DetailPanel ──────────────────────────────────────────────────────────────
+
+// [Change 12] Updated props
 interface DetailPanelProps {
   selected: Drop;
-  attachedSlimes: BrandSlime[];
+  attachedSlimes: DropSlimeEntry[];
   confirmDelete: boolean;
   setConfirmDelete: (v: boolean) => void;
   onStatusChange: (dropId: string, newStatus: DropStatus) => void;
-  onDetach: (slimeId: string) => void;
+  onDetach: (slimeId: string | null, idx: number) => void;
   onDelete: () => void;
+  expandedSlimeIdx: number | null;
+  setExpandedSlimeIdx: (idx: number | null) => void;
+  onUpdateSlime: (idx: number, updates: Partial<DropSlimeEntry>) => void;
 }
 
 function DetailPanel({
@@ -889,6 +1100,9 @@ function DetailPanel({
   onStatusChange,
   onDetach,
   onDelete,
+  expandedSlimeIdx,
+  setExpandedSlimeIdx,
+  onUpdateSlime,
 }: DetailPanelProps) {
   const styles = STATUS_STYLES[selected.status];
   return (
@@ -969,6 +1183,41 @@ function DetailPanel({
           </svg>
         </a>
       )}
+
+      {/* [Change 13] New read-only fields */}
+      {selected.drop_type && (
+        <div className="flex items-center gap-2">
+          <span
+            className="text-xs font-bold px-3 py-1 rounded-full"
+            style={{
+              color: selected.drop_type === "restock" ? "#FFB800" : "#00F0FF",
+              background:
+                selected.drop_type === "restock"
+                  ? "rgba(255,184,0,0.12)"
+                  : "rgba(0,240,255,0.12)",
+              border: `1px solid ${selected.drop_type === "restock" ? "rgba(255,184,0,0.3)" : "rgba(0,240,255,0.3)"}`,
+              fontFamily: "Montserrat, sans-serif",
+            }}
+          >
+            {selected.drop_type === "restock" ? "Restock" : "New Drop"}
+          </span>
+        </div>
+      )}
+      {selected.discount_code && (
+        <p className="text-sm" style={{ color: "rgba(245,245,245,0.6)" }}>
+          <span style={{ color: "rgba(245,245,245,0.35)" }}>Code: </span>
+          {selected.discount_code}
+        </p>
+      )}
+      {selected.free_shipping_threshold != null && (
+        <p className="text-sm" style={{ color: "rgba(245,245,245,0.6)" }}>
+          Free shipping on orders over $
+          {Number.isInteger(selected.free_shipping_threshold)
+            ? selected.free_shipping_threshold
+            : selected.free_shipping_threshold.toFixed(2)}
+        </p>
+      )}
+
       {NEXT_STATUS[selected.status] && (
         <div>
           <p
@@ -981,6 +1230,7 @@ function DetailPanel({
             {NEXT_STATUS[selected.status]!.map((action) => (
               <button
                 key={action.status}
+                type="button"
                 onClick={() => onStatusChange(selected.id, action.status)}
                 className="px-4 py-2 rounded-lg text-sm font-semibold transition-all"
                 style={{
@@ -1006,7 +1256,7 @@ function DetailPanel({
         </div>
       )}
 
-      {/* Slimes in this drop — shown in center panel as removable rows */}
+      {/* [Change 12] Expandable slime rows */}
       <div
         style={{ borderTop: "1px solid rgba(45,10,78,0.4)", paddingTop: 16 }}
       >
@@ -1022,52 +1272,13 @@ function DetailPanel({
             No slimes added yet. Use the catalog panel to add slimes.
           </p>
         ) : (
-          <div className="space-y-1.5">
-            {attachedSlimes.map((slime) => (
-              <div
-                key={slime.id}
-                className="flex items-center justify-between px-3 py-2 rounded-lg"
-                style={{
-                  background: "rgba(57,255,20,0.07)",
-                  border: "1px solid rgba(57,255,20,0.18)",
-                }}
-              >
-                <div>
-                  <p
-                    className="text-sm font-medium text-white"
-                    style={{ fontFamily: "Inter, sans-serif" }}
-                  >
-                    {slime.name}
-                  </p>
-                  <p
-                    className="text-[11px]"
-                    style={{ color: "rgba(245,245,245,0.35)" }}
-                  >
-                    {SLIME_BASE_TYPE_LABELS[slime.base_type]}
-                  </p>
-                </div>
-                <button
-                  onClick={() => onDetach(slime.id)}
-                  className="w-6 h-6 flex items-center justify-center rounded-md transition-all flex-shrink-0"
-                  style={{
-                    color: "#FF4444",
-                    background: "rgba(255,68,68,0.08)",
-                    border: "1px solid rgba(255,68,68,0.2)",
-                  }}
-                  title="Remove from drop"
-                >
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                    <path
-                      d="M1 1l8 8M9 1L1 9"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </button>
-              </div>
-            ))}
-          </div>
+          <SlimeRows
+            attachedSlimes={attachedSlimes}
+            expandedSlimeIdx={expandedSlimeIdx}
+            setExpandedSlimeIdx={setExpandedSlimeIdx}
+            onUpdateSlime={onUpdateSlime}
+            onDetach={onDetach}
+          />
         )}
       </div>
 
@@ -1077,6 +1288,7 @@ function DetailPanel({
       >
         {!confirmDelete ? (
           <button
+            type="button"
             onClick={() => setConfirmDelete(true)}
             className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-all"
             style={{
@@ -1094,6 +1306,7 @@ function DetailPanel({
               Are you sure?
             </p>
             <button
+              type="button"
               onClick={onDelete}
               className="text-xs font-semibold px-3 py-1.5 rounded-lg"
               style={{
@@ -1105,6 +1318,7 @@ function DetailPanel({
               Confirm Delete
             </button>
             <button
+              type="button"
               onClick={() => setConfirmDelete(false)}
               className="text-xs"
               style={{ color: "rgba(245,245,245,0.4)" }}
@@ -1118,9 +1332,9 @@ function DetailPanel({
   );
 }
 
-// ─── CreatePanel — extracted, receives all state as props ─────────────────────
-// CRITICAL FIX: Defined OUTSIDE DropsSplitPanel to prevent remount on parent re-render.
+// ─── CreatePanel ──────────────────────────────────────────────────────────────
 
+// [Change 3] Updated form shape, [Change 11] new fields, [Change 12] expandable rows
 interface CreatePanelProps {
   form: {
     name: string;
@@ -1128,6 +1342,10 @@ interface CreatePanelProps {
     drop_at: string;
     status: DropStatus;
     shop_url: string;
+    drop_type: "new_drop" | "restock";
+    discount_code: string;
+    free_shipping_threshold: string;
+    cover_image_url: string | null;
   };
   setForm: React.Dispatch<
     React.SetStateAction<{
@@ -1136,10 +1354,14 @@ interface CreatePanelProps {
       drop_at: string;
       status: DropStatus;
       shop_url: string;
+      drop_type: "new_drop" | "restock";
+      discount_code: string;
+      free_shipping_threshold: string;
+      cover_image_url: string | null;
     }>
   >;
-  attachedSlimes: BrandSlime[];
-  onDetach: (slimeId: string) => void;
+  attachedSlimes: DropSlimeEntry[];
+  onDetach: (slimeId: string | null, idx: number) => void;
   recurringEnabled: boolean;
   setRecurringEnabled: (v: boolean) => void;
   recurrencePattern: RecurrencePattern;
@@ -1148,6 +1370,10 @@ interface CreatePanelProps {
   saving: boolean;
   onSubmit: () => void;
   onCancel: () => void;
+  userId: string;
+  expandedSlimeIdx: number | null;
+  setExpandedSlimeIdx: (idx: number | null) => void;
+  onUpdateSlime: (idx: number, updates: Partial<DropSlimeEntry>) => void;
 }
 
 function CreatePanel({
@@ -1163,6 +1389,10 @@ function CreatePanel({
   saving,
   onSubmit,
   onCancel,
+  userId,
+  expandedSlimeIdx,
+  setExpandedSlimeIdx,
+  onUpdateSlime,
 }: CreatePanelProps) {
   return (
     <div className="p-6 overflow-y-auto flex-1">
@@ -1174,6 +1404,7 @@ function CreatePanel({
           New Drop
         </h2>
         <button
+          type="button"
           onClick={onCancel}
           className="text-xs px-3 py-1.5 rounded-lg"
           style={{
@@ -1185,6 +1416,67 @@ function CreatePanel({
         </button>
       </div>
       <div className="space-y-4 max-w-xl">
+        {/* [Change 11a] Cover image upload — above Drop Name */}
+        <div>
+          <FormLabel>Drop Cover Photo</FormLabel>
+          <ImageUpload
+            bucket="slime-photos"
+            userId={userId}
+            existingUrl={form.cover_image_url}
+            onUploadComplete={(url) =>
+              setForm((f) => ({ ...f, cover_image_url: url }))
+            }
+            onRemove={() => setForm((f) => ({ ...f, cover_image_url: null }))}
+            label="Drop Cover Photo"
+            aspectRatio="4:3"
+          />
+        </div>
+
+        {/* [Change 11b] Drop type selector — above Drop Name */}
+        <div>
+          <FormLabel>Drop Type</FormLabel>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setForm((f) => ({ ...f, drop_type: "new_drop" }))}
+              className="flex-1 py-2 rounded-lg text-xs font-bold transition-all"
+              style={{
+                background:
+                  form.drop_type === "new_drop"
+                    ? "rgba(0,240,255,0.12)"
+                    : "rgba(45,10,78,0.3)",
+                border: `1px solid ${form.drop_type === "new_drop" ? "rgba(0,240,255,0.35)" : "rgba(45,10,78,0.6)"}`,
+                color:
+                  form.drop_type === "new_drop"
+                    ? "#00F0FF"
+                    : "rgba(245,245,245,0.4)",
+                fontFamily: "Montserrat, sans-serif",
+              }}
+            >
+              New Drop
+            </button>
+            <button
+              type="button"
+              onClick={() => setForm((f) => ({ ...f, drop_type: "restock" }))}
+              className="flex-1 py-2 rounded-lg text-xs font-bold transition-all"
+              style={{
+                background:
+                  form.drop_type === "restock"
+                    ? "rgba(255,184,0,0.12)"
+                    : "rgba(45,10,78,0.3)",
+                border: `1px solid ${form.drop_type === "restock" ? "rgba(255,184,0,0.3)" : "rgba(45,10,78,0.6)"}`,
+                color:
+                  form.drop_type === "restock"
+                    ? "#FFB800"
+                    : "rgba(245,245,245,0.4)",
+                fontFamily: "Montserrat, sans-serif",
+              }}
+            >
+              Restock
+            </button>
+          </div>
+        </div>
+
         <div>
           <FormLabel>Drop Name *</FormLabel>
           <input
@@ -1255,7 +1547,49 @@ function CreatePanel({
           />
         </div>
 
-        {/* Slimes added to this drop — shown inline in center, removable with X */}
+        {/* [Change 11c] Discount code — after Shop URL */}
+        <div>
+          <FormLabel>Discount Code</FormLabel>
+          <input
+            type="text"
+            value={form.discount_code}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, discount_code: e.target.value }))
+            }
+            placeholder="e.g. SUMMER10"
+            className={inputClass}
+            style={inputStyle}
+          />
+        </div>
+
+        {/* [Change 11d] Free shipping threshold — after discount code */}
+        <div>
+          <FormLabel>Free Shipping Threshold</FormLabel>
+          <div className="flex items-center gap-2">
+            <span
+              className="text-sm"
+              style={{ color: "rgba(245,245,245,0.4)" }}
+            >
+              $
+            </span>
+            <input
+              type="number"
+              min={0}
+              value={form.free_shipping_threshold}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  free_shipping_threshold: e.target.value,
+                }))
+              }
+              placeholder="25"
+              className={inputClass}
+              style={inputStyle}
+            />
+          </div>
+        </div>
+
+        {/* [Change 12] Expandable slime rows */}
         <div
           style={{ borderTop: "1px solid rgba(45,10,78,0.4)", paddingTop: 16 }}
         >
@@ -1272,52 +1606,13 @@ function CreatePanel({
               slimes.
             </p>
           ) : (
-            <div className="space-y-1.5">
-              {attachedSlimes.map((slime) => (
-                <div
-                  key={slime.id}
-                  className="flex items-center justify-between px-3 py-2 rounded-lg"
-                  style={{
-                    background: "rgba(57,255,20,0.07)",
-                    border: "1px solid rgba(57,255,20,0.18)",
-                  }}
-                >
-                  <div>
-                    <p
-                      className="text-sm font-medium text-white"
-                      style={{ fontFamily: "Inter, sans-serif" }}
-                    >
-                      {slime.name}
-                    </p>
-                    <p
-                      className="text-[11px]"
-                      style={{ color: "rgba(245,245,245,0.35)" }}
-                    >
-                      {SLIME_BASE_TYPE_LABELS[slime.base_type]}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => onDetach(slime.id)}
-                    className="w-6 h-6 flex items-center justify-center rounded-md transition-all flex-shrink-0"
-                    style={{
-                      color: "#FF4444",
-                      background: "rgba(255,68,68,0.08)",
-                      border: "1px solid rgba(255,68,68,0.2)",
-                    }}
-                    title="Remove from drop"
-                  >
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                      <path
-                        d="M1 1l8 8M9 1L1 9"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              ))}
-            </div>
+            <SlimeRows
+              attachedSlimes={attachedSlimes}
+              expandedSlimeIdx={expandedSlimeIdx}
+              setExpandedSlimeIdx={setExpandedSlimeIdx}
+              onUpdateSlime={onUpdateSlime}
+              onDetach={onDetach}
+            />
           )}
         </div>
 
@@ -1329,6 +1624,7 @@ function CreatePanel({
         />
         {error && <p className="text-xs text-red-400">{error}</p>}
         <button
+          type="button"
           onClick={onSubmit}
           disabled={saving}
           className="px-6 py-2.5 rounded-lg text-sm font-bold text-[#0A0A0A] disabled:opacity-50 hover:opacity-90 transition-opacity"
@@ -1362,18 +1658,25 @@ export default function DropsSplitPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [attachedSlimes, setAttachedSlimes] = useState<BrandSlime[]>([]);
+  const [attachedSlimes, setAttachedSlimes] = useState<DropSlimeEntry[]>([]);
   const [recurringEnabled, setRecurringEnabled] = useState(false);
   const [recurrencePattern, setRecurrencePattern] =
     useState<RecurrencePattern>(DEFAULT_RECURRENCE);
+  // [Change 4] expandedSlimeIdx state
+  const [expandedSlimeIdx, setExpandedSlimeIdx] = useState<number | null>(null);
   const supabase = createClient();
 
+  // [Change 3] Updated emptyForm
   const emptyForm = {
     name: "",
     description: "",
     drop_at: "",
     status: "announced" as DropStatus,
     shop_url: "",
+    drop_type: "new_drop" as "new_drop" | "restock",
+    discount_code: "",
+    free_shipping_threshold: "",
+    cover_image_url: null as string | null,
   };
   const [form, setForm] = useState(emptyForm);
 
@@ -1386,18 +1689,23 @@ export default function DropsSplitPanel({
   const displayed = tab === "upcoming" ? upcoming : past;
   const selected = drops.find((d) => d.id === selectedId) ?? null;
 
-  // Fetch slimes attached to selected drop when entering detail mode
+  // [Change 10] Fetch attached slimes hydrated as DropSlimeEntry[]
   useEffect(() => {
     if (!selectedId || mode !== "detail") return;
     supabase
       .from("drop_slimes")
-      .select("slime_id, slimes(id, name, base_type, colors, image_url)")
+      .select("slime_id, name, base_type, price, scent_notes, image_url")
       .eq("drop_id", selectedId)
       .then(({ data }: { data: Array<Record<string, unknown>> | null }) => {
-        const slimes = (data ?? [])
-          .map((r) => r.slimes as BrandSlime)
-          .filter(Boolean);
-        setAttachedSlimes(slimes);
+        const entries: DropSlimeEntry[] = (data ?? []).map((r) => ({
+          slime_id: r.slime_id as string | null,
+          name: (r.name as string) ?? "",
+          base_type: (r.base_type as SlimeBaseType) ?? "",
+          price: r.price != null ? String(r.price) : "",
+          scent_notes: (r.scent_notes as string) ?? "",
+          image_url: (r.image_url as string) ?? null,
+        }));
+        setAttachedSlimes(entries);
       });
   }, [selectedId, mode]); // eslint-disable-line
 
@@ -1409,9 +1717,19 @@ export default function DropsSplitPanel({
     setAttachedSlimes([]);
     setRecurringEnabled(false);
     setRecurrencePattern(DEFAULT_RECURRENCE);
+    // [Change 15] Reset expandedSlimeIdx
+    setExpandedSlimeIdx(null);
     setMode("create");
   };
 
+  // [Change 4] handleUpdateSlime
+  const handleUpdateSlime = (idx: number, updates: Partial<DropSlimeEntry>) => {
+    setAttachedSlimes((prev) =>
+      prev.map((s, i) => (i === idx ? { ...s, ...updates } : s)),
+    );
+  };
+
+  // [Change 9] Updated handleCreate insert payloads
   const handleCreate = async () => {
     if (!form.name.trim()) {
       setError("Drop name is required.");
@@ -1428,6 +1746,12 @@ export default function DropsSplitPanel({
         drop_at: form.drop_at ? new Date(form.drop_at).toISOString() : null,
         status: form.status,
         shop_url: form.shop_url || null,
+        cover_image_url: form.cover_image_url || null,
+        drop_type: form.drop_type,
+        discount_code: form.discount_code || null,
+        free_shipping_threshold: form.free_shipping_threshold
+          ? parseFloat(form.free_shipping_threshold)
+          : null,
         announced_by: userId,
         recurrence_pattern: recurringEnabled ? recurrencePattern : null,
       })
@@ -1440,11 +1764,17 @@ export default function DropsSplitPanel({
     }
     const newDrop = data as Drop;
     if (attachedSlimes.length > 0) {
-      await supabase
-        .from("drop_slimes")
-        .insert(
-          attachedSlimes.map((s) => ({ drop_id: newDrop.id, slime_id: s.id })),
-        );
+      await supabase.from("drop_slimes").insert(
+        attachedSlimes.map((s) => ({
+          drop_id: newDrop.id,
+          slime_id: s.slime_id,
+          name: s.name || null,
+          base_type: s.base_type || null,
+          price: s.price ? parseFloat(s.price) : null,
+          scent_notes: s.scent_notes || null,
+          image_url: s.image_url || null,
+        })),
+      );
     }
     if (recurringEnabled && form.drop_at) {
       const futureDrops = generateRecurringDrops(
@@ -1499,30 +1829,42 @@ export default function DropsSplitPanel({
     }
   };
 
-  const handleAttachSlime = async (slime: BrandSlime) => {
+  // [Change 5] handleAttachSlime — converts CatalogSlime to DropSlimeEntry
+  const handleAttachSlime = async (slime: CatalogSlime) => {
+    const entry: DropSlimeEntry = {
+      slime_id: slime.id,
+      name: slime.name,
+      base_type: slime.base_type,
+      price: "",
+      scent_notes: "",
+      image_url: slime.image_url,
+    };
     if (selectedId) {
       await supabase
         .from("drop_slimes")
         .insert({ drop_id: selectedId, slime_id: slime.id });
     }
-    setAttachedSlimes((prev) => [...prev, slime]);
+    setAttachedSlimes((prev) => [...prev, entry]);
   };
 
-  const handleDetachSlime = async (slimeId: string) => {
-    if (selectedId) {
+  // [Change 6] handleDetachSlime — accepts idx
+  const handleDetachSlime = async (slimeId: string | null, idx: number) => {
+    if (selectedId && slimeId) {
       await supabase
         .from("drop_slimes")
         .delete()
         .eq("drop_id", selectedId)
         .eq("slime_id", slimeId);
     }
-    setAttachedSlimes((prev) => prev.filter((s) => s.id !== slimeId));
+    setAttachedSlimes((prev) => prev.filter((_, i) => i !== idx));
+    if (expandedSlimeIdx === idx) setExpandedSlimeIdx(null);
   };
 
+  // [Change 7] handleAddNewSlime — returns CatalogSlime, adds DropSlimeEntry
   const handleAddNewSlime = async (slimeData: {
     name: string;
     base_type: SlimeBaseType;
-  }): Promise<BrandSlime | null> => {
+  }): Promise<CatalogSlime | null> => {
     const { data, error: err } = await supabase
       .from("slimes")
       .insert({
@@ -1535,17 +1877,30 @@ export default function DropsSplitPanel({
       .select("id, name, base_type, colors, image_url")
       .single();
     if (err || !data) return null;
-    const newSlime = data as BrandSlime;
+    const newSlime = data as CatalogSlime;
+    const entry: DropSlimeEntry = {
+      slime_id: newSlime.id,
+      name: newSlime.name,
+      base_type: newSlime.base_type,
+      price: "",
+      scent_notes: "",
+      image_url: newSlime.image_url,
+    };
     if (selectedId) {
       await supabase
         .from("drop_slimes")
         .insert({ drop_id: selectedId, slime_id: newSlime.id });
     }
-    setAttachedSlimes((prev) => [...prev, newSlime]);
+    setAttachedSlimes((prev) => [...prev, entry]);
     return newSlime;
   };
 
-  const attachedIds = new Set(attachedSlimes.map((s) => s.id));
+  // [Change 8] attachedIds — filter nulls
+  const attachedIds = new Set(
+    attachedSlimes
+      .map((s) => s.slime_id)
+      .filter((id): id is string => id !== null),
+  );
   const catalogActive = mode === "create" || mode === "detail";
 
   return (
@@ -1570,6 +1925,7 @@ export default function DropsSplitPanel({
           {(["upcoming", "past"] as const).map((t) => (
             <button
               key={t}
+              type="button"
               onClick={() => setTab(t)}
               className="flex-1 text-xs font-semibold py-1.5 rounded-md capitalize transition-all"
               style={{
@@ -1597,15 +1953,18 @@ export default function DropsSplitPanel({
             </div>
           ) : (
             displayed.map((drop) => {
-              const styles = STATUS_STYLES[drop.status];
+              const dropStyles = STATUS_STYLES[drop.status];
               return (
                 <button
                   key={drop.id}
+                  type="button"
                   onClick={() => {
                     setSelectedId(drop.id);
                     setMode("detail");
                     setConfirmDelete(false);
                     setAttachedSlimes([]);
+                    // [Change 15] Reset expandedSlimeIdx on drop selection
+                    setExpandedSlimeIdx(null);
                   }}
                   className="w-full text-left px-4 py-3.5 transition-all"
                   style={{
@@ -1630,16 +1989,16 @@ export default function DropsSplitPanel({
                     <span
                       className="text-[10px] font-bold px-2 py-0.5 rounded flex-shrink-0 flex items-center gap-1"
                       style={{
-                        color: styles.color,
-                        background: styles.bg,
-                        border: `1px solid ${styles.border}`,
+                        color: dropStyles.color,
+                        background: dropStyles.bg,
+                        border: `1px solid ${dropStyles.border}`,
                         fontFamily: "Montserrat, sans-serif",
                       }}
                     >
                       {drop.status === "live" && (
                         <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
                       )}
-                      {styles.label.toUpperCase()}
+                      {dropStyles.label.toUpperCase()}
                     </span>
                   </div>
                   <p
@@ -1669,6 +2028,7 @@ export default function DropsSplitPanel({
           style={{ borderTop: "1px solid rgba(45,10,78,0.5)" }}
         >
           <button
+            type="button"
             onClick={startCreate}
             className="w-full py-2.5 rounded-lg text-sm font-bold text-[#0A0A0A] hover:opacity-90 transition-opacity"
             style={{
@@ -1681,7 +2041,7 @@ export default function DropsSplitPanel({
         </div>
       </div>
 
-      {/* ── CENTER PANEL: Drop form / detail ── */}
+      {/* ── CENTER PANEL ── */}
       <div className="hidden md:flex flex-1 flex-col overflow-hidden">
         {mode === "empty" && (
           <div className="flex-1 flex items-center justify-center p-8">
@@ -1729,6 +2089,9 @@ export default function DropsSplitPanel({
             onStatusChange={handleStatusChange}
             onDetach={handleDetachSlime}
             onDelete={handleDelete}
+            expandedSlimeIdx={expandedSlimeIdx}
+            setExpandedSlimeIdx={setExpandedSlimeIdx}
+            onUpdateSlime={handleUpdateSlime}
           />
         )}
         {mode === "create" && (
@@ -1745,6 +2108,10 @@ export default function DropsSplitPanel({
             saving={saving}
             onSubmit={handleCreate}
             onCancel={() => setMode("empty")}
+            userId={userId}
+            expandedSlimeIdx={expandedSlimeIdx}
+            setExpandedSlimeIdx={setExpandedSlimeIdx}
+            onUpdateSlime={handleUpdateSlime}
           />
         )}
       </div>
@@ -1760,6 +2127,12 @@ export default function DropsSplitPanel({
           onAttach={handleAttachSlime}
           onAddNew={handleAddNewSlime}
           isActive={catalogActive}
+          // [Change 15] Pass dropType
+          dropType={
+            mode === "detail" && selected
+              ? (selected.drop_type ?? "new_drop")
+              : form.drop_type
+          }
         />
       </div>
 
@@ -1795,6 +2168,7 @@ export default function DropsSplitPanel({
                 {mode === "create" ? "New Drop" : selected?.name}
               </p>
               <button
+                type="button"
                 onClick={() => {
                   setMode("empty");
                   setSelectedId(null);
@@ -1825,6 +2199,9 @@ export default function DropsSplitPanel({
                   onStatusChange={handleStatusChange}
                   onDetach={handleDetachSlime}
                   onDelete={handleDelete}
+                  expandedSlimeIdx={expandedSlimeIdx}
+                  setExpandedSlimeIdx={setExpandedSlimeIdx}
+                  onUpdateSlime={handleUpdateSlime}
                 />
               )}
               {mode === "create" && (
@@ -1841,9 +2218,13 @@ export default function DropsSplitPanel({
                   saving={saving}
                   onSubmit={handleCreate}
                   onCancel={() => setMode("empty")}
+                  userId={userId}
+                  expandedSlimeIdx={expandedSlimeIdx}
+                  setExpandedSlimeIdx={setExpandedSlimeIdx}
+                  onUpdateSlime={handleUpdateSlime}
                 />
               )}
-              {/* Mobile catalog — shown below the form */}
+              {/* Mobile catalog */}
               <div
                 className="px-5 pb-4 pt-2"
                 style={{ borderTop: "1px solid rgba(45,10,78,0.4)" }}
@@ -1863,6 +2244,11 @@ export default function DropsSplitPanel({
                   onAttach={handleAttachSlime}
                   onAddNew={handleAddNewSlime}
                   isActive={true}
+                  dropType={
+                    mode === "detail" && selected
+                      ? (selected.drop_type ?? "new_drop")
+                      : form.drop_type
+                  }
                 />
               </div>
             </div>

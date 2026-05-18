@@ -1,3 +1,4 @@
+// apps/web/app/brand-dashboard/[slug]/drops/page.tsx
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
@@ -25,9 +26,12 @@ export default async function DropsPage({ params }: PageProps) {
 
   if (!brand) redirect("/brands");
 
+  // [Change 1] Updated select to include new fields
   const { data: drops } = await supabase
     .from("drops")
-    .select("id, name, description, drop_at, status, shop_url, cover_image_url, recurrence_pattern, parent_drop_id")
+    .select(
+      "id, name, description, drop_at, status, shop_url, cover_image_url, recurrence_pattern, parent_drop_id, drop_type, discount_code, free_shipping_threshold",
+    )
     .eq("brand_id", brand.id)
     .order("drop_at", { ascending: false, nullsFirst: false });
 

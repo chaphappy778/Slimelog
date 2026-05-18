@@ -1,3 +1,4 @@
+// apps/web/app/brand-dashboard/[slug]/settings/page.tsx
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
@@ -16,10 +17,11 @@ export default async function SettingsPage({ params }: PageProps) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login");
 
+  // [Change 1] Added banner_url to select string
   const { data: brand } = await supabase
     .from("brands")
     .select(
-      "id, name, bio, description, website_url, shop_url, instagram_handle, tiktok_handle, contact_email, location, founded_year, restock_schedule, logo_url, slug, verification_tier",
+      "id, name, bio, description, website_url, shop_url, instagram_handle, tiktok_handle, contact_email, location, founded_year, restock_schedule, logo_url, banner_url, slug, verification_tier",
     )
     .eq("slug", slug)
     .eq("owner_id", user.id)
