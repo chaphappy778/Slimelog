@@ -357,11 +357,12 @@ export default function DashboardLayout({
 
       {/* ── Main content ── */}
       <main
-        className="flex-1 md:ml-60 min-h-screen"
+        className="flex-1 md:ml-60 min-h-screen overflow-hidden"
         style={{ background: "transparent" }}
       >
-        {/* pt accounts for mobile header height (brand row + tabs = ~88px) */}
-        <div className="pt-[88px] md:pt-0 p-4 md:p-8">{children}</div>
+        <div className="pt-[88px] md:pt-0 p-4 md:p-8 w-full overflow-hidden">
+          {children}
+        </div>
       </main>
     </div>
   );

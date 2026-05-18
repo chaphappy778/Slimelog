@@ -117,18 +117,18 @@ function EditRow({ label, value, expanded, onToggle, children }: EditRowProps) {
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center justify-between px-4 py-3.5 text-left"
+        className="w-full flex items-center justify-between px-4 py-3.5 text-left overflow-hidden"
         style={{ background: "transparent" }}
       >
-        <div className="flex flex-col gap-0.5 min-w-0 pr-4">
+        <div className="flex flex-col gap-0.5 min-w-0 pr-4 overflow-hidden">
           <span
             className="text-[10px] font-bold uppercase tracking-widest"
-            style={{ color: "#00F0FF" }}
+            style={{ color: "rgba(245,245,245,0.35)" }}
           >
             {label}
           </span>
           <span
-            className="text-sm truncate"
+            className="text-sm truncate block"
             style={{
               color: value ? "rgba(245,245,245,0.85)" : "rgba(245,245,245,0.3)",
             }}
@@ -359,7 +359,7 @@ export default function BrandSettingsForm({
 
   return (
     // [Change 1] Removed max-w-xl — dashboard layout constrains width on desktop
-    <div className="pb-20">
+    <div className="pb-20 w-full overflow-hidden">
       {/* Page header */}
       <div className="flex items-center gap-3 px-4 pt-5 pb-4">
         <Link
