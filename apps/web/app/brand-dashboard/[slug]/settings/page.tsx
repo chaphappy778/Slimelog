@@ -17,7 +17,7 @@ export default async function SettingsPage({ params }: PageProps) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login");
 
-  // [Change 1] Added banner_url to select string
+  // [Change 3] Select string unchanged — already fetches all needed columns
   const { data: brand } = await supabase
     .from("brands")
     .select(
@@ -37,37 +37,11 @@ export default async function SettingsPage({ params }: PageProps) {
     verification_tier: brand.verification_tier ?? "community",
   };
 
+  // [Change 1] Page h1 "Settings" removed — header now lives inside BrandSettingsForm
+  // [Change 2] Wrapping card div removed — BrandSettingsForm renders its own layout
   return (
     <DashboardLayout brand={layoutBrand} active="settings">
-      <div className="mb-8">
-        <h1
-          className="text-2xl font-bold text-white"
-          style={{ fontFamily: "Montserrat, sans-serif" }}
-        >
-          Settings
-        </h1>
-        <p
-          className="text-sm mt-1"
-          style={{
-            color: "rgba(245,245,245,0.4)",
-            fontFamily: "Inter, sans-serif",
-          }}
-        >
-          Manage your brand profile and public information
-        </p>
-      </div>
-
-      <div className="max-w-xl">
-        <div
-          className="rounded-xl p-6"
-          style={{
-            background: "rgba(45,10,78,0.25)",
-            border: "1px solid rgba(45,10,78,0.7)",
-          }}
-        >
-          <BrandSettingsForm brand={brand} userId={user.id} />
-        </div>
-      </div>
+      <BrandSettingsForm brand={brand} userId={user.id} />
     </DashboardLayout>
   );
 }

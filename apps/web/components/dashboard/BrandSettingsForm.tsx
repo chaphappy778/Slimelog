@@ -1,12 +1,18 @@
 // apps/web/components/dashboard/BrandSettingsForm.tsx
 "use client";
 
-import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { ImageUpload } from "@/components/ImageUpload";
+import { useState, useRef, useCallback } from "react";
+import Link from "next/link";
+import { createBrowserClient } from "@supabase/ssr";
 
-// [Change 1] Added banner_url to Brand interface
-interface Brand {
+// [Change 18] Module-level createBrowserClient — not inside component
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+);
+
+// [Change 7] Local prop interface — Brand is not exported from @/lib/types
+interface BrandProps {
   id: string;
   name: string;
   bio: string | null;
@@ -21,12 +27,165 @@ interface Brand {
   restock_schedule: string | null;
   logo_url: string | null;
   banner_url: string | null;
+  slug: string;
+  verification_tier: string | null;
 }
 
 interface BrandSettingsFormProps {
-  brand: Brand;
+  brand: BrandProps;
   userId: string;
 }
+
+// [Change 2] compressImage helper — canvas → WebP at 0.85 quality
+async function compressImage(file: File, maxDimension: number): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      let { width, height } = img;
+      if (width > maxDimension || height > maxDimension) {
+        if (width > height) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        } else {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Canvas context unavailable"));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error("Canvas toBlob failed"));
+            return;
+          }
+          resolve(blob);
+        },
+        "image/webp",
+        0.85,
+      );
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Image load failed"));
+    };
+    img.src = objectUrl;
+  });
+}
+
+// [Change 3] generateFilePath helper
+function generateFilePath(userId: string, prefix: string): string {
+  const random = Math.random().toString(36).slice(2, 8);
+  return `brands/${userId}/${prefix}-${Date.now()}-${random}.webp`;
+}
+
+// [Change 9] RowDivider component
+function RowDivider() {
+  return (
+    <div
+      style={{ height: 1, background: "rgba(45,10,78,0.7)" }}
+      aria-hidden="true"
+    />
+  );
+}
+
+// [Change 8] EditRow component — label, value display, expandable inline input
+interface EditRowProps {
+  label: string;
+  value: string;
+  expanded: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}
+
+function EditRow({ label, value, expanded, onToggle, children }: EditRowProps) {
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-4 py-3.5 text-left"
+        style={{ background: "transparent" }}
+      >
+        <div className="flex flex-col gap-0.5 min-w-0 pr-4">
+          <span
+            className="text-[10px] font-bold uppercase tracking-widest"
+            style={{ color: "#00F0FF" }}
+          >
+            {label}
+          </span>
+          <span
+            className="text-sm truncate"
+            style={{
+              color: value ? "rgba(245,245,245,0.85)" : "rgba(245,245,245,0.3)",
+            }}
+          >
+            {value || "Not set"}
+          </span>
+        </div>
+        {/* Chevron SVG */}
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          style={{
+            flexShrink: 0,
+            transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 0.2s",
+            color: "rgba(245,245,245,0.3)",
+          }}
+        >
+          <path
+            d="M4 6l4 4 4-4"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+      {expanded && (
+        <div
+          className="px-4 pb-4"
+          style={{ borderTop: "1px solid rgba(45,10,78,0.7)" }}
+        >
+          <div className="pt-3">{children}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Section header
+function SectionHeader({ title }: { title: string }) {
+  return (
+    <div className="px-4 pt-5 pb-2">
+      <span
+        className="text-[11px] font-black tracking-widest uppercase"
+        style={{ color: "#00F0FF" }} // ← was rgba(245,245,245,0.3)
+      >
+        {title}
+      </span>
+    </div>
+  );
+}
+
+// Input style helper
+const inputStyle: React.CSSProperties = {
+  background: "rgba(45,10,78,0.4)",
+  border: "1px solid rgba(45,10,78,0.9)",
+};
 
 export default function BrandSettingsForm({
   brand,
@@ -45,21 +204,108 @@ export default function BrandSettingsForm({
     founded_year: brand.founded_year?.toString() ?? "",
     restock_schedule: brand.restock_schedule ?? "",
   });
+
   const [logoUrl, setLogoUrl] = useState<string | null>(brand.logo_url ?? null);
-  // [Change 2] bannerUrl state
   const [bannerUrl, setBannerUrl] = useState<string | null>(
     brand.banner_url ?? null,
   );
+
+  // [Change 4] Upload boolean states
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const supabase = createClient();
+  const [openRow, setOpenRow] = useState<string | null>(null);
+
+  // Track original to detect changes
+  const original = useRef({
+    form: {
+      name: brand.name ?? "",
+      bio: brand.bio ?? "",
+      description: brand.description ?? "",
+      website_url: brand.website_url ?? "",
+      shop_url: brand.shop_url ?? "",
+      instagram_handle: brand.instagram_handle ?? "",
+      tiktok_handle: brand.tiktok_handle ?? "",
+      contact_email: brand.contact_email ?? "",
+      location: brand.location ?? "",
+      founded_year: brand.founded_year?.toString() ?? "",
+      restock_schedule: brand.restock_schedule ?? "",
+    },
+    logoUrl: brand.logo_url ?? null,
+    bannerUrl: brand.banner_url ?? null,
+  });
+
+  const hasChanges =
+    JSON.stringify(form) !== JSON.stringify(original.current.form) ||
+    logoUrl !== original.current.logoUrl ||
+    bannerUrl !== original.current.bannerUrl;
+
+  // [Change 5] Banner file input ref
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+  // [Change 6] Logo file input ref
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
   };
 
+  const toggleRow = useCallback((key: string) => {
+    setOpenRow((prev) => (prev === key ? null : key));
+  }, []);
+
+  // [Change 5] Banner upload handler
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBannerUploading(true);
+    try {
+      const blob = await compressImage(file, 1600);
+      const path = generateFilePath(userId, "banner");
+      const { error: uploadError } = await supabase.storage
+        .from("slime-photos")
+        .upload(path, blob, { contentType: "image/webp", upsert: false });
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage
+        .from("slime-photos")
+        .getPublicUrl(path);
+      setBannerUrl(urlData.publicUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Banner upload failed");
+    } finally {
+      setBannerUploading(false);
+      if (bannerInputRef.current) bannerInputRef.current.value = "";
+    }
+  };
+
+  // [Change 6] Logo upload handler
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoUploading(true);
+    try {
+      const blob = await compressImage(file, 400);
+      const path = generateFilePath(userId, "logo");
+      const { error: uploadError } = await supabase.storage
+        .from("slime-photos")
+        .upload(path, blob, { contentType: "image/webp", upsert: false });
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage
+        .from("slime-photos")
+        .getPublicUrl(path);
+      setLogoUrl(urlData.publicUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Logo upload failed");
+    } finally {
+      setLogoUploading(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  };
+
+  // [Change 17] handleSave
   const handleSave = async () => {
     if (!form.name.trim()) {
       setError("Brand name is required.");
@@ -79,10 +325,11 @@ export default function BrandSettingsForm({
         tiktok_handle: form.tiktok_handle.replace(/^@/, "") || null,
         contact_email: form.contact_email || null,
         location: form.location || null,
-        founded_year: form.founded_year ? parseInt(form.founded_year) : null,
+        founded_year: form.founded_year
+          ? parseInt(form.founded_year, 10)
+          : null,
         restock_schedule: form.restock_schedule || null,
         logo_url: logoUrl,
-        // [Change 4] banner_url in update payload
         banner_url: bannerUrl,
       })
       .eq("id", brand.id)
@@ -92,155 +339,314 @@ export default function BrandSettingsForm({
     if (err) {
       setError(err.message);
     } else {
+      original.current = {
+        form: { ...form },
+        logoUrl,
+        bannerUrl,
+      };
       showToast("Brand profile saved");
     }
   };
 
-  const fields = [
-    {
-      key: "name",
-      label: "Brand Name",
-      placeholder: "Your brand name",
-      type: "text",
-      required: true,
-    },
-    {
-      key: "contact_email",
-      label: "Contact Email",
-      placeholder: "hello@yourbrand.com",
-      type: "email",
-    },
-    {
-      key: "website_url",
-      label: "Website URL",
-      placeholder: "https://yourbrand.com",
-      type: "url",
-    },
-    {
-      key: "shop_url",
-      label: "Shop URL",
-      placeholder: "https://yourbrand.com/shop",
-      type: "url",
-    },
-    {
-      key: "instagram_handle",
-      label: "Instagram Handle",
-      placeholder: "@yourbrand",
-      type: "text",
-    },
-    {
-      key: "tiktok_handle",
-      label: "TikTok Handle",
-      placeholder: "@yourbrand",
-      type: "text",
-    },
-    {
-      key: "location",
-      label: "Location",
-      placeholder: "Austin, TX",
-      type: "text",
-    },
-    {
-      key: "founded_year",
-      label: "Founded Year",
-      placeholder: "2022",
-      type: "number",
-    },
-    {
-      key: "restock_schedule",
-      label: "Restock Schedule",
-      placeholder: "Every Friday 6PM EST",
-      type: "text",
-    },
-  ];
+  // Subscription badge logic
+  const tier = brand.verification_tier ?? "";
+  const isPro = tier === "verified" || tier === "partner";
 
   return (
-    <div className="px-4 py-5 space-y-5">
-      <div>
-        <p className="text-xs font-bold uppercase tracking-widest text-[#00F0FF]">
-          Brand Settings
-        </p>
-        <p className="text-2xl font-bold text-white">Edit Profile</p>
+    <div className="max-w-xl pb-20">
+      {/* [Change 10] Page header */}
+      <div className="flex items-center gap-3 px-4 pt-5 pb-4">
+        <Link
+          href={`/brand-dashboard/${brand.slug}`}
+          className="flex items-center justify-center rounded-lg"
+          style={{ color: "rgba(245,245,245,0.5)" }}
+          aria-label="Back to dashboard"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 20 20"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M12.5 15l-5-5 5-5"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </Link>
+        <div>
+          <h1
+            className="text-xl font-bold leading-tight"
+            style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
+          >
+            Brand Profile
+          </h1>
+          <p
+            className="text-xs mt-0.5"
+            style={{ color: "rgba(245,245,245,0.4)" }}
+          >
+            Manage your brand&apos;s public presence
+          </p>
+        </div>
       </div>
 
-      <div className="space-y-4">
-        {/* [Change 3] Brand Banner — above Brand Logo */}
-        <div>
-          <label className="text-xs font-bold uppercase tracking-widest text-[#6B5A7E] block mb-1.5">
-            Brand Banner
-          </label>
-          <p
-            className="text-xs mb-3"
-            style={{ color: "rgba(245,245,245,0.35)" }}
-          >
-            Displayed as the cover image on your brand page. Recommended:
-            1200x400px.
-          </p>
-          <ImageUpload
-            bucket="slime-photos"
-            userId={userId}
-            existingUrl={bannerUrl}
-            onUploadComplete={(url: string) => setBannerUrl(url)}
-            onRemove={() => setBannerUrl(null)}
-            label="Upload Banner"
-            aspectRatio="4:3"
-          />
-        </div>
-
-        <div>
-          <label className="text-xs font-bold uppercase tracking-widest text-[#6B5A7E] block mb-3">
-            Brand Logo
-          </label>
-          <div className="w-32">
-            <ImageUpload
-              bucket="avatars"
-              userId={userId}
-              existingUrl={logoUrl}
-              onUploadComplete={(url: string) => setLogoUrl(url)}
-              onRemove={() => setLogoUrl(null)}
-              label="Upload Logo"
-              aspectRatio="square"
+      {/* [Change 11] Brand hero */}
+      <div className="relative mb-10">
+        {/* Banner */}
+        <button
+          type="button"
+          onClick={() => bannerInputRef.current?.click()}
+          disabled={bannerUploading}
+          className="relative w-full overflow-hidden block"
+          style={{ height: 120, background: "rgba(45,10,78,0.5)" }}
+          aria-label="Upload banner image"
+        >
+          {bannerUrl ? (
+            <img
+              src={bannerUrl}
+              alt="Brand banner"
+              className="w-full h-full object-cover"
             />
-          </div>
-        </div>
-
-        {fields.map((field) => (
-          <div key={field.key}>
-            <label className="text-xs font-bold uppercase tracking-widest text-[#6B5A7E] block mb-1.5">
-              {field.label}{" "}
-              {field.required && <span className="text-[#FF00E5]">*</span>}
-            </label>
-            <input
-              type={field.type}
-              value={(form as Record<string, string>)[field.key]}
-              onChange={(e) =>
-                setForm({ ...form, [field.key]: e.target.value })
-              }
-              placeholder={field.placeholder}
-              className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-1 focus:ring-[#39FF14]/40"
-              style={{
-                background: "rgba(45,10,78,0.4)",
-                border: "1px solid rgba(45,10,78,0.9)",
-              }}
-            />
-          </div>
-        ))}
-
-        <div>
-          <label className="text-xs font-bold uppercase tracking-widest text-[#6B5A7E] block mb-1.5">
-            Bio{" "}
-            <span
-              style={{
-                color: "rgba(245,245,245,0.3)",
-                fontWeight: 400,
-                textTransform: "none",
-                letterSpacing: 0,
-                fontSize: 11,
-              }}
+          ) : (
+            <div
+              className="w-full h-full flex items-center justify-center"
+              style={{ background: "rgba(45,10,78,0.35)" }}
             >
-              (max 280 chars)
-            </span>
-          </label>
+              <span
+                className="text-xs"
+                style={{ color: "rgba(245,245,245,0.3)" }}
+              >
+                No banner
+              </span>
+            </div>
+          )}
+          {/* Camera overlay */}
+          <div
+            className="absolute inset-0 flex items-center justify-center"
+            style={{ background: "rgba(10,10,10,0.35)" }}
+          >
+            {bannerUploading ? (
+              <svg
+                className="animate-spin"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="rgba(245,245,245,0.2)"
+                  strokeWidth="2"
+                />
+                <path
+                  d="M12 2a10 10 0 0 1 10 10"
+                  stroke="#39FF14"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+            ) : (
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+                  stroke="rgba(245,245,245,0.7)"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <circle
+                  cx="12"
+                  cy="13"
+                  r="4"
+                  stroke="rgba(245,245,245,0.7)"
+                  strokeWidth="1.5"
+                />
+              </svg>
+            )}
+          </div>
+        </button>
+
+        {/* Hidden banner file input */}
+        <input
+          ref={bannerInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleBannerUpload}
+          aria-hidden="true"
+        />
+
+        {/* Logo circle overlapping banner */}
+        <div className="absolute -bottom-8 left-4">
+          <button
+            type="button"
+            onClick={() => logoInputRef.current?.click()}
+            disabled={logoUploading}
+            className="relative rounded-full overflow-hidden flex items-center justify-center"
+            style={{
+              width: 64,
+              height: 64,
+              background: "rgba(45,10,78,0.8)",
+              border: "2px solid rgba(45,10,78,0.9)",
+              boxShadow: "0 0 0 2px #0A0A0A",
+            }}
+            aria-label="Upload logo image"
+          >
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt="Brand logo"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+                  stroke="rgba(245,245,245,0.4)"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <circle
+                  cx="12"
+                  cy="13"
+                  r="4"
+                  stroke="rgba(245,245,245,0.4)"
+                  strokeWidth="1.5"
+                />
+              </svg>
+            )}
+            {/* Camera badge */}
+            <div
+              className="absolute inset-0 flex items-center justify-center rounded-full"
+              style={{ background: "rgba(10,10,10,0.45)" }}
+            >
+              {logoUploading ? (
+                <svg
+                  className="animate-spin"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="rgba(245,245,245,0.2)"
+                    strokeWidth="2"
+                  />
+                  <path
+                    d="M12 2a10 10 0 0 1 10 10"
+                    stroke="#39FF14"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              ) : (
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+                    stroke="rgba(245,245,245,0.8)"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <circle
+                    cx="12"
+                    cy="13"
+                    r="4"
+                    stroke="rgba(245,245,245,0.8)"
+                    strokeWidth="1.5"
+                  />
+                </svg>
+              )}
+            </div>
+          </button>
+        </div>
+
+        {/* Hidden logo file input */}
+        <input
+          ref={logoInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleLogoUpload}
+          aria-hidden="true"
+        />
+      </div>
+
+      {/* Brand name below hero */}
+      <div className="px-4 mb-6">
+        <p
+          className="text-base font-bold text-white"
+          style={{ fontFamily: "Montserrat, sans-serif" }}
+        >
+          {brand.name}
+        </p>
+      </div>
+
+      {/* [Change 12] BRAND IDENTITY section */}
+      <div
+        className="rounded-xl overflow-hidden mb-3"
+        style={{
+          background: "rgba(45,10,78,0.25)",
+          border: "1px solid rgba(45,10,78,0.7)",
+          boxShadow: "inset 0 0 16px rgba(45,10,78,0.1)",
+        }}
+      >
+        <SectionHeader title="Brand Identity" />
+
+        <EditRow
+          label="Brand Name"
+          value={form.name}
+          expanded={openRow === "name"}
+          onToggle={() => toggleRow("name")}
+        >
+          <input
+            type="text"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="Your brand name"
+            className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-1 focus:ring-[#39FF14]/40"
+            style={inputStyle}
+          />
+        </EditRow>
+
+        <RowDivider />
+
+        <EditRow
+          label="Bio"
+          value={form.bio}
+          expanded={openRow === "bio"}
+          onToggle={() => toggleRow("bio")}
+        >
           <textarea
             value={form.bio}
             onChange={(e) =>
@@ -248,57 +654,322 @@ export default function BrandSettingsForm({
             }
             rows={3}
             placeholder="A quick intro to your brand..."
-            className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none resize-none"
-            style={{
-              background: "rgba(45,10,78,0.4)",
-              border: "1px solid rgba(45,10,78,0.9)",
-            }}
+            className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none resize-none focus:ring-1 focus:ring-[#39FF14]/40"
+            style={inputStyle}
           />
-          <p className="text-xs text-[#6B5A7E] mt-1 text-right">
+          <p
+            className="text-xs mt-1 text-right"
+            style={{ color: "rgba(245,245,245,0.3)" }}
+          >
             {form.bio.length}/280
           </p>
-        </div>
+        </EditRow>
 
-        <div>
-          <label className="text-xs font-bold uppercase tracking-widest text-[#6B5A7E] block mb-1.5">
-            Full Description
-          </label>
+        <RowDivider />
+
+        <EditRow
+          label="Full Description"
+          value={form.description}
+          expanded={openRow === "description"}
+          onToggle={() => toggleRow("description")}
+        >
           <textarea
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             rows={4}
-            placeholder="Tell the community your story, your process, what makes your slimes special..."
-            className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none resize-none"
-            style={{
-              background: "rgba(45,10,78,0.4)",
-              border: "1px solid rgba(45,10,78,0.9)",
-            }}
+            placeholder="Tell the community your story..."
+            className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none resize-none focus:ring-1 focus:ring-[#39FF14]/40"
+            style={inputStyle}
           />
-        </div>
-
-        {error && (
-          <div
-            className="rounded-xl px-4 py-3"
-            style={{
-              background: "rgba(255,68,68,0.1)",
-              border: "1px solid rgba(255,68,68,0.2)",
-            }}
-          >
-            <p className="text-xs text-red-400">{error}</p>
-          </div>
-        )}
-
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving}
-          className="w-full py-3.5 rounded-xl font-bold text-[#0A0A0A] disabled:opacity-50 transition-opacity"
-          style={{ background: "linear-gradient(135deg, #39FF14, #00F0FF)" }}
-        >
-          {saving ? "Saving..." : "Save Changes"}
-        </button>
+        </EditRow>
       </div>
 
+      {/* [Change 13] CONTACT & LINKS section */}
+      <div
+        className="rounded-xl overflow-hidden mb-3"
+        style={{
+          background: "rgba(45,10,78,0.25)",
+          border: "1px solid rgba(45,10,78,0.7)",
+          boxShadow: "inset 0 0 16px rgba(45,10,78,0.1)",
+        }}
+      >
+        <SectionHeader title="Contact & Links" />
+
+        <EditRow
+          label="Contact Email"
+          value={form.contact_email}
+          expanded={openRow === "contact_email"}
+          onToggle={() => toggleRow("contact_email")}
+        >
+          <input
+            type="email"
+            value={form.contact_email}
+            onChange={(e) =>
+              setForm({ ...form, contact_email: e.target.value })
+            }
+            placeholder="hello@yourbrand.com"
+            className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-1 focus:ring-[#39FF14]/40"
+            style={inputStyle}
+          />
+        </EditRow>
+
+        <RowDivider />
+
+        <EditRow
+          label="Website URL"
+          value={form.website_url}
+          expanded={openRow === "website_url"}
+          onToggle={() => toggleRow("website_url")}
+        >
+          <input
+            type="url"
+            value={form.website_url}
+            onChange={(e) => setForm({ ...form, website_url: e.target.value })}
+            placeholder="https://yourbrand.com"
+            className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-1 focus:ring-[#39FF14]/40"
+            style={inputStyle}
+          />
+        </EditRow>
+
+        <RowDivider />
+
+        <EditRow
+          label="Shop URL"
+          value={form.shop_url}
+          expanded={openRow === "shop_url"}
+          onToggle={() => toggleRow("shop_url")}
+        >
+          <input
+            type="url"
+            value={form.shop_url}
+            onChange={(e) => setForm({ ...form, shop_url: e.target.value })}
+            placeholder="https://yourbrand.com/shop"
+            className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-1 focus:ring-[#39FF14]/40"
+            style={inputStyle}
+          />
+        </EditRow>
+
+        <RowDivider />
+
+        <EditRow
+          label="Location"
+          value={form.location}
+          expanded={openRow === "location"}
+          onToggle={() => toggleRow("location")}
+        >
+          <input
+            type="text"
+            value={form.location}
+            onChange={(e) => setForm({ ...form, location: e.target.value })}
+            placeholder="Austin, TX"
+            className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-1 focus:ring-[#39FF14]/40"
+            style={inputStyle}
+          />
+        </EditRow>
+
+        <RowDivider />
+
+        <EditRow
+          label="Founded Year"
+          value={form.founded_year}
+          expanded={openRow === "founded_year"}
+          onToggle={() => toggleRow("founded_year")}
+        >
+          <input
+            type="number"
+            value={form.founded_year}
+            onChange={(e) => setForm({ ...form, founded_year: e.target.value })}
+            placeholder="2022"
+            className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-1 focus:ring-[#39FF14]/40"
+            style={inputStyle}
+          />
+        </EditRow>
+
+        <RowDivider />
+
+        <EditRow
+          label="Restock Schedule"
+          value={form.restock_schedule}
+          expanded={openRow === "restock_schedule"}
+          onToggle={() => toggleRow("restock_schedule")}
+        >
+          <input
+            type="text"
+            value={form.restock_schedule}
+            onChange={(e) =>
+              setForm({ ...form, restock_schedule: e.target.value })
+            }
+            placeholder="Every Friday 6PM EST"
+            className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-1 focus:ring-[#39FF14]/40"
+            style={inputStyle}
+          />
+        </EditRow>
+      </div>
+
+      {/* [Change 14] SOCIAL section */}
+      <div
+        className="rounded-xl overflow-hidden mb-3"
+        style={{
+          background: "rgba(45,10,78,0.25)",
+          border: "1px solid rgba(45,10,78,0.7)",
+          boxShadow: "inset 0 0 16px rgba(45,10,78,0.1)",
+        }}
+      >
+        <SectionHeader title="Social" />
+
+        <EditRow
+          label="Instagram Handle"
+          value={form.instagram_handle ? `@${form.instagram_handle}` : ""}
+          expanded={openRow === "instagram_handle"}
+          onToggle={() => toggleRow("instagram_handle")}
+        >
+          <input
+            type="text"
+            value={form.instagram_handle}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                instagram_handle: e.target.value.replace(/^@/, ""),
+              })
+            }
+            placeholder="yourbrand"
+            className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-1 focus:ring-[#39FF14]/40"
+            style={inputStyle}
+          />
+          <p
+            className="text-xs mt-1"
+            style={{ color: "rgba(245,245,245,0.3)" }}
+          >
+            Enter without the @ symbol
+          </p>
+        </EditRow>
+
+        <RowDivider />
+
+        <EditRow
+          label="TikTok Handle"
+          value={form.tiktok_handle ? `@${form.tiktok_handle}` : ""}
+          expanded={openRow === "tiktok_handle"}
+          onToggle={() => toggleRow("tiktok_handle")}
+        >
+          <input
+            type="text"
+            value={form.tiktok_handle}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                tiktok_handle: e.target.value.replace(/^@/, ""),
+              })
+            }
+            placeholder="yourbrand"
+            className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-1 focus:ring-[#39FF14]/40"
+            style={inputStyle}
+          />
+          <p
+            className="text-xs mt-1"
+            style={{ color: "rgba(245,245,245,0.3)" }}
+          >
+            Enter without the @ symbol
+          </p>
+        </EditRow>
+      </div>
+
+      {/* [Change 15] SUBSCRIPTION section — non-accordion */}
+      <div
+        className="rounded-xl overflow-hidden mb-6"
+        style={{
+          background: "rgba(45,10,78,0.25)",
+          border: "1px solid rgba(45,10,78,0.7)",
+          boxShadow: "inset 0 0 16px rgba(45,10,78,0.1)",
+        }}
+      >
+        <SectionHeader title="Subscription" />
+
+        <Link
+          href={`/brand-dashboard/${brand.slug}/subscription`}
+          className="flex items-center justify-between px-4 py-3.5"
+        >
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              {isPro ? (
+                <span
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                  style={{
+                    background: "rgba(57,255,20,0.15)",
+                    color: "#39FF14",
+                    border: "1px solid rgba(57,255,20,0.3)",
+                  }}
+                >
+                  BRAND PRO
+                </span>
+              ) : (
+                <span
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                  style={{
+                    background: "rgba(245,245,245,0.08)",
+                    color: "rgba(245,245,245,0.4)",
+                    border: "1px solid rgba(245,245,245,0.1)",
+                  }}
+                >
+                  FREE
+                </span>
+              )}
+            </div>
+            <span
+              className="text-xs"
+              style={{ color: "rgba(245,245,245,0.4)" }}
+            >
+              {isPro ? "Active" : "Upgrade for analytics & more"}
+            </span>
+          </div>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            style={{ color: "rgba(245,245,245,0.3)", flexShrink: 0 }}
+          >
+            <path
+              d="M6 4l4 4-4 4"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </Link>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div
+          className="rounded-xl px-4 py-3 mb-4 mx-0"
+          style={{
+            background: "rgba(255,68,68,0.1)",
+            border: "1px solid rgba(255,68,68,0.2)",
+          }}
+        >
+          <p className="text-xs text-red-400">{error}</p>
+        </div>
+      )}
+
+      {/* [Change 16] Save Profile CTA */}
+      <button
+        type="button"
+        onClick={handleSave}
+        disabled={saving || !hasChanges}
+        className="w-full py-3.5 rounded-xl font-bold text-[#0A0A0A] transition-opacity"
+        style={{
+          background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+          opacity: saving || !hasChanges ? 0.4 : 1,
+          fontFamily: "Montserrat, sans-serif",
+        }}
+      >
+        {saving ? "Saving..." : "Save Profile"}
+      </button>
+
+      {/* Toast */}
       {toast && (
         <div
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-full text-sm font-semibold text-[#0A0A0A] shadow-lg"
