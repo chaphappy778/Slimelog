@@ -1,3 +1,4 @@
+// apps/web/components/dashboard/DashboardLayout.tsx
 "use client";
 
 import Link from "next/link";
@@ -207,7 +208,7 @@ export default function DashboardLayout({
                 }}
               >
                 {isPro
-                  ? "★ VERIFIED"
+                  ? "VERIFIED"
                   : (brand.verification_tier?.toUpperCase() ?? "COMMUNITY")}
               </span>
             </div>
@@ -263,14 +264,14 @@ export default function DashboardLayout({
           })}
         </nav>
 
-        {/* Bottom: back to app */}
+        {/* Bottom: view brand page */}
         <div className="px-3 pb-6">
           <div
             className="mx-2 mb-3"
             style={{ height: "1px", background: "rgba(45,10,78,0.5)" }}
           />
           <Link
-            href="/"
+            href={`/brands/${brand.slug}`}
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all"
             style={{
               color: "rgba(245,245,245,0.35)",
@@ -286,41 +287,72 @@ export default function DashboardLayout({
                 strokeLinejoin="round"
               />
             </svg>
-            Back to App
+            View Brand Page
           </Link>
         </div>
       </aside>
 
       {/* ── Mobile tab bar ── */}
       <div
-        className="md:hidden fixed top-0 left-0 right-0 z-40 flex overflow-x-auto"
+        className="md:hidden fixed top-0 left-0 right-0 z-40"
         style={{
           background: "rgba(10,10,10,0.97)",
           borderBottom: "1px solid rgba(45,10,78,0.6)",
         }}
       >
-        {navItems.map((item) => {
-          const isActive = item.key === active;
-          return (
-            <Link
-              key={item.key}
-              href={item.href(brand.slug)}
-              className="flex-shrink-0 relative px-4 py-3.5 text-xs font-semibold whitespace-nowrap transition-colors"
-              style={{
-                color: isActive ? "#fff" : "rgba(245,245,245,0.4)",
-                fontFamily: "Inter, sans-serif",
-              }}
-            >
-              {item.label}
-              {isActive && (
-                <span
-                  className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full"
-                  style={{ background: "#39FF14" }}
-                />
-              )}
-            </Link>
-          );
-        })}
+        {/* Top row: brand name + view brand page link */}
+        <div
+          className="flex items-center justify-between px-4 pt-3 pb-2"
+          style={{ borderBottom: "1px solid rgba(45,10,78,0.4)" }}
+        >
+          <p
+            className="text-sm font-bold text-white truncate"
+            style={{ fontFamily: "Montserrat, sans-serif" }}
+          >
+            {brand.name}
+          </p>
+          <Link
+            href={`/brands/${brand.slug}`}
+            className="flex items-center gap-1.5 text-xs font-semibold"
+            style={{ color: "#00F0FF", fontFamily: "Inter, sans-serif" }}
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <path
+                d="M10 3L5 8L10 13"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            View Brand
+          </Link>
+        </div>
+        {/* Nav tabs */}
+        <div className="flex overflow-x-auto">
+          {navItems.map((item) => {
+            const isActive = item.key === active;
+            return (
+              <Link
+                key={item.key}
+                href={item.href(brand.slug)}
+                className="flex-shrink-0 relative px-4 py-3 text-xs font-semibold whitespace-nowrap transition-colors"
+                style={{
+                  color: isActive ? "#fff" : "rgba(245,245,245,0.4)",
+                  fontFamily: "Inter, sans-serif",
+                }}
+              >
+                {item.label}
+                {isActive && (
+                  <span
+                    className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full"
+                    style={{ background: "#39FF14" }}
+                  />
+                )}
+              </Link>
+            );
+          })}
+        </div>
       </div>
 
       {/* ── Main content ── */}
@@ -328,7 +360,8 @@ export default function DashboardLayout({
         className="flex-1 md:ml-60 min-h-screen"
         style={{ background: "transparent" }}
       >
-        <div className="pt-12 md:pt-0 p-4 md:p-8">{children}</div>
+        {/* pt accounts for mobile header height (brand row + tabs = ~88px) */}
+        <div className="pt-[88px] md:pt-0 p-4 md:p-8">{children}</div>
       </main>
     </div>
   );

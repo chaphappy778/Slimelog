@@ -24,14 +24,15 @@ export default function BannerLightbox({
       />
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: "rgba(0,0,0,0.92)" }}
+          onClick={() => setOpen(false)}
         >
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center"
-            style={{ background: "rgba(255,255,255,0.1)" }}
+            className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center z-10"
+            style={{ background: "rgba(255,255,255,0.15)" }}
             aria-label="Close"
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -43,17 +44,20 @@ export default function BannerLightbox({
               />
             </svg>
           </button>
-          <div
-            className="relative w-full max-w-2xl mx-4"
-            style={{ aspectRatio: "16/9" }}
-          >
-            <Image
-              src={bannerUrl}
-              alt={`${brandName} banner`}
-              fill
-              className="object-contain"
-            />
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={bannerUrl}
+            alt={`${brandName} banner`}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: "100%",
+              maxHeight: "90vh",
+              width: "auto",
+              height: "auto",
+              objectFit: "contain",
+              borderRadius: 8,
+            }}
+          />
         </div>
       )}
     </>
