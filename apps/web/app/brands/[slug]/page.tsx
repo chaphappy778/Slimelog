@@ -1,5 +1,8 @@
 // apps/web/app/brands/[slug]/page.tsx
-// [Change 1 — Brands Redesign D3] Hero upgrade, stats pills, catalog section, drops/logs query fixes
+// [Change 1–10 — Drops Overhaul D1] Banner lightbox, BrandWithBanner type,
+// updated UpcomingDrop interface, removed catalog query/section, updated drops
+// query, hero banner upgrade (200px), -mt-12 logo offset, catalog pill,
+// section reorder, DropCard replacement
 
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -11,10 +14,17 @@ import PageWrapper from "@/components/PageWrapper";
 import PageHeader from "@/components/PageHeader";
 import FollowBrandButton from "@/components/FollowBrandButton";
 import ClaimBrandButton from "@/components/brand/ClaimBrandButton";
+import BannerLightbox from "./components/BannerLightbox";
+import DropCard from "./components/DropCard";
 import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
 import type { Brand, SlimeBaseType, BrandClaimStatus } from "@/lib/types";
 
 // ─── Local interfaces (not in @/lib/types) ────────────────────────────────────
+
+// [Change 2] BrandWithBanner extends Brand with the new banner_url column
+interface BrandWithBanner extends Brand {
+  banner_url: string | null;
+}
 
 interface BrandSlimeRow {
   id: string;
@@ -31,6 +41,7 @@ interface BrandSlimeRow {
     | null;
 }
 
+// [Change 3] Updated UpcomingDrop interface with new drop fields
 interface UpcomingDrop {
   id: string;
   name: string;
@@ -38,15 +49,16 @@ interface UpcomingDrop {
   drop_at: string;
   status: string | null;
   cover_image_url: string | null;
-}
-
-interface CatalogSlime {
-  id: string;
-  name: string;
-  image_url: string | null;
-  base_type: string | null;
-  avg_overall: number | null;
-  total_ratings: number;
+  drop_type: "new_drop" | "restock" | null;
+  discount_code: string | null;
+  free_shipping_threshold: number | null;
+  drop_slimes: Array<{
+    id: string;
+    name: string | null;
+    base_type: string | null;
+    price: number | null;
+    slime_id: string | null;
+  }>;
 }
 
 // ─── Server Supabase ──────────────────────────────────────────────────────────
@@ -60,14 +72,15 @@ async function getSupabase() {
   );
 }
 
-async function fetchBrand(slug: string): Promise<Brand | null> {
+// [Change 2] fetchBrand returns BrandWithBanner
+async function fetchBrand(slug: string): Promise<BrandWithBanner | null> {
   const supabase = await getSupabase();
   const { data } = await supabase
     .from("brands")
     .select("*")
     .eq("slug", slug)
     .maybeSingle();
-  return (data as Brand | null) ?? null;
+  return (data as BrandWithBanner | null) ?? null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -202,27 +215,23 @@ export default async function BrandPage({
 
   const communityLogs = (communityRows ?? []) as unknown as BrandSlimeRow[];
 
-  // Upcoming drops — fix column names to match schema
+  // [Change 5] Updated drops query with new fields and drop_slimes join
   const { data: dropRows } = await supabase
     .from("drops")
-    .select("id, name, description, drop_at, status, cover_image_url")
+    .select(
+      `
+      id, name, description, drop_at, status, cover_image_url,
+      drop_type, discount_code, free_shipping_threshold,
+      drop_slimes ( id, name, base_type, price, slime_id )
+    `,
+    )
     .eq("brand_id", brand.id)
     .neq("status", "cancelled")
     .gte("drop_at", new Date().toISOString())
     .order("drop_at", { ascending: true })
     .limit(3);
 
-  const upcomingDrops = (dropRows ?? []) as UpcomingDrop[];
-
-  // Slime catalog from slimes table
-  const { data: catalogRows } = await supabase
-    .from("slimes")
-    .select("id, name, image_url, base_type, avg_overall, total_ratings")
-    .eq("brand_id", brand.id)
-    .order("avg_overall", { ascending: false, nullsFirst: false })
-    .limit(20);
-
-  const catalogSlimes = (catalogRows ?? []) as CatalogSlime[];
+  const upcomingDrops = (dropRows ?? []) as unknown as UpcomingDrop[];
 
   const initials = brand.name.slice(0, 2).toUpperCase();
 
@@ -231,16 +240,26 @@ export default async function BrandPage({
       <PageHeader />
 
       <main className="pt-14 pb-24 max-w-2xl mx-auto">
-        {/* Hero gradient */}
-        <div className="relative w-full" style={{ height: 160 }}>
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                "linear-gradient(135deg, rgba(45,10,78,0.9) 0%, rgba(0,240,255,0.08) 50%, rgba(255,0,229,0.08) 100%)",
-            }}
-          />
-          {/* Dot pattern overlay */}
+        {/* [Change 6] Hero banner — 200px, real image when banner_url exists */}
+        <div className="relative w-full" style={{ height: 200 }}>
+          {brand.banner_url ? (
+            <Image
+              src={brand.banner_url}
+              alt={`${brand.name} banner`}
+              fill
+              className="object-cover"
+              priority
+            />
+          ) : (
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  "linear-gradient(135deg, rgba(45,10,78,0.9) 0%, rgba(0,240,255,0.08) 50%, rgba(255,0,229,0.08) 100%)",
+              }}
+            />
+          )}
+          {/* Dot pattern — always shown */}
           <div
             className="absolute inset-0 opacity-20"
             style={{
@@ -249,7 +268,7 @@ export default async function BrandPage({
               backgroundSize: "24px 24px",
             }}
           />
-          {/* Bottom fade */}
+          {/* Bottom fade — always shown */}
           <div
             className="absolute inset-x-0 bottom-0"
             style={{
@@ -257,10 +276,17 @@ export default async function BrandPage({
               background: "linear-gradient(to bottom, transparent, #0A0A0A)",
             }}
           />
+          {/* [Change 1] Lightbox trigger — only when banner exists */}
+          {brand.banner_url && (
+            <BannerLightbox
+              bannerUrl={brand.banner_url}
+              brandName={brand.name}
+            />
+          )}
         </div>
 
-        {/* Header section */}
-        <section className="px-4 -mt-10 relative z-10">
+        {/* [Change 7] Header section — -mt-12 */}
+        <section className="px-4 -mt-12 relative z-10">
           <div className="flex items-end gap-4">
             {/* Logo */}
             <div
@@ -559,118 +585,33 @@ export default async function BrandPage({
               existingClaim={latestClaim}
             />
           </div>
+
+          {/* [Change 8] View Slime Catalog pill */}
+          <div className="mt-4">
+            <Link
+              href={`/brands/${brand.slug}/catalog`}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors"
+              style={{
+                border: "1px solid rgba(0,240,255,0.4)",
+                color: "#00F0FF",
+                background: "rgba(0,240,255,0.06)",
+              }}
+            >
+              View Slime Catalog
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path
+                  d="M3 7h8M7 3l4 4-4 4"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </Link>
+          </div>
         </section>
 
-        {/* Slime catalog */}
-        {catalogSlimes.length > 0 && (
-          <section className="mt-8">
-            <p
-              className="text-[11px] font-black tracking-widest uppercase mb-3 px-4"
-              style={{ color: "#00F0FF" }}
-            >
-              Slime Catalog
-            </p>
-            <div
-              className="flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-none"
-              style={{ msOverflowStyle: "none", scrollbarWidth: "none" }}
-            >
-              {catalogSlimes.map((slime) => {
-                const baseLabel = slime.base_type
-                  ? (SLIME_BASE_TYPE_LABELS[slime.base_type as SlimeBaseType] ??
-                    slime.base_type.replace(/_/g, " "))
-                  : null;
-                return (
-                  <Link
-                    key={slime.id}
-                    href={`/slimes/${slime.id}`}
-                    className="shrink-0 block active:scale-[0.98] transition-all"
-                    style={{ width: "calc(62vw - 16px)", maxWidth: 220 }}
-                  >
-                    <div
-                      className="rounded-2xl overflow-hidden"
-                      style={{
-                        background: "rgba(45,10,78,0.3)",
-                        border: "1px solid rgba(45,10,78,0.7)",
-                      }}
-                    >
-                      {/* Image */}
-                      <div
-                        className="relative w-full"
-                        style={{ aspectRatio: "1 / 1" }}
-                      >
-                        {slime.image_url ? (
-                          <Image
-                            src={slime.image_url}
-                            alt={slime.name}
-                            fill
-                            sizes="220px"
-                            className="object-cover"
-                          />
-                        ) : (
-                          <div
-                            className="w-full h-full flex items-center justify-center"
-                            style={{
-                              background:
-                                "linear-gradient(135deg, rgba(45,10,78,0.4), rgba(0,240,255,0.1))",
-                            }}
-                          >
-                            <svg
-                              viewBox="0 0 24 24"
-                              className="w-8 h-8"
-                              fill="none"
-                            >
-                              <circle
-                                cx="12"
-                                cy="12"
-                                r="9"
-                                stroke="rgba(45,10,78,0.8)"
-                                strokeWidth="1.5"
-                              />
-                              <circle
-                                cx="9"
-                                cy="9"
-                                r="1.5"
-                                fill="rgba(45,10,78,0.8)"
-                              />
-                            </svg>
-                          </div>
-                        )}
-                        {slime.avg_overall != null && (
-                          <span
-                            className="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded font-bold"
-                            style={{
-                              background: "rgba(10,10,10,0.75)",
-                              color: "#39FF14",
-                            }}
-                          >
-                            {slime.avg_overall.toFixed(1)}
-                          </span>
-                        )}
-                      </div>
-                      {/* Info */}
-                      <div className="p-2.5">
-                        <p className="text-xs font-bold text-slime-text truncate">
-                          {slime.name}
-                        </p>
-                        {baseLabel && (
-                          <p className="text-[10px] text-slime-muted mt-0.5 capitalize">
-                            {baseLabel}
-                          </p>
-                        )}
-                        <p className="text-[10px] text-slime-muted mt-0.5">
-                          {slime.total_ratings}{" "}
-                          {slime.total_ratings === 1 ? "rating" : "ratings"}
-                        </p>
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-        )}
-
-        {/* Upcoming drops */}
+        {/* [Change 9, 10] Upcoming Drops — now uses DropCard */}
         {upcomingDrops.length > 0 && (
           <section className="px-4 mt-8">
             <p
@@ -679,57 +620,9 @@ export default async function BrandPage({
             >
               Upcoming Drops
             </p>
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-4">
               {upcomingDrops.map((drop) => (
-                <Link
-                  key={drop.id}
-                  href={`/drops/${drop.id}`}
-                  className="rounded-xl overflow-hidden border border-slime-border bg-slime-card hover:border-slime-accent/50 transition-colors p-3 flex flex-row items-center gap-3"
-                >
-                  <div className="relative w-16 h-16 rounded-lg overflow-hidden shrink-0 bg-slime-surface">
-                    {drop.cover_image_url ? (
-                      <Image
-                        src={drop.cover_image_url}
-                        alt={drop.name}
-                        fill
-                        sizes="64px"
-                        className="object-cover"
-                      />
-                    ) : (
-                      <div
-                        className="w-full h-full flex items-center justify-center"
-                        style={{
-                          background:
-                            "linear-gradient(135deg, rgba(57,255,20,0.2), rgba(0,240,255,0.2))",
-                        }}
-                      >
-                        <svg
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="rgba(255,255,255,0.4)"
-                          strokeWidth="1.5"
-                          aria-hidden="true"
-                        >
-                          <path d="M12 2 L14 9 L21 12 L14 15 L12 22 L10 15 L3 12 L10 9 Z" />
-                        </svg>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slime-text line-clamp-1">
-                      {drop.name}
-                    </p>
-                    <p className="text-xs text-slime-muted line-clamp-1">
-                      {new Intl.DateTimeFormat("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      }).format(new Date(drop.drop_at))}
-                    </p>
-                  </div>
-                </Link>
+                <DropCard key={drop.id} drop={drop} />
               ))}
             </div>
           </section>
