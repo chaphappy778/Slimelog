@@ -357,7 +357,7 @@ export default async function AdminBrandClaimsPage({
           </div>
         ) : (
           <>
-            {/* Desktop table (≥640px) */}
+            {/* Desktop table (>=640px) */}
             <div
               className="hidden sm:block rounded-2xl overflow-hidden"
               style={{ border: "1px solid rgba(45,10,78,0.9)" }}
@@ -389,6 +389,8 @@ export default async function AdminBrandClaimsPage({
                     {claims.map((row, i) => {
                       const brand = normaliseRelation(row.brands);
                       const profile = normaliseRelation(row.profiles_public);
+                      const brandInitial = (brand?.name ??
+                        "?")[0].toUpperCase();
                       const isEven = i % 2 === 0;
                       return (
                         <tr
@@ -413,7 +415,23 @@ export default async function AdminBrandClaimsPage({
                                     sizes="32px"
                                     className="object-cover"
                                   />
-                                ) : null}
+                                ) : (
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <span
+                                      style={{
+                                        fontSize: 13,
+                                        fontWeight: 900,
+                                        color: "#39FF14",
+                                        fontFamily: "Montserrat, sans-serif",
+                                        userSelect: "none",
+                                        lineHeight: 1,
+                                      }}
+                                      aria-hidden="true"
+                                    >
+                                      {brandInitial}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                               <div className="min-w-0">
                                 <p className="text-slime-text font-medium truncate">
@@ -488,6 +506,7 @@ export default async function AdminBrandClaimsPage({
               {claims.map((row) => {
                 const brand = normaliseRelation(row.brands);
                 const profile = normaliseRelation(row.profiles_public);
+                const brandInitial = (brand?.name ?? "?")[0].toUpperCase();
                 return (
                   <Link
                     key={row.id}
@@ -513,7 +532,23 @@ export default async function AdminBrandClaimsPage({
                               sizes="40px"
                               className="object-cover"
                             />
-                          ) : null}
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span
+                                style={{
+                                  fontSize: 15,
+                                  fontWeight: 900,
+                                  color: "#39FF14",
+                                  fontFamily: "Montserrat, sans-serif",
+                                  userSelect: "none",
+                                  lineHeight: 1,
+                                }}
+                                aria-hidden="true"
+                              >
+                                {brandInitial}
+                              </span>
+                            </div>
+                          )}
                         </div>
                         <p
                           className="text-base font-bold text-white truncate"
