@@ -1,3 +1,4 @@
+// apps/web/app/brand-dashboard/[slug]/slimes/page.tsx
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
@@ -25,10 +26,11 @@ export default async function SlimesPage({ params }: PageProps) {
 
   if (!brand) redirect("/brands");
 
+  // [Change 1] — base_type replaces slime_type in select string
   const { data: slimes } = await supabase
     .from("slimes")
     .select(
-      "id, name, slime_type, description, colors, scent, retail_price, is_limited, is_discontinued, avg_texture, avg_scent, avg_sound, avg_drizzle, avg_creativity, avg_sensory_fit, avg_overall, total_ratings, image_url",
+      "id, name, base_type, description, colors, scent, retail_price, is_limited, is_discontinued, avg_texture, avg_scent, avg_sound, avg_drizzle, avg_creativity, avg_sensory_fit, avg_overall, total_ratings, image_url",
     )
     .eq("brand_id", brand.id)
     .eq("is_brand_official", true)

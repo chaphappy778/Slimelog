@@ -1,40 +1,24 @@
+// apps/web/components/dashboard/SlimesSplitPanel.tsx
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { createBrowserClient } from "@supabase/ssr";
+// [Change 1] — SLIME_BASE_TYPE_LABELS and SlimeBaseType imported; local arrays removed
+import { SLIME_BASE_TYPE_LABELS, SlimeBaseType } from "@/lib/types";
 
-const SLIME_TYPES = [
-  "butter",
-  "clear",
-  "cloud",
-  "icee",
-  "fluffy",
-  "floam",
-  "snow_fizz",
-  "thick_and_glossy",
-  "jelly",
-  "beaded",
-  "clay",
-  "cloud_cream",
-  "magnetic",
-  "thermochromic",
-  "avalanche",
-  "slay",
-];
-
-const TYPE_DISPLAY: Record<string, string> = Object.fromEntries(
-  SLIME_TYPES.map((t) => [
-    t,
-    t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-  ]),
+// [Change 8] — module-level createBrowserClient; createClient import removed
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
 );
 
 type FilterTab = "all" | "active" | "limited" | "discontinued";
 
+// [Change 2] — Slime interface uses base_type: SlimeBaseType
 interface Slime {
   id: string;
   name: string;
-  slime_type: string;
+  base_type: SlimeBaseType;
   description: string | null;
   colors: string[] | null;
   scent: string | null;
@@ -157,11 +141,11 @@ export default function SlimesSplitPanel({
   const [error, setError] = useState<string | null>(null);
   const [colorInput, setColorInput] = useState("");
   const [colors, setColors] = useState<string[]>([]);
-  const supabase = createClient();
 
+  // [Change 3] — emptyForm uses base_type
   const emptyForm = {
     name: "",
-    slime_type: "butter",
+    base_type: "butter" as SlimeBaseType,
     description: "",
     scent: "",
     retail_price: "",
@@ -196,10 +180,11 @@ export default function SlimesSplitPanel({
     setMode("add");
   };
 
+  // [Change 4] — startEdit sets base_type
   const startEdit = (slime: Slime) => {
     setForm({
       name: slime.name,
-      slime_type: slime.slime_type,
+      base_type: slime.base_type,
       description: slime.description ?? "",
       scent: slime.scent ?? "",
       retail_price: slime.retail_price?.toString() ?? "",
@@ -219,9 +204,10 @@ export default function SlimesSplitPanel({
     }
     setSaving(true);
     setError(null);
+    // [Change 5] — payload uses base_type
     const payload = {
       name: form.name.trim(),
-      slime_type: form.slime_type,
+      base_type: form.base_type,
       description: form.description || null,
       colors: colors.length > 0 ? colors : null,
       scent: form.scent || null,
@@ -335,6 +321,7 @@ export default function SlimesSplitPanel({
         </div>
 
         {/* Filter tabs */}
+        {/* [Change 10] — type="button" on all filter tab buttons */}
         <div
           className="flex overflow-x-auto scrollbar-none px-3 py-2 gap-1.5"
           style={{ borderBottom: "1px solid rgba(45,10,78,0.5)" }}
@@ -342,6 +329,7 @@ export default function SlimesSplitPanel({
           {filterTabs.map((tab) => (
             <button
               key={tab.key}
+              type="button"
               onClick={() => setFilter(tab.key)}
               className="flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-md transition-all"
               style={{
@@ -372,8 +360,10 @@ export default function SlimesSplitPanel({
             </div>
           ) : (
             filtered.map((slime) => (
+              // [Change 10] — type="button" on list item buttons
               <button
                 key={slime.id}
+                type="button"
                 onClick={() => {
                   setSelectedId(slime.id);
                   setMode("detail");
@@ -399,6 +389,7 @@ export default function SlimesSplitPanel({
                     >
                       {slime.name}
                     </p>
+                    {/* [Change 6] — use SLIME_BASE_TYPE_LABELS */}
                     <p
                       className="text-xs mt-0.5"
                       style={{
@@ -406,7 +397,8 @@ export default function SlimesSplitPanel({
                         fontFamily: "Inter, sans-serif",
                       }}
                     >
-                      {TYPE_DISPLAY[slime.slime_type] ?? slime.slime_type}
+                      {SLIME_BASE_TYPE_LABELS[slime.base_type] ??
+                        slime.base_type}
                     </p>
                   </div>
                   <div className="text-right flex-shrink-0">
@@ -458,11 +450,13 @@ export default function SlimesSplitPanel({
         </div>
 
         {/* Add button */}
+        {/* [Change 10] — type="button" */}
         <div
           className="p-3"
           style={{ borderTop: "1px solid rgba(45,10,78,0.5)" }}
         >
           <button
+            type="button"
             onClick={startAdd}
             className="w-full py-2.5 rounded-lg text-sm font-bold text-[#0A0A0A] transition-opacity hover:opacity-90"
             style={{
@@ -511,7 +505,9 @@ export default function SlimesSplitPanel({
                     ? "Edit Slime"
                     : selected?.name}
               </p>
+              {/* [Change 10] — type="button" on mobile close */}
               <button
+                type="button"
                 onClick={() => setMode("empty")}
                 className="mt-2 p-1.5 rounded-lg"
                 style={{
@@ -599,11 +595,17 @@ export default function SlimesSplitPanel({
                       <RatingBar
                         key={d.key}
                         label={d.label}
-                        value={(selected as any)[d.key]}
+                        value={
+                          (
+                            selected as unknown as Record<string, number | null>
+                          )[d.key] ?? null
+                        }
                       />
                     ))}
                   </div>
+                  {/* [Change 10] — type="button" on mobile Edit button */}
                   <button
+                    type="button"
                     onClick={() => startEdit(selected)}
                     className="w-full py-2.5 rounded-lg text-sm font-bold text-[#0A0A0A]"
                     style={{
@@ -630,24 +632,30 @@ export default function SlimesSplitPanel({
                       style={inputStyle}
                     />
                   </FormInput>
+                  {/* [Change 7] — mobile select uses SLIME_BASE_TYPE_LABELS */}
                   <FormInput label="Type">
                     <select
-                      value={form.slime_type}
+                      value={form.base_type}
                       onChange={(e) =>
-                        setForm({ ...form, slime_type: e.target.value })
+                        setForm({
+                          ...form,
+                          base_type: e.target.value as SlimeBaseType,
+                        })
                       }
                       className={inputClass}
                       style={{ ...inputStyle, appearance: "none" as const }}
                     >
-                      {SLIME_TYPES.map((t) => (
-                        <option
-                          key={t}
-                          value={t}
-                          style={{ background: "#0F0A1A" }}
-                        >
-                          {TYPE_DISPLAY[t]}
-                        </option>
-                      ))}
+                      {Object.entries(SLIME_BASE_TYPE_LABELS).map(
+                        ([value, label]) => (
+                          <option
+                            key={value}
+                            value={value}
+                            style={{ background: "#0F0A1A" }}
+                          >
+                            {label}
+                          </option>
+                        ),
+                      )}
                     </select>
                   </FormInput>
                   <FormInput label="Description">
@@ -697,24 +705,36 @@ export default function SlimesSplitPanel({
                         key={tog.key}
                         className="flex items-center gap-2 cursor-pointer"
                       >
+                        {/* [Change 10] — type="button" on mobile toggles */}
                         <button
+                          type="button"
                           onClick={() =>
                             setForm({
                               ...form,
-                              [tog.key]: !(form as any)[tog.key],
+                              [tog.key]: !(form as Record<string, unknown>)[
+                                tog.key
+                              ],
                             })
                           }
                           className="w-9 h-5 rounded-full relative transition-all"
                           style={{
-                            background: (form as any)[tog.key]
+                            background: (form as Record<string, unknown>)[
+                              tog.key
+                            ]
                               ? "#39FF14"
                               : "rgba(45,10,78,0.6)",
                           }}
+                          aria-pressed={
+                            !!(form as Record<string, unknown>)[tog.key]
+                          }
+                          aria-label={`Toggle ${tog.label}`}
                         >
                           <span
                             className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all"
                             style={{
-                              left: (form as any)[tog.key] ? "18px" : "2px",
+                              left: (form as Record<string, unknown>)[tog.key]
+                                ? "18px"
+                                : "2px",
                             }}
                           />
                         </button>
@@ -731,7 +751,9 @@ export default function SlimesSplitPanel({
                     ))}
                   </div>
                   {error && <p className="text-xs text-red-400">{error}</p>}
+                  {/* [Change 10] — type="button" on mobile save */}
                   <button
+                    type="button"
                     onClick={handleSave}
                     disabled={saving}
                     className="w-full py-3 rounded-lg text-sm font-bold text-[#0A0A0A] disabled:opacity-50"
@@ -810,6 +832,7 @@ export default function SlimesSplitPanel({
                 >
                   {selected.name}
                 </h2>
+                {/* [Change 6] — use SLIME_BASE_TYPE_LABELS in detail panel */}
                 <p
                   className="text-sm mt-1"
                   style={{
@@ -817,11 +840,14 @@ export default function SlimesSplitPanel({
                     fontFamily: "Inter, sans-serif",
                   }}
                 >
-                  {TYPE_DISPLAY[selected.slime_type] ?? selected.slime_type}
+                  {SLIME_BASE_TYPE_LABELS[selected.base_type] ??
+                    selected.base_type}
                   {selected.retail_price && ` · $${selected.retail_price}`}
                 </p>
               </div>
+              {/* [Change 10] — type="button" on desktop Edit button */}
               <button
+                type="button"
                 onClick={() => startEdit(selected)}
                 className="px-4 py-2 rounded-lg text-xs font-bold transition-all"
                 style={{
@@ -914,7 +940,11 @@ export default function SlimesSplitPanel({
                 <RatingBar
                   key={d.key}
                   label={d.label}
-                  value={(selected as any)[d.key]}
+                  value={
+                    (selected as unknown as Record<string, number | null>)[
+                      d.key
+                    ] ?? null
+                  }
                 />
               ))}
             </div>
@@ -987,7 +1017,9 @@ export default function SlimesSplitPanel({
               >
                 {mode === "add" ? "Add New Slime" : "Edit Slime"}
               </h2>
+              {/* [Change 10] — type="button" on Cancel */}
               <button
+                type="button"
                 onClick={() => setMode(selectedId ? "detail" : "empty")}
                 className="text-xs px-3 py-1.5 rounded-lg"
                 style={{
@@ -1012,20 +1044,30 @@ export default function SlimesSplitPanel({
                 />
               </FormInput>
 
+              {/* [Change 7] — desktop select uses SLIME_BASE_TYPE_LABELS */}
               <FormInput label="Type">
                 <select
-                  value={form.slime_type}
+                  value={form.base_type}
                   onChange={(e) =>
-                    setForm({ ...form, slime_type: e.target.value })
+                    setForm({
+                      ...form,
+                      base_type: e.target.value as SlimeBaseType,
+                    })
                   }
                   className={inputClass}
-                  style={{ ...inputStyle, appearance: "none" }}
+                  style={{ ...inputStyle, appearance: "none" as const }}
                 >
-                  {SLIME_TYPES.map((t) => (
-                    <option key={t} value={t} style={{ background: "#0F0A1A" }}>
-                      {TYPE_DISPLAY[t]}
-                    </option>
-                  ))}
+                  {Object.entries(SLIME_BASE_TYPE_LABELS).map(
+                    ([value, label]) => (
+                      <option
+                        key={value}
+                        value={value}
+                        style={{ background: "#0F0A1A" }}
+                      >
+                        {label}
+                      </option>
+                    ),
+                  )}
                 </select>
               </FormInput>
 
@@ -1073,13 +1115,28 @@ export default function SlimesSplitPanel({
                         }}
                       >
                         {c}
+                        {/* [Change 9] — × replaced with SVG; type="button" added */}
                         <button
+                          type="button"
                           onClick={() =>
                             setColors(colors.filter((x) => x !== c))
                           }
                           className="opacity-60 hover:opacity-100 leading-none"
+                          aria-label={`Remove ${c}`}
                         >
-                          ×
+                          <svg
+                            width="10"
+                            height="10"
+                            viewBox="0 0 10 10"
+                            fill="none"
+                          >
+                            <path
+                              d="M8 2L2 8M2 2l6 6"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                            />
+                          </svg>
                         </button>
                       </span>
                     ))}
@@ -1125,21 +1182,34 @@ export default function SlimesSplitPanel({
                     key={tog.key}
                     className="flex items-center gap-2.5 cursor-pointer"
                   >
+                    {/* [Change 10] — type="button" on desktop toggles */}
                     <button
+                      type="button"
                       onClick={() =>
-                        setForm({ ...form, [tog.key]: !(form as any)[tog.key] })
+                        setForm({
+                          ...form,
+                          [tog.key]: !(form as Record<string, unknown>)[
+                            tog.key
+                          ],
+                        })
                       }
                       className="w-9 h-5 rounded-full relative transition-all"
                       style={{
-                        background: (form as any)[tog.key]
+                        background: (form as Record<string, unknown>)[tog.key]
                           ? "#39FF14"
                           : "rgba(45,10,78,0.6)",
                       }}
+                      aria-pressed={
+                        !!(form as Record<string, unknown>)[tog.key]
+                      }
+                      aria-label={`Toggle ${tog.label}`}
                     >
                       <span
                         className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all"
                         style={{
-                          left: (form as any)[tog.key] ? "18px" : "2px",
+                          left: (form as Record<string, unknown>)[tog.key]
+                            ? "18px"
+                            : "2px",
                         }}
                       />
                     </button>
@@ -1165,7 +1235,9 @@ export default function SlimesSplitPanel({
                 </p>
               )}
 
+              {/* [Change 10] — type="button" on desktop save */}
               <button
+                type="button"
                 onClick={handleSave}
                 disabled={saving}
                 className="px-6 py-2.5 rounded-lg text-sm font-bold text-[#0A0A0A] disabled:opacity-50 transition-opacity hover:opacity-90"
