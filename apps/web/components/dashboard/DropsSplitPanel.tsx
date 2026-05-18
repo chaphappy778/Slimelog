@@ -11,7 +11,6 @@ import { ImageUpload } from "@/components/ImageUpload";
 
 type DropStatus = "announced" | "live" | "sold_out" | "restocked" | "cancelled";
 
-// [Change 1] Updated Drop interface
 interface Drop {
   id: string;
   name: string;
@@ -27,8 +26,6 @@ interface Drop {
   free_shipping_threshold: number | null;
 }
 
-// [Change 2] Replaced BrandSlime with two interfaces
-// Used internally by CatalogPanel only
 interface CatalogSlime {
   id: string;
   name: string;
@@ -37,12 +34,11 @@ interface CatalogSlime {
   image_url: string | null;
 }
 
-// Used for attached slimes in create/detail panels
 interface DropSlimeEntry {
   slime_id: string | null;
   name: string;
   base_type: SlimeBaseType | "";
-  price: string; // string for input, parseFloat on save
+  price: string;
   scent_notes: string;
   image_url: string | null;
 }
@@ -530,7 +526,6 @@ function RecurrenceBuilder({
 
 // ─── CatalogPanel — RIGHT column ──────────────────────────────────────────────
 
-// [Change 14] Added dropType prop
 interface CatalogPanelProps {
   brandId: string;
   attachedIds: Set<string>;
@@ -611,7 +606,6 @@ function CatalogPanel({
         className="px-4 pt-4 pb-3 flex-shrink-0"
         style={{ borderBottom: "1px solid rgba(45,10,78,0.5)" }}
       >
-        {/* [Change 14] Dynamic header label */}
         <p
           className="text-xs font-bold uppercase tracking-widest mb-3"
           style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
@@ -709,7 +703,6 @@ function CatalogPanel({
                 {SLIME_BASE_TYPE_LABELS[slime.base_type]}
               </p>
             </div>
-            {/* [Change 14] Dynamic attach button label */}
             <button
               type="button"
               onClick={() => onAttach(slime)}
@@ -885,7 +878,7 @@ function generateRecurringDrops(
   return results;
 }
 
-// ─── Expandable slime rows (shared by CreatePanel and DetailPanel) ─────────────
+// ─── Expandable slime rows ────────────────────────────────────────────────────
 
 interface SlimeRowsProps {
   attachedSlimes: DropSlimeEntry[];
@@ -913,7 +906,6 @@ function SlimeRows({
             border: "1px solid rgba(57,255,20,0.18)",
           }}
         >
-          {/* Collapsed row header */}
           <div className="flex items-center justify-between px-3 py-2">
             <button
               type="button"
@@ -939,7 +931,6 @@ function SlimeRows({
               </p>
             </button>
             <div className="flex items-center gap-1.5 flex-shrink-0">
-              {/* Expand/collapse chevron */}
               <button
                 type="button"
                 onClick={() =>
@@ -960,7 +951,6 @@ function SlimeRows({
                   />
                 </svg>
               </button>
-              {/* Remove button */}
               <button
                 type="button"
                 onClick={() => onDetach(slime.slime_id, idx)}
@@ -984,7 +974,6 @@ function SlimeRows({
             </div>
           </div>
 
-          {/* Expanded mini-form */}
           {expandedSlimeIdx === idx && (
             <div
               className="px-3 pb-3 space-y-2"
@@ -1076,9 +1065,797 @@ function SlimeRows({
   );
 }
 
+// ─── WizardStepIndicator ──────────────────────────────────────────────────────
+
+interface WizardStepIndicatorProps {
+  step: 1 | 2 | 3 | 4;
+}
+
+const STEP_LABELS = ["Cover", "Details", "Slimes", "Preview"];
+
+function WizardStepIndicator({ step }: WizardStepIndicatorProps) {
+  return (
+    <div className="flex items-center justify-center px-4 py-4">
+      {STEP_LABELS.map((label, i) => {
+        const stepNum = (i + 1) as 1 | 2 | 3 | 4;
+        const isCompleted = stepNum < step;
+        const isCurrent = stepNum === step;
+        return (
+          <div key={stepNum} className="flex items-center">
+            <div className="flex flex-col items-center">
+              <svg width="12" height="12" viewBox="0 0 12 12">
+                <circle
+                  cx="6"
+                  cy="6"
+                  r="5"
+                  fill={
+                    isCompleted
+                      ? "#39FF14"
+                      : isCurrent
+                        ? "rgba(57,255,20,0.2)"
+                        : "rgba(45,10,78,0.6)"
+                  }
+                  stroke={
+                    isCompleted || isCurrent ? "#39FF14" : "rgba(45,10,78,0.8)"
+                  }
+                  strokeWidth="1.5"
+                />
+                {isCompleted && (
+                  <path
+                    d="M3.5 6l1.5 1.5 3-3"
+                    stroke="#0A0A0A"
+                    strokeWidth="1.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    fill="none"
+                  />
+                )}
+              </svg>
+              <span
+                className="text-[10px] mt-1 font-semibold"
+                style={{
+                  color: isCurrent
+                    ? "#39FF14"
+                    : isCompleted
+                      ? "rgba(57,255,20,0.6)"
+                      : "rgba(245,245,245,0.25)",
+                  fontFamily: "Montserrat, sans-serif",
+                }}
+              >
+                {label}
+              </span>
+            </div>
+            {i < STEP_LABELS.length - 1 && (
+              <div
+                className="mb-3 mx-1"
+                style={{
+                  width: 28,
+                  height: 1,
+                  background:
+                    stepNum < step
+                      ? "rgba(57,255,20,0.5)"
+                      : "rgba(45,10,78,0.7)",
+                }}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Wizard nav button helpers ────────────────────────────────────────────────
+
+function WizardNextButton({
+  onClick,
+  disabled,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="px-5 py-2.5 rounded-lg text-sm font-bold disabled:opacity-40 transition-opacity hover:opacity-90"
+      style={{
+        background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+        color: "#0A0A0A",
+        fontFamily: "Montserrat, sans-serif",
+        fontWeight: 700,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function WizardBackButton({
+  onClick,
+  children,
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="px-5 py-2.5 rounded-lg text-sm font-bold transition-all"
+      style={{
+        color: "rgba(245,245,245,0.4)",
+        background: "rgba(45,10,78,0.3)",
+        border: "1px solid rgba(45,10,78,0.6)",
+        fontFamily: "Montserrat, sans-serif",
+        fontWeight: 700,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ─── CreateWizard ─────────────────────────────────────────────────────────────
+
+type WizardForm = {
+  name: string;
+  description: string;
+  drop_at: string;
+  status: DropStatus;
+  shop_url: string;
+  drop_type: "new_drop" | "restock";
+  discount_code: string;
+  free_shipping_threshold: string;
+  cover_image_url: string | null;
+};
+
+interface CreateWizardProps {
+  step: 1 | 2 | 3 | 4;
+  setStep: (s: 1 | 2 | 3 | 4) => void;
+  form: WizardForm;
+  setForm: React.Dispatch<React.SetStateAction<WizardForm>>;
+  attachedSlimes: DropSlimeEntry[];
+  onDetach: (slimeId: string | null, idx: number) => void;
+  recurringEnabled: boolean;
+  setRecurringEnabled: (v: boolean) => void;
+  recurrencePattern: RecurrencePattern;
+  setRecurrencePattern: (p: RecurrencePattern) => void;
+  error: string | null;
+  saving: boolean;
+  onSubmit: () => void;
+  onCancel: () => void;
+  userId: string;
+  expandedSlimeIdx: number | null;
+  setExpandedSlimeIdx: (idx: number | null) => void;
+  onUpdateSlime: (idx: number, updates: Partial<DropSlimeEntry>) => void;
+}
+
+function CreateWizard({
+  step,
+  setStep,
+  form,
+  setForm,
+  attachedSlimes,
+  onDetach,
+  recurringEnabled,
+  setRecurringEnabled,
+  recurrencePattern,
+  setRecurrencePattern,
+  error,
+  saving,
+  onSubmit,
+  onCancel,
+  userId,
+  expandedSlimeIdx,
+  setExpandedSlimeIdx,
+  onUpdateSlime,
+}: CreateWizardProps) {
+  const nameValid = form.name.trim().length > 0;
+
+  return (
+    <div className="flex flex-col flex-1 overflow-hidden">
+      {/* Step indicator */}
+      <div style={{ borderBottom: "1px solid rgba(45,10,78,0.5)" }}>
+        <WizardStepIndicator step={step} />
+      </div>
+
+      {/* Step content */}
+      <div className="flex-1 overflow-y-auto">
+        {/* ── Step 1: Cover Photo ── */}
+        {step === 1 && (
+          <div className="p-6 space-y-4 max-w-xl">
+            <p
+              className="text-xs font-bold uppercase tracking-widest"
+              style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
+            >
+              Cover Photo
+            </p>
+            <ImageUpload
+              bucket="slime-photos"
+              userId={userId}
+              existingUrl={form.cover_image_url}
+              onUploadComplete={(url) =>
+                setForm((f) => ({ ...f, cover_image_url: url }))
+              }
+              onRemove={() => setForm((f) => ({ ...f, cover_image_url: null }))}
+              label="Drop Cover Photo"
+              aspectRatio="4:3"
+            />
+            <p
+              className="text-xs"
+              style={{
+                color: "rgba(245,245,245,0.35)",
+                fontFamily: "Inter, sans-serif",
+              }}
+            >
+              A 4:3 image works best. You can skip this and add one later.
+            </p>
+            <div className="flex justify-between pt-2">
+              <WizardBackButton onClick={onCancel}>Cancel</WizardBackButton>
+              <WizardNextButton onClick={() => setStep(2)}>
+                Next
+              </WizardNextButton>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 2: Drop Details ── */}
+        {step === 2 && (
+          <div className="p-6 space-y-4 max-w-xl">
+            <p
+              className="text-xs font-bold uppercase tracking-widest"
+              style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
+            >
+              Drop Details
+            </p>
+
+            {/* Drop Type */}
+            <div>
+              <FormLabel>Drop Type</FormLabel>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setForm((f) => ({ ...f, drop_type: "new_drop" }))
+                  }
+                  className="flex-1 py-2 rounded-lg text-xs font-bold transition-all"
+                  style={{
+                    background:
+                      form.drop_type === "new_drop"
+                        ? "rgba(0,240,255,0.12)"
+                        : "rgba(45,10,78,0.3)",
+                    border: `1px solid ${form.drop_type === "new_drop" ? "rgba(0,240,255,0.35)" : "rgba(45,10,78,0.6)"}`,
+                    color:
+                      form.drop_type === "new_drop"
+                        ? "#00F0FF"
+                        : "rgba(245,245,245,0.4)",
+                    fontFamily: "Montserrat, sans-serif",
+                  }}
+                >
+                  New Drop
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setForm((f) => ({ ...f, drop_type: "restock" }))
+                  }
+                  className="flex-1 py-2 rounded-lg text-xs font-bold transition-all"
+                  style={{
+                    background:
+                      form.drop_type === "restock"
+                        ? "rgba(255,184,0,0.12)"
+                        : "rgba(45,10,78,0.3)",
+                    border: `1px solid ${form.drop_type === "restock" ? "rgba(255,184,0,0.3)" : "rgba(45,10,78,0.6)"}`,
+                    color:
+                      form.drop_type === "restock"
+                        ? "#FFB800"
+                        : "rgba(245,245,245,0.4)",
+                    fontFamily: "Montserrat, sans-serif",
+                  }}
+                >
+                  Restock
+                </button>
+              </div>
+            </div>
+
+            {/* Drop Name */}
+            <div>
+              <FormLabel>Drop Name *</FormLabel>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, name: e.target.value }))
+                }
+                placeholder="Summer Pastel Collection"
+                className={inputClass}
+                style={inputStyle}
+              />
+            </div>
+
+            {/* Date & Time */}
+            <div>
+              <FormLabel>Date &amp; Time</FormLabel>
+              <DateTimePicker
+                value={form.drop_at}
+                onChange={(iso) => setForm((f) => ({ ...f, drop_at: iso }))}
+              />
+            </div>
+
+            {/* Status */}
+            <div>
+              <FormLabel>Status</FormLabel>
+              <select
+                value={form.status}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    status: e.target.value as DropStatus,
+                  }))
+                }
+                className={inputClass}
+                style={selectStyle}
+              >
+                {(
+                  [
+                    "announced",
+                    "live",
+                    "sold_out",
+                    "restocked",
+                    "cancelled",
+                  ] as DropStatus[]
+                ).map((s) => (
+                  <option key={s} value={s} style={{ background: "#0F0A1A" }}>
+                    {s
+                      .replace(/_/g, " ")
+                      .replace(/\b\w/g, (c) => c.toUpperCase())}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Description */}
+            <div>
+              <FormLabel>Description</FormLabel>
+              <textarea
+                value={form.description}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, description: e.target.value }))
+                }
+                rows={3}
+                placeholder="Tell fans what to expect..."
+                className={`${inputClass} resize-none`}
+                style={inputStyle}
+              />
+            </div>
+
+            {/* Shop URL */}
+            <div>
+              <FormLabel>Shop URL</FormLabel>
+              <input
+                type="url"
+                value={form.shop_url}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, shop_url: e.target.value }))
+                }
+                placeholder="https://yourshop.com/drop"
+                className={inputClass}
+                style={inputStyle}
+              />
+            </div>
+
+            {/* Discount Code */}
+            <div>
+              <FormLabel>Discount Code</FormLabel>
+              <input
+                type="text"
+                value={form.discount_code}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, discount_code: e.target.value }))
+                }
+                placeholder="e.g. SUMMER10"
+                className={inputClass}
+                style={inputStyle}
+              />
+            </div>
+
+            {/* Free Shipping Threshold */}
+            <div>
+              <FormLabel>Free Shipping Threshold</FormLabel>
+              <div className="flex items-center gap-2">
+                <span
+                  className="text-sm"
+                  style={{ color: "rgba(245,245,245,0.4)" }}
+                >
+                  $
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  value={form.free_shipping_threshold}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      free_shipping_threshold: e.target.value,
+                    }))
+                  }
+                  placeholder="25"
+                  className={inputClass}
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+
+            {/* Recurrence */}
+            <RecurrenceBuilder
+              enabled={recurringEnabled}
+              onToggle={setRecurringEnabled}
+              pattern={recurrencePattern}
+              onChange={setRecurrencePattern}
+            />
+
+            <div className="flex justify-between pt-2">
+              <WizardBackButton onClick={() => setStep(1)}>
+                Back
+              </WizardBackButton>
+              <WizardNextButton
+                onClick={() => setStep(3)}
+                disabled={!nameValid}
+              >
+                Next
+              </WizardNextButton>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 3: Slimes ── */}
+        {step === 3 && (
+          <div className="p-6 space-y-4 max-w-xl">
+            <p
+              className="text-xs font-bold uppercase tracking-widest"
+              style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
+            >
+              Slimes
+            </p>
+            <p
+              className="text-xs"
+              style={{
+                color: "rgba(245,245,245,0.35)",
+                fontFamily: "Inter, sans-serif",
+              }}
+            >
+              Optional — you can add slimes after creating the drop.
+            </p>
+            {attachedSlimes.length === 0 ? (
+              <p
+                className="text-xs py-4"
+                style={{
+                  color: "rgba(245,245,245,0.25)",
+                  fontFamily: "Inter, sans-serif",
+                }}
+              >
+                Use the catalog panel on the right to add slimes to this drop.
+              </p>
+            ) : (
+              <SlimeRows
+                attachedSlimes={attachedSlimes}
+                expandedSlimeIdx={expandedSlimeIdx}
+                setExpandedSlimeIdx={setExpandedSlimeIdx}
+                onUpdateSlime={onUpdateSlime}
+                onDetach={onDetach}
+              />
+            )}
+            <div className="flex justify-between pt-2">
+              <WizardBackButton onClick={() => setStep(2)}>
+                Back
+              </WizardBackButton>
+              <WizardNextButton onClick={() => setStep(4)}>
+                Next
+              </WizardNextButton>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 4: Preview & Create ── */}
+        {step === 4 && (
+          <div className="p-6 space-y-5 max-w-xl">
+            <p
+              className="text-xs font-bold uppercase tracking-widest"
+              style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
+            >
+              Preview &amp; Create
+            </p>
+
+            {/* Cover image preview */}
+            {form.cover_image_url && (
+              <div
+                className="rounded-xl overflow-hidden"
+                style={{ border: "1px solid rgba(45,10,78,0.6)" }}
+              >
+                <img
+                  src={form.cover_image_url}
+                  alt="Drop cover"
+                  className="w-full object-cover rounded-xl"
+                  style={{ maxHeight: 180 }}
+                />
+              </div>
+            )}
+
+            {/* Summary grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Drop Type */}
+              {form.drop_type && (
+                <div>
+                  <p
+                    className="text-[10px] font-bold uppercase tracking-widest mb-1"
+                    style={{
+                      color: "rgba(245,245,245,0.3)",
+                      fontFamily: "Montserrat, sans-serif",
+                    }}
+                  >
+                    Type
+                  </p>
+                  <span
+                    className="text-xs font-bold px-3 py-1 rounded-full"
+                    style={{
+                      color:
+                        form.drop_type === "restock" ? "#FFB800" : "#00F0FF",
+                      background:
+                        form.drop_type === "restock"
+                          ? "rgba(255,184,0,0.12)"
+                          : "rgba(0,240,255,0.12)",
+                      border: `1px solid ${form.drop_type === "restock" ? "rgba(255,184,0,0.3)" : "rgba(0,240,255,0.3)"}`,
+                      fontFamily: "Montserrat, sans-serif",
+                    }}
+                  >
+                    {form.drop_type === "restock" ? "Restock" : "New Drop"}
+                  </span>
+                </div>
+              )}
+
+              {/* Status */}
+              <div>
+                <p
+                  className="text-[10px] font-bold uppercase tracking-widest mb-1"
+                  style={{
+                    color: "rgba(245,245,245,0.3)",
+                    fontFamily: "Montserrat, sans-serif",
+                  }}
+                >
+                  Status
+                </p>
+                <span
+                  className="text-xs font-bold px-3 py-1 rounded-full"
+                  style={{
+                    color: STATUS_STYLES[form.status].color,
+                    background: STATUS_STYLES[form.status].bg,
+                    border: `1px solid ${STATUS_STYLES[form.status].border}`,
+                    fontFamily: "Montserrat, sans-serif",
+                  }}
+                >
+                  {STATUS_STYLES[form.status].label.toUpperCase()}
+                </span>
+              </div>
+
+              {/* Date */}
+              {form.drop_at && (
+                <div>
+                  <p
+                    className="text-[10px] font-bold uppercase tracking-widest mb-1"
+                    style={{
+                      color: "rgba(245,245,245,0.3)",
+                      fontFamily: "Montserrat, sans-serif",
+                    }}
+                  >
+                    Date &amp; Time
+                  </p>
+                  <p
+                    className="text-sm text-white"
+                    style={{ fontFamily: "Inter, sans-serif" }}
+                  >
+                    {formatDate(form.drop_at)}
+                  </p>
+                </div>
+              )}
+
+              {/* Discount Code */}
+              {form.discount_code && (
+                <div>
+                  <p
+                    className="text-[10px] font-bold uppercase tracking-widest mb-1"
+                    style={{
+                      color: "rgba(245,245,245,0.3)",
+                      fontFamily: "Montserrat, sans-serif",
+                    }}
+                  >
+                    Discount Code
+                  </p>
+                  <p
+                    className="text-sm text-white"
+                    style={{ fontFamily: "Inter, sans-serif" }}
+                  >
+                    {form.discount_code}
+                  </p>
+                </div>
+              )}
+
+              {/* Free Shipping */}
+              {form.free_shipping_threshold && (
+                <div>
+                  <p
+                    className="text-[10px] font-bold uppercase tracking-widest mb-1"
+                    style={{
+                      color: "rgba(245,245,245,0.3)",
+                      fontFamily: "Montserrat, sans-serif",
+                    }}
+                  >
+                    Free Shipping Over
+                  </p>
+                  <p
+                    className="text-sm text-white"
+                    style={{ fontFamily: "Inter, sans-serif" }}
+                  >
+                    ${form.free_shipping_threshold}
+                  </p>
+                </div>
+              )}
+
+              {/* Slimes count */}
+              <div>
+                <p
+                  className="text-[10px] font-bold uppercase tracking-widest mb-1"
+                  style={{
+                    color: "rgba(245,245,245,0.3)",
+                    fontFamily: "Montserrat, sans-serif",
+                  }}
+                >
+                  Slimes
+                </p>
+                <p
+                  className="text-sm"
+                  style={{
+                    color:
+                      attachedSlimes.length > 0
+                        ? "#FF00E5"
+                        : "rgba(245,245,245,0.3)",
+                    fontFamily: "Inter, sans-serif",
+                  }}
+                >
+                  {attachedSlimes.length > 0
+                    ? `${attachedSlimes.length} slime${attachedSlimes.length !== 1 ? "s" : ""} in this drop`
+                    : "No slimes added"}
+                </p>
+              </div>
+            </div>
+
+            {/* Drop Name — large */}
+            <div>
+              <p
+                className="text-[10px] font-bold uppercase tracking-widest mb-1"
+                style={{
+                  color: "rgba(245,245,245,0.3)",
+                  fontFamily: "Montserrat, sans-serif",
+                }}
+              >
+                Drop Name
+              </p>
+              <p
+                className="text-xl font-bold text-white"
+                style={{ fontFamily: "Montserrat, sans-serif" }}
+              >
+                {form.name}
+              </p>
+            </div>
+
+            {/* Description */}
+            {form.description && (
+              <div>
+                <p
+                  className="text-[10px] font-bold uppercase tracking-widest mb-1"
+                  style={{
+                    color: "rgba(245,245,245,0.3)",
+                    fontFamily: "Montserrat, sans-serif",
+                  }}
+                >
+                  Description
+                </p>
+                <p
+                  className="text-sm"
+                  style={{
+                    color: "rgba(245,245,245,0.6)",
+                    fontFamily: "Inter, sans-serif",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {form.description}
+                </p>
+              </div>
+            )}
+
+            {/* Shop URL */}
+            {form.shop_url && (
+              <div>
+                <p
+                  className="text-[10px] font-bold uppercase tracking-widest mb-1"
+                  style={{
+                    color: "rgba(245,245,245,0.3)",
+                    fontFamily: "Montserrat, sans-serif",
+                  }}
+                >
+                  Shop URL
+                </p>
+                <a
+                  href={form.shop_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm hover:opacity-80 transition-opacity"
+                  style={{ color: "#00F0FF", fontFamily: "Inter, sans-serif" }}
+                >
+                  {form.shop_url}
+                </a>
+              </div>
+            )}
+
+            {/* Recurring summary */}
+            {recurringEnabled && (
+              <div
+                className="px-3 py-2 rounded-lg text-xs"
+                style={{
+                  background: "rgba(57,255,20,0.07)",
+                  border: "1px solid rgba(57,255,20,0.2)",
+                  color: "#39FF14",
+                  fontFamily: "Inter, sans-serif",
+                }}
+              >
+                Recurring drop ·{" "}
+                {recurrencePattern.frequency.charAt(0).toUpperCase() +
+                  recurrencePattern.frequency.slice(1)}
+              </div>
+            )}
+
+            {error && (
+              <p
+                className="text-xs text-red-400"
+                style={{ fontFamily: "Inter, sans-serif" }}
+              >
+                {error}
+              </p>
+            )}
+
+            <div className="flex justify-between pt-2">
+              <WizardBackButton onClick={() => setStep(3)}>
+                Back
+              </WizardBackButton>
+              <button
+                type="button"
+                onClick={onSubmit}
+                disabled={saving}
+                className="px-6 py-2.5 rounded-lg text-sm font-bold text-[#0A0A0A] disabled:opacity-50 hover:opacity-90 transition-opacity"
+                style={{
+                  background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                  fontFamily: "Montserrat, sans-serif",
+                }}
+              >
+                {saving
+                  ? "Creating..."
+                  : recurringEnabled
+                    ? "Create Drop Series"
+                    : "Create Drop"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── DetailPanel ──────────────────────────────────────────────────────────────
 
-// [Change 12] Updated props
 interface DetailPanelProps {
   selected: Drop;
   attachedSlimes: DropSlimeEntry[];
@@ -1183,8 +1960,6 @@ function DetailPanel({
           </svg>
         </a>
       )}
-
-      {/* [Change 13] New read-only fields */}
       {selected.drop_type && (
         <div className="flex items-center gap-2">
           <span
@@ -1217,7 +1992,6 @@ function DetailPanel({
             : selected.free_shipping_threshold.toFixed(2)}
         </p>
       )}
-
       {NEXT_STATUS[selected.status] && (
         <div>
           <p
@@ -1255,8 +2029,6 @@ function DetailPanel({
           </div>
         </div>
       )}
-
-      {/* [Change 12] Expandable slime rows */}
       <div
         style={{ borderTop: "1px solid rgba(45,10,78,0.4)", paddingTop: 16 }}
       >
@@ -1281,8 +2053,6 @@ function DetailPanel({
           />
         )}
       </div>
-
-      {/* Delete */}
       <div
         style={{ borderTop: "1px solid rgba(45,10,78,0.4)", paddingTop: 16 }}
       >
@@ -1332,318 +2102,6 @@ function DetailPanel({
   );
 }
 
-// ─── CreatePanel ──────────────────────────────────────────────────────────────
-
-// [Change 3] Updated form shape, [Change 11] new fields, [Change 12] expandable rows
-interface CreatePanelProps {
-  form: {
-    name: string;
-    description: string;
-    drop_at: string;
-    status: DropStatus;
-    shop_url: string;
-    drop_type: "new_drop" | "restock";
-    discount_code: string;
-    free_shipping_threshold: string;
-    cover_image_url: string | null;
-  };
-  setForm: React.Dispatch<
-    React.SetStateAction<{
-      name: string;
-      description: string;
-      drop_at: string;
-      status: DropStatus;
-      shop_url: string;
-      drop_type: "new_drop" | "restock";
-      discount_code: string;
-      free_shipping_threshold: string;
-      cover_image_url: string | null;
-    }>
-  >;
-  attachedSlimes: DropSlimeEntry[];
-  onDetach: (slimeId: string | null, idx: number) => void;
-  recurringEnabled: boolean;
-  setRecurringEnabled: (v: boolean) => void;
-  recurrencePattern: RecurrencePattern;
-  setRecurrencePattern: (p: RecurrencePattern) => void;
-  error: string | null;
-  saving: boolean;
-  onSubmit: () => void;
-  onCancel: () => void;
-  userId: string;
-  expandedSlimeIdx: number | null;
-  setExpandedSlimeIdx: (idx: number | null) => void;
-  onUpdateSlime: (idx: number, updates: Partial<DropSlimeEntry>) => void;
-}
-
-function CreatePanel({
-  form,
-  setForm,
-  attachedSlimes,
-  onDetach,
-  recurringEnabled,
-  setRecurringEnabled,
-  recurrencePattern,
-  setRecurrencePattern,
-  error,
-  saving,
-  onSubmit,
-  onCancel,
-  userId,
-  expandedSlimeIdx,
-  setExpandedSlimeIdx,
-  onUpdateSlime,
-}: CreatePanelProps) {
-  return (
-    <div className="p-6 overflow-y-auto flex-1">
-      <div className="flex items-center justify-between mb-6">
-        <h2
-          className="text-xl font-bold text-white"
-          style={{ fontFamily: "Montserrat, sans-serif" }}
-        >
-          New Drop
-        </h2>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="text-xs px-3 py-1.5 rounded-lg"
-          style={{
-            color: "rgba(245,245,245,0.4)",
-            background: "rgba(45,10,78,0.3)",
-          }}
-        >
-          Cancel
-        </button>
-      </div>
-      <div className="space-y-4 max-w-xl">
-        {/* [Change 11a] Cover image upload — above Drop Name */}
-        <div>
-          <FormLabel>Drop Cover Photo</FormLabel>
-          <ImageUpload
-            bucket="slime-photos"
-            userId={userId}
-            existingUrl={form.cover_image_url}
-            onUploadComplete={(url) =>
-              setForm((f) => ({ ...f, cover_image_url: url }))
-            }
-            onRemove={() => setForm((f) => ({ ...f, cover_image_url: null }))}
-            label="Drop Cover Photo"
-            aspectRatio="4:3"
-          />
-        </div>
-
-        {/* [Change 11b] Drop type selector — above Drop Name */}
-        <div>
-          <FormLabel>Drop Type</FormLabel>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setForm((f) => ({ ...f, drop_type: "new_drop" }))}
-              className="flex-1 py-2 rounded-lg text-xs font-bold transition-all"
-              style={{
-                background:
-                  form.drop_type === "new_drop"
-                    ? "rgba(0,240,255,0.12)"
-                    : "rgba(45,10,78,0.3)",
-                border: `1px solid ${form.drop_type === "new_drop" ? "rgba(0,240,255,0.35)" : "rgba(45,10,78,0.6)"}`,
-                color:
-                  form.drop_type === "new_drop"
-                    ? "#00F0FF"
-                    : "rgba(245,245,245,0.4)",
-                fontFamily: "Montserrat, sans-serif",
-              }}
-            >
-              New Drop
-            </button>
-            <button
-              type="button"
-              onClick={() => setForm((f) => ({ ...f, drop_type: "restock" }))}
-              className="flex-1 py-2 rounded-lg text-xs font-bold transition-all"
-              style={{
-                background:
-                  form.drop_type === "restock"
-                    ? "rgba(255,184,0,0.12)"
-                    : "rgba(45,10,78,0.3)",
-                border: `1px solid ${form.drop_type === "restock" ? "rgba(255,184,0,0.3)" : "rgba(45,10,78,0.6)"}`,
-                color:
-                  form.drop_type === "restock"
-                    ? "#FFB800"
-                    : "rgba(245,245,245,0.4)",
-                fontFamily: "Montserrat, sans-serif",
-              }}
-            >
-              Restock
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <FormLabel>Drop Name *</FormLabel>
-          <input
-            type="text"
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="Summer Pastel Collection"
-            className={inputClass}
-            style={inputStyle}
-          />
-        </div>
-        <div>
-          <FormLabel>Date & Time</FormLabel>
-          <DateTimePicker
-            value={form.drop_at}
-            onChange={(iso) => setForm((f) => ({ ...f, drop_at: iso }))}
-          />
-        </div>
-        <div>
-          <FormLabel>Status</FormLabel>
-          <select
-            value={form.status}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, status: e.target.value as DropStatus }))
-            }
-            className={inputClass}
-            style={selectStyle}
-          >
-            {(
-              [
-                "announced",
-                "live",
-                "sold_out",
-                "restocked",
-                "cancelled",
-              ] as DropStatus[]
-            ).map((s) => (
-              <option key={s} value={s} style={{ background: "#0F0A1A" }}>
-                {s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <FormLabel>Description</FormLabel>
-          <textarea
-            value={form.description}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, description: e.target.value }))
-            }
-            rows={3}
-            placeholder="Tell fans what to expect..."
-            className={`${inputClass} resize-none`}
-            style={inputStyle}
-          />
-        </div>
-        <div>
-          <FormLabel>Shop URL</FormLabel>
-          <input
-            type="url"
-            value={form.shop_url}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, shop_url: e.target.value }))
-            }
-            placeholder="https://yourshop.com/drop"
-            className={inputClass}
-            style={inputStyle}
-          />
-        </div>
-
-        {/* [Change 11c] Discount code — after Shop URL */}
-        <div>
-          <FormLabel>Discount Code</FormLabel>
-          <input
-            type="text"
-            value={form.discount_code}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, discount_code: e.target.value }))
-            }
-            placeholder="e.g. SUMMER10"
-            className={inputClass}
-            style={inputStyle}
-          />
-        </div>
-
-        {/* [Change 11d] Free shipping threshold — after discount code */}
-        <div>
-          <FormLabel>Free Shipping Threshold</FormLabel>
-          <div className="flex items-center gap-2">
-            <span
-              className="text-sm"
-              style={{ color: "rgba(245,245,245,0.4)" }}
-            >
-              $
-            </span>
-            <input
-              type="number"
-              min={0}
-              value={form.free_shipping_threshold}
-              onChange={(e) =>
-                setForm((f) => ({
-                  ...f,
-                  free_shipping_threshold: e.target.value,
-                }))
-              }
-              placeholder="25"
-              className={inputClass}
-              style={inputStyle}
-            />
-          </div>
-        </div>
-
-        {/* [Change 12] Expandable slime rows */}
-        <div
-          style={{ borderTop: "1px solid rgba(45,10,78,0.4)", paddingTop: 16 }}
-        >
-          <p
-            className="text-xs font-bold uppercase tracking-widest mb-3"
-            style={{ color: "#FF00E5", fontFamily: "Montserrat, sans-serif" }}
-          >
-            Slimes in Drop{" "}
-            {attachedSlimes.length > 0 && `(${attachedSlimes.length})`}
-          </p>
-          {attachedSlimes.length === 0 ? (
-            <p className="text-xs" style={{ color: "rgba(245,245,245,0.25)" }}>
-              No slimes added yet. Use the catalog panel on the right to add
-              slimes.
-            </p>
-          ) : (
-            <SlimeRows
-              attachedSlimes={attachedSlimes}
-              expandedSlimeIdx={expandedSlimeIdx}
-              setExpandedSlimeIdx={setExpandedSlimeIdx}
-              onUpdateSlime={onUpdateSlime}
-              onDetach={onDetach}
-            />
-          )}
-        </div>
-
-        <RecurrenceBuilder
-          enabled={recurringEnabled}
-          onToggle={setRecurringEnabled}
-          pattern={recurrencePattern}
-          onChange={setRecurrencePattern}
-        />
-        {error && <p className="text-xs text-red-400">{error}</p>}
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={saving}
-          className="px-6 py-2.5 rounded-lg text-sm font-bold text-[#0A0A0A] disabled:opacity-50 hover:opacity-90 transition-opacity"
-          style={{
-            background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-            fontFamily: "Montserrat, sans-serif",
-          }}
-        >
-          {saving
-            ? "Creating..."
-            : recurringEnabled
-              ? "Create Drop Series"
-              : "Create Drop"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function DropsSplitPanel({
@@ -1662,12 +2120,11 @@ export default function DropsSplitPanel({
   const [recurringEnabled, setRecurringEnabled] = useState(false);
   const [recurrencePattern, setRecurrencePattern] =
     useState<RecurrencePattern>(DEFAULT_RECURRENCE);
-  // [Change 4] expandedSlimeIdx state
   const [expandedSlimeIdx, setExpandedSlimeIdx] = useState<number | null>(null);
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
   const supabase = createClient();
 
-  // [Change 3] Updated emptyForm
-  const emptyForm = {
+  const emptyForm: WizardForm = {
     name: "",
     description: "",
     drop_at: "",
@@ -1676,9 +2133,9 @@ export default function DropsSplitPanel({
     drop_type: "new_drop" as "new_drop" | "restock",
     discount_code: "",
     free_shipping_threshold: "",
-    cover_image_url: null as string | null,
+    cover_image_url: null,
   };
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState<WizardForm>(emptyForm);
 
   const upcoming = drops.filter((d) =>
     ["announced", "live"].includes(d.status),
@@ -1689,7 +2146,6 @@ export default function DropsSplitPanel({
   const displayed = tab === "upcoming" ? upcoming : past;
   const selected = drops.find((d) => d.id === selectedId) ?? null;
 
-  // [Change 10] Fetch attached slimes hydrated as DropSlimeEntry[]
   useEffect(() => {
     if (!selectedId || mode !== "detail") return;
     supabase
@@ -1717,19 +2173,17 @@ export default function DropsSplitPanel({
     setAttachedSlimes([]);
     setRecurringEnabled(false);
     setRecurrencePattern(DEFAULT_RECURRENCE);
-    // [Change 15] Reset expandedSlimeIdx
     setExpandedSlimeIdx(null);
+    setWizardStep(1);
     setMode("create");
   };
 
-  // [Change 4] handleUpdateSlime
   const handleUpdateSlime = (idx: number, updates: Partial<DropSlimeEntry>) => {
     setAttachedSlimes((prev) =>
       prev.map((s, i) => (i === idx ? { ...s, ...updates } : s)),
     );
   };
 
-  // [Change 9] Updated handleCreate insert payloads
   const handleCreate = async () => {
     if (!form.name.trim()) {
       setError("Drop name is required.");
@@ -1829,7 +2283,6 @@ export default function DropsSplitPanel({
     }
   };
 
-  // [Change 5] handleAttachSlime — converts CatalogSlime to DropSlimeEntry
   const handleAttachSlime = async (slime: CatalogSlime) => {
     const entry: DropSlimeEntry = {
       slime_id: slime.id,
@@ -1847,7 +2300,6 @@ export default function DropsSplitPanel({
     setAttachedSlimes((prev) => [...prev, entry]);
   };
 
-  // [Change 6] handleDetachSlime — accepts idx
   const handleDetachSlime = async (slimeId: string | null, idx: number) => {
     if (selectedId && slimeId) {
       await supabase
@@ -1860,7 +2312,6 @@ export default function DropsSplitPanel({
     if (expandedSlimeIdx === idx) setExpandedSlimeIdx(null);
   };
 
-  // [Change 7] handleAddNewSlime — returns CatalogSlime, adds DropSlimeEntry
   const handleAddNewSlime = async (slimeData: {
     name: string;
     base_type: SlimeBaseType;
@@ -1895,13 +2346,15 @@ export default function DropsSplitPanel({
     return newSlime;
   };
 
-  // [Change 8] attachedIds — filter nulls
   const attachedIds = new Set(
     attachedSlimes
       .map((s) => s.slime_id)
       .filter((id): id is string => id !== null),
   );
   const catalogActive = mode === "create" || mode === "detail";
+
+  // Catalog panel should only be active during step 3 when in create mode
+  const catalogActiveCreate = mode === "create" ? wizardStep === 3 : true;
 
   return (
     <div
@@ -1963,7 +2416,6 @@ export default function DropsSplitPanel({
                     setMode("detail");
                     setConfirmDelete(false);
                     setAttachedSlimes([]);
-                    // [Change 15] Reset expandedSlimeIdx on drop selection
                     setExpandedSlimeIdx(null);
                   }}
                   className="w-full text-left px-4 py-3.5 transition-all"
@@ -2095,7 +2547,9 @@ export default function DropsSplitPanel({
           />
         )}
         {mode === "create" && (
-          <CreatePanel
+          <CreateWizard
+            step={wizardStep}
+            setStep={setWizardStep}
             form={form}
             setForm={setForm}
             attachedSlimes={attachedSlimes}
@@ -2126,8 +2580,7 @@ export default function DropsSplitPanel({
           attachedIds={attachedIds}
           onAttach={handleAttachSlime}
           onAddNew={handleAddNewSlime}
-          isActive={catalogActive}
-          // [Change 15] Pass dropType
+          isActive={catalogActive && catalogActiveCreate}
           dropType={
             mode === "detail" && selected
               ? (selected.drop_type ?? "new_drop")
@@ -2205,7 +2658,9 @@ export default function DropsSplitPanel({
                 />
               )}
               {mode === "create" && (
-                <CreatePanel
+                <CreateWizard
+                  step={wizardStep}
+                  setStep={setWizardStep}
                   form={form}
                   setForm={setForm}
                   attachedSlimes={attachedSlimes}
@@ -2224,33 +2679,36 @@ export default function DropsSplitPanel({
                   onUpdateSlime={handleUpdateSlime}
                 />
               )}
-              {/* Mobile catalog */}
-              <div
-                className="px-5 pb-4 pt-2"
-                style={{ borderTop: "1px solid rgba(45,10,78,0.4)" }}
-              >
-                <p
-                  className="text-xs font-bold uppercase tracking-widest mb-3"
-                  style={{
-                    color: "#00F0FF",
-                    fontFamily: "Montserrat, sans-serif",
-                  }}
+              {/* Mobile catalog — only show during step 3 in create mode, always show in detail mode */}
+              {(mode === "detail" ||
+                (mode === "create" && wizardStep === 3)) && (
+                <div
+                  className="px-5 pb-4 pt-2"
+                  style={{ borderTop: "1px solid rgba(45,10,78,0.4)" }}
                 >
-                  Add from Catalog
-                </p>
-                <CatalogPanel
-                  brandId={brandId}
-                  attachedIds={attachedIds}
-                  onAttach={handleAttachSlime}
-                  onAddNew={handleAddNewSlime}
-                  isActive={true}
-                  dropType={
-                    mode === "detail" && selected
-                      ? (selected.drop_type ?? "new_drop")
-                      : form.drop_type
-                  }
-                />
-              </div>
+                  <p
+                    className="text-xs font-bold uppercase tracking-widest mb-3"
+                    style={{
+                      color: "#00F0FF",
+                      fontFamily: "Montserrat, sans-serif",
+                    }}
+                  >
+                    Add from Catalog
+                  </p>
+                  <CatalogPanel
+                    brandId={brandId}
+                    attachedIds={attachedIds}
+                    onAttach={handleAttachSlime}
+                    onAddNew={handleAddNewSlime}
+                    isActive={true}
+                    dropType={
+                      mode === "detail" && selected
+                        ? (selected.drop_type ?? "new_drop")
+                        : form.drop_type
+                    }
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
