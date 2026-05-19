@@ -4,14 +4,13 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
-import type { SlimeBaseType } from "@/lib/types";
 
 interface DropSlimeRow {
   id: string;
   name: string | null;
   base_type: string | null;
   price: number | null;
+  image_url?: string | null;
   slime_id: string | null;
 }
 
@@ -61,7 +60,7 @@ export default function DropCard({ drop }: DropCardProps) {
       const minutes = Math.floor((totalSeconds % 3600) / 60);
       const seconds = totalSeconds % 60;
 
-      let parts: string[] = [];
+      const parts: string[] = [];
       if (days > 0) parts.push(`${days}d`);
       if (days > 0 || hours > 0) parts.push(`${hours}h`);
       if (days > 0 || hours > 0 || minutes > 0) parts.push(`${minutes}m`);
@@ -80,9 +79,6 @@ export default function DropCard({ drop }: DropCardProps) {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
-
-  const visibleSlimes = drop.drop_slimes.slice(0, 6);
-  const extraCount = drop.drop_slimes.length - 6;
 
   return (
     <div
@@ -249,44 +245,80 @@ export default function DropCard({ drop }: DropCardProps) {
           </p>
         )}
 
-        {/* What's Dropping */}
+        {/* What's Dropping — swipeable image carousel */}
         {drop.drop_slimes.length > 0 && (
           <div>
             <p className="text-[10px] uppercase tracking-widest font-bold text-slime-muted mb-2">
               What&apos;s Dropping
             </p>
-            <div className="space-y-2">
-              {visibleSlimes.map((slime) => {
-                const baseLabel = slime.base_type
-                  ? (SLIME_BASE_TYPE_LABELS[slime.base_type as SlimeBaseType] ??
-                    null)
-                  : null;
-                return (
-                  <div
-                    key={slime.id}
-                    className="flex items-center justify-between"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-white font-medium truncate">
-                        {slime.name ?? "Unnamed"}
-                      </p>
-                      {baseLabel && (
-                        <p className="text-[11px] text-slime-muted">
-                          {baseLabel}
-                        </p>
-                      )}
-                    </div>
+            <div
+              className="flex gap-2 overflow-x-auto pb-1 scrollbar-none"
+              style={{
+                msOverflowStyle: "none",
+                scrollbarWidth: "none",
+              }}
+            >
+              {drop.drop_slimes.map((slime) => (
+                <div
+                  key={slime.id}
+                  style={{
+                    background: "rgba(45,10,78,0.4)",
+                    border: "1px solid rgba(45,10,78,0.6)",
+                    flexShrink: 0,
+                    width: 120,
+                    borderRadius: 10,
+                    overflow: "hidden",
+                  }}
+                >
+                  {/* Image area */}
+                  <div className="relative" style={{ width: 120, height: 90 }}>
+                    {slime.image_url ? (
+                      <Image
+                        src={slime.image_url}
+                        alt={slime.name ?? "Slime"}
+                        fill
+                        sizes="120px"
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div
+                        className="w-full h-full flex items-center justify-center"
+                        style={{
+                          background:
+                            "linear-gradient(135deg, rgba(57,255,20,0.08), rgba(45,10,78,0.4))",
+                        }}
+                      >
+                        <svg
+                          width="22"
+                          height="22"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="rgba(255,255,255,0.2)"
+                          strokeWidth="1.5"
+                          aria-hidden="true"
+                        >
+                          <path d="M12 2 C8 7 5 11 5 15 a7 7 0 0 0 14 0 C19 11 16 7 12 2 z" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Card footer */}
+                  <div className="px-2 py-1.5 flex flex-col gap-0.5">
+                    <p className="text-xs font-semibold text-white truncate">
+                      {slime.name ?? "Unnamed"}
+                    </p>
                     {slime.price != null && (
-                      <p className="text-sm text-slime-muted ml-3 shrink-0">
+                      <p
+                        className="text-xs font-bold"
+                        style={{ color: "#39FF14" }}
+                      >
                         ${slime.price.toFixed(2)}
                       </p>
                     )}
                   </div>
-                );
-              })}
-              {extraCount > 0 && (
-                <p className="text-xs text-slime-muted">+{extraCount} more</p>
-              )}
+                </div>
+              ))}
             </div>
           </div>
         )}

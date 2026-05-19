@@ -7,6 +7,8 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import PageWrapper from "@/components/PageWrapper";
 import PageHeader from "@/components/PageHeader";
+import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
+import type { SlimeBaseType } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,6 +22,9 @@ interface Drop {
   cover_image_url: string | null;
   shop_url: string | null;
   created_at: string;
+  drop_type: "new_drop" | "restock" | null;
+  discount_code: string | null;
+  free_shipping_threshold: number | null;
 }
 
 interface DropBrand {
@@ -32,11 +37,12 @@ interface DropBrand {
 
 interface DropSlime {
   id: string;
-  slime_name: string;
+  name: string | null;
+  base_type: string | null;
   description: string | null;
   image_url: string | null;
   price: number | null;
-  display_order: number;
+  scent_notes: string | null;
 }
 
 // ─── Server Supabase ──────────────────────────────────────────────────────────
@@ -214,11 +220,8 @@ export default async function DropPage({
 
   const { data: slimeRows } = await supabase
     .from("drop_slimes")
-    .select(
-      "id, slime_name, description, image_url, price, display_order",
-    )
-    .eq("drop_id", drop.id)
-    .order("display_order", { ascending: true });
+    .select("id, name, base_type, description, image_url, price, scent_notes")
+    .eq("drop_id", drop.id);
 
   const slimes = (slimeRows ?? []) as DropSlime[];
 
@@ -441,6 +444,50 @@ export default async function DropPage({
               Shop the drop
             </a>
           )}
+
+          {/* Promo info row */}
+          {drop.discount_code && (
+            <div
+              className="mt-4 inline-flex items-center gap-2 px-3 py-2 rounded-xl"
+              style={{
+                background: "rgba(45,10,78,0.3)",
+                border: "1px solid rgba(45,10,78,0.6)",
+              }}
+            >
+              <p
+                className="text-[10px] uppercase tracking-widest font-bold"
+                style={{
+                  color: "rgba(245,245,245,0.4)",
+                  fontFamily: "Montserrat, sans-serif",
+                }}
+              >
+                Code
+              </p>
+              <span
+                className="text-sm font-black text-white px-2 py-0.5 rounded-lg"
+                style={{
+                  background: "rgba(45,10,78,0.5)",
+                  border: "1px solid rgba(45,10,78,0.8)",
+                }}
+              >
+                {drop.discount_code}
+              </span>
+            </div>
+          )}
+          {drop.free_shipping_threshold != null && (
+            <p
+              className="mt-2 text-xs"
+              style={{
+                color: "rgba(245,245,245,0.5)",
+                fontFamily: "Inter, sans-serif",
+              }}
+            >
+              Free shipping on orders over $
+              {Number.isInteger(drop.free_shipping_threshold)
+                ? drop.free_shipping_threshold
+                : (drop.free_shipping_threshold as number).toFixed(2)}
+            </p>
+          )}
         </section>
 
         {slimes.length > 0 && (
@@ -464,62 +511,95 @@ export default async function DropPage({
               </svg>
               Drop Lineup ({slimes.length})
             </h2>
-            <div className="flex flex-col gap-3">
+
+            {/* Horizontal swipeable carousel */}
+            <div
+              className="flex gap-3 overflow-x-auto pb-2 scrollbar-none"
+              style={{
+                msOverflowStyle: "none",
+                scrollbarWidth: "none",
+              }}
+            >
               {slimes.map((slime) => {
+                const baseLabel = slime.base_type
+                  ? (SLIME_BASE_TYPE_LABELS[slime.base_type as SlimeBaseType] ??
+                    null)
+                  : null;
+
                 return (
                   <article
                     key={slime.id}
-                    className="rounded-xl overflow-hidden border bg-slime-card flex flex-row gap-3 p-3"
-                    style={{ borderColor: "rgba(45,10,78,0.5)" }}
+                    className="rounded-xl overflow-hidden"
+                    style={{
+                      background: "rgba(45,10,78,0.3)",
+                      border: "1px solid rgba(45,10,78,0.6)",
+                      flexShrink: 0,
+                      width: 160,
+                    }}
                   >
+                    {/* Image area */}
                     <div
-                      className="relative w-20 h-20 rounded-lg overflow-hidden shrink-0"
-                      style={{ background: "rgba(45,10,78,0.4)" }}
+                      className="relative overflow-hidden"
+                      style={{ width: 160, height: 120 }}
                     >
                       {slime.image_url ? (
                         <Image
                           src={slime.image_url}
-                          alt={slime.slime_name}
+                          alt={slime.name ?? "Slime"}
                           fill
-                          sizes="80px"
+                          sizes="160px"
                           className="object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center">
+                        <div
+                          className="w-full h-full flex items-center justify-center"
+                          style={{
+                            background:
+                              "linear-gradient(135deg, rgba(57,255,20,0.1), rgba(45,10,78,0.4))",
+                          }}
+                        >
                           <svg
-                            width="24"
-                            height="24"
+                            width="28"
+                            height="28"
                             viewBox="0 0 24 24"
                             fill="none"
-                            stroke="rgba(255,255,255,0.3)"
+                            stroke="rgba(255,255,255,0.25)"
                             strokeWidth="1.5"
                             aria-hidden="true"
                           >
-                            <path d="M12 2 L14 9 L21 12 L14 15 L12 22 L10 15 L3 12 L10 9 Z" />
+                            <path d="M12 2 C8 7 5 11 5 15 a7 7 0 0 0 14 0 C19 11 16 7 12 2 z" />
                           </svg>
                         </div>
                       )}
                     </div>
-                    <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
-                      <p className="text-sm font-bold text-slime-text">
-                        {slime.slime_name}
+
+                    {/* Card body */}
+                    <div className="p-2.5 flex flex-col gap-1">
+                      <p
+                        className="text-sm font-bold text-white truncate"
+                        title={slime.name ?? undefined}
+                      >
+                        {slime.name ?? "Unnamed"}
                       </p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {typeof slime.price === "number" && (
-                          <span
-                            className="text-xs font-bold"
-                            style={{ color: "#39FF14" }}
-                          >
-                            {new Intl.NumberFormat("en-US", {
-                              style: "currency",
-                              currency: "USD",
-                            }).format(slime.price)}
-                          </span>
-                        )}
-                      </div>
-                      {slime.description && (
-                        <p className="text-xs text-slime-muted line-clamp-2">
-                          {slime.description}
+                      {baseLabel && (
+                        <p className="text-[11px] text-slime-muted">
+                          {baseLabel}
+                        </p>
+                      )}
+                      {typeof slime.price === "number" && (
+                        <p
+                          className="text-xs font-bold"
+                          style={{ color: "#39FF14" }}
+                        >
+                          {new Intl.NumberFormat("en-US", {
+                            style: "currency",
+                            currency: "USD",
+                          }).format(slime.price)}
+                        </p>
+                      )}
+                      {slime.scent_notes && (
+                        <p className="text-[11px] text-slime-muted line-clamp-1">
+                          {slime.scent_notes}
                         </p>
                       )}
                     </div>
