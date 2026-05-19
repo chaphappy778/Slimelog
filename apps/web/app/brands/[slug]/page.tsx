@@ -226,8 +226,7 @@ export default async function BrandPage({
     `,
     )
     .eq("brand_id", brand.id)
-    .neq("status", "cancelled")
-    .gte("drop_at", new Date().toISOString())
+    .in("status", ["announced", "live"])
     .order("drop_at", { ascending: true })
     .limit(3);
 
