@@ -250,7 +250,6 @@ export default function SlimeDetailCard({
     (log as CollectionLog & { subtype?: { name: string } | null }).subtype
       ?.name ?? null;
 
-  // [T72+T73] Scent strength + keywords from log data
   const scentStrength =
     (log as CollectionLog & { scent_strength?: ScentStrength | null })
       .scent_strength ?? null;
@@ -453,49 +452,69 @@ export default function SlimeDetailCard({
             : 16,
         }}
       >
-        {/* Brand logo thumbnail */}
-        {imageUrl && (
+        {/* Owner avatar + @username — absolute flex row at card boundary */}
+        {imageUrl && showOwnerRow && (
           <div
             style={{
               position: "absolute",
               top: -28,
               left: 16,
-              width: 56,
-              height: 56,
-              borderRadius: "50%",
-              border: "2px solid #0F0018",
-              overflow: "hidden",
-              boxShadow: "0 2px 12px rgba(0,0,0,0.6)",
-              flexShrink: 0,
+              display: "flex",
+              alignItems: "flex-end",
+              gap: 10,
             }}
           >
-            {brandLogoUrl ? (
-              <Image
-                src={brandLogoUrl}
-                alt={log.brand_name_raw ?? "Brand"}
-                width={56}
-                height={56}
-                className="object-cover w-full h-full"
-              />
-            ) : (
-              <div
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#0A0A0A",
-                  fontSize: 22,
-                  fontWeight: 900,
-                  fontFamily: "Montserrat, Inter, sans-serif",
-                }}
-                aria-hidden="true"
-              >
-                {brandInitial}
-              </div>
-            )}
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: "50%",
+                border: "2px solid #0F0018",
+                overflow: "hidden",
+                boxShadow: "0 2px 12px rgba(0,0,0,0.6)",
+                flexShrink: 0,
+              }}
+            >
+              {ownerAvatarUrl ? (
+                <Image
+                  src={ownerAvatarUrl}
+                  alt={ownerUsername ?? "User"}
+                  width={56}
+                  height={56}
+                  className="object-cover w-full h-full"
+                />
+              ) : (
+                <div
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    background: "linear-gradient(135deg, #FF00E5, #9B59B6)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#fff",
+                    fontSize: 22,
+                    fontWeight: 900,
+                    fontFamily: "Montserrat, Inter, sans-serif",
+                  }}
+                  aria-hidden="true"
+                >
+                  {ownerInitial}
+                </div>
+              )}
+            </div>
+            <p
+              style={{
+                margin: 0,
+                paddingBottom: 6,
+                fontSize: 13,
+                fontWeight: 700,
+                color: "#FF00E5",
+                fontFamily: "Montserrat, Inter, sans-serif",
+              }}
+            >
+              @{ownerUsername}
+            </p>
           </div>
         )}
 
@@ -509,70 +528,6 @@ export default function SlimeDetailCard({
             gap: 14,
           }}
         >
-          {/* Owner row */}
-          {showOwnerRow && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                marginBottom: -4,
-              }}
-            >
-              <div
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: "50%",
-                  overflow: "hidden",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  flexShrink: 0,
-                }}
-              >
-                {ownerAvatarUrl ? (
-                  <Image
-                    src={ownerAvatarUrl}
-                    alt={ownerUsername ?? "user"}
-                    width={36}
-                    height={36}
-                    className="object-cover w-full h-full"
-                  />
-                ) : (
-                  <div
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "#0A0A0A",
-                      fontSize: 14,
-                      fontWeight: 800,
-                      fontFamily: "Montserrat, Inter, sans-serif",
-                    }}
-                    aria-hidden="true"
-                  >
-                    {ownerInitial}
-                  </div>
-                )}
-              </div>
-              <Link
-                href={`/users/${ownerUsername}`}
-                onClick={(e) => e.stopPropagation()}
-                style={{
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: "#FF00E5",
-                  textDecoration: "none",
-                  fontFamily: "Montserrat, Inter, sans-serif",
-                }}
-              >
-                @{ownerUsername}
-              </Link>
-            </div>
-          )}
-
           <h2
             style={{
               margin: 0,
@@ -586,7 +541,7 @@ export default function SlimeDetailCard({
             {log.slime_name ?? "Unnamed Slime"}
           </h2>
 
-          {/* Brand row */}
+          {/* Brand row — inline logo + name */}
           {log.brand_name_raw && (
             <div
               style={{
@@ -597,8 +552,54 @@ export default function SlimeDetailCard({
                 marginTop: -6,
               }}
             >
-              {brandSlug ? (
-                <>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  minWidth: 0,
+                }}
+              >
+                {/* Inline brand logo — 32x32 */}
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: "50%",
+                    overflow: "hidden",
+                    flexShrink: 0,
+                    border: "1px solid rgba(255,255,255,0.1)",
+                  }}
+                >
+                  {brandLogoUrl ? (
+                    <Image
+                      src={brandLogoUrl}
+                      alt={log.brand_name_raw}
+                      width={32}
+                      height={32}
+                      className="object-cover w-full h-full"
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "#0A0A0A",
+                        fontSize: 12,
+                        fontWeight: 900,
+                        fontFamily: "Montserrat, Inter, sans-serif",
+                      }}
+                      aria-hidden="true"
+                    >
+                      {brandInitial}
+                    </div>
+                  )}
+                </div>
+                {brandSlug ? (
                   <button
                     type="button"
                     onClick={() => setShowBrandSheet(true)}
@@ -614,46 +615,49 @@ export default function SlimeDetailCard({
                   >
                     {log.brand_name_raw}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowBrandSheet(true)}
-                    aria-label={`More about ${log.brand_name_raw}`}
+                ) : (
+                  <span
                     style={{
-                      background: "none",
-                      border: "none",
-                      padding: 0,
-                      cursor: "pointer",
-                      color: "rgba(255,255,255,0.3)",
-                      lineHeight: 0,
+                      fontSize: 15,
+                      fontWeight: 600,
+                      color: "rgba(255,255,255,0.5)",
                     }}
                   >
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <circle cx="12" cy="12" r="1" />
-                      <circle cx="19" cy="12" r="1" />
-                      <circle cx="5" cy="12" r="1" />
-                    </svg>
-                  </button>
-                </>
-              ) : (
-                <span
+                    {log.brand_name_raw}
+                  </span>
+                )}
+              </div>
+              {brandSlug && (
+                <button
+                  type="button"
+                  onClick={() => setShowBrandSheet(true)}
+                  aria-label={`More about ${log.brand_name_raw}`}
                   style={{
-                    fontSize: 15,
-                    fontWeight: 600,
-                    color: "rgba(255,255,255,0.5)",
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                    color: "rgba(255,255,255,0.3)",
+                    lineHeight: 0,
+                    flexShrink: 0,
                   }}
                 >
-                  {log.brand_name_raw}
-                </span>
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="1" />
+                    <circle cx="19" cy="12" r="1" />
+                    <circle cx="5" cy="12" r="1" />
+                  </svg>
+                </button>
               )}
             </div>
           )}
@@ -744,7 +748,7 @@ export default function SlimeDetailCard({
               ))}
           </div>
 
-          {/* [T72+T73] Scent strength + keyword pills */}
+          {/* Scent strength + keyword pills */}
           {(scentStrength || keywords.length > 0) && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {scentStrength && (
