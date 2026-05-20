@@ -384,10 +384,7 @@ function LogPageInner() {
     setSaving(true);
     setSaveError(null);
     try {
-      const finalColors =
-        form.base_type === "clear"
-          ? ["clear"]
-          : buildColorsArray(form.selected_color_values);
+      const finalColors = buildColorsArray(form.selected_color_values);
 
       const input: LogSlimeInput = {
         slime_name: form.slime_name.trim() || undefined,
@@ -657,22 +654,10 @@ function LogPageInner() {
 
               {/* [G2] base_type === "clear" check */}
               <Field label="Colors" optional>
-                {form.base_type === "clear" ? (
-                  <p
-                    style={{
-                      fontSize: 13,
-                      color: "rgba(255,255,255,0.4)",
-                      fontStyle: "italic",
-                    }}
-                  >
-                    Color is automatically set to clear for this slime type.
-                  </p>
-                ) : (
-                  <ColorPicker
-                    selectedValues={form.selected_color_values}
-                    onToggle={toggleColor}
-                  />
-                )}
+                <ColorPicker
+                  selectedValues={form.selected_color_values}
+                  onToggle={toggleColor}
+                />
               </Field>
 
               {/* [T72] Keywords tag input */}
@@ -847,19 +832,13 @@ function LogPageInner() {
                     </span>
                   </p>
                 )}
-                {form.base_type === "clear" ? (
+                {form.selected_color_values.length > 0 && (
                   <p>
-                    Colors: <span className="text-slime-accent">clear</span>
+                    Colors:{" "}
+                    <span className="text-slime-accent">
+                      {form.selected_color_values.join(", ")}
+                    </span>
                   </p>
-                ) : (
-                  form.selected_color_values.length > 0 && (
-                    <p>
-                      Colors:{" "}
-                      <span className="text-slime-accent">
-                        {form.selected_color_values.join(", ")}
-                      </span>
-                    </p>
-                  )
                 )}
                 {form.scent_strength && (
                   <p>
