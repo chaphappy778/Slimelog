@@ -363,7 +363,16 @@ export default function FeedCard({
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center gap-2">
-            <Avatar username={log.username} avatar_url={log.avatar_url} />
+            {log.username ? (
+              <Link
+                href={`/users/${log.username}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Avatar username={log.username} avatar_url={log.avatar_url} />
+              </Link>
+            ) : (
+              <Avatar username={log.username} avatar_url={log.avatar_url} />
+            )}
             {log.username ? (
               <Link
                 href={`/users/${log.username}`}

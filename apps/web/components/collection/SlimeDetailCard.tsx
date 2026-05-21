@@ -503,7 +503,8 @@ export default function SlimeDetailCard({
                 </div>
               )}
             </div>
-            <p
+            <Link
+              href={`/users/${ownerUsername}`}
               style={{
                 margin: 0,
                 paddingBottom: 6,
@@ -511,10 +512,11 @@ export default function SlimeDetailCard({
                 fontWeight: 700,
                 color: "#FF00E5",
                 fontFamily: "Montserrat, Inter, sans-serif",
+                textDecoration: "none",
               }}
             >
               @{ownerUsername}
-            </p>
+            </Link>
           </div>
         )}
 
