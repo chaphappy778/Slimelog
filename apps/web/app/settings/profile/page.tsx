@@ -8,6 +8,7 @@ import Link from "next/link";
 import { updateProfile, checkUsernameAvailable } from "@/lib/profile-actions";
 import PageWrapper from "@/components/PageWrapper";
 import { useToast } from "@/components/Toast";
+import BrandSearchInput from "@/components/BrandSearchInput";
 
 // Module-level client — absolute rule
 const supabase = createBrowserClient(
@@ -35,8 +36,6 @@ const sectionStyle = {
   border: "1px solid rgba(45,10,78,0.7)",
   boxShadow: "inset 0 0 16px rgba(45,10,78,0.1)",
 };
-
-// ─── Image compression helpers ───────────────────────────────────────────────
 
 async function compressImage(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => {
@@ -89,9 +88,6 @@ function generateFilePath(userId: string): string {
   return `${userId}/${timestamp}-${random}.webp`;
 }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-// [Change 1] — Added youtube_handle, pinterest_handle, twitter_handle to FormState
 type FormState = {
   username: string;
   bio: string;
@@ -104,11 +100,19 @@ type FormState = {
   youtube_handle: string;
   pinterest_handle: string;
   twitter_handle: string;
+  background_url: string | null;
+  favorite_brand_id: string | null;
+  favorite_brand_name: string;
+};
+
+type ProfileLink = {
+  id: string;
+  label: string;
+  url: string;
+  sort_order: number;
 };
 
 type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid";
-
-// ─── Helper components ────────────────────────────────────────────────────────
 
 function UsernameStatusIcon({ status }: { status: UsernameStatus }) {
   if (status === "idle") return null;
@@ -287,11 +291,10 @@ function EditRow({
 
 function ProfileSettingsContent({ userId }: { userId: string }) {
   const { showToast } = useToast();
-  const router = useRouter();
   const searchParams = useSearchParams();
+  const router = useRouter();
 
-  // [Change 2] — Initial state includes all three new fields
-  const [originalForm, setOriginalForm] = useState<FormState>({
+  const emptyForm: FormState = {
     username: "",
     bio: "",
     location: "",
@@ -303,32 +306,30 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     youtube_handle: "",
     pinterest_handle: "",
     twitter_handle: "",
-  });
-  const [form, setForm] = useState<FormState>({
-    username: "",
-    bio: "",
-    location: "",
-    website_url: "",
-    avatar_url: null,
-    instagram_handle: "",
-    tiktok_handle: "",
-    shop_url: "",
-    youtube_handle: "",
-    pinterest_handle: "",
-    twitter_handle: "",
-  });
+    background_url: null,
+    favorite_brand_id: null,
+    favorite_brand_name: "",
+  };
+
+  const [originalForm, setOriginalForm] = useState<FormState>(emptyForm);
+  const [form, setForm] = useState<FormState>(emptyForm);
   const [profileLoading, setProfileLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
-
-  // Accordion — only one row open at a time
   const [expandedField, setExpandedField] = useState<string | null>(null);
-
   const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>("idle");
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [bgUploading, setBgUploading] = useState(false);
+  const bgInputRef = useRef<HTMLInputElement>(null);
+  const [links, setLinks] = useState<ProfileLink[]>([]);
+  const [linksLoading, setLinksLoading] = useState(true);
+  const [showAddLink, setShowAddLink] = useState(false);
+  const [newLinkLabel, setNewLinkLabel] = useState("");
+  const [newLinkUrl, setNewLinkUrl] = useState("");
+  const [linkSaving, setLinkSaving] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
 
   function toggleField(field: string) {
     setExpandedField((prev) => (prev === field ? null : field));
@@ -338,31 +339,31 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
   useEffect(() => {
     const upgraded = searchParams.get("upgraded") === "true";
     const alreadyPro = searchParams.get("already_pro") === "true";
-
-    if (upgraded) {
-      showToast("Welcome to SlimeLog Pro!", "success");
-    } else if (alreadyPro) {
-      showToast("You're already subscribed to Pro.", "info");
-    }
-
-    if (upgraded || alreadyPro) {
-      router.replace("/settings/profile");
-    }
+    if (upgraded) showToast("Welcome to SlimeLog Pro!", "success");
+    else if (alreadyPro) showToast("You're already subscribed to Pro.", "info");
+    if (upgraded || alreadyPro) router.replace("/settings/profile");
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── profile fetch ──────────────────────────────────────────────────────────
   useEffect(() => {
-    // [Change 4] — Added youtube_handle, pinterest_handle, twitter_handle to select
     supabase
       .from("profiles")
       .select(
-        "username, bio, location, website_url, avatar_url, instagram_handle, tiktok_handle, shop_url, youtube_handle, pinterest_handle, twitter_handle",
+        "username, bio, location, website_url, avatar_url, instagram_handle, tiktok_handle, shop_url, youtube_handle, pinterest_handle, twitter_handle, background_url, favorite_brand_id",
       )
       .eq("id", userId)
       .maybeSingle()
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         if (data) {
-          // [Change 3] — Load new fields from profile data
+          let favName = "";
+          if (data.favorite_brand_id) {
+            const { data: brandRow } = await supabase
+              .from("brands")
+              .select("name")
+              .eq("id", data.favorite_brand_id)
+              .maybeSingle();
+            favName = brandRow?.name ?? "";
+          }
           const loaded: FormState = {
             username: data.username ?? "",
             bio: data.bio ?? "",
@@ -375,11 +376,24 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
             youtube_handle: data.youtube_handle ?? "",
             pinterest_handle: data.pinterest_handle ?? "",
             twitter_handle: data.twitter_handle ?? "",
+            background_url: data.background_url ?? null,
+            favorite_brand_id: data.favorite_brand_id ?? null,
+            favorite_brand_name: favName,
           };
           setOriginalForm(loaded);
           setForm(loaded);
         }
         setProfileLoading(false);
+      });
+
+    supabase
+      .from("profile_links")
+      .select("id, label, url, sort_order")
+      .eq("user_id", userId)
+      .order("sort_order", { ascending: true })
+      .then(({ data }) => {
+        setLinks((data ?? []) as ProfileLink[]);
+        setLinksLoading(false);
       });
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -450,18 +464,46 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     }
   }
 
+  // ── background upload ──────────────────────────────────────────────────────
+  async function handleBgChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBgUploading(true);
+    try {
+      const compressed = await compressImage(file);
+      const filePath = generateFilePath(userId);
+      const { error: uploadError } = await supabase.storage
+        .from("slime-photos")
+        .upload(filePath, compressed, {
+          contentType: "image/webp",
+          upsert: false,
+        });
+      if (uploadError) throw new Error(uploadError.message);
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("slime-photos").getPublicUrl(filePath);
+      setForm((f) => ({ ...f, background_url: publicUrl }));
+    } catch {
+      // silently ignore
+    } finally {
+      setBgUploading(false);
+      if (bgInputRef.current) bgInputRef.current.value = "";
+    }
+  }
+
   // ── validation helpers ─────────────────────────────────────────────────────
   const stripLeadingAt = (value: string) =>
     value.startsWith("@") ? value.slice(1) : value;
 
   const handleInstagramChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = stripLeadingAt(e.target.value);
-    setForm((f) => ({ ...f, instagram_handle: value }));
+    setForm((f) => ({
+      ...f,
+      instagram_handle: stripLeadingAt(e.target.value),
+    }));
   };
 
   const handleTiktokChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = stripLeadingAt(e.target.value);
-    setForm((f) => ({ ...f, tiktok_handle: value }));
+    setForm((f) => ({ ...f, tiktok_handle: stripLeadingAt(e.target.value) }));
   };
 
   const handleShopUrlBlur = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -471,7 +513,6 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     }
   };
 
-  // [Change 5] — hasChanges includes the three new fields
   const hasChanges =
     form.username !== originalForm.username ||
     form.bio !== originalForm.bio ||
@@ -483,15 +524,15 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     form.shop_url !== originalForm.shop_url ||
     form.youtube_handle !== originalForm.youtube_handle ||
     form.pinterest_handle !== originalForm.pinterest_handle ||
-    form.twitter_handle !== originalForm.twitter_handle;
+    form.twitter_handle !== originalForm.twitter_handle ||
+    form.background_url !== originalForm.background_url ||
+    form.favorite_brand_id !== originalForm.favorite_brand_id;
 
   const instagramValid =
     form.instagram_handle === "" || INSTAGRAM_RE.test(form.instagram_handle);
   const tiktokValid =
     form.tiktok_handle === "" || TIKTOK_RE.test(form.tiktok_handle);
   const shopUrlValid = form.shop_url === "" || SHOP_URL_RE.test(form.shop_url);
-
-  // [Change 6] — Validation booleans for new fields
   const youtubeValid =
     form.youtube_handle === "" ||
     /^[a-zA-Z0-9_.-]{1,50}$/.test(form.youtube_handle);
@@ -502,7 +543,6 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
     form.twitter_handle === "" ||
     /^[a-zA-Z0-9_]{1,15}$/.test(form.twitter_handle);
 
-  // [Change 7] — isFormValid includes new field validations
   const isFormValid =
     hasChanges &&
     form.username.length >= 3 &&
@@ -521,8 +561,6 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
   const handleSave = async () => {
     if (!isFormValid) return;
     setSaving(true);
-
-    // [Change 8] — Pass new handle fields to updateProfile
     const result = await updateProfile({
       username: form.username,
       bio: form.bio || undefined,
@@ -535,18 +573,67 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
       youtube_handle: form.youtube_handle || undefined,
       pinterest_handle: form.pinterest_handle || undefined,
       twitter_handle: form.twitter_handle || undefined,
+      background_url: form.background_url || undefined,
+      favorite_brand_id: form.favorite_brand_id || undefined,
     });
-
     setSaving(false);
-
     if (result.success) {
       showToast("Profile saved", "success");
       setOriginalForm({ ...form });
       setUsernameStatus("idle");
     } else {
-      showToast("Could not save profile", "error");
+      showToast(result.error ?? "Could not save profile", "error");
     }
   };
+
+  // ── link operations ────────────────────────────────────────────────────────
+  async function handleAddLink() {
+    const trimLabel = newLinkLabel.trim();
+    const trimUrl = newLinkUrl.trim();
+    if (!trimLabel || !trimUrl) {
+      setLinkError("Label and URL are required.");
+      return;
+    }
+    if (!trimUrl.startsWith("https://")) {
+      setLinkError("URL must start with https://");
+      return;
+    }
+    if (links.length >= 5) {
+      setLinkError("Maximum 5 links allowed.");
+      return;
+    }
+    setLinkSaving(true);
+    setLinkError(null);
+    const nextOrder =
+      links.length > 0 ? Math.max(...links.map((l) => l.sort_order)) + 1 : 0;
+    const { data, error } = await supabase
+      .from("profile_links")
+      .insert({
+        user_id: userId,
+        label: trimLabel,
+        url: trimUrl,
+        sort_order: nextOrder,
+      })
+      .select("id, label, url, sort_order")
+      .single();
+    if (error) {
+      setLinkError(error.message);
+    } else {
+      setLinks((prev) => [...prev, data as ProfileLink]);
+      setNewLinkLabel("");
+      setNewLinkUrl("");
+      setShowAddLink(false);
+    }
+    setLinkSaving(false);
+  }
+
+  async function handleDeleteLink(id: string) {
+    const { error } = await supabase
+      .from("profile_links")
+      .delete()
+      .eq("id", id);
+    if (!error) setLinks((prev) => prev.filter((l) => l.id !== id));
+  }
 
   // ── loading skeleton ───────────────────────────────────────────────────────
   if (profileLoading) {
@@ -597,7 +684,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
       </header>
 
       <div className="px-4 pb-28 space-y-4">
-        {/* Hidden file input */}
+        {/* Hidden file inputs */}
         <input
           ref={avatarInputRef}
           type="file"
@@ -606,9 +693,28 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
           onChange={handleAvatarChange}
           aria-label="Change profile photo"
         />
+        <input
+          ref={bgInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={handleBgChange}
+          aria-hidden="true"
+        />
 
-        {/* Avatar section */}
-        <div className="flex flex-col items-center gap-2 py-4">
+        {/* Appearance — avatar + background */}
+        <p
+          className="text-[11px] font-black tracking-widest uppercase mb-2 px-1"
+          style={{ color: "#00F0FF" }}
+        >
+          Appearance
+        </p>
+
+        {/* Avatar */}
+        <div
+          className="flex flex-col items-center gap-2 py-4 rounded-2xl"
+          style={sectionStyle}
+        >
           <button
             type="button"
             onClick={() => avatarInputRef.current?.click()}
@@ -643,8 +749,6 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
                 </div>
               )}
             </div>
-
-            {/* Camera badge */}
             <span
               className="absolute bottom-0 right-0 w-6 h-6 rounded-full flex items-center justify-center"
               style={{
@@ -695,7 +799,6 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
               )}
             </span>
           </button>
-
           {form.avatar_url && !avatarUploading && (
             <button
               type="button"
@@ -706,7 +809,6 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
               Remove photo
             </button>
           )}
-
           {avatarError && (
             <p className="text-xs text-red-400 text-center px-4">
               {avatarError}
@@ -714,7 +816,87 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
           )}
         </div>
 
-        {/* About You card */}
+        {/* Background */}
+        <div className="rounded-2xl p-4" style={sectionStyle}>
+          <button
+            type="button"
+            onClick={() => bgInputRef.current?.click()}
+            className="relative w-full rounded-2xl overflow-hidden transition-opacity active:opacity-80"
+            style={{
+              height: 160,
+              border: form.background_url
+                ? "1px solid rgba(45,10,78,0.8)"
+                : "2px dashed rgba(45,10,78,0.8)",
+              background: "rgba(10,0,20,0.3)",
+            }}
+            aria-label="Set profile background image"
+          >
+            {form.background_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={form.background_url}
+                alt=""
+                className="w-full h-full object-cover"
+                aria-hidden="true"
+              />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="rgba(255,255,255,0.3)"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <polyline points="21 15 16 10 5 21" />
+                </svg>
+                <span
+                  className="text-xs font-semibold"
+                  style={{ color: "rgba(255,255,255,0.3)" }}
+                >
+                  Tap to set background
+                </span>
+              </div>
+            )}
+            {bgUploading && (
+              <div
+                className="absolute inset-0 flex items-center justify-center"
+                style={{ background: "rgba(10,0,20,0.6)" }}
+              >
+                <svg
+                  className="animate-spin"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#39FF14"
+                  strokeWidth="2"
+                  aria-hidden="true"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+              </div>
+            )}
+          </button>
+          {form.background_url && (
+            <button
+              type="button"
+              onClick={() => setForm((f) => ({ ...f, background_url: null }))}
+              className="mt-2 text-xs font-medium active:opacity-70 transition-opacity"
+              style={{ color: "rgba(245,245,245,0.35)" }}
+            >
+              Remove background
+            </button>
+          )}
+        </div>
+
+        {/* About You */}
         <div>
           <p
             className="text-[11px] font-black tracking-widest uppercase mb-2 px-1"
@@ -723,7 +905,6 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
             About You
           </p>
           <div className="rounded-2xl overflow-hidden" style={sectionStyle}>
-            {/* Username row */}
             <EditRow
               label="Username"
               value={form.username ? `@${form.username}` : ""}
@@ -766,7 +947,6 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
 
             <RowDivider />
 
-            {/* Bio row */}
             <EditRow
               label="Bio"
               value={form.bio}
@@ -779,13 +959,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
                     Bio
                   </span>
                   <span
-                    className={`text-[10px] font-medium tabular-nums transition-colors ${
-                      form.bio.length > 140
-                        ? form.bio.length > 150
-                          ? "text-red-400"
-                          : "text-amber-400"
-                        : "text-slime-muted"
-                    }`}
+                    className={`text-[10px] font-medium tabular-nums transition-colors ${form.bio.length > 140 ? (form.bio.length > 150 ? "text-red-400" : "text-amber-400") : "text-slime-muted"}`}
                   >
                     {form.bio.length}/150
                   </span>
@@ -806,8 +980,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
           </div>
         </div>
 
-        {/* Contact & Links card — Location, Website, Shop URL only */}
-        {/* [Change 9] — Instagram and TikTok moved to Social Links section below */}
+        {/* Contact & Links */}
         <div>
           <p
             className="text-[11px] font-black tracking-widest uppercase mb-2 px-1"
@@ -816,7 +989,6 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
             Contact &amp; Links
           </p>
           <div className="rounded-2xl overflow-hidden" style={sectionStyle}>
-            {/* Location */}
             <EditRow
               label="Location"
               value={form.location}
@@ -837,10 +1009,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
                 />
               </div>
             </EditRow>
-
             <RowDivider />
-
-            {/* Website */}
             <EditRow
               label="Website"
               value={form.website_url}
@@ -862,10 +1031,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
                 />
               </div>
             </EditRow>
-
             <RowDivider />
-
-            {/* Shop URL */}
             <EditRow
               label="Shop URL"
               value={form.shop_url}
@@ -898,7 +1064,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
           </div>
         </div>
 
-        {/* [Change 9] — Social Links card (new section) */}
+        {/* Social Links */}
         <div>
           <p
             className="text-[11px] font-black tracking-widest uppercase mb-2 px-1"
@@ -907,7 +1073,6 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
             Social Links
           </p>
           <div className="rounded-2xl overflow-hidden" style={sectionStyle}>
-            {/* Instagram */}
             <EditRow
               label="Instagram"
               value={form.instagram_handle ? `@${form.instagram_handle}` : ""}
@@ -944,10 +1109,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
                   ))}
               </div>
             </EditRow>
-
             <RowDivider />
-
-            {/* TikTok */}
             <EditRow
               label="TikTok"
               value={form.tiktok_handle ? `@${form.tiktok_handle}` : ""}
@@ -984,10 +1146,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
                   ))}
               </div>
             </EditRow>
-
             <RowDivider />
-
-            {/* YouTube */}
             <EditRow
               label="YouTube"
               value={form.youtube_handle ? `@${form.youtube_handle}` : ""}
@@ -1031,10 +1190,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
                   ))}
               </div>
             </EditRow>
-
             <RowDivider />
-
-            {/* Pinterest */}
             <EditRow
               label="Pinterest"
               value={form.pinterest_handle ? `@${form.pinterest_handle}` : ""}
@@ -1078,10 +1234,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
                   ))}
               </div>
             </EditRow>
-
             <RowDivider />
-
-            {/* Twitter/X */}
             <EditRow
               label="Twitter / X"
               value={form.twitter_handle ? `@${form.twitter_handle}` : ""}
@@ -1128,16 +1281,203 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
           </div>
         </div>
 
+        {/* Favorite Shop — no overflow-hidden so dropdown isn't clipped */}
+        <div>
+          <p
+            className="text-[11px] font-black tracking-widest uppercase mb-2 px-1"
+            style={{ color: "#00F0FF" }}
+          >
+            Favorite Shop
+          </p>
+          <div className="rounded-2xl p-4" style={sectionStyle}>
+            <BrandSearchInput
+              value={form.favorite_brand_name}
+              onChange={(name: string, id: string | null) =>
+                setForm((f) => ({
+                  ...f,
+                  favorite_brand_name: name,
+                  favorite_brand_id: id,
+                }))
+              }
+              placeholder="Search brands..."
+            />
+            {form.favorite_brand_id && (
+              <button
+                type="button"
+                onClick={() =>
+                  setForm((f) => ({
+                    ...f,
+                    favorite_brand_id: null,
+                    favorite_brand_name: "",
+                  }))
+                }
+                className="mt-2 text-xs font-medium active:opacity-70 transition-opacity"
+                style={{ color: "rgba(245,245,245,0.35)" }}
+              >
+                Clear favorite shop
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Affiliate Links */}
+        <div>
+          <p
+            className="text-[11px] font-black tracking-widest uppercase mb-2 px-1"
+            style={{ color: "#00F0FF" }}
+          >
+            Affiliate Links
+          </p>
+          <div className="rounded-2xl overflow-hidden p-4" style={sectionStyle}>
+            {linksLoading ? (
+              <div className="flex flex-col gap-2">
+                {[0, 1].map((i) => (
+                  <div
+                    key={i}
+                    className="h-12 rounded-xl animate-pulse"
+                    style={{ background: "rgba(45,10,78,0.3)" }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <>
+                {links.length > 0 && (
+                  <div className="flex flex-col gap-2 mb-3">
+                    {links.map((link) => (
+                      <div
+                        key={link.id}
+                        className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
+                        style={{
+                          background: "rgba(45,10,78,0.3)",
+                          border: "1px solid rgba(45,10,78,0.6)",
+                        }}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slime-text truncate">
+                            {link.label}
+                          </p>
+                          <p className="text-[10px] text-slime-muted truncate">
+                            {link.url}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteLink(link.id)}
+                          className="shrink-0 transition-opacity active:opacity-70"
+                          aria-label={`Delete link: ${link.label}`}
+                        >
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="#FF00E5"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {showAddLink ? (
+                  <div className="flex flex-col gap-3">
+                    <div>
+                      <label className="block text-[10px] font-semibold uppercase tracking-wider text-slime-muted mb-1.5">
+                        Label (max 50 chars)
+                      </label>
+                      <input
+                        type="text"
+                        value={newLinkLabel}
+                        onChange={(e) => setNewLinkLabel(e.target.value)}
+                        className={inputCls}
+                        placeholder="e.g. My Etsy Shop"
+                        maxLength={50}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold uppercase tracking-wider text-slime-muted mb-1.5">
+                        URL (must start with https://)
+                      </label>
+                      <input
+                        type="url"
+                        value={newLinkUrl}
+                        onChange={(e) => setNewLinkUrl(e.target.value)}
+                        className={inputCls}
+                        placeholder="https://example.com"
+                        maxLength={200}
+                      />
+                    </div>
+                    {linkError && (
+                      <p className="text-xs" style={{ color: "#ff6b6b" }}>
+                        {linkError}
+                      </p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleAddLink}
+                        disabled={linkSaving}
+                        className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-opacity disabled:opacity-50"
+                        style={{
+                          background:
+                            "linear-gradient(135deg, #39FF14, #00F0FF)",
+                          color: "#0A0A0A",
+                        }}
+                      >
+                        {linkSaving ? "Saving..." : "Save Link"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAddLink(false);
+                          setNewLinkLabel("");
+                          setNewLinkUrl("");
+                          setLinkError(null);
+                        }}
+                        className="px-4 py-2.5 rounded-xl text-sm font-semibold text-slime-muted transition-opacity active:opacity-70"
+                        style={{
+                          background: "rgba(45,10,78,0.3)",
+                          border: "1px solid rgba(45,10,78,0.7)",
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (links.length < 5) setShowAddLink(true);
+                    }}
+                    disabled={links.length >= 5}
+                    className="w-full py-2.5 rounded-xl text-sm font-semibold transition-opacity active:opacity-70 disabled:opacity-40"
+                    style={{
+                      background: "rgba(57,255,20,0.08)",
+                      border: "1px solid rgba(57,255,20,0.25)",
+                      color: "#39FF14",
+                    }}
+                  >
+                    {links.length >= 5 ? "Max 5 links reached" : "+ Add Link"}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
         {/* Save button */}
         <button
           type="button"
           onClick={handleSave}
           disabled={!isFormValid || saving}
-          className={`w-full py-3.5 rounded-2xl text-sm font-black tracking-wide transition-all active:scale-95 ${
-            isFormValid && !saving
-              ? "text-slime-bg shadow-glow-green"
-              : "bg-slime-surface text-slime-muted cursor-not-allowed"
-          }`}
+          className={`w-full py-3.5 rounded-2xl text-sm font-black tracking-wide transition-all active:scale-95 ${isFormValid && !saving ? "text-slime-bg shadow-glow-green" : "bg-slime-surface text-slime-muted cursor-not-allowed"}`}
           style={
             isFormValid && !saving
               ? { background: "linear-gradient(135deg, #39FF14, #00F0FF)" }

@@ -6,7 +6,6 @@ import { cookies } from "next/headers";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-// [Change 1] — UpdateProfileInput extended with youtube_handle, pinterest_handle, twitter_handle
 type UpdateProfileInput = {
   username: string;
   bio?: string;
@@ -19,6 +18,8 @@ type UpdateProfileInput = {
   youtube_handle?: string;
   pinterest_handle?: string;
   twitter_handle?: string;
+  background_url?: string;
+  favorite_brand_id?: string;
 };
 
 type UpdateProfileResult = {
@@ -28,13 +29,8 @@ type UpdateProfileResult = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Creates a Supabase server client using the request cookies.
- * Next.js 16: cookies() must be awaited.
- */
 async function getSupabaseServerClient() {
   const cookieStore = await cookies();
-
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -49,39 +45,19 @@ async function getSupabaseServerClient() {
 }
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
-
-// Server-side validation regexes mirror the client
 const INSTAGRAM_RE = /^[a-zA-Z0-9._]{1,30}$/;
 const TIKTOK_RE = /^[a-zA-Z0-9._]{1,24}$/;
 const SHOP_URL_RE = /^https?:\/\/.+/;
-
-// [Change 2] — Validation regexes for the three new social fields
 const YOUTUBE_RE = /^[a-zA-Z0-9_.-]{1,50}$/;
 const PINTEREST_RE = /^[a-zA-Z0-9_.+-]{1,30}$/;
 const TWITTER_RE = /^[a-zA-Z0-9_]{1,15}$/;
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
-/**
- * Updates the current user's profile row.
- *
- * RLS note: The profiles table must have an UPDATE policy that restricts
- * writes to rows where `auth.uid() = id`. This action relies on that
- * policy — it does NOT enforce auth.uid() manually here, so if RLS is
- * misconfigured (or the anon key is used without RLS), a user could
- * overwrite another user's profile. Ensure RLS is enabled and the
- * policy is set before using this in production.
- *
- * Recommended RLS policy for profiles UPDATE:
- *   CREATE POLICY "users can update own profile"
- *   ON profiles FOR UPDATE
- *   USING (auth.uid() = id)
- *   WITH CHECK (auth.uid() = id);
- */
 export async function updateProfile(
   input: UpdateProfileInput,
 ): Promise<UpdateProfileResult> {
-  // ── 1. Validate input server-side (never trust client-only validation) ──
+  // ── 1. Validate input server-side ──
   if (!USERNAME_RE.test(input.username)) {
     return {
       success: false,
@@ -93,13 +69,10 @@ export async function updateProfile(
     return { success: false, error: "Bio must be 150 characters or fewer." };
   }
 
-  // Server-side validation for instagram/tiktok/shop fields.
-  // Strip leading @ on handles as defense-in-depth (the client already does this).
   let instagramHandle: string | undefined = input.instagram_handle;
   if (instagramHandle !== undefined && instagramHandle !== "") {
-    if (instagramHandle.startsWith("@")) {
+    if (instagramHandle.startsWith("@"))
       instagramHandle = instagramHandle.slice(1);
-    }
     if (!INSTAGRAM_RE.test(instagramHandle)) {
       return { success: false, error: "Invalid Instagram handle." };
     }
@@ -107,9 +80,7 @@ export async function updateProfile(
 
   let tiktokHandle: string | undefined = input.tiktok_handle;
   if (tiktokHandle !== undefined && tiktokHandle !== "") {
-    if (tiktokHandle.startsWith("@")) {
-      tiktokHandle = tiktokHandle.slice(1);
-    }
+    if (tiktokHandle.startsWith("@")) tiktokHandle = tiktokHandle.slice(1);
     if (!TIKTOK_RE.test(tiktokHandle)) {
       return { success: false, error: "Invalid TikTok handle." };
     }
@@ -125,7 +96,6 @@ export async function updateProfile(
     }
   }
 
-  // [Change 3] — Server-side validation for youtube, pinterest, twitter
   let youtubeHandle: string | undefined = input.youtube_handle;
   if (youtubeHandle !== undefined && youtubeHandle !== "") {
     if (youtubeHandle.startsWith("@")) youtubeHandle = youtubeHandle.slice(1);
@@ -157,7 +127,6 @@ export async function updateProfile(
     data: { user },
     error: authError,
   } = await supabase.auth.getUser();
-
   if (authError || !user) {
     return {
       success: false,
@@ -165,10 +134,7 @@ export async function updateProfile(
     };
   }
 
-  // ── 3. Username uniqueness check (double-check server-side) ──
-  // We only check if username is being changed — profile page passes current
-  // username on save, so we check anyway; a unique constraint on the column
-  // is the real source of truth.
+  // ── 3. Username uniqueness check ──
   const { data: existing, error: lookupError } = await supabase
     .from("profiles")
     .select("id")
@@ -192,37 +158,35 @@ export async function updateProfile(
     updated_at: new Date().toISOString(),
   };
 
-  // Only include optional fields if provided so we don't accidentally null them
   if (input.bio !== undefined) payload.bio = input.bio || null;
   if (input.avatar_url !== undefined)
     payload.avatar_url = input.avatar_url || null;
   if (input.location !== undefined) payload.location = input.location || null;
   if (input.website_url !== undefined)
     payload.website_url = input.website_url || null;
-
-  // Persist social fields with null-coalesce for empty strings
   if (input.instagram_handle !== undefined)
     payload.instagram_handle = instagramHandle || null;
   if (input.tiktok_handle !== undefined)
     payload.tiktok_handle = tiktokHandle || null;
   if (input.shop_url !== undefined) payload.shop_url = shopUrl || null;
-
-  // [Change 4] — Persist youtube, pinterest, twitter fields
   if (input.youtube_handle !== undefined)
     payload.youtube_handle = youtubeHandle || null;
   if (input.pinterest_handle !== undefined)
     payload.pinterest_handle = pinterestHandle || null;
   if (input.twitter_handle !== undefined)
     payload.twitter_handle = twitterHandle || null;
+  if (input.background_url !== undefined)
+    payload.background_url = input.background_url || null;
+  if (input.favorite_brand_id !== undefined)
+    payload.favorite_brand_id = input.favorite_brand_id || null;
 
-  // ── 5. Persist — RLS ensures user can only update their own row ──
+  // ── 5. Persist ──
   const { error: updateError } = await supabase
     .from("profiles")
     .update(payload)
     .eq("id", user.id);
 
   if (updateError) {
-    // Surface a readable error for common Postgres violations
     if (updateError.code === "23505") {
       return { success: false, error: "That username is already taken." };
     }
@@ -235,22 +199,12 @@ export async function updateProfile(
   return { success: true };
 }
 
-/**
- * Checks whether a given username is available (not already in profiles).
- *
- * Called from the client component via server action — avoids an extra
- * Supabase client round-trip from the browser and keeps the profiles
- * table unexposed to direct browser queries on the username column.
- *
- * Returns true if available, false if taken or on error.
- */
 export async function checkUsernameAvailable(
   username: string,
 ): Promise<boolean> {
   if (!USERNAME_RE.test(username)) return false;
 
   const supabase = await getSupabaseServerClient();
-
   const { data, error } = await supabase
     .from("profiles")
     .select("id")
@@ -258,10 +212,9 @@ export async function checkUsernameAvailable(
     .maybeSingle();
 
   if (error) {
-    // On error, conservatively treat as unavailable so the user retries
     console.error("[checkUsernameAvailable]", error.message);
     return false;
   }
 
-  return data === null; // null = no row found = username is free
+  return data === null;
 }
