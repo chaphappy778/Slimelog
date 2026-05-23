@@ -606,6 +606,7 @@ export default async function UserPage({
                   }}
                 >
                   {favoriteBrand.logo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={favoriteBrand.logo_url}
                       alt=""
@@ -631,13 +632,14 @@ export default async function UserPage({
             )}
 
             {/* [Change 4] — Affiliate links */}
+            {/* [Change 6] — Label renamed from "Links" to "Affiliate Links" */}
             {profileLinks.length > 0 && (
               <div className="mt-4 w-full">
                 <p
                   className="text-[11px] font-black tracking-widest uppercase mb-2"
                   style={{ color: "#00F0FF" }}
                 >
-                  Links
+                  Affiliate Links
                 </p>
                 <div className="flex flex-col gap-2">
                   {profileLinks.map((link) => (
