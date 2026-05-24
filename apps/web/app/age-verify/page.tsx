@@ -141,23 +141,8 @@ function AgeVerifyPageInner() {
         return;
       }
 
-      // [T96] After age verify, check if user needs username interstitial.
-      // Auto-generated usernames start with "user_" — redirect to /welcome.
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("username")
-          .eq("id", user.id)
-          .single();
-        if (profile?.username?.startsWith("user_")) {
-          router.push(`/welcome?next=${encodeURIComponent(next)}`);
-          return;
-        }
-      }
-      router.push(next);
+      // [T96] Always route through /welcome — it self-dismisses if username is already set.
+      router.push(`/welcome?next=${encodeURIComponent(next)}`);
     });
   }
 
