@@ -3,21 +3,16 @@
 //   • Google OAuth (after Supabase exchanges the Google code)
 //   • Email confirmation link clicks
 //
-// Next.js 16 note: This is a Route Handler — no async params needed here
-// since we read from searchParams, not dynamic segments.
+// [T96] Email signup flow:
+//   DOB is collected on the signup page and passed as user_metadata.
+//   The callback reads it here, saves it to the profile, and marks
+//   age_verified = true — skipping the /age-verify page entirely.
 //
-// After session exchange, checks if the user has completed age
-// verification. New users (age_verified = false OR date_of_birth IS NULL)
-// are redirected to /age-verify. Existing verified users proceed to `next`.
+// [T96] Google OAuth flow:
+//   No DOB in metadata — still redirects to /age-verify as before.
 //
-// [Change 1 — #35] The `next` param is now validated through safeRedirect
-// before being used in any redirect. Without this, a phishing link like
-//   /auth/callback?code=...&next=https://evil.com
-// would send the user off-site after auth.
-//
-// [Change 2 — T96] After age verify gate passes, check if user has a
-// real username. Auto-generated usernames (starting with "user_") redirect
-// to /welcome for the onboarding interstitial before the final destination.
+// After age is handled, checks for auto-generated username (user_*)
+// and redirects to /welcome if needed.
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
@@ -28,13 +23,10 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
 
-  // [Change 2 — #35] Validate the next param. Falls back to "/" because
-  // by the time we reach the callback, the user is becoming logged-in.
   const rawNext = searchParams.get("next");
   const next = safeRedirect(rawNext, "/");
 
   if (code) {
-    // cookies() must be awaited in Next.js 16
     const cookieStore = await cookies();
 
     const supabase = createServerClient(
@@ -57,7 +49,6 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      // Check age verification status and username for this user
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -69,28 +60,38 @@ export async function GET(request: NextRequest) {
           .eq("id", user.id)
           .single();
 
-        // New or unverified users go to age gate
-        const needsAgeVerify =
-          !profile || !profile.age_verified || profile.date_of_birth === null;
+        // ── Age verification ──────────────────────────────────────────────
+        if (!profile?.age_verified || profile?.date_of_birth === null) {
+          const dobFromMeta = user.user_metadata?.date_of_birth as
+            | string
+            | undefined;
 
-        if (needsAgeVerify) {
-          // Preserve `next` (already validated) so after age verify they
-          // land in the right place.
-          const ageVerifyUrl = `${origin}/age-verify?next=${encodeURIComponent(next)}`;
-          return NextResponse.redirect(ageVerifyUrl);
+          if (dobFromMeta) {
+            // Email signup: DOB was collected on the signup page and stored
+            // in user metadata. Save it to the profile and mark verified.
+            await supabase
+              .from("profiles")
+              .update({ date_of_birth: dobFromMeta, age_verified: true })
+              .eq("id", user.id);
+          } else {
+            // Google OAuth: no DOB in metadata — send to age verify page.
+            return NextResponse.redirect(
+              `${origin}/age-verify?next=${encodeURIComponent(next)}`,
+            );
+          }
         }
 
-        // [Change 2 — T96] Check if user has set a real username yet.
+        // ── Username interstitial ─────────────────────────────────────────
         // Auto-generated usernames start with "user_" (e.g. "user_bf07af8").
         const needsUsernameSetup =
           profile?.username?.startsWith("user_") ?? false;
         if (needsUsernameSetup) {
-          const welcomeUrl = `${origin}/welcome?next=${encodeURIComponent(next)}`;
-          return NextResponse.redirect(welcomeUrl);
+          return NextResponse.redirect(
+            `${origin}/welcome?next=${encodeURIComponent(next)}`,
+          );
         }
       }
 
-      // Verified user with real username — redirect to validated destination
       return NextResponse.redirect(`${origin}${next}`);
     }
 
@@ -100,7 +101,6 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Fallback: something went wrong — send to login with an error hint.
   return NextResponse.redirect(
     `${origin}/login?error=auth_callback_failed&next=${encodeURIComponent(next)}`,
   );

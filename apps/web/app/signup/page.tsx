@@ -5,9 +5,8 @@ import { useMemo, useState, useTransition, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { safeRedirect } from "@/lib/safe-redirect"; // [Change 1 — #35]
+import { safeRedirect } from "@/lib/safe-redirect";
 
-// Age calculation helper — inline, no date-fns
 function calculateAge(dob: string): number {
   const today = new Date();
   const birth = new Date(dob);
@@ -17,7 +16,6 @@ function calculateAge(dob: string): number {
   return age;
 }
 
-// Static month options.
 const MONTH_OPTIONS: { value: string; label: string }[] = [
   { value: "01", label: "Jan" },
   { value: "02", label: "Feb" },
@@ -43,11 +41,6 @@ function pad2(n: number): string {
 
 function SignupPageInner() {
   const searchParams = useSearchParams();
-
-  // [Change 2 — #35] Read and validate the optional `next` param so a
-  // logged-out user clicking an action button gets routed back to the
-  // page they came from after signup confirms. Validated to prevent
-  // open-redirect.
   const rawNext = searchParams.get("next");
   const next = safeRedirect(rawNext, "/");
 
@@ -129,13 +122,16 @@ function SignupPageInner() {
 
     startTransition(async () => {
       const supabase = createClient();
-      // [Change 3 — #35] Thread `next` through the email confirmation
-      // callback URL so the post-confirm landing respects the source page.
+      // [T96] Pass DOB as user metadata so the auth callback can save it
+      // to the profile and mark age_verified = true without a separate step.
       const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+          data: {
+            date_of_birth: dob,
+          },
         },
       });
 
@@ -151,19 +147,15 @@ function SignupPageInner() {
   async function handleGoogleSignup() {
     setError(null);
     const supabase = createClient();
-
-    // [Change 4 — #35] Thread `next` into Google OAuth callback URL.
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
-
     if (error) setError(error.message);
   }
 
-  // Email-sent confirmation screen
   if (success) {
     return (
       <div className="min-h-screen bg-slime-bg flex flex-col items-center justify-center px-5 py-12">
@@ -171,7 +163,6 @@ function SignupPageInner() {
           <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-slime-cyan/10 blur-3xl" />
           <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-slime-violet/15 blur-3xl" />
         </div>
-
         <div className="relative w-full max-w-sm text-center space-y-5">
           <div
             className="inline-flex items-center justify-center w-20 h-20 rounded-3xl shadow-glow-green"
@@ -239,7 +230,6 @@ function SignupPageInner() {
     );
   }
 
-  // Under-13 block screen
   if (isUnder13 && dob) {
     return (
       <div className="min-h-screen bg-slime-bg flex flex-col items-center justify-center px-5 py-12">
@@ -248,7 +238,6 @@ function SignupPageInner() {
           <div className="absolute -bottom-32 -left-32 w-96 h-96 rounded-full bg-slime-violet/15 blur-3xl" />
           <div className="absolute top-1/3 right-1/4 w-48 h-48 rounded-full bg-slime-cyan/8 blur-2xl" />
         </div>
-
         <div className="relative w-full max-w-sm">
           <div className="mb-8 text-center">
             <div
@@ -275,7 +264,6 @@ function SignupPageInner() {
               Thanks for your interest
             </h1>
           </div>
-
           <div
             className="rounded-3xl backdrop-blur-sm p-6 shadow-2xl space-y-5"
             style={{
@@ -310,7 +298,6 @@ function SignupPageInner() {
     );
   }
 
-  // Signup form
   return (
     <div className="min-h-screen bg-slime-bg flex flex-col items-center justify-center px-5 py-12">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
@@ -499,7 +486,6 @@ function SignupPageInner() {
                     ))}
                   </select>
                 </div>
-
                 <div className="flex-[2] min-w-0">
                   <label
                     htmlFor="dob-day"
@@ -529,7 +515,6 @@ function SignupPageInner() {
                     ))}
                   </select>
                 </div>
-
                 <div className="flex-[3] min-w-0">
                   <label
                     htmlFor="dob-year"
@@ -618,7 +603,7 @@ function SignupPageInner() {
                       d="M4 12a8 8 0 018-8v8H4z"
                     />
                   </svg>
-                  Creating account…
+                  Creating account...
                 </span>
               ) : (
                 "Create my account"
@@ -658,8 +643,6 @@ function SignupPageInner() {
   );
 }
 
-// [Change 5 — #35] Wrap inner component in Suspense per absolute rule 5
-// (useSearchParams requires a Suspense boundary).
 export default function SignupPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-slime-bg" />}>
