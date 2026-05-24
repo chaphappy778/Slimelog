@@ -218,3 +218,63 @@ export async function checkUsernameAvailable(
 
   return data === null;
 }
+
+// ─── T96: Onboarding-specific profile update ─────────────────────────────────
+
+type OnboardingProfileInput = {
+  username: string;
+  avatar_url?: string;
+};
+
+export async function updateOnboardingProfile(
+  input: OnboardingProfileInput,
+): Promise<UpdateProfileResult> {
+  if (!USERNAME_RE.test(input.username)) {
+    return {
+      success: false,
+      error:
+        "Invalid username: 3–20 characters, letters, numbers, and underscores only.",
+    };
+  }
+
+  const supabase = await getSupabaseServerClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return { success: false, error: "You must be logged in." };
+  }
+
+  // Uniqueness check
+  const { data: existing } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("username", input.username)
+    .neq("id", user.id)
+    .maybeSingle();
+
+  if (existing) {
+    return { success: false, error: "That username is already taken." };
+  }
+
+  const payload: Record<string, unknown> = {
+    username: input.username,
+    updated_at: new Date().toISOString(),
+  };
+  if (input.avatar_url) payload.avatar_url = input.avatar_url;
+
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update(payload)
+    .eq("id", user.id);
+
+  if (updateError) {
+    if (updateError.code === "23505") {
+      return { success: false, error: "That username is already taken." };
+    }
+    return { success: false, error: "Failed to save. Please try again." };
+  }
+
+  return { success: true };
+}

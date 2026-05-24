@@ -14,6 +14,10 @@
 // before being used in any redirect. Without this, a phishing link like
 //   /auth/callback?code=...&next=https://evil.com
 // would send the user off-site after auth.
+//
+// [Change 2 — T96] After age verify gate passes, check if user has a
+// real username. Auto-generated usernames (starting with "user_") redirect
+// to /welcome for the onboarding interstitial before the final destination.
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
@@ -53,7 +57,7 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      // Check age verification status for this user
+      // Check age verification status and username for this user
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -61,7 +65,7 @@ export async function GET(request: NextRequest) {
       if (user) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("age_verified, date_of_birth")
+          .select("age_verified, date_of_birth, username")
           .eq("id", user.id)
           .single();
 
@@ -75,9 +79,18 @@ export async function GET(request: NextRequest) {
           const ageVerifyUrl = `${origin}/age-verify?next=${encodeURIComponent(next)}`;
           return NextResponse.redirect(ageVerifyUrl);
         }
+
+        // [Change 2 — T96] Check if user has set a real username yet.
+        // Auto-generated usernames start with "user_" (e.g. "user_bf07af8").
+        const needsUsernameSetup =
+          profile?.username?.startsWith("user_") ?? false;
+        if (needsUsernameSetup) {
+          const welcomeUrl = `${origin}/welcome?next=${encodeURIComponent(next)}`;
+          return NextResponse.redirect(welcomeUrl);
+        }
       }
 
-      // Verified user — redirect to validated destination
+      // Verified user with real username — redirect to validated destination
       return NextResponse.redirect(`${origin}${next}`);
     }
 
