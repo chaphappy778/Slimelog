@@ -62,6 +62,18 @@ export async function GET(request: NextRequest) {
           .eq("id", user.id)
           .single();
 
+        // [T96-debug] Log profile state — remove after Vercel log verification
+        console.error(
+          "[T96-debug] profile:",
+          JSON.stringify({
+            username: profile?.username,
+            age_verified: profile?.age_verified,
+            date_of_birth: profile?.date_of_birth,
+            needsUsernameSetup: profile?.username?.startsWith("user_") ?? false,
+            dobFromMeta: user.user_metadata?.date_of_birth,
+          }),
+        );
+
         // ── Age verification ──────────────────────────────────────────────
         if (!profile?.age_verified || profile?.date_of_birth === null) {
           const dobFromMeta = user.user_metadata?.date_of_birth as
@@ -76,6 +88,21 @@ export async function GET(request: NextRequest) {
               .from("profiles")
               .update({ date_of_birth: dobFromMeta, age_verified: true })
               .eq("id", user.id);
+
+            // Re-fetch profile after update so username check uses fresh data
+            const { data: refreshedProfile } = await supabase
+              .from("profiles")
+              .select("username")
+              .eq("id", user.id)
+              .single();
+
+            if (refreshedProfile?.username?.startsWith("user_")) {
+              return NextResponse.redirect(
+                `${origin}/welcome?next=${encodeURIComponent(next)}`,
+              );
+            }
+
+            return NextResponse.redirect(`${origin}${next}`);
           } else {
             // Google OAuth: no DOB in metadata — send to age verify page.
             return NextResponse.redirect(
@@ -85,6 +112,7 @@ export async function GET(request: NextRequest) {
         }
 
         // ── Username interstitial ─────────────────────────────────────────
+        // Already age-verified path — username check on existing profile.
         // Auto-generated usernames start with "user_" (e.g. "user_bf07af8").
         const needsUsernameSetup =
           profile?.username?.startsWith("user_") ?? false;
