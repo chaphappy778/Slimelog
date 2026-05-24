@@ -185,7 +185,8 @@ function WelcomeInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const rawNext = searchParams.get("next");
-  const next = safeRedirect(rawNext, "/");
+  const resolvedNext = safeRedirect(rawNext, "/");
+  const next = resolvedNext === "/welcome" ? "/" : resolvedNext;
 
   const [step, setStep] = useState<1 | 2>(1);
   const [userId, setUserId] = useState<string | null>(null);
