@@ -5,8 +5,9 @@
 //
 // [T96] Email signup flow:
 //   DOB is collected on the signup page and passed as user_metadata.
-//   The callback reads it here, saves it to the profile, and marks
-//   age_verified = true — skipping the /age-verify page entirely.
+//   The callback reads it here, saves it to the profile via the admin
+//   client (bypasses RLS), and marks age_verified = true — skipping
+//   the /age-verify page entirely.
 //
 // [T96] Google OAuth flow:
 //   No DOB in metadata — still redirects to /age-verify as before.
@@ -18,6 +19,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 import { safeRedirect } from "@/lib/safe-redirect";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -68,8 +70,9 @@ export async function GET(request: NextRequest) {
 
           if (dobFromMeta) {
             // Email signup: DOB was collected on the signup page and stored
-            // in user metadata. Save it to the profile and mark verified.
-            await supabase
+            // in user metadata. Save it via admin client to bypass RLS.
+            const adminClient = createAdminClient();
+            await adminClient
               .from("profiles")
               .update({ date_of_birth: dobFromMeta, age_verified: true })
               .eq("id", user.id);
