@@ -57,10 +57,10 @@ interface ClaimDetail {
   rejection_reason: string | null;
   created_at: string;
   updated_at: string;
+  // [T59-fix] No profile joins on ClaimDetail — both claimant and reviewer
+  // are fetched via separate queries to avoid PostgREST failing the entire
+  // request when reviewed_by is NULL and an alias join is present.
   brands: BrandRow | BrandRow[] | null;
-  // [T59] switched from profiles_public to profiles for the claimant join
-  profiles: ClaimantProfile | ClaimantProfile[] | null;
-  reviewer: ReviewerProfile | ReviewerProfile[] | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -214,9 +214,9 @@ export default async function AdminBrandClaimReviewPage({
   const { id } = await params;
   const admin = createAdminClient();
 
-  // [T59] Fetch claim — switched profiles_public claimant join to profiles.
-  // The reviewer alias join (reviewer:profiles_public!brand_claims_reviewed_by_fkey)
-  // is unchanged — it uses an alias key, not profiles_public.
+  // [T59-fix] No profile joins on the main query — PostgREST fails the entire
+  // request when reviewed_by is NULL and an alias join is present. Brand join
+  // only; claimant and reviewer fetched in separate queries below.
   const { data: rawClaim } = await admin
     .from("brand_claims")
     .select(
@@ -224,9 +224,7 @@ export default async function AdminBrandClaimReviewPage({
        email_verified_at, document_storage_path, document_filename, document_uploaded_at,
        instagram_handle, additional_notes, reviewed_by, reviewed_at, rejection_reason,
        created_at, updated_at,
-       brands!brand_claims_brand_id_fkey ( id, name, slug, logo_url, website_url, owner_id, is_verified, verification_tier ),
-       profiles!brand_claims_user_id_fkey ( username, display_name, avatar_url ),
-       reviewer:profiles_public!brand_claims_reviewed_by_fkey ( username, display_name )`,
+       brands!brand_claims_brand_id_fkey ( id, name, slug, logo_url, website_url, owner_id, is_verified, verification_tier )`,
     )
     .eq("id", id)
     .maybeSingle();
@@ -237,19 +235,37 @@ export default async function AdminBrandClaimReviewPage({
 
   const claim = rawClaim as unknown as ClaimDetail;
   const brand = normaliseRelation(claim.brands);
-  // [T59] switched from claim.profiles_public to claim.profiles
-  const claimant = normaliseRelation(claim.profiles);
-  const reviewer = normaliseRelation(claim.reviewer);
 
   if (!brand) {
     notFound();
   }
 
-  // Claimant auth email (from auth.users — admin client can read this)
+  // Claimant auth email
   const { data: authUserData } = await admin.auth.admin.getUserById(
     claim.user_id,
   );
   const claimantAuthEmail = authUserData?.user?.email ?? null;
+
+  // Claimant profile — separate query from profiles so private-profile
+  // claimants resolve correctly in the admin queue.
+  const { data: claimantProfileData } = await admin
+    .from("profiles")
+    .select("username, display_name, avatar_url")
+    .eq("id", claim.user_id)
+    .maybeSingle();
+
+  const claimant: ClaimantProfile | null = claimantProfileData ?? null;
+
+  // Reviewer profile — separate query, only needed when reviewed_by is set.
+  let reviewer: ReviewerProfile | null = null;
+  if (claim.reviewed_by) {
+    const { data: reviewerData } = await admin
+      .from("profiles")
+      .select("username, display_name")
+      .eq("id", claim.reviewed_by)
+      .maybeSingle();
+    reviewer = reviewerData ?? null;
+  }
 
   // Competing claims count
   const { count: competingCount } = await admin
