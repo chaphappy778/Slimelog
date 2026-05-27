@@ -58,7 +58,8 @@ interface ClaimDetail {
   created_at: string;
   updated_at: string;
   brands: BrandRow | BrandRow[] | null;
-  profiles_public: ClaimantProfile | ClaimantProfile[] | null;
+  // [T59] switched from profiles_public to profiles for the claimant join
+  profiles: ClaimantProfile | ClaimantProfile[] | null;
   reviewer: ReviewerProfile | ReviewerProfile[] | null;
 }
 
@@ -213,7 +214,9 @@ export default async function AdminBrandClaimReviewPage({
   const { id } = await params;
   const admin = createAdminClient();
 
-  // Fetch claim with all joins
+  // [T59] Fetch claim — switched profiles_public claimant join to profiles.
+  // The reviewer alias join (reviewer:profiles_public!brand_claims_reviewed_by_fkey)
+  // is unchanged — it uses an alias key, not profiles_public.
   const { data: rawClaim } = await admin
     .from("brand_claims")
     .select(
@@ -222,7 +225,7 @@ export default async function AdminBrandClaimReviewPage({
        instagram_handle, additional_notes, reviewed_by, reviewed_at, rejection_reason,
        created_at, updated_at,
        brands!brand_claims_brand_id_fkey ( id, name, slug, logo_url, website_url, owner_id, is_verified, verification_tier ),
-       profiles_public!brand_claims_user_id_fkey ( username, display_name, avatar_url ),
+       profiles!brand_claims_user_id_fkey ( username, display_name, avatar_url ),
        reviewer:profiles_public!brand_claims_reviewed_by_fkey ( username, display_name )`,
     )
     .eq("id", id)
@@ -234,7 +237,8 @@ export default async function AdminBrandClaimReviewPage({
 
   const claim = rawClaim as unknown as ClaimDetail;
   const brand = normaliseRelation(claim.brands);
-  const claimant = normaliseRelation(claim.profiles_public);
+  // [T59] switched from claim.profiles_public to claim.profiles
+  const claimant = normaliseRelation(claim.profiles);
   const reviewer = normaliseRelation(claim.reviewer);
 
   if (!brand) {

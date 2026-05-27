@@ -5,11 +5,11 @@ import Link from "next/link";
 import type { BrandClaimStatus } from "@/lib/types";
 
 interface Props {
-  brandId: string;
   brandSlug: string;
   brandOwnerId: string | null;
   currentUserId: string | null;
   existingClaim: { id: string; status: BrandClaimStatus } | null;
+  canClaim: boolean;
 }
 
 export default function ClaimBrandButton({
@@ -17,7 +17,11 @@ export default function ClaimBrandButton({
   brandOwnerId,
   currentUserId,
   existingClaim,
+  canClaim,
 }: Props) {
+  // [T86] Server has determined this user is ineligible to claim any brand.
+  if (!canClaim) return null;
+
   // Logged-out users don't see a claim affordance at all.
   if (!currentUserId) return null;
 
@@ -92,7 +96,7 @@ function ClaimStatusBanner({
             href={`/brands/${brandSlug}/claim`}
             className="text-slime-accent font-semibold hover:underline"
           >
-            Resume claim →
+            Resume claim &rarr;
           </Link>
         </>
       );
@@ -117,7 +121,7 @@ function ClaimStatusBanner({
             href={`/brands/${brandSlug}/claim`}
             className="text-slime-accent font-semibold hover:underline"
           >
-            Submit new claim →
+            Submit new claim &rarr;
           </Link>
         </>
       );
@@ -132,7 +136,7 @@ function ClaimStatusBanner({
             href="mailto:support@slimelog.com"
             className="text-slime-accent font-semibold hover:underline"
           >
-            Contact support →
+            Contact support &rarr;
           </a>
         </>
       );

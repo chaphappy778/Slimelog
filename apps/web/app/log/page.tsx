@@ -4,6 +4,7 @@
 // removed scent text input, removed rating_scent from RATING_FIELDS,
 // removed color_description, SVG checkmark in StepIndicator
 // Updated: [scent_notes]
+// [T36] Added step-0 Cancel button
 
 import { useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -883,21 +884,21 @@ function LogPageInner() {
             </div>
           )}
 
-          {/* Navigation */}
+          {/* [T36] Navigation — Cancel on step 0, Back on steps 1–3, always visible */}
           <div className="flex gap-3 mt-8">
-            {step > 0 && (
-              <button
-                type="button"
-                onClick={() => setStep((s) => (s - 1) as Step)}
-                className="flex-1 py-3 rounded-xl text-sm font-semibold text-slime-muted transition"
-                style={{
-                  border: "1px solid rgba(45,10,78,0.6)",
-                  background: "rgba(45,10,78,0.2)",
-                }}
-              >
-                Back
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() =>
+                step === 0 ? router.back() : setStep((s) => (s - 1) as Step)
+              }
+              className="flex-1 py-3 rounded-xl text-sm font-semibold text-slime-muted transition"
+              style={{
+                border: "1px solid rgba(45,10,78,0.6)",
+                background: "rgba(45,10,78,0.2)",
+              }}
+            >
+              {step === 0 ? "Cancel" : "Back"}
+            </button>
 
             {step < 3 ? (
               <button

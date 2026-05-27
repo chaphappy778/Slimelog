@@ -36,7 +36,8 @@ interface ClaimRow {
         logo_url: string | null;
       }[]
     | null;
-  profiles_public:
+  // [T59] switched from profiles_public to profiles
+  profiles:
     | {
         username: string | null;
         display_name: string | null;
@@ -219,13 +220,13 @@ export default async function AdminBrandClaimsPage({
       .then((r) => r.count ?? 0),
   ]);
 
-  // Filtered list
+  // [T59] Filtered list — switched profiles_public join to profiles
   let listQuery = admin
     .from("brand_claims")
     .select(
       `id, brand_id, user_id, status, business_email, role, created_at,
        brands!brand_claims_brand_id_fkey ( id, name, slug, logo_url ),
-       profiles_public!brand_claims_user_id_fkey ( username, display_name, avatar_url )`,
+       profiles!brand_claims_user_id_fkey ( username, display_name, avatar_url )`,
     )
     .order("created_at", { ascending: false })
     .limit(100);
@@ -388,7 +389,8 @@ export default async function AdminBrandClaimsPage({
                   <tbody>
                     {claims.map((row, i) => {
                       const brand = normaliseRelation(row.brands);
-                      const profile = normaliseRelation(row.profiles_public);
+                      // [T59] switched from row.profiles_public to row.profiles
+                      const profile = normaliseRelation(row.profiles);
                       const brandInitial = (brand?.name ??
                         "?")[0].toUpperCase();
                       const isEven = i % 2 === 0;
@@ -505,7 +507,8 @@ export default async function AdminBrandClaimsPage({
             <div className="sm:hidden flex flex-col gap-3">
               {claims.map((row) => {
                 const brand = normaliseRelation(row.brands);
-                const profile = normaliseRelation(row.profiles_public);
+                // [T59] switched from row.profiles_public to row.profiles
+                const profile = normaliseRelation(row.profiles);
                 const brandInitial = (brand?.name ?? "?")[0].toUpperCase();
                 return (
                   <Link
@@ -568,7 +571,7 @@ export default async function AdminBrandClaimsPage({
                       </span>
                       <span style={{ color: "#888888" }}>
                         {" "}
-                        · {relativeTime(row.created_at)}
+                        &middot; {relativeTime(row.created_at)}
                       </span>
                     </p>
 
@@ -577,7 +580,7 @@ export default async function AdminBrandClaimsPage({
                       <span style={{ color: "#888888" }}>
                         {row.business_email}
                       </span>
-                      <span style={{ color: "#888888" }}> · </span>
+                      <span style={{ color: "#888888" }}> &middot; </span>
                       <span style={{ color: "#FFFFFF" }}>
                         {BRAND_CLAIM_ROLE_LABELS[row.role] ?? row.role}
                       </span>

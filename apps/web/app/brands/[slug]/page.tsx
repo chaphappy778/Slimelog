@@ -3,6 +3,7 @@
 // updated UpcomingDrop interface, removed catalog query/section, updated drops
 // query, hero banner upgrade (200px), -mt-12 logo offset, catalog pill,
 // section reorder, DropCard replacement
+// [T86] Added canClaim server-side computation
 
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -18,6 +19,7 @@ import BannerLightbox from "./components/BannerLightbox";
 import DropCard from "./components/DropCard";
 import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
 import type { Brand, SlimeBaseType, BrandClaimStatus } from "@/lib/types";
+import { validateBusinessEmail } from "@/lib/brand-claims";
 
 // ─── Local interfaces ─────────────────────────────────────────────────────────
 
@@ -219,6 +221,27 @@ export default async function BrandPage({
         id: claimRow.id as string,
         status: claimRow.status as BrandClaimStatus,
       };
+    }
+  }
+
+  // [T86] Determine whether the claim CTA should be shown at all.
+  // Rules (all must pass for canClaim = true):
+  //   1. User is logged in
+  //   2. Brand is not already owned (brandOwnerId check is handled inside ClaimBrandButton, keep it)
+  //   3. User's account email is not a freemail/consumer domain
+  //   4. User has no approved claim anywhere in the system
+  let canClaim = false;
+  if (user) {
+    const userEmail = user.email ?? "";
+    const emailCheck = validateBusinessEmail(userEmail);
+    if (emailCheck.valid) {
+      // Check for any existing approved claim by this user across all brands
+      const { count: approvedCount } = await supabase
+        .from("brand_claims")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("status", "approved");
+      canClaim = (approvedCount ?? 0) === 0;
     }
   }
 
@@ -651,11 +674,11 @@ export default async function BrandPage({
           {/* Claim button */}
           <div className="mt-4">
             <ClaimBrandButton
-              brandId={brand.id}
               brandSlug={brand.slug}
               brandOwnerId={brand.owner_id}
               currentUserId={user?.id ?? null}
               existingClaim={latestClaim}
+              canClaim={canClaim}
             />
           </div>
 
