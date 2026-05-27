@@ -306,13 +306,13 @@ export default function SlimeMenu() {
 
             <NavSection title="Learn">
               <NavItem
-                href="/guide"
+                href="/slime-types"
                 icon={<BookOpen className="w-5 h-5" />}
                 label="Slime Type Guide"
                 onClose={handleClose}
               />
               <NavItem
-                href="/guide#rating"
+                href="/slime-types"
                 icon={<Star className="w-5 h-5" />}
                 label="How to Rate a Slime"
                 onClose={handleClose}
