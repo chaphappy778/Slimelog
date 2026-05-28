@@ -16,6 +16,7 @@ import {
   Star,
   Menu,
   ChevronRight,
+  Shield,
 } from "lucide-react";
 
 // [T13] Module-level Supabase client — absolute rule: never instantiate
@@ -145,6 +146,7 @@ export default function SlimeMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const pathname = usePathname();
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -158,6 +160,10 @@ export default function SlimeMenu() {
       if (!user) {
         setLoading(false);
         return;
+      }
+      // Check admin status against the env var
+      if (user.email && user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
+        setIsAdmin(true);
       }
       const { data } = await supabase
         .from("profiles")
@@ -318,6 +324,21 @@ export default function SlimeMenu() {
                 onClose={handleClose}
               />
             </NavSection>
+
+            {/* Admin section — only visible to admin account */}
+            {isAdmin && (
+              <>
+                <Divider />
+                <NavSection title="Admin">
+                  <NavItem
+                    href="/admin"
+                    icon={<Shield className="w-5 h-5" />}
+                    label="Control Panel"
+                    onClose={handleClose}
+                  />
+                </NavSection>
+              </>
+            )}
 
             <div className="flex-1" />
             <div className="pb-8 px-4">
