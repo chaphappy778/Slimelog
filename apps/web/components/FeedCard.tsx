@@ -42,7 +42,6 @@ interface FeedCardProps {
 
 // ─── Relative time helper ─────────────────────────────────────────────────────
 // [Change F5] Inline replacement for date-fns formatDistanceToNow.
-// Same shape as the helper used in app/users/[username]/page.tsx.
 
 function formatRelativeTime(isoString: string): string {
   const diffMs = Date.now() - new Date(isoString).getTime();
@@ -60,9 +59,7 @@ function formatRelativeTime(isoString: string): string {
 
 // ─── Type badge palette ───────────────────────────────────────────────────────
 
-// [Change F2] Tailwind class-pair map keyed on SlimeBaseType (compile-time
-// guard against taxonomy drift). 20 base types from the post-G1 enum.
-// `thermochromic` removed (now a subtype under `clear`).
+// [Change F2] Tailwind class-pair map keyed on SlimeBaseType.
 const TYPE_STYLE: Record<
   SlimeBaseType,
   { bg: string; text: string; label: string }
@@ -166,28 +163,49 @@ function getSwatchColor(colorName: string): string {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
+// [Change 1 — T98b] Replaced integer star fill with fill bar + toFixed(1)
 function Stars({ rating }: { rating: number | null }) {
   if (!rating)
     return <span className="text-xs text-slime-muted">No rating</span>;
+  const pct = (rating / 5) * 100;
   return (
     <span
-      className="flex items-center gap-0.5"
-      aria-label={`${rating} out of 5`}
+      className="flex items-center gap-2"
+      aria-label={`${rating.toFixed(1)} out of 5`}
     >
-      {[1, 2, 3, 4, 5].map((n) => (
-        <svg
-          key={n}
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill={n <= rating ? "#39FF14" : "rgba(57,255,20,0.15)"}
-          aria-hidden="true"
-        >
-          <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
-        </svg>
-      ))}
-      <span className="ml-1.5 text-xs text-slime-muted font-medium">
-        {rating}/5
+      <div
+        style={{
+          width: 64,
+          height: 5,
+          borderRadius: 3,
+          background: "rgba(45,10,78,0.5)",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: `${pct}%`,
+            background:
+              pct > 80
+                ? "#39FF14"
+                : pct > 50
+                  ? "#00F0FF"
+                  : "rgba(100,50,200,0.9)",
+            borderRadius: 3,
+            transition: "width 0.2s ease",
+          }}
+        />
+      </div>
+      <span
+        className="text-xs font-bold tabular-nums"
+        style={{ color: "#39FF14" }}
+      >
+        {rating.toFixed(1)}/5
       </span>
     </span>
   );
@@ -272,8 +290,7 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
 // ─── CollectionLog builder ────────────────────────────────────────────────────
 
 function buildCollectionLog(log: FeedCardLog): CollectionLog {
-  // [Change F4] base_type + subtype_id replace slime_type. We don't have
-  // a subtype_id on the feed card data; pass null.
+  // [Change F4] base_type + subtype_id replace slime_type.
   return {
     id: log.id,
     user_id: log.actor_id,
@@ -343,15 +360,13 @@ export default function FeedCard({
   return (
     <>
       {/* ── Card ──
-          [Change 2] onClick only wired when not a wishlist card.
-          Wishlist cards are display-only — no detail overlay. */}
+          [Change 2] onClick only wired when not a wishlist card. */}
       <article
         className="relative w-full max-w-lg mx-auto rounded-2xl overflow-hidden flex flex-col"
         style={{
           minHeight: "auto",
           background: "rgba(45,10,78,0.25)",
           border: "1px solid rgba(45,10,78,0.7)",
-          // [Change 2] cursor: default for wishlist cards, pointer for logged cards
           cursor: isWishlist ? "default" : "pointer",
         }}
         onClick={isWishlist ? undefined : openDetail}
@@ -377,7 +392,6 @@ export default function FeedCard({
               <Link
                 href={`/users/${log.username}`}
                 className="text-sm font-semibold hover:text-slime-accent transition-colors"
-                // [Change 2] Wishlist cards use magenta-purple for username accent
                 style={{ color: isWishlist ? "#CC44FF" : "#FF00E5" }}
               >
                 @{log.username}
@@ -435,7 +449,6 @@ export default function FeedCard({
                   <Link
                     href={`/brands/${brandSlug}`}
                     className="text-sm font-medium hover:text-slime-accent transition-colors"
-                    // [Change 2] Brand name uses #CC44FF for wishlist cards, #00F0FF for logged
                     style={{ color: isWishlist ? "#CC44FF" : "#00F0FF" }}
                     onClick={(e) => e.stopPropagation()}
                   >
@@ -539,8 +552,7 @@ export default function FeedCard({
         </div>
 
         {/* ── Card footer ──
-            [Change 2] Wishlist cards: no "View Full Review" button.
-            Show muted "No review yet" text instead. */}
+            [Change 2] Wishlist cards: no "View Full Review" button. */}
         <div className="px-4 pb-4 pt-1 shrink-0">
           {isWishlist ? (
             <p className="text-center text-xs text-slime-muted py-2">
@@ -562,10 +574,7 @@ export default function FeedCard({
       </article>
 
       {/* ── Level 2: Full-screen detail overlay ──
-          [Change 2] Only mounted for non-wishlist cards
-          [Change 1 — T30] Pass ownerUsername and ownerAvatarUrl through so the
-          detail overlay can surface the log creator at the top of the info
-          card body. */}
+          [Change 2] Only mounted for non-wishlist cards */}
       {showDetail && !isWishlist && (
         <SlimeDetailCard
           log={buildCollectionLog(log)}

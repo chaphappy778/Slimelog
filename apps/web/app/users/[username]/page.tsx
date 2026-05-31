@@ -760,7 +760,7 @@ export default async function UserPage({
                           color: "#39FF14",
                         }}
                       >
-                        {log.rating_overall}/5
+                        {(log.rating_overall as number).toFixed(1)}/5
                       </span>
                     )}
                   </div>

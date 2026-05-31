@@ -59,7 +59,6 @@ function StackCard({
         background: "#0F0018",
         border: "1px solid rgba(45,10,78,0.85)",
         overflow: "hidden",
-        // All cards non-interactive — tap target overlay handles cycling
         pointerEvents: "none",
       }}
     >
@@ -86,7 +85,7 @@ function StackCard({
               "linear-gradient(to bottom, transparent 50%, rgba(10,0,20,0.65) 100%)",
           }}
         />
-        {/* View button — front card only, pointer events restored just for this */}
+        {/* View button — front card only */}
         {isFront && (
           <Link
             href={`/slimes/${log.id}`}
@@ -124,26 +123,36 @@ function StackCard({
         </p>
         <div className="flex items-center justify-between gap-2 mt-0.5">
           {log.rating_overall != null && (
+            // [Change 1 — T98b] Replace integer star row with fill bar + toFixed(1)
             <div
-              className="flex items-center gap-0.5"
-              aria-label={`Rating: ${rating} out of 5`}
+              className="flex items-center gap-1.5"
+              aria-label={`Rating: ${log.rating_overall?.toFixed(1)} out of 5`}
             >
-              {Array.from({ length: 5 }).map((_, i) => (
-                <svg
-                  key={i}
-                  width="11"
-                  height="11"
-                  viewBox="0 0 24 24"
-                  fill={i < rating ? "#39FF14" : "none"}
-                  stroke={i < rating ? "#39FF14" : "rgba(255,255,255,0.2)"}
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-              ))}
+              <div
+                style={{
+                  width: 40,
+                  height: 3,
+                  borderRadius: 2,
+                  background: "rgba(45,10,78,0.5)",
+                  position: "relative",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: `${((log.rating_overall ?? 0) / 5) * 100}%`,
+                    background: "#39FF14",
+                    borderRadius: 2,
+                  }}
+                />
+              </div>
+              <span style={{ fontSize: 10, fontWeight: 700, color: "#39FF14" }}>
+                {log.rating_overall?.toFixed(1)}
+              </span>
             </div>
           )}
           {typeLabel && (
@@ -205,9 +214,7 @@ export default function StackedSlimes({ featuredLogs }: Props) {
           );
         })}
 
-        {/* Single invisible tap target that covers the whole stack.
-            Sits above all cards. Tapping anywhere on the stack advances
-            to the next card. The View Link sits above this via z-index. */}
+        {/* Single invisible tap target that covers the whole stack. */}
         {count > 1 && (
           <button
             type="button"
@@ -221,14 +228,11 @@ export default function StackedSlimes({ featuredLogs }: Props) {
               border: "none",
               cursor: "pointer",
               WebkitTapHighlightColor: "transparent",
-              // Leave a cutout at the bottom-right for the View link
-              // by not covering that region — handled by View link's own z-index
             }}
           />
         )}
 
-        {/* View link for front card — rendered outside cards so it sits
-            above the tap overlay at z-index 60 */}
+        {/* View link for front card — sits above tap overlay at z-index 60 */}
         {count > 0 && orderedLogs[0] && (
           <Link
             href={`/slimes/${orderedLogs[0].id}`}

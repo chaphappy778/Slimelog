@@ -19,10 +19,7 @@ const PAD_RIGHT = 24;
 const PAD_TOP = 24;
 const PAD_BOTTOM = 48;
 
-// [Change TV1] Local palette kept for canvas dot fills (saturated hex
-// values for legible chart rendering vs the bg/text pair the badge map
-// provides). Typed Record<SlimeBaseType, string> to catch taxonomy drift
-// at compile time. All 20 base types present; `thermochromic` removed.
+// [Change TV1] Local palette kept for canvas dot fills.
 const TYPE_COLORS: Record<SlimeBaseType, string> = {
   avalanche: "#3498DB",
   beaded: "#FF00E5",
@@ -227,7 +224,8 @@ export default function TimelineView({ logs, likeData, currentUserId }: Props) {
       const yRatio = (i + 1) / maxCount;
       const x = PAD_LEFT + xRatio * plotW;
       const y = PAD_TOP + plotH * (1 - yRatio * 0.8);
-      const isFiveStar = log.rating_overall === 5;
+      // [Change 1 — T98b] >= 4.75 instead of === 5 for decimal rating support
+      const isFiveStar = (log.rating_overall ?? 0) >= 4.75;
       const r = isFiveStar ? 8 : 5;
       allPositions.push({ x, y, r, log });
     });
@@ -270,7 +268,8 @@ export default function TimelineView({ logs, likeData, currentUserId }: Props) {
     // Draw dots
     visiblePositions.forEach(({ x, y, r, log }, i) => {
       const color = getBlobColor(log);
-      const isFiveStar = log.rating_overall === 5;
+      // [Change 1 — T98b] >= 4.75 instead of === 5 for decimal rating support
+      const isFiveStar = (log.rating_overall ?? 0) >= 4.75;
 
       if (isFiveStar) {
         ctx.beginPath();

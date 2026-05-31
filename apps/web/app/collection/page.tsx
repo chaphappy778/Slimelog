@@ -29,17 +29,40 @@ function formatDate(iso: string) {
   }).format(new Date(iso));
 }
 
+// [Change 1 — T98b] Replaced integer dot fill with fill bar
 function RatingDots({ value }: { value: number | null }) {
-  if (!value) return <span className="text-slime-muted text-xs">—</span>;
+  if (value == null) return <span className="text-slime-muted text-xs">—</span>;
+  const pct = (value / 5) * 100;
   return (
-    <span className="flex gap-0.5">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <span
-          key={i}
-          className={`w-1.5 h-1.5 rounded-full ${i <= value ? "bg-slime-accent" : "bg-slime-border"}`}
+    <div style={{ display: "flex", alignItems: "center", gap: 4, width: 48 }}>
+      <div
+        style={{
+          flex: 1,
+          height: 4,
+          borderRadius: 2,
+          background: "rgba(45,10,78,0.5)",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: `${pct}%`,
+            background:
+              pct > 80
+                ? "#39FF14"
+                : pct > 50
+                  ? "#00F0FF"
+                  : "rgba(100,50,200,0.9)",
+            borderRadius: 2,
+          }}
         />
-      ))}
-    </span>
+      </div>
+    </div>
   );
 }
 
@@ -153,8 +176,9 @@ function SlimeCard({ log }: { log: CollectionLog }) {
                   </span>
                   <div className="flex items-center gap-1.5">
                     <RatingDots value={log.rating_overall} />
+                    {/* [Change 2 — T98b] Show one decimal place */}
                     <span className="text-xs font-bold text-slime-cyan">
-                      {log.rating_overall}/5
+                      {(log.rating_overall as number).toFixed(1)}/5
                     </span>
                   </div>
                 </div>

@@ -78,9 +78,10 @@ export async function generateMetadata({
 
   const slimeName = log.slime_name ?? "Unnamed slime";
   const brandPart = log.brand_name_raw ? ` from ${log.brand_name_raw}` : "";
+  // [Change 1 — T98b] toFixed(1) on metadata rating string
   const ratingPart =
     typeof log.rating_overall === "number"
-      ? ` — rated ${log.rating_overall}/5`
+      ? ` — rated ${(log.rating_overall as number).toFixed(1)}/5`
       : "";
 
   const title = `${slimeName}${brandPart}${ratingPart} — SlimeLog`;
@@ -367,6 +368,7 @@ export default async function SlimePage({
           {/* Overall rating */}
           {typeof log.rating_overall === "number" && (
             <div className="flex items-center gap-4 mt-1">
+              {/* [Change 2 — T98b] toFixed(1) on large rating number */}
               <span
                 className="text-5xl font-black leading-none"
                 style={{
@@ -374,26 +376,31 @@ export default async function SlimePage({
                   fontFamily: "Montserrat, Inter, sans-serif",
                 }}
               >
-                {log.rating_overall}
+                {(log.rating_overall as number).toFixed(1)}
               </span>
               <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-0.5">
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <svg
-                      key={n}
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill={
-                        n <= (log.rating_overall ?? 0)
-                          ? "#39FF14"
-                          : "rgba(57,255,20,0.15)"
-                      }
-                      aria-hidden="true"
-                    >
-                      <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
-                    </svg>
-                  ))}
+                {/* [Change 3 — T98b] Replace star row with gradient fill bar */}
+                <div
+                  style={{
+                    width: 90,
+                    height: 6,
+                    borderRadius: 3,
+                    background: "rgba(45,10,78,0.5)",
+                    position: "relative",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: `${((log.rating_overall ?? 0) / 5) * 100}%`,
+                      background: "linear-gradient(90deg, #00F0FF, #39FF14)",
+                      borderRadius: 3,
+                    }}
+                  />
                 </div>
                 <span className="text-xs text-slime-muted uppercase tracking-wider">
                   overall rating
@@ -468,7 +475,7 @@ export default async function SlimePage({
             )}
           </div>
 
-          {/* [Change 4 — scent_notes] Dimension grid — 5 numeric dims + scent strength as 6th item */}
+          {/* [Change 4 — T98b + scent_notes] Dimension grid — fill bars + toFixed(1) */}
           {(activeDimensions.length > 0 || log.scent_strength) && (
             <div
               className="grid grid-cols-2 gap-x-4 gap-y-2.5 p-4 rounded-xl border"
@@ -482,24 +489,35 @@ export default async function SlimePage({
                   <span className="text-[10px] uppercase tracking-wider text-slime-muted font-semibold">
                     {label}
                   </span>
-                  <div className="flex items-center gap-1.5">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                      <span
-                        key={i}
-                        className="w-2 h-2 rounded-full"
+                  {/* [Change 4 — T98b] Replace dot row with fill bar + toFixed(1) */}
+                  <div className="flex items-center gap-2">
+                    <div
+                      style={{
+                        width: 48,
+                        height: 4,
+                        borderRadius: 2,
+                        background: "rgba(45,10,78,0.5)",
+                        position: "relative",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
                         style={{
-                          background:
-                            i <= (log[key] as number)
-                              ? "#39FF14"
-                              : "rgba(57,255,20,0.15)",
+                          position: "absolute",
+                          left: 0,
+                          top: 0,
+                          bottom: 0,
+                          width: `${((log[key] as number) / 5) * 100}%`,
+                          background: "#39FF14",
+                          borderRadius: 2,
                         }}
                       />
-                    ))}
+                    </div>
                     <span
-                      className="text-xs font-bold ml-1"
+                      className="text-xs font-bold"
                       style={{ color: "#39FF14" }}
                     >
-                      {log[key] as number}
+                      {(log[key] as number).toFixed(1)}
                     </span>
                   </div>
                 </div>
