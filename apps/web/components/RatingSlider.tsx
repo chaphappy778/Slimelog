@@ -8,6 +8,17 @@ interface RatingSliderProps {
   isOverall?: boolean;
 }
 
+// Snap a raw float to the nearest 0.25 step
+function snapTo25(raw: number): number {
+  return Math.round(raw * 4) / 4;
+}
+
+// Display helper: drop trailing zeros, never show ".0" on whole numbers
+// 5.0 → "5", 3.5 → "3.5", 2.75 → "2.75"
+function formatRating(val: number): string {
+  return parseFloat(val.toFixed(2)).toString();
+}
+
 export function RatingSlider({
   label,
   value,
@@ -16,11 +27,8 @@ export function RatingSlider({
 }: RatingSliderProps) {
   const pct = value !== null ? (value / 5) * 100 : 0;
 
-  // Gradient fill: #2D0A4E at 0%, #00F0FF at 50%, #39FF14 at 100%
   const fillGradient = `linear-gradient(90deg, #2D0A4E 0%, #00F0FF 50%, #39FF14 100%)`;
 
-  // Clip the gradient to the filled portion by using a solid color trick:
-  // We render a full-width gradient div, then clip it via a wrapper with overflow hidden
   const TICKS = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
 
   return (
@@ -61,7 +69,7 @@ export function RatingSlider({
             textAlign: "right",
           }}
         >
-          {value !== null ? value.toFixed(1) : "\u2014"}
+          {value !== null ? formatRating(value) : "\u2014"}
         </span>
       </div>
 
@@ -120,14 +128,14 @@ export function RatingSlider({
           }}
         />
 
-        {/* Native range input — transparent overlay for interaction */}
+        {/* Native range input — snap to 0.25 on change */}
         <input
           type="range"
           min={0}
           max={5}
           step={0.25}
           value={value ?? 0}
-          onChange={(e) => onChange(parseFloat(e.target.value))}
+          onChange={(e) => onChange(snapTo25(parseFloat(e.target.value)))}
           style={{
             position: "absolute",
             inset: 0,

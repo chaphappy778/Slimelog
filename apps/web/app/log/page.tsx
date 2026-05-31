@@ -625,7 +625,7 @@ function LogPageInner() {
               <Field
                 label="Keywords"
                 optional
-                hint="Tag your slime \u2014 up to 10 keywords"
+                hint="Tag your slime — up to 10 keywords"
               >
                 <KeywordTagInput
                   value={form.keywords}
