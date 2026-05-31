@@ -833,7 +833,10 @@ function LogPageInner() {
                   <p>
                     Overall:{" "}
                     <span className="text-slime-accent font-bold">
-                      {form.rating_overall?.toFixed(1)}/5
+                      {form.rating_overall !== null
+                        ? parseFloat(form.rating_overall.toFixed(2)).toString()
+                        : ""}
+                      /5
                     </span>
                   </p>
                 )}
