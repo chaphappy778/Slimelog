@@ -137,7 +137,8 @@ function CandidateRow({
 
       {log.rating_overall != null && (
         <p className="text-xs font-bold text-slime-cyan shrink-0 tabular-nums">
-          {log.rating_overall}/5
+          {/* [Change 1 — T98b] toFixed(1) for decimal rating display */}
+          {(log.rating_overall as number).toFixed(1)}/5
         </p>
       )}
 
@@ -234,8 +235,6 @@ export default function ProfileFeaturedEditor({
           Done
         </button>
       </div>
-
-      {/* [Change 1] Error state removed — replaced by toast. No inline error div. */}
 
       {allLogs.length === 0 ? (
         <div className="py-8 text-center text-slime-muted text-sm">
