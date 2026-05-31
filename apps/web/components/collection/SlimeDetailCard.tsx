@@ -72,44 +72,79 @@ function getSwatchColor(colorName: string): string {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
+// [Change 1 — T98] RatingDots replaced with fill-bar version
 function RatingDots({ value }: { value: number | null | undefined }) {
   if (value == null) return null;
+  const pct = (value / 5) * 100;
   return (
-    <div style={{ display: "flex", gap: 3 }}>
-      {[1, 2, 3, 4, 5].map((i) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
+      <div
+        style={{
+          flex: 1,
+          height: 4,
+          borderRadius: 2,
+          background: "rgba(45,10,78,0.5)",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
         <div
-          key={i}
           style={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            background: i <= value ? "#39FF14" : "rgba(57,255,20,0.15)",
+            position: "absolute",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: `${pct}%`,
+            background:
+              pct > 80
+                ? "#39FF14"
+                : pct > 50
+                  ? "#00F0FF"
+                  : "rgba(45,10,78,0.9)",
+            borderRadius: 2,
+            transition: "width 0.3s ease",
           }}
         />
-      ))}
+      </div>
     </div>
   );
 }
 
+// [Change 2 — T98] StarRow replaced with numeric fill-bar version
 function StarRow({ rating }: { rating: number }) {
+  const pct = (rating / 5) * 100;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-      {[1, 2, 3, 4, 5].map((n) => (
-        <svg
-          key={n}
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill={n <= rating ? "#39FF14" : "rgba(57,255,20,0.15)"}
-          aria-hidden="true"
-        >
-          <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
-        </svg>
-      ))}
-      <span
-        style={{ fontSize: 14, color: "rgba(255,255,255,0.45)", marginLeft: 6 }}
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div
+        style={{
+          width: 80,
+          height: 6,
+          borderRadius: 3,
+          background: "rgba(45,10,78,0.5)",
+          position: "relative",
+          overflow: "hidden",
+        }}
       >
-        {rating}/5
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: `${pct}%`,
+            background: "linear-gradient(90deg, #00F0FF, #39FF14)",
+            borderRadius: 3,
+          }}
+        />
+      </div>
+      <span
+        style={{
+          fontSize: 14,
+          color: "rgba(255,255,255,0.45)",
+          fontWeight: 500,
+        }}
+      >
+        {rating.toFixed(1)}/5
       </span>
     </div>
   );
@@ -799,7 +834,8 @@ export default function SlimeDetailCard({
                   fontFamily: "Montserrat, Inter, sans-serif",
                 }}
               >
-                {log.rating_overall}
+                {/* [Change 4 — T98] toFixed(1) */}
+                {log.rating_overall.toFixed(1)}
               </span>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 <StarRow rating={log.rating_overall} />
@@ -947,6 +983,7 @@ export default function SlimeDetailCard({
                     style={{ display: "flex", alignItems: "center", gap: 6 }}
                   >
                     <RatingDots value={log[key] as number} />
+                    {/* [Change 3 — T98] toFixed(1) */}
                     <span
                       style={{
                         fontSize: 12,
@@ -954,7 +991,7 @@ export default function SlimeDetailCard({
                         fontWeight: 700,
                       }}
                     >
-                      {log[key] as number}
+                      {(log[key] as number).toFixed(1)}
                     </span>
                   </div>
                 </div>
@@ -978,6 +1015,7 @@ export default function SlimeDetailCard({
           )}
 
           {/* Meta row */}
+          {/* [Change 5 — T98 / cost_paid fix] use purchase_price */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {log.created_at && (
               <span
@@ -997,7 +1035,7 @@ export default function SlimeDetailCard({
                 }).format(new Date(log.created_at))}
               </span>
             )}
-            {typeof log.cost_paid === "number" && (
+            {typeof log.purchase_price === "number" && (
               <span
                 style={{
                   padding: "4px 10px",
@@ -1010,7 +1048,7 @@ export default function SlimeDetailCard({
                 {new Intl.NumberFormat("en-US", {
                   style: "currency",
                   currency: "USD",
-                }).format(log.cost_paid)}
+                }).format(log.purchase_price)}
               </span>
             )}
             {log.purchased_from && (

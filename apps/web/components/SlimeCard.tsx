@@ -214,8 +214,9 @@ export function LogCard({
               >
                 <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
               </svg>
+              {/* [Change 2 — T98] toFixed(1) */}
               <span className="text-sm font-black text-pink-600">
-                {log.rating_overall}/5
+                {(log.rating_overall as number).toFixed(1)}/5
               </span>
             </div>
           )}
@@ -223,10 +224,11 @@ export function LogCard({
 
         {log.rating_overall && (
           <div className="flex gap-1 my-2">
+            {/* [Change 1 — T98] "Drizzle" renamed to "Aesthetic" */}
             {[
               { label: "Texture", val: log.rating_texture },
               { label: "Sound", val: log.rating_sound },
-              { label: "Drizzle", val: log.rating_drizzle },
+              { label: "Aesthetic", val: log.rating_drizzle },
             ].map(({ label, val }) =>
               val ? (
                 <div key={label} className="flex-1 text-center">

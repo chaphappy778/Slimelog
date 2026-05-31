@@ -5,6 +5,7 @@
 // removed color_description, SVG checkmark in StepIndicator
 // Updated: [scent_notes]
 // [T36] Added step-0 Cancel button
+// [T98] Replace StarRating with RatingSlider (0.0–5.0, step 0.25)
 
 import { useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -19,6 +20,8 @@ import FloatingPills from "@/components/FloatingPills";
 import BrandSearchInput from "@/components/BrandSearchInput";
 import SubtypeAutocomplete from "@/components/SubtypeAutocomplete";
 import { KeywordTagInput } from "@/components/KeywordTagInput";
+// [Change 2 — T98]
+import { RatingSlider } from "@/components/RatingSlider";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -95,49 +98,6 @@ interface FormState {
 
 function buildColorsArray(selectedValues: string[]): string[] | undefined {
   return selectedValues.length > 0 ? selectedValues : undefined;
-}
-
-// ─── Star Rating ──────────────────────────────────────────────────────────────
-
-function StarRating({
-  value,
-  onChange,
-  label,
-}: {
-  value: number | null;
-  onChange: (v: number) => void;
-  label: string;
-}) {
-  const [hovered, setHovered] = useState<number | null>(null);
-  return (
-    <div
-      className="flex items-center justify-between py-3 border-b last:border-0"
-      style={{ borderColor: "rgba(45,10,78,0.5)" }}
-    >
-      <span className="flex items-center gap-2 text-sm font-medium text-slime-text">
-        {label}
-      </span>
-      <div className="flex gap-1">
-        {[1, 2, 3, 4, 5].map((star) => {
-          const filled =
-            hovered !== null ? star <= hovered : star <= (value ?? 0);
-          return (
-            <button
-              key={star}
-              type="button"
-              onClick={() => onChange(star)}
-              onMouseEnter={() => setHovered(star)}
-              onMouseLeave={() => setHovered(null)}
-              className={`w-8 h-8 rounded-full text-lg transition-all duration-100 ${filled ? "text-slime-accent scale-110" : "text-slime-muted hover:text-slime-accent"}`}
-              aria-label={`${star} star`}
-            >
-              {filled ? "\u25cf" : "\u25cb"}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
 }
 
 // ─── Step Indicator ───────────────────────────────────────────────────────────
@@ -677,17 +637,19 @@ function LogPageInner() {
           )}
 
           {/* ── Step 2: Ratings ── */}
+          {/* [Change 3 — T98] Replace StarRating with RatingSlider */}
           {step === 2 && (
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-0">
               <h2 className="text-lg font-bold text-slime-cyan mb-3">
                 Rate it
               </h2>
               {RATING_FIELDS.map(({ key, label }) => (
-                <StarRating
+                <RatingSlider
                   key={key}
+                  label={label}
                   value={form[key] as number | null}
                   onChange={(v) => set(key, v)}
-                  label={label}
+                  isOverall={key === "rating_overall"}
                 />
               ))}
             </div>
@@ -866,11 +828,12 @@ function LogPageInner() {
                     </span>
                   </p>
                 )}
-                {form.rating_overall && (
+                {/* [Change 4 — T98] toFixed(1) display */}
+                {form.rating_overall !== null && (
                   <p>
                     Overall:{" "}
                     <span className="text-slime-accent font-bold">
-                      {form.rating_overall}/5
+                      {form.rating_overall?.toFixed(1)}/5
                     </span>
                   </p>
                 )}

@@ -4,6 +4,7 @@
 // user_id is read from the validated session — never trusted from the client.
 // Updated: Bundle T72+T73+T75 — keywords + scent_strength added; scent + rating_scent removed
 // Updated: [scent_notes] + [T64] purchase_price fix
+// Updated: [T98] rating columns now numeric 0–5 in 0.25 increments
 
 "use server";
 
@@ -32,7 +33,7 @@ export interface LogSlimeInput {
   in_wishlist?: boolean;
   is_public?: boolean;
 
-  // Ratings — all optional, smallint 1–5
+  // [Change 2 — T98] Ratings — all optional, numeric 0–5 in 0.25 increments
   rating_texture?: number;
   rating_sound?: number;
   rating_drizzle?: number;
@@ -75,7 +76,7 @@ export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
   const userId = await requireAuthUserId();
   const supabase = await createClient();
 
-  // Validate ratings are in range 1–5 if provided
+  // [Change 1 — T98] Validate ratings are 0–5 in 0.25 increments
   const ratingFields = [
     "rating_texture",
     "rating_sound",
@@ -87,8 +88,11 @@ export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
 
   for (const field of ratingFields) {
     const val = input[field];
-    if (val !== undefined && (val < 1 || val > 5 || !Number.isInteger(val))) {
-      throw new Error(`${field} must be an integer between 1 and 5.`);
+    if (
+      val !== undefined &&
+      (val < 0 || val > 5 || Math.round(val * 4) / 4 !== val)
+    ) {
+      throw new Error(`${field} must be between 0 and 5 in 0.25 increments.`);
     }
   }
 
