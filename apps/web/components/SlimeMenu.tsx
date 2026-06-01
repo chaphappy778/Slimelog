@@ -317,8 +317,11 @@ export default function SlimeMenu() {
                 label="Slime Type Guide"
                 onClose={handleClose}
               />
+              {/* [Change 1 — T31] How to Rate a Slime now points at the
+                  dedicated /how-to-rate guide instead of the /slime-types
+                  placeholder. */}
               <NavItem
-                href="/slime-types"
+                href="/how-to-rate"
                 icon={<Star className="w-5 h-5" />}
                 label="How to Rate a Slime"
                 onClose={handleClose}
