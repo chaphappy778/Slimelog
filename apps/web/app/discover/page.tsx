@@ -112,17 +112,15 @@ export default async function DiscoverPage() {
       <PageHeader />
 
       <div className="pt-14 pb-24">
-        {/* Search pill */}
+        {/* [Change 1] Search pill — small cyan pill, hugs content */}
         <div className="flex justify-center px-4 pt-6 pb-4">
           <Link
             href="/search"
-            className="flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold"
             style={{
-              background: "rgba(45,10,78,0.4)",
-              border: "1px solid rgba(45,10,78,0.7)",
-              color: "rgba(255,255,255,0.5)",
-              width: "100%",
-              maxWidth: 400,
+              background: "rgba(0,240,255,0.08)",
+              border: "1px solid rgba(0,240,255,0.5)",
+              color: "#00F0FF",
             }}
           >
             <svg
@@ -139,7 +137,7 @@ export default async function DiscoverPage() {
               <circle cx="11" cy="11" r="8" />
               <path d="m21 21-4.35-4.35" />
             </svg>
-            Find slimes...
+            Search
           </Link>
         </div>
 
