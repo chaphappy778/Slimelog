@@ -147,7 +147,7 @@ export async function POST(req: Request) {
   let claimRowId: string;
 
   if (claim_id) {
-    // Resend path — verify ownership and state.
+    // Resend / email-edit path — verify ownership and state.
     const { data: existing } = await admin
       .from("brand_claims")
       .select("id, user_id, status")
@@ -164,9 +164,19 @@ export async function POST(req: Request) {
       );
     }
 
+    // [Change 2 — patch-claim-fields] persist edited step-1 fields alongside the code refresh
     const { error: updateErr } = await admin
       .from("brand_claims")
       .update({
+        full_legal_name: full_legal_name.trim(),
+        role,
+        business_email: business_email.trim().toLowerCase(),
+        instagram_handle: instagram_handle
+          ? instagram_handle.toString().trim().replace(/^@/, "") || null
+          : null,
+        additional_notes: additional_notes
+          ? additional_notes.trim() || null
+          : null,
         email_verification_code: codeHash,
         email_verification_sent_at: sentAt.toISOString(),
         email_verification_expires_at: expiresAt.toISOString(),

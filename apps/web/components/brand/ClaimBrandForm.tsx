@@ -121,6 +121,8 @@ export default function ClaimBrandForm({
           business_email: businessEmail.trim(),
           instagram_handle: handleClean || null,
           additional_notes: additionalNotes.trim() || null,
+          // [Change 1 — email-edit-back-button] include claim_id so route PATCHes rather than INSERTs when returning from step 3
+          ...(claimId ? { claim_id: claimId } : {}),
         }),
       });
       const body = await res.json();
@@ -306,6 +308,7 @@ export default function ClaimBrandForm({
       )}
 
       {step === "email_verification" && (
+        // [Change 1 — email-edit-back-button] pass onEditEmail to allow returning to step 1
         <EmailVerificationStep
           email={submittedEmail}
           code={code}
@@ -314,6 +317,7 @@ export default function ClaimBrandForm({
           onResend={handleResendCode}
           onVerify={handleVerifyCode}
           submitting={submitting}
+          onEditEmail={() => setStep("claimant_info")}
         />
       )}
 
@@ -740,6 +744,7 @@ function DocumentUploadStep(props: Step2Props) {
 
 // ─── Step 3 ──────────────────────────────────────────────────────────────────
 
+// [Change 1 — email-edit-back-button] extended Step3Props with optional onEditEmail
 interface Step3Props {
   email: string;
   code: string;
@@ -748,6 +753,7 @@ interface Step3Props {
   onResend: (e: React.MouseEvent) => void;
   onVerify: (e: React.MouseEvent) => void;
   submitting: boolean;
+  onEditEmail?: () => void;
 }
 
 function EmailVerificationStep(props: Step3Props) {
@@ -763,11 +769,31 @@ function EmailVerificationStep(props: Step3Props) {
         Step 3 of 3 — almost there.
       </p>
 
-      <p className="text-sm text-white/90 leading-relaxed mb-5">
+      <p className="text-sm text-white/90 leading-relaxed mb-1">
         We sent a 6-digit code to{" "}
         <span style={{ color: "#00F0FF", fontWeight: 600 }}>{props.email}</span>
         . Enter it below to complete your claim.
       </p>
+
+      {/* [Change 1 — email-edit-back-button] wrong email escape hatch */}
+      {props.onEditEmail && (
+        <p className="mb-4">
+          <button
+            type="button"
+            onClick={props.onEditEmail}
+            className="text-xs hover:underline"
+            style={{
+              color: "#00F0FF",
+              background: "none",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+            }}
+          >
+            Wrong email?
+          </button>
+        </p>
+      )}
 
       <input
         type="text"
