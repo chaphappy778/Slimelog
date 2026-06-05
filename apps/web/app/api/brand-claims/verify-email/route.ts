@@ -196,7 +196,7 @@ function buildClaimantConfirmationEmail(brandName: string): string {
           </p>
           <hr style="border:none;border-top:1px solid #2D0A4E;margin:24px 0;" />
           <p style="margin:0;font-size:11px;color:#ffffff;opacity:0.5;line-height:1.6;">
-            SlimeLog &middot; Glastonbury, CT &middot; Reply to <a href="mailto:support@slimelog.com" style="color:#00F0FF;">support@slimelog.com</a> for help.
+            ChapHaus LLC &middot; 310R Flanders Rd #447, East Lyme, CT 06333 &middot; Reply to <a href="mailto:support@slimelog.com" style="color:#00F0FF;">support@slimelog.com</a> for help.
           </p>
         </td></tr>
       </table>

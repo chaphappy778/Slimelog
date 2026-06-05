@@ -16,7 +16,7 @@ const SITE_URL =
 const FOOTER_HTML = `
   <hr style="border:none;border-top:1px solid #2D0A4E;margin:32px 0 16px 0;" />
   <p style="font-size:11px;color:#888;line-height:1.5;margin:0;">
-    SlimeLog · ChapHaus LLC · Glastonbury, CT, USA<br />
+    SlimeLog · ChapHaus LLC · 310R Flanders Rd #447, East Lyme, CT 06333, USA<br />
     You're receiving this email because you submitted a brand claim on SlimeLog.<br />
     Questions? Email <a href="mailto:support@slimelog.com" style="color:#00F0FF;">support@slimelog.com</a>.
   </p>
