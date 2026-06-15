@@ -80,6 +80,11 @@ function getBlobColor(log: CollectionLog): string {
   return "#39FF14";
 }
 
+// [Touch T1] Helper: distance between two touch points.
+function getTouchDist(t1: React.Touch, t2: React.Touch): number {
+  return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+}
+
 interface Transform {
   x: number;
   y: number;
@@ -104,6 +109,11 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
   const blobPositions = useRef<
     Array<{ x: number; y: number; r: number; log: CollectionLog }>
   >([]);
+
+  // [Touch T2] Pinch-to-zoom refs.
+  const pinchStartDist = useRef<number | null>(null);
+  const pinchStartScale = useRef<number>(1);
+  const pinchMidpoint = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     transformRef.current = transform;
@@ -224,6 +234,7 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
     draw();
   }, [draw, transform]);
 
+  // Wheel zoom (mouse/trackpad)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -247,6 +258,20 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
     return () => canvas.removeEventListener("wheel", onWheel);
   }, [tab]);
 
+  // [Touch T3] Passive:false touch listeners to block page scroll during canvas interaction.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const prevent = (e: TouchEvent) => e.preventDefault();
+    canvas.addEventListener("touchmove", prevent, { passive: false });
+    canvas.addEventListener("touchstart", prevent, { passive: false });
+    return () => {
+      canvas.removeEventListener("touchmove", prevent);
+      canvas.removeEventListener("touchstart", prevent);
+    };
+  }, [tab]);
+
+  // --- Mouse handlers ---
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     dragging.current = true;
     dragStart.current = {
@@ -274,6 +299,23 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
     dragging.current = false;
   };
 
+  // Shared hit-test logic used by both click and tap.
+  const hitTest = useCallback(
+    (canvasX: number, canvasY: number): CollectionLog | null => {
+      const t = transformRef.current;
+      const cx = (canvasX - t.x) / t.scale;
+      const cy = (canvasY - t.y) / t.scale;
+      for (let i = blobPositions.current.length - 1; i >= 0; i--) {
+        const { x, y, r, log } = blobPositions.current[i];
+        if ((cx - x) ** 2 + (cy - y) ** 2 <= (r + 4) ** 2) {
+          return log;
+        }
+      }
+      return null;
+    },
+    [],
+  );
+
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       const canvas = canvasRef.current;
@@ -281,21 +323,110 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
       const rect = canvas.getBoundingClientRect();
       const mx = (e.clientX - rect.left) * (CANVAS_SIZE / rect.width);
       const my = (e.clientY - rect.top) * (CANVAS_SIZE / rect.height);
-      const t = transformRef.current;
-      const cx = (mx - t.x) / t.scale;
-      const cy = (my - t.y) / t.scale;
-      let hit: CollectionLog | null = null;
-      for (let i = blobPositions.current.length - 1; i >= 0; i--) {
-        const { x, y, r, log } = blobPositions.current[i];
-        if ((cx - x) ** 2 + (cy - y) ** 2 <= (r + 4) ** 2) {
-          hit = log;
-          break;
-        }
-      }
-      setSelectedLog(hit);
+      setSelectedLog(hitTest(mx, my));
     },
-    [],
+    [hitTest],
   );
+
+  // [Touch T4] Touch handlers: single-finger pan, two-finger pinch, tap-to-select.
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = CANVAS_SIZE / rect.width;
+    const scaleY = CANVAS_SIZE / rect.height;
+
+    if (e.touches.length === 1) {
+      dragging.current = true;
+      dragStart.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        tx: transformRef.current.x,
+        ty: transformRef.current.y,
+      };
+      // Reset pinch state when going back to one finger.
+      pinchStartDist.current = null;
+      pinchMidpoint.current = null;
+    } else if (e.touches.length === 2) {
+      // [Touch T5] Two-finger pinch start: record initial distance, scale, and midpoint.
+      dragging.current = false;
+      const dist = getTouchDist(e.touches[0], e.touches[1]);
+      pinchStartDist.current = dist;
+      pinchStartScale.current = transformRef.current.scale;
+      const midClientX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const midClientY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      pinchMidpoint.current = {
+        x: (midClientX - rect.left) * scaleX,
+        y: (midClientY - rect.top) * scaleY,
+      };
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = CANVAS_SIZE / rect.width;
+
+    if (e.touches.length === 1 && dragging.current) {
+      // [Touch T6] Single-finger pan.
+      const dx = e.touches[0].clientX - dragStart.current.x;
+      const dy = e.touches[0].clientY - dragStart.current.y;
+      setTransform((prev) => ({
+        ...prev,
+        x: dragStart.current.tx + dx * scaleX,
+        y: dragStart.current.ty + dy * scaleX,
+      }));
+    } else if (
+      e.touches.length === 2 &&
+      pinchStartDist.current !== null &&
+      pinchMidpoint.current !== null
+    ) {
+      // [Touch T7] Two-finger pinch-to-zoom, zooming toward the midpoint.
+      const currentDist = getTouchDist(e.touches[0], e.touches[1]);
+      const ratio = currentDist / pinchStartDist.current;
+      const newScale = Math.max(
+        0.3,
+        Math.min(4, pinchStartScale.current * ratio),
+      );
+      const mid = pinchMidpoint.current;
+      setTransform((prev) => {
+        const sc = newScale / prev.scale;
+        return {
+          x: mid.x - sc * (mid.x - prev.x),
+          y: mid.y - sc * (mid.y - prev.y),
+          scale: newScale,
+        };
+      });
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    if (e.changedTouches.length === 1) {
+      const touch = e.changedTouches[0];
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = CANVAS_SIZE / rect.width;
+      const scaleY = CANVAS_SIZE / rect.height;
+      const touchCanvasX = (touch.clientX - rect.left) * scaleX;
+      const touchCanvasY = (touch.clientY - rect.top) * scaleY;
+
+      // [Touch T8] Tap-to-select: only fire if touch didn't drift more than 8px.
+      const moveX = touch.clientX - dragStart.current.x;
+      const moveY = touch.clientY - dragStart.current.y;
+      const moved = Math.hypot(moveX, moveY);
+
+      if (moved < 8) {
+        setSelectedLog(hitTest(touchCanvasX, touchCanvasY));
+      }
+    }
+
+    dragging.current = false;
+    pinchStartDist.current = null;
+    pinchMidpoint.current = null;
+  };
 
   const toggleBrand = (brand: string) => {
     setSelectedBrands((prev) => {
@@ -465,6 +596,9 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
           onClick={handleCanvasClick}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
         />
       </div>
 
