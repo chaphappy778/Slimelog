@@ -645,7 +645,16 @@ export default async function UserPage({
                   {profileLinks.map((link) => (
                     <a
                       key={link.id}
-                      href={link.url}
+                      // Audit blocker #2 (2026-07-06): render-side scheme
+                      // guard. The migration
+                      // 20260706000048_audit_blocker_2_profile_links_url_check.sql
+                      // adds a DB CHECK that rejects non-http(s) URLs at
+                      // insert/update time, but any historical row that
+                      // predates the constraint (or slips through via
+                      // future privileged writes) needs a fallback.
+                      // Anything not matching http(s):// falls through to
+                      // '#' so a javascript: or data: URL cannot execute.
+                      href={/^https?:\/\//i.test(link.url) ? link.url : "#"}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center justify-between px-3 py-2.5 rounded-xl transition-opacity active:opacity-70"

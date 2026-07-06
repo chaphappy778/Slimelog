@@ -594,8 +594,14 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
       setLinkError("Label and URL are required.");
       return;
     }
-    if (!trimUrl.startsWith("https://")) {
-      setLinkError("URL must start with https://");
+    // Audit blocker #2 (2026-07-06): match the DB CHECK constraint added
+    // in migration 20260706000048. The constraint accepts http(s):// and
+    // is case-insensitive, so we validate the same way here to keep the
+    // client / DB / render layers in agreement. Historically this was
+    // `startsWith("https://")` which would reject valid `HTTPS://` URLs
+    // and mislead users about what the server actually accepts.
+    if (!/^https?:\/\//i.test(trimUrl)) {
+      setLinkError("URL must start with http:// or https://");
       return;
     }
     if (links.length >= 5) {
