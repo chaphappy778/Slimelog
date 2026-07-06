@@ -110,6 +110,10 @@ export default function SettingsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Audit blocker #3 (2026-07-06): API now requires the current password
+  // to be re-verified before it will delete the account. This local state
+  // holds the password only until the fetch resolves.
+  const [deletePassword, setDeletePassword] = useState("");
   const [signOutLoading, setSignOutLoading] = useState(false);
 
   useEffect(() => {
@@ -142,10 +146,23 @@ export default function SettingsPage() {
   }
 
   async function handleDeleteAccount() {
+    // Audit blocker #3 (2026-07-06): require a non-empty password before
+    // even hitting the API. Server will re-verify.
+    if (!deletePassword) {
+      setDeleteError("Enter your password to confirm.");
+      return;
+    }
     setDeleteLoading(true);
     setDeleteError(null);
     try {
-      const res = await fetch("/api/account/delete", { method: "DELETE" });
+      const res = await fetch("/api/account/delete", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: deletePassword }),
+      });
+      // Clear the local password immediately regardless of outcome so we
+      // never keep it around in memory past the request.
+      setDeletePassword("");
       if (!res.ok) {
         const body = await res.json();
         setDeleteError(body.error ?? "Something went wrong. Please try again.");
@@ -156,6 +173,7 @@ export default function SettingsPage() {
       router.push("/");
       router.refresh();
     } catch {
+      setDeletePassword("");
       setDeleteError("Something went wrong. Please try again.");
       setDeleteLoading(false);
     }
@@ -392,6 +410,27 @@ export default function SettingsPage() {
                     logs, photos, comments, and follows will be removed. This
                     cannot be undone.
                   </p>
+                  {/* Audit blocker #3 (2026-07-06): the API now requires
+                      the current password to re-authenticate before it
+                      will delete the account. Session cookies alone are
+                      no longer sufficient to trigger the destructive
+                      call — this input feeds the fetch body. */}
+                  <label className="text-xs text-red-200 font-semibold">
+                    Enter your password to confirm
+                  </label>
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    disabled={deleteLoading}
+                    placeholder="Current password"
+                    className="w-full px-3 py-2 rounded-lg text-sm text-white placeholder-slime-muted disabled:opacity-50"
+                    style={{
+                      background: "rgba(45,10,78,0.5)",
+                      border: "1px solid rgba(239,68,68,0.35)",
+                    }}
+                  />
                   {deleteError && (
                     <p className="text-xs text-red-400">{deleteError}</p>
                   )}
@@ -401,6 +440,7 @@ export default function SettingsPage() {
                       onClick={() => {
                         setShowDeleteConfirm(false);
                         setDeleteError(null);
+                        setDeletePassword("");
                       }}
                       disabled={deleteLoading}
                       className="flex-1 py-2 rounded-lg text-xs font-bold text-slime-muted transition-colors disabled:opacity-50"
@@ -411,7 +451,7 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       onClick={handleDeleteAccount}
-                      disabled={deleteLoading}
+                      disabled={deleteLoading || deletePassword.length === 0}
                       className="flex-1 py-2 rounded-lg text-xs font-bold text-white transition-colors disabled:opacity-50"
                       style={{ background: "rgba(239,68,68,0.7)" }}
                     >
