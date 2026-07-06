@@ -62,17 +62,15 @@ export async function GET(request: NextRequest) {
           .eq("id", user.id)
           .single();
 
-        // [T96-debug] Log profile state — remove after Vercel log verification
-        console.error(
-          "[T96-debug] profile:",
-          JSON.stringify({
-            username: profile?.username,
-            age_verified: profile?.age_verified,
-            date_of_birth: profile?.date_of_birth,
-            needsUsernameSetup: profile?.username?.startsWith("user_") ?? false,
-            dobFromMeta: user.user_metadata?.date_of_birth,
-          }),
-        );
+        // 2026-07-06 audit blocker #6: the previous [T96-debug] block
+        // logged date_of_birth + username + dobFromMeta to Vercel runtime
+        // logs on every login. Storing DOB in structured logs is a
+        // compliance issue (COPPA-adjacent for the under-13 branch,
+        // GDPR/CCPA more generally) and the block was already marked
+        // "remove after Vercel log verification" — that time has come.
+        // If future debugging needs a signal from here, log only
+        // booleans (e.g., `hasDob`, `needsUsernameSetup`) and gate on
+        // `process.env.NODE_ENV !== "production"`.
 
         // ── Age verification ──────────────────────────────────────────────
         if (!profile?.age_verified || profile?.date_of_birth === null) {
