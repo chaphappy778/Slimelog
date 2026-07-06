@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { stripe } from "@/lib/stripe";
+import { validateRedirectUrl } from "@/lib/stripe-guards";
 
 const adminClient = createAdminClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -36,6 +37,15 @@ export async function POST(req: NextRequest) {
         { error: "Missing required fields" },
         { status: 400 },
       );
+    }
+
+    // Audit blocker #4 (2026-07-06): return_url must be on this site.
+    // Without this check, an attacker who could deep-link a portal
+    // session URL could deliver a signed Stripe URL that redirects
+    // users back to a phishing page they control.
+    const returnErr = validateRedirectUrl(return_url, req.headers.get("host"));
+    if (returnErr) {
+      return NextResponse.json({ error: returnErr }, { status: 400 });
     }
 
     let customerId: string | null = null;

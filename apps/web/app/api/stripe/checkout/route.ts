@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { stripe } from "@/lib/stripe";
+import {
+  isAllowedPriceIdForMode,
+  validateRedirectUrl,
+} from "@/lib/stripe-guards";
 
 const adminClient = createAdminClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -51,6 +55,30 @@ export async function POST(req: NextRequest) {
         { error: "brand_id required for brand mode" },
         { status: 400 },
       );
+    }
+
+    // ── Audit blocker #4 (2026-07-06): validate price + redirect URLs ────
+    // Before this block, price_id was passed straight into
+    // stripe.checkout.sessions.create — a client could substitute any
+    // active Stripe price on this account (a $0.01 test SKU, for
+    // example) and end up entitled to PRO after paying pennies.
+    // success_url and cancel_url were also unvalidated, turning a signed
+    // checkout link into an open redirect a phishing site could exploit.
+    if (!isAllowedPriceIdForMode(price_id, mode)) {
+      return NextResponse.json(
+        { error: "Price is not available for this subscription tier." },
+        { status: 400 },
+      );
+    }
+
+    const host = req.headers.get("host");
+    const successErr = validateRedirectUrl(success_url, host);
+    if (successErr) {
+      return NextResponse.json({ error: successErr }, { status: 400 });
+    }
+    const cancelErr = validateRedirectUrl(cancel_url, host);
+    if (cancelErr) {
+      return NextResponse.json({ error: cancelErr }, { status: 400 });
     }
 
     let customerId: string;
