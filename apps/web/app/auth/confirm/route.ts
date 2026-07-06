@@ -10,12 +10,20 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { safeRedirect } from "@/lib/safe-redirect";
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const token_hash = searchParams.get("token_hash");
   const type = searchParams.get("type");
-  const next = searchParams.get("next") ?? "/";
+  // 2026-07-06 audit blocker #7: run `next` through safeRedirect (same
+  // helper /auth/callback already uses). Without this, `next=//evil.com`
+  // was a live open redirect at the highest-trust moment in the user
+  // lifecycle — email confirmation lands the user just after we've
+  // proved their address, so a phishing site sitting at the far end of
+  // that redirect is disproportionately effective. Fallback to "/" when
+  // the input is missing or fails validation.
+  const next = safeRedirect(searchParams.get("next"), "/");
 
   if (!token_hash || !type) {
     return NextResponse.redirect(`${origin}/login?error=missing_token`);
