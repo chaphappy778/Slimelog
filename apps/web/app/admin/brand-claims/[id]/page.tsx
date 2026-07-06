@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isAdminUser } from "@/lib/is-admin-check";
 import PageWrapper from "@/components/PageWrapper";
 import PageHeader from "@/components/PageHeader";
 import {
@@ -207,7 +208,8 @@ export default async function AdminBrandClaimReviewPage({
     data: { user },
   } = await authClient.auth.getUser();
 
-  if (!user || user.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
+  // Audit hp-9 (2026-07-06): role-based admin check.
+  if (!(await isAdminUser(authClient, user))) {
     redirect("/");
   }
 

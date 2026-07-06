@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isAdminUser } from "@/lib/is-admin-check";
 
 export const runtime = "nodejs";
 
@@ -82,7 +83,8 @@ export async function POST(req: Request) {
     data: { user: adminUser },
   } = await authClient.auth.getUser();
 
-  if (!adminUser || adminUser.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
+  // Audit hp-9 (2026-07-06): role-based admin check.
+  if (!(await isAdminUser(authClient, adminUser))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

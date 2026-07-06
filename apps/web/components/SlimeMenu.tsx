@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
+import { isAdminUser } from "@/lib/is-admin-check";
 import {
   Layers,
   Heart,
@@ -161,8 +162,11 @@ export default function SlimeMenu() {
         setLoading(false);
         return;
       }
-      // Check admin status against the env var
-      if (user.email && user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
+      // Audit hp-9 (2026-07-06): role-based admin check instead of
+      // NEXT_PUBLIC_ADMIN_EMAIL string equality. This is a best-effort
+      // UI gate — actual authorization is enforced server-side + via
+      // RLS. If the check fails or errors, the admin link stays hidden.
+      if (await isAdminUser(supabase, user)) {
         setIsAdmin(true);
       }
       const { data } = await supabase

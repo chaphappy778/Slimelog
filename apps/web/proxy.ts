@@ -21,8 +21,8 @@ import { NextResponse, type NextRequest } from "next/server";
 // logging composer, singular), /wishlist, /brand-dashboard/*, /admin/*.
 //
 // /admin is included here as a defense-in-depth layer; admin-only access is
-// still enforced separately in the admin pages themselves (currently by
-// NEXT_PUBLIC_ADMIN_EMAIL, which is itself queued for hardening — audit #9).
+// still enforced separately in the admin pages themselves via the
+// role-based isAdminUser() helper (lib/is-admin-check.ts, audit #9).
 const PROTECTED_PREFIXES = [
   "/logs",
   "/collection",
