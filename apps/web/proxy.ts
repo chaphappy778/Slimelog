@@ -11,7 +11,28 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Routes that require an active session.
-const PROTECTED_PREFIXES = ["/logs", "/collection", "/profile"];
+//
+// 2026-07-06 (audit blocker #1): expanded from ["/logs","/collection","/profile"]
+// to also cover every route that was relying on client-side useEffect redirects
+// for auth. Without middleware-level protection, the full HTML/JS was shipping
+// to unauthenticated visitors, which fails with JS off, during hydration
+// races, or for any scraper. Each of the added prefixes has a corresponding
+// route under app/: /settings/{email,password,profile,subscription}, /log (the
+// logging composer, singular), /wishlist, /brand-dashboard/*, /admin/*.
+//
+// /admin is included here as a defense-in-depth layer; admin-only access is
+// still enforced separately in the admin pages themselves (currently by
+// NEXT_PUBLIC_ADMIN_EMAIL, which is itself queued for hardening — audit #9).
+const PROTECTED_PREFIXES = [
+  "/logs",
+  "/collection",
+  "/profile",
+  "/settings",
+  "/log",
+  "/wishlist",
+  "/brand-dashboard",
+  "/admin",
+];
 
 // Auth-only routes — bounce already-authenticated users back to home.
 const AUTH_ONLY_PATHS = ["/login", "/signup"];
