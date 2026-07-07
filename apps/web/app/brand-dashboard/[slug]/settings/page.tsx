@@ -15,7 +15,12 @@ export default async function SettingsPage({ params }: PageProps) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/login");
+  // Audit hp-21 (2026-07-07): login route is /login, not /auth/login.
+  if (!user) {
+    redirect(
+      `/login?next=${encodeURIComponent(`/brand-dashboard/${slug}/settings`)}`,
+    );
+  }
 
   // [Change 1] Added youtube_handle, pinterest_handle, twitter_handle to select
   const { data: brand } = await supabase

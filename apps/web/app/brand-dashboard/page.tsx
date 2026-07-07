@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
+import Image from "next/image";
 
 export default async function BrandDashboardRootPage() {
   const supabase = await createClient();
@@ -8,7 +9,12 @@ export default async function BrandDashboardRootPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/login");
+  // Audit hp-21 (2026-07-07): login route is at /login, not /auth/login.
+  // The old redirect target 404'd — pass the current path as next so
+  // the user lands back here after signing in.
+  if (!user) {
+    redirect(`/login?next=${encodeURIComponent("/brand-dashboard")}`);
+  }
 
   const { data: brands } = await supabase
     .from("brands")
@@ -72,9 +78,15 @@ export default async function BrandDashboardRootPage() {
                 }}
               >
                 {brand.logo_url ? (
-                  <img
+                  // Audit hp-21 (2026-07-07): raw <img> → next/image.
+                  // The remote host is allowlisted in next.config.js
+                  // (Supabase Storage bucket, mig hp-16 constrains
+                  // logo_url to that host anyway).
+                  <Image
                     src={brand.logo_url}
                     alt={brand.name}
+                    width={48}
+                    height={48}
                     className="w-12 h-12 rounded-xl object-cover flex-shrink-0"
                   />
                 ) : (
