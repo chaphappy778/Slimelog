@@ -4,6 +4,7 @@ import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { constantTimeEqual, hashVerificationCode } from "@/lib/brand-claims";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -26,6 +27,27 @@ export async function POST(req: Request) {
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Audit hp-14 (2026-07-06): 3 verification attempts per hour per user.
+  // Every success fires TWO Resend emails (claimant confirmation +
+  // admin notification) — a modest attempt loop is disproportionately
+  // expensive on Resend quota. Also constrains brute-force on the
+  // 6-digit code: 3 attempts/hr against a 10^6 keyspace makes chance
+  // per user negligible.
+  const rateResult = await checkRateLimit({
+    key: `verify-email:user:${user.id}`,
+    limit: 3,
+    windowSeconds: 3600,
+  });
+  if (!rateResult.allowed) {
+    return NextResponse.json(
+      { error: "Too many verification attempts. Try again later." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rateResult.retryAfterSeconds) },
+      },
+    );
   }
 
   // 2. Parse + validate.

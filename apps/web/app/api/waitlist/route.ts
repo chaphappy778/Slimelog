@@ -25,6 +25,7 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { addContactToWaitlist, AddContactResult } from "@/lib/brevo";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 interface WaitlistRow {
   id: string;
@@ -94,6 +95,27 @@ export async function POST(request: NextRequest) {
 
   if (!email || !email.includes("@")) {
     return NextResponse.json({ error: "Invalid email" }, { status: 400 });
+  }
+
+  // Audit hp-14 (2026-07-06): 10 signups per hour per IP. Waitlist
+  // triggers a Brevo POST per call, and Brevo's monthly-send cap is
+  // the failure mode we care about — a scripted flood exhausts the
+  // quota and blocks legit signups until reset. IP-based here because
+  // signups are unauthenticated.
+  const ip = getClientIp(request);
+  const rateResult = await checkRateLimit({
+    key: `waitlist:ip:${ip}`,
+    limit: 10,
+    windowSeconds: 3600,
+  });
+  if (!rateResult.allowed) {
+    return NextResponse.json(
+      { error: "Too many signups from this IP. Try again later." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rateResult.retryAfterSeconds) },
+      },
+    );
   }
 
   const marketingOptIn = marketing_consent ?? false;

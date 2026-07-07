@@ -3,6 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+// Audit hp-14 (2026-07-06): cap the details field before it lands in a
+// Resend email body. The details field is attacker-controlled — a
+// megabyte of arbitrary text becomes a support-inbox nuisance and eats
+// Resend's per-email size limits.
+const MAX_DETAILS_LENGTH = 2000;
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies();
@@ -22,6 +29,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Audit hp-14 (2026-07-06): 5 reports per hour per authenticated user.
+  // Report endpoint is a spam-relay vector — attacker-controlled
+  // `details` gets embedded in the Resend email to support@slimelog.com
+  // (see line 100). Rate limit here is the first line of defense; the
+  // truncation on MAX_DETAILS_LENGTH is the second.
+  const rateResult = await checkRateLimit({
+    key: `report:user:${user.id}`,
+    limit: 5,
+    windowSeconds: 3600,
+  });
+  if (!rateResult.allowed) {
+    return NextResponse.json(
+      { error: "Too many reports. Please try again later." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rateResult.retryAfterSeconds) },
+      },
+    );
+  }
+
   let body: {
     content_type?: string;
     content_id?: string;
@@ -39,6 +66,13 @@ export async function POST(req: NextRequest) {
   }
 
   const { content_type, content_id, reason, details } = body;
+
+  // Audit hp-14 (2026-07-06): hard-truncate the details field.
+  // Attacker-supplied text lands in the Resend email body below.
+  const safeDetails =
+    typeof details === "string" && details.length > 0
+      ? details.slice(0, MAX_DETAILS_LENGTH)
+      : null;
 
   if (!content_type || !content_id || !reason) {
     return NextResponse.json(
@@ -65,7 +99,7 @@ export async function POST(req: NextRequest) {
     content_type,
     content_id,
     reason,
-    details: details ?? null,
+    details: safeDetails,
   });
 
   if (insertError) {
@@ -97,7 +131,7 @@ export async function POST(req: NextRequest) {
             `Content type: ${content_type}`,
             `Content ID: ${content_id}`,
             `Reason: ${reason}`,
-            details ? `Details: ${details}` : null,
+            safeDetails ? `Details: ${safeDetails}` : null,
           ]
             .filter(Boolean)
             .join("\n"),
