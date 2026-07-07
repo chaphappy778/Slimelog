@@ -38,24 +38,33 @@ export default function ReportButton({
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [openUpward, setOpenUpward] = useState(true);
   const { showToast } = useToast();
   const router = useRouter();
   const pathname = usePathname();
 
-  // Close on outside click
+  // 2026-07-07: closes on Escape key. Backdrop click is handled by
+  // the overlay's own onClick — removed the outside-click listener
+  // from the previous absolute-positioned dropdown implementation
+  // because the modal is now viewport-anchored, so "outside" is any
+  // click on the backdrop.
   useEffect(() => {
     if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
-        setOpen(false);
-      }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
     }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [open]);
+
+  // 2026-07-07: lock body scroll while the modal is open so the
+  // background page can't scroll under it.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
   }, [open]);
 
   // [Change 1 — #35] Removed early `if (!currentUserId) return null;`.
@@ -105,10 +114,8 @@ export default function ReportButton({
       router.push(`/signup?next=${encodeURIComponent(next)}`);
       return;
     }
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      setOpenUpward(rect.top > 280);
-    }
+    // 2026-07-07: modal is viewport-centered now, so the previous
+    // openUpward positioning heuristic is gone.
     setOpen((o) => !o);
   }
 
@@ -163,30 +170,56 @@ export default function ReportButton({
         Report
       </button>
 
-      {/* Dropdown sheet — only opens for authenticated users (handler routes
-          logged-out users away before this can be true). */}
+      {/* Report modal — only opens for authenticated users (handler routes
+          logged-out users away before this can be true).
+
+          2026-07-07: switched from absolute-positioned dropdown to a
+          viewport-centered fixed modal with backdrop. Previously the
+          dropdown anchored to the flag button; when the flag was near
+          the bottom of the card the dropdown opened upward and its
+          contents clipped off the top of the viewport (see wishlist/
+          report screenshots from 2026-07-07 smoke test). The centered
+          modal always fits regardless of where the trigger sits. */}
       {open && (
-        <div
-          style={{
-            position: "absolute",
-            ...(openUpward
-              ? { bottom: "calc(100% + 8px)" }
-              : { top: "calc(100% + 8px)" }),
-            right: 0,
-            zIndex: 200,
-            width: 280,
-            maxHeight: "60vh",
-            overflowY: "auto",
-            background: "rgba(15,0,24,0.97)",
-            border: "1px solid rgba(45,10,78,0.7)",
-            borderRadius: 14,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
-            padding: 16,
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-          }}
-        >
+        <>
+          {/* Backdrop */}
+          <div
+            onClick={() => setOpen(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.6)",
+              zIndex: 199,
+            }}
+            aria-hidden="true"
+          />
+          {/* Sheet */}
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Report content"
+            style={{
+              position: "fixed",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 200,
+              width: "min(320px, calc(100vw - 32px))",
+              maxHeight: "calc(100dvh - 32px)",
+              overflowY: "auto",
+              background: "rgba(15,0,24,0.97)",
+              border: "1px solid rgba(45,10,78,0.7)",
+              borderRadius: 14,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+              padding: 16,
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+              // Prevent clicks inside the sheet from bubbling to the
+              // backdrop (which would close the modal).
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
           {submitted ? (
             <div
               style={{
@@ -310,7 +343,8 @@ export default function ReportButton({
               </button>
             </>
           )}
-        </div>
+          </div>
+        </>
       )}
     </div>
   );

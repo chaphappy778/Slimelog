@@ -16,9 +16,23 @@ type WishlistLog = {
   brand_name_raw: string | null;
   base_type: string | null;
   colors: string[] | null;
-  scent: string | null;
+  scent_strength: "unscented" | "weak" | "medium" | "strong" | null;
   cost_paid: number | null;
   image_url: string | null;
+};
+
+// 2026-07-07: labels for the scent_strength enum. The old `scent` text
+// column was dropped in migration 20260514000039 and replaced with this
+// enum. The wishlist page still queried the dropped column, which is
+// why the "Could not load your wishlist" error was firing.
+const SCENT_STRENGTH_LABELS: Record<
+  NonNullable<WishlistLog["scent_strength"]>,
+  string
+> = {
+  unscented: "Unscented",
+  weak: "Weak scent",
+  medium: "Medium scent",
+  strong: "Strong scent",
 };
 
 function formatDate(iso: string) {
@@ -102,9 +116,9 @@ function WishlistCard({ log }: { log: WishlistLog }) {
               {secondaryColor}
             </span>
           )}
-          {log.scent && (
+          {log.scent_strength && (
             <span className="text-xs px-2 py-0.5 rounded-full bg-slime-surface border border-slime-border text-slime-muted">
-              {log.scent}
+              {SCENT_STRENGTH_LABELS[log.scent_strength]}
             </span>
           )}
           {log.cost_paid != null && (
@@ -173,7 +187,7 @@ export default async function WishlistPage() {
   const { data: logs, error } = await supabase
     .from("collection_logs")
     .select(
-      "id, created_at, slime_name, brand_name_raw, base_type, colors, scent, cost_paid, image_url",
+      "id, created_at, slime_name, brand_name_raw, base_type, colors, scent_strength, cost_paid, image_url",
     )
     .eq("user_id", user.id)
     .eq("in_wishlist", true)
