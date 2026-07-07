@@ -61,11 +61,24 @@ export async function GET(req: Request) {
     );
   }
 
+  // Audit hp-17 (2026-07-07): force Content-Disposition: attachment
+  // on the signed URL so browsers download the document instead of
+  // rendering it inline. Combined with the magic-byte sniff at upload
+  // (see /api/brand-claims/upload-document), this closes the polyglot
+  // XSS surface: even if a malicious file ever slipped past sniffing,
+  // it can't execute in the admin's browser because it's saved to
+  // disk, not rendered. The `download` option accepts a string that
+  // Supabase places into the `filename` param of the disposition
+  // header, so the file arrives with the sanitized name we stored.
+  const downloadName =
+    (claim.document_filename as string | null) || "document";
+
   const { data, error: signedErr } = await admin.storage
     .from("brand-claim-documents")
     .createSignedUrl(
       claim.document_storage_path as string,
       SIGNED_URL_EXPIRY_SECONDS,
+      { download: downloadName },
     );
 
   if (signedErr || !data?.signedUrl) {
