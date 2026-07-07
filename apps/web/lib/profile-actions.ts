@@ -3,6 +3,11 @@
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import {
+  ValidationError,
+  optionalHttpUrl,
+  optionalSupabaseUrl,
+} from "@/lib/api-validation";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -158,27 +163,54 @@ export async function updateProfile(
     updated_at: new Date().toISOString(),
   };
 
-  if (input.bio !== undefined) payload.bio = input.bio || null;
-  if (input.avatar_url !== undefined)
-    payload.avatar_url = input.avatar_url || null;
-  if (input.location !== undefined) payload.location = input.location || null;
-  if (input.website_url !== undefined)
-    payload.website_url = input.website_url || null;
-  if (input.instagram_handle !== undefined)
-    payload.instagram_handle = instagramHandle || null;
-  if (input.tiktok_handle !== undefined)
-    payload.tiktok_handle = tiktokHandle || null;
-  if (input.shop_url !== undefined) payload.shop_url = shopUrl || null;
-  if (input.youtube_handle !== undefined)
-    payload.youtube_handle = youtubeHandle || null;
-  if (input.pinterest_handle !== undefined)
-    payload.pinterest_handle = pinterestHandle || null;
-  if (input.twitter_handle !== undefined)
-    payload.twitter_handle = twitterHandle || null;
-  if (input.background_url !== undefined)
-    payload.background_url = input.background_url || null;
-  if (input.favorite_brand_id !== undefined)
-    payload.favorite_brand_id = input.favorite_brand_id || null;
+  // Audit hp-16 (2026-07-07): validate URL fields before persisting.
+  // avatar_url/background_url are expected to be Supabase Storage
+  // public URLs (uploaded via our own flow); website_url/shop_url are
+  // any external http(s):// URL. Invalid values return a 400-shaped
+  // response instead of getting written and rendered on public pages.
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  try {
+    if (input.bio !== undefined) payload.bio = input.bio || null;
+    if (input.avatar_url !== undefined) {
+      payload.avatar_url = optionalSupabaseUrl(
+        input.avatar_url,
+        "avatar_url",
+        supabaseUrl,
+      );
+    }
+    if (input.location !== undefined)
+      payload.location = input.location || null;
+    if (input.website_url !== undefined) {
+      payload.website_url = optionalHttpUrl(input.website_url, "website_url");
+    }
+    if (input.instagram_handle !== undefined)
+      payload.instagram_handle = instagramHandle || null;
+    if (input.tiktok_handle !== undefined)
+      payload.tiktok_handle = tiktokHandle || null;
+    if (input.shop_url !== undefined) {
+      payload.shop_url = optionalHttpUrl(shopUrl, "shop_url");
+    }
+    if (input.youtube_handle !== undefined)
+      payload.youtube_handle = youtubeHandle || null;
+    if (input.pinterest_handle !== undefined)
+      payload.pinterest_handle = pinterestHandle || null;
+    if (input.twitter_handle !== undefined)
+      payload.twitter_handle = twitterHandle || null;
+    if (input.background_url !== undefined) {
+      payload.background_url = optionalSupabaseUrl(
+        input.background_url,
+        "background_url",
+        supabaseUrl,
+      );
+    }
+    if (input.favorite_brand_id !== undefined)
+      payload.favorite_brand_id = input.favorite_brand_id || null;
+  } catch (err) {
+    if (err instanceof ValidationError) {
+      return { success: false, error: err.message };
+    }
+    throw err;
+  }
 
   // ── 5. Persist ──
   const { error: updateError } = await supabase

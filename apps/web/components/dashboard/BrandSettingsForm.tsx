@@ -4,6 +4,11 @@
 import { useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
+import {
+  ValidationError,
+  optionalHttpUrl,
+  optionalSupabaseUrl,
+} from "@/lib/api-validation";
 
 // Module-level createBrowserClient — not inside component
 const supabase = createBrowserClient(
@@ -313,6 +318,32 @@ export default function BrandSettingsForm({
       setError("Brand name is required.");
       return;
     }
+
+    // Audit hp-16 (2026-07-07): validate every URL field before the
+    // update lands in Postgres. The DB CHECK constraints (mig 57) are
+    // the last line of defense; catching bad values here surfaces a
+    // legible error to the brand owner instead of a raw Postgres
+    // constraint-violation string. logo_url + banner_url must live on
+    // our Supabase Storage (uploaded via handleLogoUpload / bannerUrl
+    // upload); website_url + shop_url may be any external http(s).
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    let websiteUrl: string | null;
+    let shopUrl: string | null;
+    let checkedLogoUrl: string | null;
+    let checkedBannerUrl: string | null;
+    try {
+      websiteUrl = optionalHttpUrl(form.website_url, "Website URL");
+      shopUrl = optionalHttpUrl(form.shop_url, "Shop URL");
+      checkedLogoUrl = optionalSupabaseUrl(logoUrl, "Logo", supabaseUrl);
+      checkedBannerUrl = optionalSupabaseUrl(bannerUrl, "Banner", supabaseUrl);
+    } catch (validationErr) {
+      if (validationErr instanceof ValidationError) {
+        setError(validationErr.message);
+        return;
+      }
+      throw validationErr;
+    }
+
     setSaving(true);
     setError(null);
     const { error: err } = await supabase
@@ -321,8 +352,8 @@ export default function BrandSettingsForm({
         name: form.name.trim(),
         bio: form.bio || null,
         description: form.description || null,
-        website_url: form.website_url || null,
-        shop_url: form.shop_url || null,
+        website_url: websiteUrl,
+        shop_url: shopUrl,
         instagram_handle: form.instagram_handle.replace(/^@/, "") || null,
         tiktok_handle: form.tiktok_handle.replace(/^@/, "") || null,
         youtube_handle: form.youtube_handle.replace(/^@/, "") || null,
@@ -334,8 +365,8 @@ export default function BrandSettingsForm({
           ? parseInt(form.founded_year, 10)
           : null,
         restock_schedule: form.restock_schedule || null,
-        logo_url: logoUrl,
-        banner_url: bannerUrl,
+        logo_url: checkedLogoUrl,
+        banner_url: checkedBannerUrl,
       })
       .eq("id", brand.id)
       .eq("owner_id", userId);

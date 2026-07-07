@@ -99,3 +99,109 @@ export function optionalEnum<T extends string>(
   if (raw === undefined || raw === null || raw === "") return null;
   return requireEnum(raw, field, allowed);
 }
+
+// ---------------------------------------------------------------------------
+// URL validation (audit hp-16 2026-07-07)
+// ---------------------------------------------------------------------------
+//
+// Two flavors:
+//   - assertHttpUrl:      any http(s)://... URL. For user-facing website
+//                         and shop links.
+//   - assertSupabaseUrl:  URL must be hosted on the Supabase Storage endpoint
+//                         (NEXT_PUBLIC_SUPABASE_URL prefix). For avatar,
+//                         background, logo, banner — anything expected to
+//                         come from our own Storage upload flow.
+//
+// Both trim, reject empty, reject anything with a null byte or backslash
+// (defense in depth against smuggling). Returned strings are the trimmed
+// input.
+
+const HTTP_URL_RE = /^https?:\/\//i;
+
+function stripDangerousChars(raw: string): string {
+  return raw.trim();
+}
+
+function rejectDangerous(raw: string, field: string): void {
+  if (raw.includes("\0") || raw.toLowerCase().includes("%00")) {
+    throw new ValidationError(field, "contains null byte");
+  }
+  if (raw.includes("\\")) {
+    throw new ValidationError(field, "contains backslash");
+  }
+}
+
+export function requireHttpUrl(
+  raw: unknown,
+  field: string,
+  opts: { maxLength?: number } = {},
+): string {
+  if (typeof raw !== "string") {
+    throw new ValidationError(field, "must be a string");
+  }
+  const trimmed = stripDangerousChars(raw);
+  if (trimmed.length === 0) {
+    throw new ValidationError(field, "is required");
+  }
+  const max = opts.maxLength ?? 2000;
+  if (trimmed.length > max) {
+    throw new ValidationError(field, `must be at most ${max} characters`);
+  }
+  rejectDangerous(trimmed, field);
+  if (!HTTP_URL_RE.test(trimmed)) {
+    throw new ValidationError(field, "must start with http:// or https://");
+  }
+  return trimmed;
+}
+
+export function optionalHttpUrl(
+  raw: unknown,
+  field: string,
+  opts: { maxLength?: number } = {},
+): string | null {
+  if (raw === undefined || raw === null || raw === "") return null;
+  if (typeof raw === "string" && raw.trim().length === 0) return null;
+  return requireHttpUrl(raw, field, opts);
+}
+
+/** Require a Supabase-Storage-hosted URL. `supabaseUrl` is typically
+ *  `process.env.NEXT_PUBLIC_SUPABASE_URL`. Comparison is case-insensitive on
+ *  the prefix. */
+export function optionalSupabaseUrl(
+  raw: unknown,
+  field: string,
+  supabaseUrl: string | undefined,
+  opts: { maxLength?: number } = {},
+): string | null {
+  if (raw === undefined || raw === null || raw === "") return null;
+  if (typeof raw === "string" && raw.trim().length === 0) return null;
+  if (typeof raw !== "string") {
+    throw new ValidationError(field, "must be a string");
+  }
+  const trimmed = stripDangerousChars(raw);
+  const max = opts.maxLength ?? 2000;
+  if (trimmed.length > max) {
+    throw new ValidationError(field, `must be at most ${max} characters`);
+  }
+  rejectDangerous(trimmed, field);
+  if (!HTTP_URL_RE.test(trimmed)) {
+    throw new ValidationError(field, "must start with http:// or https://");
+  }
+  if (!supabaseUrl) {
+    // Env not configured — fall back to just requiring https(:). Log so
+    // the operator notices the misconfiguration.
+    console.warn(
+      "[api-validation] optionalSupabaseUrl called without a supabaseUrl. " +
+        "Falling back to http(s) check only.",
+    );
+    return trimmed;
+  }
+  const normalizedSupabase = supabaseUrl.replace(/\/+$/, "").toLowerCase();
+  if (!trimmed.toLowerCase().startsWith(normalizedSupabase)) {
+    throw new ValidationError(
+      field,
+      "must be hosted on this site's Supabase Storage",
+    );
+  }
+  return trimmed;
+}
