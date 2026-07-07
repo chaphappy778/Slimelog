@@ -173,7 +173,14 @@ export async function updateSlimeLog(
   const userId = await requireAuthUserId();
   const supabase = await createClient();
 
-  const { error } = await supabase
+  // Audit hp-19 (2026-07-07): add `.select("id")` and throw when the
+  // returned array is empty. Previously .update().eq(...).eq(...)
+  // returned `{success:true}` even when zero rows matched — so a bad
+  // logId, someone else's logId, or an RLS-blocked write all looked
+  // like a successful save to the UI. That hides both UX bugs (user
+  // sees "saved" but their edit went nowhere) and data-integrity
+  // blind spots (any future RLS mis-config becomes silent).
+  const { data: updated, error } = await supabase
     .from("collection_logs")
     .update({
       ...(input.slime_id !== undefined && { slime_id: input.slime_id }),
@@ -227,11 +234,21 @@ export async function updateSlimeLog(
       ...(input.colors !== undefined && { colors: input.colors }),
     })
     .eq("id", logId)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .select("id");
 
   if (error) {
     console.error("[updateSlimeLog] update error:", error.message);
     throw new Error(`Failed to update log: ${error.message}`);
+  }
+  if (!updated || updated.length === 0) {
+    // No rows matched — logId doesn't belong to this user, doesn't exist,
+    // or RLS silently blocked the write.
+    console.error(
+      "[updateSlimeLog] zero rows affected — logId does not belong to user or does not exist",
+      { logId, userId },
+    );
+    throw new Error("Log not found or you do not have permission to edit it.");
   }
 
   // Keywords: full replace strategy
@@ -268,15 +285,29 @@ export async function deleteSlimeLog(logId: string): Promise<void> {
   const userId = await requireAuthUserId();
   const supabase = await createClient();
 
-  const { error } = await supabase
+  // Audit hp-19 (2026-07-07): same fix as updateSlimeLog. Without
+  // `.select("id")` the delete returns success even when zero rows
+  // matched, so a bad logId, someone else's log, or an RLS-blocked
+  // delete all look identical to a real successful delete.
+  const { data: deleted, error } = await supabase
     .from("collection_logs")
     .delete()
     .eq("id", logId)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .select("id");
 
   if (error) {
     console.error("[deleteSlimeLog] delete error:", error.message);
     throw new Error(`Failed to delete log: ${error.message}`);
+  }
+  if (!deleted || deleted.length === 0) {
+    console.error(
+      "[deleteSlimeLog] zero rows affected — logId does not belong to user or does not exist",
+      { logId, userId },
+    );
+    throw new Error(
+      "Log not found or you do not have permission to delete it.",
+    );
   }
 
   revalidatePath("/collection");
