@@ -23,6 +23,10 @@ interface ClaimRow {
   business_email: string;
   role: BrandClaimRole;
   created_at: string;
+  // Audit hp-18 (2026-07-07): true when brand has no website_url, so
+  // no email-domain match was performed at submit — needs extra
+  // scrutiny.
+  requires_manual_review: boolean | null;
   brands:
     | {
         id: string;
@@ -226,7 +230,7 @@ export default async function AdminBrandClaimsPage({
   let listQuery = admin
     .from("brand_claims")
     .select(
-      `id, brand_id, user_id, status, business_email, role, created_at,
+      `id, brand_id, user_id, status, business_email, role, created_at, requires_manual_review,
        brands!brand_claims_brand_id_fkey ( id, name, slug, logo_url ),
        profiles!brand_claims_user_id_fkey ( username, display_name, avatar_url )`,
     )
@@ -486,7 +490,22 @@ export default async function AdminBrandClaimsPage({
                             {relativeTime(row.created_at)}
                           </td>
                           <td className="px-4 py-3">
-                            <StatusPill status={row.status} />
+                            <div className="flex items-center gap-1.5">
+                              <StatusPill status={row.status} />
+                              {row.requires_manual_review && (
+                                <span
+                                  title="Brand has no website — no email-domain match performed. Extra scrutiny required."
+                                  className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                                  style={{
+                                    background: "rgba(255,140,0,0.15)",
+                                    border: "1px solid rgba(255,140,0,0.45)",
+                                    color: "#ff8c00",
+                                  }}
+                                >
+                                  Manual
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-3">
                             <Link

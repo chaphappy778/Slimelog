@@ -58,6 +58,9 @@ interface ClaimDetail {
   rejection_reason: string | null;
   created_at: string;
   updated_at: string;
+  // Audit hp-18 (2026-07-07): true when brand had no website_url at
+  // submit — email-domain match couldn't run, needs extra scrutiny.
+  requires_manual_review: boolean | null;
   // [T59-fix] No profile joins on ClaimDetail — both claimant and reviewer
   // are fetched via separate queries to avoid PostgREST failing the entire
   // request when reviewed_by is NULL and an alias join is present.
@@ -225,7 +228,7 @@ export default async function AdminBrandClaimReviewPage({
       `id, brand_id, user_id, status, full_legal_name, role, business_email,
        email_verified_at, document_storage_path, document_filename, document_uploaded_at,
        instagram_handle, additional_notes, reviewed_by, reviewed_at, rejection_reason,
-       created_at, updated_at,
+       created_at, updated_at, requires_manual_review,
        brands!brand_claims_brand_id_fkey ( id, name, slug, logo_url, website_url, owner_id, is_verified, verification_tier )`,
     )
     .eq("id", id)
@@ -330,6 +333,31 @@ export default async function AdminBrandClaimReviewPage({
             </p>
           </div>
         </div>
+
+        {/* Audit hp-18 (2026-07-07): manual-review warning banner.
+            Renders above the brand summary when requires_manual_review
+            is true so admins can't miss it. */}
+        {claim.requires_manual_review && (
+          <div
+            role="alert"
+            className="mb-6 rounded-xl px-4 py-3 text-sm"
+            style={{
+              background: "rgba(255,140,0,0.10)",
+              border: "1px solid rgba(255,140,0,0.45)",
+              color: "#ffb066",
+            }}
+          >
+            <p className="font-bold" style={{ color: "#ff8c00" }}>
+              Manual review required
+            </p>
+            <p className="mt-1" style={{ color: "#ffb066" }}>
+              This brand had no <code>website_url</code> at submit time, so
+              the email-domain match couldn't run. Verify the document
+              carefully and cross-check the Instagram handle before
+              approving.
+            </p>
+          </div>
+        )}
 
         {/* Brand summary */}
         <SectionCard title="Brand">

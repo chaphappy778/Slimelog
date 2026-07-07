@@ -129,6 +129,15 @@ export async function POST(req: Request) {
     );
   }
 
+  // Audit hp-18 (2026-07-07): mark the claim for extra admin scrutiny
+  // when brand has no website_url. The email domain match couldn't
+  // run (no domain to compare against), so admins need to lean on
+  // the document + Instagram cross-check instead. Migration 58
+  // adds the requires_manual_review column and backfills historical
+  // in-flight claims.
+  const requiresManualReview =
+    !brandRow.website_url || brandRow.website_url.trim() === "";
+
   // 4. Rate limit.
   const recentCount = await countRecentClaimAttempts(user.id, brand_id, 30);
   if (recentCount >= 3) {
@@ -165,6 +174,9 @@ export async function POST(req: Request) {
     }
 
     // [Change 2 — patch-claim-fields] persist edited step-1 fields alongside the code refresh
+    // Audit hp-18 (2026-07-07): also refresh requires_manual_review in
+    // case the brand's website_url was set between original submit
+    // and the resend/edit.
     const { error: updateErr } = await admin
       .from("brand_claims")
       .update({
@@ -180,6 +192,7 @@ export async function POST(req: Request) {
         email_verification_code: codeHash,
         email_verification_sent_at: sentAt.toISOString(),
         email_verification_expires_at: expiresAt.toISOString(),
+        requires_manual_review: requiresManualReview,
         updated_at: sentAt.toISOString(),
       })
       .eq("id", claim_id);
@@ -211,6 +224,7 @@ export async function POST(req: Request) {
         email_verification_code: codeHash,
         email_verification_sent_at: sentAt.toISOString(),
         email_verification_expires_at: expiresAt.toISOString(),
+        requires_manual_review: requiresManualReview,
       })
       .select("id")
       .single();
