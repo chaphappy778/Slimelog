@@ -40,10 +40,12 @@
 --
 -- Columns covered
 -- ---------------
---   profiles: avatar_url, website_url, shop_url, background_url
---   brands:   logo_url, website_url, shop_url, banner_url
---   slimes:   image_url
---   drops:    image_url, cover_image_url
+--   profiles:    avatar_url, website_url, shop_url, background_url
+--   brands:      logo_url, website_url, shop_url, banner_url
+--   slimes:      image_url
+--   drops:       cover_image_url  (drops.image_url does not exist; mig 43
+--                                  added image_url to drop_slimes, not drops)
+--   drop_slimes: image_url
 --   collection_logs: image_url
 --
 -- All check constraints are `NOT VALID` at creation to skip validating
@@ -141,16 +143,9 @@ ALTER TABLE public.slimes
 ALTER TABLE public.slimes VALIDATE CONSTRAINT slimes_image_url_http_only;
 
 -- ---------------------------------------------------------------------------
--- drops
+-- drops (only cover_image_url; there is no image_url column on drops —
+-- mig 20260516000043_drops_overhaul added image_url to drop_slimes only)
 -- ---------------------------------------------------------------------------
-
-ALTER TABLE public.drops
-  DROP CONSTRAINT IF EXISTS drops_image_url_http_only;
-ALTER TABLE public.drops
-  ADD CONSTRAINT drops_image_url_http_only
-  CHECK (image_url IS NULL OR image_url ~* '^https?://')
-  NOT VALID;
-ALTER TABLE public.drops VALIDATE CONSTRAINT drops_image_url_http_only;
 
 ALTER TABLE public.drops
   DROP CONSTRAINT IF EXISTS drops_cover_image_url_http_only;
@@ -159,6 +154,18 @@ ALTER TABLE public.drops
   CHECK (cover_image_url IS NULL OR cover_image_url ~* '^https?://')
   NOT VALID;
 ALTER TABLE public.drops VALIDATE CONSTRAINT drops_cover_image_url_http_only;
+
+-- ---------------------------------------------------------------------------
+-- drop_slimes
+-- ---------------------------------------------------------------------------
+
+ALTER TABLE public.drop_slimes
+  DROP CONSTRAINT IF EXISTS drop_slimes_image_url_http_only;
+ALTER TABLE public.drop_slimes
+  ADD CONSTRAINT drop_slimes_image_url_http_only
+  CHECK (image_url IS NULL OR image_url ~* '^https?://')
+  NOT VALID;
+ALTER TABLE public.drop_slimes VALIDATE CONSTRAINT drop_slimes_image_url_http_only;
 
 -- ---------------------------------------------------------------------------
 -- collection_logs
