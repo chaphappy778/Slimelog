@@ -2,7 +2,20 @@
 
 *Single source of truth for active issues, technical debt, and action items.*
 
-**Last Updated:** May 4, 2026  |  **Owner:** Jennifer Chapman
+**Last Updated:** July 7, 2026  |  **Owner:** Jennifer Chapman
+
+---
+
+## Reference Docs (living)
+
+Strategic and planning documents that inform work below. Refresh from these before starting a new work thread.
+
+| Doc | Scope | Last touched |
+| --- | --- | --- |
+| [monetization-plan-2026-07-07.md](./monetization-plan-2026-07-07.md) | 8-pillar monetization strategy, revenue projections ($16-50M exit target), sequenced schema roadmap, realistic timelines with AI pairing. Read before starting any monetization-related work. | 2026-07-07 |
+| [pre-launch-audit-2026-07-06.md](./pre-launch-audit-2026-07-06.md) | Full pre-launch security + code audit. 7 blockers ✅ shipped 2026-07-06; HP 8-14 ✅ shipped 2026-07-07; HP 15+ pending. Next up: HP 15 (input validation on /api/wishlist + /api/report). | 2026-07-07 |
+| [schema-reference.md](./schema-reference.md) | Database schema reference. | see file |
+| [hub-snapshot.md](./hub-snapshot.md) | Auto-generated snapshot from the StartupLenz hub. | see file |
 
 ---
 
