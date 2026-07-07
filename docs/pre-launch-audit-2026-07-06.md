@@ -152,6 +152,14 @@ SlimeLog is a solid Next.js 14 + Supabase app with a well-structured RLS-first d
 - **Fix:** If `website_url` is null, force the document-upload path plus manual review before advancing to `pending_review`.
 
 ### 19. Server slime-log actions silently no-op on RLS-blocked writes
+- **Status (2026-07-07):** ✅ Shipped. Happy path (edit + delete of own logs) verified. Adversarial test deferred to pre-launch validation pass — needs a walkthrough (user has not done browser-console adversarial testing before). Test plan:
+  1. Log in as user A.
+  2. Open browser DevTools → Network tab.
+  3. Trigger a legit log update/delete to capture the request shape.
+  4. Copy the request as fetch/curl, change the logId to a random UUID (or another user's known log id).
+  5. Replay. Should return the new error message ("Log not found or you do not have permission to edit/delete it.") instead of silently succeeding.
+
+
 - **File:** `apps/web/lib/slime-actions.ts:176-230` (`updateSlimeLog`, `deleteSlimeLog`)
 - **Issue:** `.update(...).eq("id", logId).eq("user_id", userId)` returns `{success:true}` even when zero rows are affected. UI shows success toast + `router.push`.
 - **Why:** Confusing UX; hides a data-integrity blind spot if RLS ever mis-configures.

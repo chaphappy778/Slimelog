@@ -63,22 +63,36 @@ export default function DeleteLogButton({ logId }: { logId: string }) {
       </button>
 
       {showConfirm && (
+        // 2026-07-07: switched from bottom-sheet alignment
+        // (alignItems: flex-end with 40px bottom padding) to
+        // viewport-centered — matches the report modal pattern from
+        // the earlier smoke-test fix. The bottom-sheet placement
+        // collided with the BottomNavWrapper (64px + iOS safe area),
+        // so the card rendered underneath or barely above the nav.
+        // Centered fits regardless of nav height and dvh chrome.
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirm delete"
+          onClick={() => (isPending ? null : setShowConfirm(false))}
           style={{
             position: "fixed",
             inset: 0,
             zIndex: 120,
             background: "rgba(0,0,0,0.75)",
             display: "flex",
-            alignItems: "flex-end",
+            alignItems: "center",
             justifyContent: "center",
-            padding: "0 16px 40px",
+            padding: 16,
           }}
         >
           <div
+            onClick={(e) => e.stopPropagation()}
             style={{
               width: "100%",
-              maxWidth: 480,
+              maxWidth: 420,
+              maxHeight: "calc(100dvh - 32px)",
+              overflowY: "auto",
               background: "#0F0018",
               borderRadius: 20,
               border: "1px solid rgba(204,68,255,0.3)",
@@ -86,6 +100,7 @@ export default function DeleteLogButton({ logId }: { logId: string }) {
               display: "flex",
               flexDirection: "column",
               gap: 16,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
             }}
           >
             <p
