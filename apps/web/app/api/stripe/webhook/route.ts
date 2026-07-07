@@ -115,6 +115,42 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
+  // Audit hp-10 (2026-07-06): idempotency dedup. Insert-first with
+  // ON CONFLICT DO NOTHING against public.stripe_webhook_events. If
+  // the row already exists (returning empty select), another delivery
+  // already claimed this event — short-circuit with 200 so Stripe
+  // stops retrying. On successful handler execution we leave the row
+  // in place; on handler failure we delete it so the next retry can
+  // reclaim the event fresh.
+  //
+  // Payload stored so a postmortem can reprocess without hitting Stripe.
+  const { data: claim, error: claimErr } = await adminClient
+    .from("stripe_webhook_events")
+    .upsert(
+      {
+        event_id: event.id,
+        event_type: event.type,
+        payload: event.data.object as unknown as Record<string, unknown>,
+      },
+      { onConflict: "event_id", ignoreDuplicates: true },
+    )
+    .select("event_id");
+
+  if (claimErr) {
+    console.error("Webhook idempotency claim error:", claimErr);
+    // Fail closed — return 500 so Stripe retries. If the table is
+    // temporarily unavailable, we'd rather deliver-late than double.
+    return NextResponse.json(
+      { error: "Idempotency store unavailable" },
+      { status: 500 },
+    );
+  }
+
+  if (!claim || claim.length === 0) {
+    // Already processed — return 200 without running the handler.
+    return NextResponse.json({ received: true, deduped: true });
+  }
+
   try {
     switch (event.type) {
       case "checkout.session.completed": {
@@ -250,6 +286,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ received: true });
   } catch (err) {
     console.error("Webhook handler error:", err);
+
+    // Audit hp-10 (2026-07-06): roll back the idempotency claim so
+    // Stripe's next retry can reclaim this event. Without this, a
+    // partial handler failure would be permanently locked out from
+    // reprocessing. Best-effort delete — if this fails, the event is
+    // stuck in "claimed but not applied" state and needs manual
+    // intervention, but that's better than silently double-processing.
+    const { error: rollbackErr } = await adminClient
+      .from("stripe_webhook_events")
+      .delete()
+      .eq("event_id", event.id);
+    if (rollbackErr) {
+      console.error(
+        "Webhook idempotency rollback failed for",
+        event.id,
+        rollbackErr,
+      );
+    }
+
     return NextResponse.json(
       { error: "Webhook handler failed" },
       { status: 500 },
