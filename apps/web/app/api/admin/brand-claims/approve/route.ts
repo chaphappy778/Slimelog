@@ -83,8 +83,10 @@ export async function POST(req: Request) {
     data: { user: adminUser },
   } = await authClient.auth.getUser();
 
-  // Audit hp-9 (2026-07-06): role-based admin check.
-  if (!(await isAdminUser(authClient, adminUser))) {
+  // Audit hp-9 (2026-07-06): role-based admin check. Keep the
+  // explicit adminUser null guard first so TypeScript can narrow the
+  // type through the check — downstream code uses adminUser.id.
+  if (!adminUser || !(await isAdminUser(authClient, adminUser))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

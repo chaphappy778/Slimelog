@@ -25,8 +25,10 @@ export async function GET(req: Request) {
     data: { user: adminUser },
   } = await authClient.auth.getUser();
 
-  // Audit hp-9 (2026-07-06): role-based admin check.
-  if (!(await isAdminUser(authClient, adminUser))) {
+  // Audit hp-9 (2026-07-06): role-based admin check. Keep the
+  // explicit adminUser null guard first for consistency with the
+  // approve/reject routes; isAdminUser also handles null internally.
+  if (!adminUser || !(await isAdminUser(authClient, adminUser))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
