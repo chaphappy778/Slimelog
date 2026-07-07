@@ -77,7 +77,18 @@ export async function checkRateLimit(args: CheckArgs): Promise<CheckResult> {
 
   try {
     const admin = getAdminClient();
-    const { data, error } = await admin.rpc("rate_limit_increment", {
+    // The generated Supabase TS types don't include the
+    // rate_limit_increment RPC (added in migration 20260706000056).
+    // Cast the RPC surface to bypass — the runtime call works fine
+    // and we validate the return type below. When we regenerate
+    // types (supabase gen types typescript), this cast can be
+    // removed.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rpc = admin.rpc as unknown as (
+      fn: string,
+      args: Record<string, unknown>,
+    ) => Promise<{ data: unknown; error: { message: string } | null }>;
+    const { data, error } = await rpc("rate_limit_increment", {
       p_bucket_key: key,
       p_bucket_start: bucketStartIso,
     });
