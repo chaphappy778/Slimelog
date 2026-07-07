@@ -8,3 +8,4 @@ node_modules
 # Local-only Word docs (not source of truth — markdown equivalents in repo)
 docs/*.docx
 docs/Project_Summary
+docs/hub-snapshot.md
