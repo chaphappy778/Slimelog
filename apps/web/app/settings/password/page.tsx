@@ -106,8 +106,14 @@ function ValidationDot({ met }: { met: boolean }) {
 export default function ChangePasswordPage() {
   const router = useRouter();
   const [authChecked, setAuthChecked] = useState(false);
+  // Audit hp-22 (2026-07-07): added currentPassword. Client no longer
+  // calls supabase.auth.updateUser() directly — the server route
+  // /api/account/change-password verifies the current password via
+  // signInWithPassword before rotating.
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [status, setStatus] = useState<
@@ -125,21 +131,44 @@ export default function ChangePasswordPage() {
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const hasCurrent = currentPassword.length > 0;
   const isLongEnough = newPassword.length >= 8;
   const passwordsMatch =
     newPassword.length > 0 && newPassword === confirmPassword;
-  const isValid = isLongEnough && passwordsMatch;
+  const isDifferent =
+    currentPassword.length > 0 &&
+    newPassword.length > 0 &&
+    currentPassword !== newPassword;
+  const isValid = hasCurrent && isLongEnough && passwordsMatch && isDifferent;
 
   async function handleSubmit() {
     if (!isValid || status === "loading") return;
     setStatus("loading");
     setErrorMsg("");
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    if (error) {
-      setErrorMsg(error.message);
-      setStatus("error");
-    } else {
+    try {
+      const res = await fetch("/api/account/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: newPassword,
+        }),
+      });
+      const json = (await res.json()) as { error?: string; success?: boolean };
+      if (!res.ok || !json.success) {
+        setErrorMsg(json.error ?? "Could not update password. Try again.");
+        setStatus("error");
+        return;
+      }
       setStatus("success");
+      // Clear the fields on success so the values don't linger in
+      // memory / autofill.
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch {
+      setErrorMsg("Network error. Try again.");
+      setStatus("error");
     }
   }
 
@@ -229,6 +258,24 @@ export default function ChangePasswordPage() {
             </div>
           ) : (
             <>
+              {/* Audit hp-22 (2026-07-07): current-password re-auth input.
+                  Without this a session-hijacker could rotate the
+                  password and permanently lock out the real user. */}
+              <PasswordInput
+                id="current-password"
+                label="CURRENT PASSWORD"
+                value={currentPassword}
+                onChange={(v) => {
+                  setCurrentPassword(v);
+                  if (status === "error") {
+                    setStatus("idle");
+                    setErrorMsg("");
+                  }
+                }}
+                show={showCurrent}
+                onToggle={() => setShowCurrent((s) => !s)}
+              />
+
               <PasswordInput
                 id="new-password"
                 label="NEW PASSWORD"
@@ -262,6 +309,19 @@ export default function ChangePasswordPage() {
               {/* Validation checklist */}
               <div className="space-y-2 pt-1">
                 <div className="flex items-center gap-2">
+                  <ValidationDot met={hasCurrent} />
+                  <span
+                    className="text-xs transition-colors"
+                    style={{
+                      color: hasCurrent
+                        ? "rgba(245,245,245,0.85)"
+                        : "rgba(245,245,245,0.4)",
+                    }}
+                  >
+                    Current password entered
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
                   <ValidationDot met={isLongEnough} />
                   <span
                     className="text-xs transition-colors"
@@ -285,6 +345,19 @@ export default function ChangePasswordPage() {
                     }}
                   >
                     Passwords match
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <ValidationDot met={isDifferent} />
+                  <span
+                    className="text-xs transition-colors"
+                    style={{
+                      color: isDifferent
+                        ? "rgba(245,245,245,0.85)"
+                        : "rgba(245,245,245,0.4)",
+                    }}
+                  >
+                    New password differs from current
                   </span>
                 </div>
               </div>
