@@ -107,10 +107,58 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const portalSession = await stripe.billingPortal.sessions.create({
-      customer: customerId,
-      return_url,
-    });
+    let portalSession;
+    try {
+      portalSession = await stripe.billingPortal.sessions.create({
+        customer: customerId,
+        return_url,
+      });
+    } catch (stripeErr) {
+      // 2026-07-09: gracefully handle deleted-customer edge case. If
+      // the customer_id on file no longer exists in Stripe (test-mode
+      // cleanup, mode mismatch, manual delete in dashboard, etc.),
+      // Stripe returns resource_missing / 400. Clear the stale
+      // reference on our side so the user can start a fresh
+      // subscription flow, and return a legible 400 instead of a
+      // generic 500.
+      const isResourceMissing =
+        stripeErr instanceof Error &&
+        "code" in stripeErr &&
+        (stripeErr as { code?: string }).code === "resource_missing";
+
+      if (isResourceMissing) {
+        console.warn(
+          `[stripe/portal] stale customer_id ${customerId} — clearing from ${mode} row`,
+        );
+        if (mode === "user") {
+          await getAdminClient()
+            .from("profiles")
+            .update({
+              stripe_customer_id: null,
+              subscription_status: null,
+              subscription_tier: "free",
+            })
+            .eq("id", user.id);
+        } else if (brand_id) {
+          await getAdminClient()
+            .from("brands")
+            .update({
+              stripe_customer_id: null,
+              subscription_status: null,
+              subscription_tier: "free",
+            })
+            .eq("id", brand_id);
+        }
+        return NextResponse.json(
+          {
+            error:
+              "Your subscription record was out of sync. It's been reset — please subscribe again to manage billing.",
+          },
+          { status: 400 },
+        );
+      }
+      throw stripeErr;
+    }
 
     return NextResponse.json({ url: portalSession.url });
   } catch (err) {
