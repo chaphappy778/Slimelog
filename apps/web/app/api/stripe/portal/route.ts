@@ -1,17 +1,33 @@
 // apps/web/app/api/stripe/portal/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { stripe } from "@/lib/stripe";
 import { validateRedirectUrl } from "@/lib/stripe-guards";
 
-const adminClient = createAdminClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
+// Audit hp-23 (2026-07-08): lazy-init admin client with explicit env
+// check. See webhook/route.ts for full context.
+let cachedAdminClient: ReturnType<typeof createSupabaseClient> | null = null;
+function getAdminClient() {
+  if (cachedAdminClient) return cachedAdminClient;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error(
+      "Missing Supabase env vars (NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)",
+    );
+  }
+  cachedAdminClient = createSupabaseClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  return cachedAdminClient;
+}
 
 export async function POST(req: NextRequest) {
   try {
+    // Audit hp-23 (2026-07-08): validate env presence up front.
+    getAdminClient();
+
     const supabase = await createClient();
     const {
       data: { user },
@@ -51,7 +67,7 @@ export async function POST(req: NextRequest) {
     let customerId: string | null = null;
 
     if (mode === "user") {
-      const { data: profile } = await adminClient
+      const { data: profile } = await getAdminClient()
         .from("profiles")
         .select("stripe_customer_id")
         .eq("id", user.id)
@@ -66,7 +82,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const { data: brand } = await adminClient
+      const { data: brand } = await getAdminClient()
         .from("brands")
         .select("stripe_customer_id, owner_id")
         .eq("id", brand_id)

@@ -1,15 +1,35 @@
 // apps/web/app/api/stripe/webhook/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { stripe } from "@/lib/stripe";
 import Stripe from "stripe";
 
 export const runtime = "nodejs";
 
-const adminClient = createAdminClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
+// Audit hp-23 (2026-07-08): the previous module-scope
+// `createAdminClient(url!, key!)` silently accepted `undefined` env
+// vars (JS coerces `undefined!` to a runtime undefined which
+// createClient treats as "" for the key). If the env was missing at
+// deploy, the webhook accepted Stripe events and returned 200 while
+// no DB updates ever landed — the worst class of silent failure at
+// the money-flow layer. Lazy-init inside the handler with explicit
+// env presence check now. Module-scope singleton cache avoids
+// re-instantiating on every invocation once the check passes.
+let cachedAdminClient: ReturnType<typeof createSupabaseClient> | null = null;
+function getAdminClient() {
+  if (cachedAdminClient) return cachedAdminClient;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error(
+      "Missing Supabase env vars (NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)",
+    );
+  }
+  cachedAdminClient = createSupabaseClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  return cachedAdminClient;
+}
 
 // [Fix B] Signature widened from Record<string, string | null> to accept boolean
 // values so subscription_cancel_at_period_end can be written alongside string
@@ -18,28 +38,28 @@ async function updateByCustomerId(
   customerId: string,
   updates: Record<string, string | null | boolean>,
 ) {
-  const { data: profile } = await adminClient
+  const { data: profile } = await getAdminClient()
     .from("profiles")
     .select("id")
     .eq("stripe_customer_id", customerId)
     .maybeSingle();
 
   if (profile) {
-    await adminClient
+    await getAdminClient()
       .from("profiles")
       .update(updates)
       .eq("stripe_customer_id", customerId);
     return;
   }
 
-  const { data: brand } = await adminClient
+  const { data: brand } = await getAdminClient()
     .from("brands")
     .select("id")
     .eq("stripe_customer_id", customerId)
     .maybeSingle();
 
   if (brand) {
-    await adminClient
+    await getAdminClient()
       .from("brands")
       .update(updates)
       .eq("stripe_customer_id", customerId);
@@ -53,28 +73,28 @@ async function updateByCustomerIdTyped(
   profileUpdates: Record<string, string | null | boolean>,
   brandUpdates: Record<string, string | null | boolean>,
 ) {
-  const { data: profile } = await adminClient
+  const { data: profile } = await getAdminClient()
     .from("profiles")
     .select("id")
     .eq("stripe_customer_id", customerId)
     .maybeSingle();
 
   if (profile) {
-    await adminClient
+    await getAdminClient()
       .from("profiles")
       .update(profileUpdates)
       .eq("stripe_customer_id", customerId);
     return;
   }
 
-  const { data: brand } = await adminClient
+  const { data: brand } = await getAdminClient()
     .from("brands")
     .select("id")
     .eq("stripe_customer_id", customerId)
     .maybeSingle();
 
   if (brand) {
-    await adminClient
+    await getAdminClient()
       .from("brands")
       .update(brandUpdates)
       .eq("stripe_customer_id", customerId);
@@ -92,6 +112,27 @@ function periodEndIso(subscription: Stripe.Subscription): string | null {
 }
 
 export async function POST(req: NextRequest) {
+  // Audit hp-23 (2026-07-08): validate env presence up front so a
+  // deploy with missing Supabase env vars fails visibly rather than
+  // accepting Stripe events and returning 200 while doing nothing.
+  // Cache-warms getAdminClient so subsequent calls are cheap.
+  try {
+    getAdminClient();
+  } catch (envErr) {
+    console.error("[stripe/webhook] env check failed:", envErr);
+    return NextResponse.json(
+      { error: "Server misconfigured — Supabase env vars missing." },
+      { status: 500 },
+    );
+  }
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    console.error("[stripe/webhook] STRIPE_WEBHOOK_SECRET missing");
+    return NextResponse.json(
+      { error: "Server misconfigured — Stripe webhook secret missing." },
+      { status: 500 },
+    );
+  }
+
   const body = await req.text();
   const sig = req.headers.get("stripe-signature");
 
@@ -124,7 +165,7 @@ export async function POST(req: NextRequest) {
   // reclaim the event fresh.
   //
   // Payload stored so a postmortem can reprocess without hitting Stripe.
-  const { data: claim, error: claimErr } = await adminClient
+  const { data: claim, error: claimErr } = await getAdminClient()
     .from("stripe_webhook_events")
     .upsert(
       {
@@ -293,7 +334,7 @@ export async function POST(req: NextRequest) {
     // reprocessing. Best-effort delete — if this fails, the event is
     // stuck in "claimed but not applied" state and needs manual
     // intervention, but that's better than silently double-processing.
-    const { error: rollbackErr } = await adminClient
+    const { error: rollbackErr } = await getAdminClient()
       .from("stripe_webhook_events")
       .delete()
       .eq("event_id", event.id);
