@@ -1,6 +1,9 @@
 // apps/web/app/api/stripe/webhook/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import {
+  createClient as createSupabaseClient,
+  type SupabaseClient,
+} from "@supabase/supabase-js";
 import { stripe } from "@/lib/stripe";
 import Stripe from "stripe";
 
@@ -15,8 +18,11 @@ export const runtime = "nodejs";
 // the money-flow layer. Lazy-init inside the handler with explicit
 // env presence check now. Module-scope singleton cache avoids
 // re-instantiating on every invocation once the check passes.
-let cachedAdminClient: ReturnType<typeof createSupabaseClient> | null = null;
-function getAdminClient() {
+// Explicit `SupabaseClient` type so downstream .from() queries don't
+// infer as `never` (ReturnType<typeof createSupabaseClient> without a
+// Database generic resolves to SupabaseClient<never> in newer versions).
+let cachedAdminClient: SupabaseClient | null = null;
+function getAdminClient(): SupabaseClient {
   if (cachedAdminClient) return cachedAdminClient;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;

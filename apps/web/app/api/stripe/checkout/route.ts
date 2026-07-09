@@ -1,7 +1,10 @@
 // apps/web/app/api/stripe/checkout/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import {
+  createClient as createSupabaseClient,
+  type SupabaseClient,
+} from "@supabase/supabase-js";
 import { stripe } from "@/lib/stripe";
 import {
   isAllowedPriceIdForMode,
@@ -12,8 +15,13 @@ import {
 // check. Previous module-scope `createAdminClient(url!, key!)` let
 // undefined env vars through silently — checkout returned 200 while
 // no DB updates landed. See webhook/route.ts for full context.
-let cachedAdminClient: ReturnType<typeof createSupabaseClient> | null = null;
-function getAdminClient() {
+// Explicit `SupabaseClient` type (defaults its Database generic to `any`)
+// so downstream .from() queries don't infer as `never`. ReturnType<typeof
+// createSupabaseClient> without an explicit Database generic resolves to
+// SupabaseClient<never> in newer supabase-js versions, which broke the
+// build on first attempt at this refactor.
+let cachedAdminClient: SupabaseClient | null = null;
+function getAdminClient(): SupabaseClient {
   if (cachedAdminClient) return cachedAdminClient;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;

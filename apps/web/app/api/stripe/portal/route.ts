@@ -1,14 +1,19 @@
 // apps/web/app/api/stripe/portal/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import {
+  createClient as createSupabaseClient,
+  type SupabaseClient,
+} from "@supabase/supabase-js";
 import { stripe } from "@/lib/stripe";
 import { validateRedirectUrl } from "@/lib/stripe-guards";
 
 // Audit hp-23 (2026-07-08): lazy-init admin client with explicit env
 // check. See webhook/route.ts for full context.
-let cachedAdminClient: ReturnType<typeof createSupabaseClient> | null = null;
-function getAdminClient() {
+// Explicit `SupabaseClient` type so downstream .from() queries don't
+// infer as `never`. See webhook/route.ts for the same fix.
+let cachedAdminClient: SupabaseClient | null = null;
+function getAdminClient(): SupabaseClient {
   if (cachedAdminClient) return cachedAdminClient;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
