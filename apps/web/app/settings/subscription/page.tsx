@@ -43,6 +43,8 @@ export default function SubscriptionPage() {
   const [periodEnd, setPeriodEnd] = useState<string | null>(null);
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState<boolean>(false);
   const [portalLoading, setPortalLoading] = useState(false);
+  // 2026-07-09: surface portal errors instead of swallowing them.
+  const [portalError, setPortalError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -76,6 +78,7 @@ export default function SubscriptionPage() {
   async function handleManage() {
     if (portalLoading) return;
     setPortalLoading(true);
+    setPortalError(null);
     try {
       const res = await fetch("/api/stripe/portal", {
         method: "POST",
@@ -85,10 +88,48 @@ export default function SubscriptionPage() {
           mode: "user",
         }),
       });
-      const data = await res.json();
-      if (data.url) window.location.href = data.url;
+      const data = (await res.json()) as { url?: string; error?: string };
+
+      if (res.ok && data.url) {
+        window.location.href = data.url;
+        return;
+      }
+
+      // 2026-07-09: surface the server error to the user instead of
+      // silently no-oping. The portal route may 400 when the customer
+      // was cleared for a stale record (self-heal path in
+      // /api/stripe/portal) — the user needs to know they should
+      // re-subscribe.
+      const message =
+        data.error ||
+        "Could not open the subscription portal. Please try again or reload the page.";
+      setPortalError(message);
+
+      // If the server signaled the customer was reset, re-fetch profile
+      // so the UI switches to the upgrade CTAs on next click.
+      if (
+        userId &&
+        typeof message === "string" &&
+        message.toLowerCase().includes("out of sync")
+      ) {
+        const { data: refreshed } = await supabase
+          .from("profiles")
+          .select(
+            "subscription_tier, subscription_current_period_end, subscription_cancel_at_period_end",
+          )
+          .eq("id", userId)
+          .maybeSingle();
+        if (refreshed) {
+          setSubscriptionTier(refreshed.subscription_tier ?? "free");
+          setPeriodEnd(refreshed.subscription_current_period_end ?? null);
+          setCancelAtPeriodEnd(
+            refreshed.subscription_cancel_at_period_end ?? false,
+          );
+        }
+      }
     } catch (err) {
       console.error("Portal error:", err);
+      setPortalError("Network error. Please check your connection and retry.");
     } finally {
       setPortalLoading(false);
     }
@@ -188,6 +229,21 @@ export default function SubscriptionPage() {
               >
                 {portalLoading ? "Loading..." : "Manage Subscription"}
               </button>
+              {portalError && (
+                <p
+                  role="alert"
+                  className="text-xs mt-1"
+                  style={{
+                    color: "#FF5A6A",
+                    background: "rgba(255,90,106,0.08)",
+                    border: "1px solid rgba(255,90,106,0.25)",
+                    padding: "8px 10px",
+                    borderRadius: "10px",
+                  }}
+                >
+                  {portalError}
+                </p>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
