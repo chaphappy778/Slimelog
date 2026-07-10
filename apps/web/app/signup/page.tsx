@@ -1,11 +1,28 @@
 // apps/web/app/signup/page.tsx
 "use client";
 
-import { useMemo, useState, useTransition, Suspense } from "react";
+import { useEffect, useMemo, useState, useTransition, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { safeRedirect } from "@/lib/safe-redirect";
+
+// Referral code shape must match the DB CHECK constraint on
+// profiles.referral_code (mig 62): 6 chars, uppercase alphanumeric only.
+const REFERRAL_CODE_RE = /^[A-Z0-9]{6}$/;
+
+// Cookie bridge for referral codes so the code survives OAuth roundtrips
+// and email verification. 7-day expiry — long enough for the user to
+// click through email, short enough that a stale invite link can't sit
+// on a shared machine forever. path=/ so any subsequent page can read it.
+// SameSite=Lax so the cookie ships on top-level cross-site navigation
+// (clicking an invite link from Instagram/DM), but not on cross-site
+// subrequests. Not HttpOnly — the client needs to read it too, and the
+// value isn't a secret (referral codes are meant to be shared).
+function setReferralCookie(code: string) {
+  const maxAge = 7 * 24 * 60 * 60;
+  document.cookie = `slimelog_ref=${code}; path=/; max-age=${maxAge}; SameSite=Lax`;
+}
 
 function calculateAge(dob: string): number {
   const today = new Date();
@@ -43,6 +60,23 @@ function SignupPageInner() {
   const searchParams = useSearchParams();
   const rawNext = searchParams.get("next");
   const next = safeRedirect(rawNext, "/");
+
+  // Read + validate ?ref=. Uppercased so users don't get burned by copy-
+  // paste from a lowercase link. Invalid values are silently dropped —
+  // no error UI because a bad referral code shouldn't block signup.
+  const rawRef = searchParams.get("ref");
+  const referralCode = useMemo(() => {
+    if (!rawRef) return null;
+    const upper = rawRef.trim().toUpperCase();
+    return REFERRAL_CODE_RE.test(upper) ? upper : null;
+  }, [rawRef]);
+
+  // Persist the code to a cookie so it survives the OAuth roundtrip
+  // (Google → Supabase → /auth/callback) and email verification. Auth
+  // callback reads the cookie and applies the referral relationship.
+  useEffect(() => {
+    if (referralCode) setReferralCookie(referralCode);
+  }, [referralCode]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -135,6 +169,10 @@ function SignupPageInner() {
           data: {
             date_of_birth: dob,
             marketing_consent: marketingConsent,
+            // Referral code passed in metadata as primary channel (survives
+            // email confirmation reliably). Cookie is the fallback for
+            // OAuth signups and edge cases where the metadata is lost.
+            ...(referralCode ? { referred_by_code: referralCode } : {}),
           },
         },
       });

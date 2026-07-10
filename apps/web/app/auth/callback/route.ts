@@ -20,6 +20,72 @@ import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 import { safeRedirect } from "@/lib/safe-redirect";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+// Referral code shape must match DB CHECK on profiles.referral_code
+// (mig 62): 6 chars, uppercase alphanumeric only.
+const REFERRAL_CODE_RE = /^[A-Z0-9]{6}$/;
+
+/**
+ * Applies a referral relationship to a new user's profile if a valid code
+ * is available in either user_metadata (email signup path) or the
+ * slimelog_ref cookie (OAuth signup path). Idempotent and silent — a
+ * missing, invalid, or already-set referral is a no-op.
+ *
+ * Referrer's referral_activations counter is NOT bumped here. Activation
+ * is defined as "email verified + logged first slime," which happens
+ * later. That trigger will read profiles.referred_by_user_id and update
+ * the referrer's counter at the right moment.
+ */
+async function applyReferralIfPresent(
+  userId: string,
+  metadataCode: unknown,
+  cookieCode: string | undefined,
+  adminClient: SupabaseClient,
+): Promise<void> {
+  const raw =
+    (typeof metadataCode === "string" ? metadataCode : null) ??
+    cookieCode ??
+    null;
+  if (!raw) return;
+  const code = raw.trim().toUpperCase();
+  if (!REFERRAL_CODE_RE.test(code)) return;
+
+  // Immutability: never overwrite an existing referrer. This shouldn't
+  // fire in practice (auth callback runs once per signup) but is a
+  // defense against a re-triggered callback + stale cookie combo.
+  const { data: existing } = await adminClient
+    .from("profiles")
+    .select("referred_by_user_id")
+    .eq("id", userId)
+    .single();
+  if (existing?.referred_by_user_id) return;
+
+  // Look up the referrer by code. Bad/nonexistent codes fail silently —
+  // we don't want to block signup on a mistyped invite link.
+  const { data: referrer } = await adminClient
+    .from("profiles")
+    .select("id")
+    .eq("referral_code", code)
+    .maybeSingle();
+  if (!referrer) return;
+  // Guard against self-referral (belt-and-braces with the DB CHECK).
+  if (referrer.id === userId) return;
+
+  const { error: updateError } = await adminClient
+    .from("profiles")
+    .update({ referred_by_user_id: referrer.id })
+    .eq("id", userId);
+
+  if (updateError) {
+    // Log but don't block signup — a failed referral is disappointing
+    // but shouldn't prevent the user from getting into the app.
+    console.error(
+      "[auth/callback] Failed to apply referral:",
+      updateError.message,
+    );
+  }
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -105,6 +171,16 @@ export async function GET(request: NextRequest) {
               .update(profileUpdate)
               .eq("id", user.id);
 
+            // Apply referral if the signup page passed one via metadata
+            // (primary channel for email signups) or the slimelog_ref
+            // cookie (fallback). Immutable once set.
+            await applyReferralIfPresent(
+              user.id,
+              user.user_metadata?.referred_by_code,
+              cookieStore.get("slimelog_ref")?.value,
+              adminClient,
+            );
+
             // Sync Brevo list membership if the user opted in. We don't
             // await failure — sync errors get logged but don't block the
             // redirect. Only run for consent = true; leaving consent
@@ -150,6 +226,17 @@ export async function GET(request: NextRequest) {
           } else {
             // Google OAuth: no DOB in metadata — send to age verify page.
             // Marketing consent for OAuth users is captured on /welcome.
+            // Apply referral relationship here so it lands regardless of
+            // whether the user completes /age-verify + /welcome in this
+            // session. Cookie is the OAuth channel since user_metadata
+            // won't carry referred_by_code from a Google signin.
+            const adminClient = createAdminClient();
+            await applyReferralIfPresent(
+              user.id,
+              user.user_metadata?.referred_by_code,
+              cookieStore.get("slimelog_ref")?.value,
+              adminClient,
+            );
             return NextResponse.redirect(
               `${origin}/age-verify?next=${encodeURIComponent(next)}`,
             );
