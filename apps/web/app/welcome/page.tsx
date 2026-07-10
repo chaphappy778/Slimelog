@@ -3,19 +3,17 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
 import {
   checkUsernameAvailable,
   updateOnboardingProfile,
 } from "@/lib/profile-actions";
 import { safeRedirect } from "@/lib/safe-redirect";
+// Audit hp-24 (2026-07-09): use the shared browser singleton.
+import { createClient } from "@/lib/supabase/client";
 
-// ─── Module-level Supabase client (absolute rule) ─────────────────────────────
+// ─── Module-level Supabase client (absolute rule, singleton internally) ─────
 
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+const supabase = createClient();
 
 // ─── Image compression helpers (verbatim from settings/profile/page.tsx) ──────
 

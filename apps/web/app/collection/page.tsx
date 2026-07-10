@@ -3,7 +3,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { createBrowserClient } from "@supabase/ssr";
+// Audit hp-24 (2026-07-09): use the shared browser singleton.
+import { createClient } from "@/lib/supabase/client";
 import { getUserCollectionLogs } from "@/lib/slime-actions";
 import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
 import type { CollectionLog, SlimeBaseType } from "@/lib/types";
@@ -272,10 +273,7 @@ export default function CollectionPage() {
 
         if (fetched.length === 0) return;
 
-        const supabase = createBrowserClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        );
+        const supabase = createClient();
 
         const logIds = fetched.map((l) => l.id);
 

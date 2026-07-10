@@ -3,15 +3,12 @@
 
 import { useMemo, useState, useTransition, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
 import FloatingPills from "@/components/FloatingPills";
 import { safeRedirect } from "@/lib/safe-redirect";
+// Audit hp-24 (2026-07-09): use the shared browser singleton.
+import { createClient } from "@/lib/supabase/client";
 
-// Module-level Supabase client — not inside component body
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+const supabase = createClient();
 
 function calculateAge(dob: string): number {
   const today = new Date();

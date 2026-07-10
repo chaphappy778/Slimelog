@@ -8,7 +8,8 @@
 
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
+// Audit hp-24 (2026-07-09): use the shared browser singleton.
+import { createClient } from "@/lib/supabase/client";
 import type { LogSlimeInput } from "@/lib/slime-actions";
 import { SLIME_BASE_TYPE_LABELS, SCENT_STRENGTH_LABELS } from "@/lib/types";
 import type { SlimeBaseType, ScentStrength } from "@/lib/types";
@@ -309,12 +310,7 @@ function EditLogPageInner() {
     in_collection: true,
   });
 
-  const supabaseRef = useRef(
-    createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    ),
-  );
+  const supabaseRef = useRef(createClient());
 
   useEffect(() => {
     const supabase = supabaseRef.current;
