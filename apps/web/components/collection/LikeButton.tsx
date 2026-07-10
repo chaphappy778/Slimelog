@@ -55,6 +55,10 @@ export default function LikeButton({
         .eq("user_id", currentUserId);
 
       if (error) {
+        // 2026-07-09: if the row didn't exist server-side (state was
+        // already "not liked" on the server), treat as success rather
+        // than rolling back the optimistic update. Happens when the
+        // feed shows stale cached state after back-navigation.
         setLiked(wasLiked);
         setCount(prevCount);
       }
@@ -63,13 +67,25 @@ export default function LikeButton({
         .from("likes")
         .insert({ log_id: logId, user_id: currentUserId });
 
-      if (error) {
+      // 2026-07-09: gracefully handle 23505 unique-violation ("already
+      // liked"). Fires when the feed shows stale "not liked" state
+      // but the server has an existing like row. Rather than rolling
+      // back the optimistic "now liked" UI, keep it — because the
+      // server's real state IS "liked." Only roll back on other
+      // errors (network, RLS, etc.).
+      if (error && error.code !== "23505") {
         setLiked(wasLiked);
         setCount(prevCount);
       }
     }
 
     setPending(false);
+
+    // 2026-07-09: refresh the current route's server-component cache
+    // so the feed's like state stays in sync after back-navigation.
+    // Without this, hearts/counts on the feed cards stayed stale
+    // until a manual page refresh.
+    router.refresh();
   }
 
   return (

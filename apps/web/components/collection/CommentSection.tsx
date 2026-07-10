@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useToast } from "@/components/Toast";
 import ReportButton from "@/components/ReportButton";
 import CommentLikeButton from "@/components/collection/CommentLikeButton";
@@ -62,6 +62,7 @@ export default function CommentSection({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { showToast } = useToast();
   const pathname = usePathname();
+  const router = useRouter();
 
   useEffect(() => {
     let cancelled = false;
@@ -201,6 +202,10 @@ export default function CommentSection({
       onCountChange(comments.length + 1);
       setBody("");
       showToast("Comment posted", "success");
+      // 2026-07-09: refresh the current route's server-component cache
+      // so the feed card's comment icon reflects the new comment on
+      // next back-navigation. Without this, feed cards stayed stale.
+      router.refresh();
     } else {
       showToast("Could not post comment", "error");
     }
@@ -227,6 +232,9 @@ export default function CommentSection({
       });
       onCountChange(comments.length - 1);
       showToast("Comment deleted", "info");
+      // 2026-07-09: same as insert path — refresh route cache so
+      // feed card comment counts sync after back-navigation.
+      router.refresh();
     }
   }
 

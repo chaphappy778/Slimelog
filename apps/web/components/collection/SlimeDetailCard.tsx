@@ -485,7 +485,11 @@ export default function SlimeDetailCard({
             : 16,
         }}
       >
-        {/* Owner avatar + @username — absolute flex row at card boundary */}
+        {/* Owner avatar + @username — absolute flex row at card boundary.
+            2026-07-09: avatar wrapped in a Link so it navigates to the
+            owner's profile like the username does. Previously only the
+            username was clickable, forcing users to hit the tiny handle
+            instead of the more obvious avatar target. */}
         {imageUrl && showOwnerRow && (
           <div
             style={{
@@ -497,7 +501,9 @@ export default function SlimeDetailCard({
               gap: 10,
             }}
           >
-            <div
+            <Link
+              href={`/users/${ownerUsername}`}
+              aria-label={`View ${ownerUsername ?? "user"}'s profile`}
               style={{
                 width: 56,
                 height: 56,
@@ -506,6 +512,7 @@ export default function SlimeDetailCard({
                 overflow: "hidden",
                 boxShadow: "0 2px 12px rgba(0,0,0,0.6)",
                 flexShrink: 0,
+                display: "block",
               }}
             >
               {ownerAvatarUrl ? (
@@ -535,7 +542,7 @@ export default function SlimeDetailCard({
                   {ownerInitial}
                 </div>
               )}
-            </div>
+            </Link>
             <Link
               href={`/users/${ownerUsername}`}
               style={{
