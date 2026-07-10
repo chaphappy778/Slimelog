@@ -37,25 +37,57 @@ function getAdminClient(): SupabaseClient {
   return cachedAdminClient;
 }
 
-// [Fix B] Signature widened from Record<string, string | null> to accept boolean
-// values so subscription_cancel_at_period_end can be written alongside string
-// and nullable timestamp values.
-async function updateByCustomerId(
-  customerId: string,
-  updates: Record<string, string | null | boolean>,
-) {
+// 2026-07-09: metadata-first routing. Every checkout session we create
+// sets `subscription_data.metadata = { brand_id }` or
+// `{ supabase_user_id }`, which Stripe propagates onto the subscription
+// object AND surfaces on the checkout session itself. Routing by
+// metadata gives us deterministic table selection independent of
+// stripe_customer_id lookups (which were fragile: dependent on the
+// customer_id being written to our row before the webhook fires, and
+// on there being no collisions across profiles+brands).
+//
+// We fall back to customer_id lookup for defensive coverage — mostly
+// for historical subscriptions created before metadata routing shipped.
+type Target =
+  | { kind: "profile"; matchColumn: string; matchValue: string }
+  | { kind: "brand"; matchColumn: string; matchValue: string }
+  | null;
+
+interface StripeMetadata {
+  brand_id?: string;
+  supabase_user_id?: string;
+}
+
+async function resolveTarget(
+  customerId: string | null,
+  metadata: StripeMetadata | null | undefined,
+): Promise<Target> {
+  // 1. Metadata-first routing.
+  if (metadata?.brand_id) {
+    return { kind: "brand", matchColumn: "id", matchValue: metadata.brand_id };
+  }
+  if (metadata?.supabase_user_id) {
+    return {
+      kind: "profile",
+      matchColumn: "id",
+      matchValue: metadata.supabase_user_id,
+    };
+  }
+
+  // 2. Fallback: look up by stripe_customer_id.
+  if (!customerId) return null;
+
   const { data: profile } = await getAdminClient()
     .from("profiles")
     .select("id")
     .eq("stripe_customer_id", customerId)
     .maybeSingle();
-
   if (profile) {
-    await getAdminClient()
-      .from("profiles")
-      .update(updates)
-      .eq("stripe_customer_id", customerId);
-    return;
+    return {
+      kind: "profile",
+      matchColumn: "stripe_customer_id",
+      matchValue: customerId,
+    };
   }
 
   const { data: brand } = await getAdminClient()
@@ -63,47 +95,98 @@ async function updateByCustomerId(
     .select("id")
     .eq("stripe_customer_id", customerId)
     .maybeSingle();
-
   if (brand) {
-    await getAdminClient()
-      .from("brands")
-      .update(updates)
-      .eq("stripe_customer_id", customerId);
+    return {
+      kind: "brand",
+      matchColumn: "stripe_customer_id",
+      matchValue: customerId,
+    };
+  }
+
+  return null;
+}
+
+// [Fix B] Signature widened from Record<string, string | null> to accept boolean
+// values so subscription_cancel_at_period_end can be written alongside string
+// and nullable timestamp values.
+async function updateByCustomerId(
+  customerId: string | null,
+  metadata: StripeMetadata | null | undefined,
+  updates: Record<string, string | null | boolean>,
+) {
+  const target = await resolveTarget(customerId, metadata);
+  if (!target) {
+    console.error(
+      "[stripe/webhook] updateByCustomerId: no target resolved",
+      { customerId, metadata },
+    );
+    return;
+  }
+
+  // 2026-07-09: if the row also needs its stripe_customer_id set (when
+  // we routed by metadata but the row didn't yet have a customer_id
+  // stored), include it in the update. Catches the class of bug where
+  // the checkout route's own update to stripe_customer_id landed but
+  // then something else cleared it.
+  const enrichedUpdates = customerId
+    ? { ...updates, stripe_customer_id: customerId }
+    : updates;
+
+  const { data, error } = await getAdminClient()
+    .from(target.kind === "profile" ? "profiles" : "brands")
+    .update(enrichedUpdates)
+    .eq(target.matchColumn, target.matchValue)
+    .select("id");
+
+  if (error) {
+    console.error("[stripe/webhook] updateByCustomerId error:", error);
+    throw error;
+  }
+  if (!data || data.length === 0) {
+    console.error(
+      "[stripe/webhook] updateByCustomerId affected 0 rows",
+      { customerId, metadata, target },
+    );
   }
 }
 
 // [Fix B] Same widening as above — both profileUpdates and brandUpdates now
 // accept boolean values.
 async function updateByCustomerIdTyped(
-  customerId: string,
+  customerId: string | null,
+  metadata: StripeMetadata | null | undefined,
   profileUpdates: Record<string, string | null | boolean>,
   brandUpdates: Record<string, string | null | boolean>,
 ) {
-  const { data: profile } = await getAdminClient()
-    .from("profiles")
-    .select("id")
-    .eq("stripe_customer_id", customerId)
-    .maybeSingle();
-
-  if (profile) {
-    await getAdminClient()
-      .from("profiles")
-      .update(profileUpdates)
-      .eq("stripe_customer_id", customerId);
+  const target = await resolveTarget(customerId, metadata);
+  if (!target) {
+    console.error(
+      "[stripe/webhook] updateByCustomerIdTyped: no target resolved",
+      { customerId, metadata },
+    );
     return;
   }
 
-  const { data: brand } = await getAdminClient()
-    .from("brands")
-    .select("id")
-    .eq("stripe_customer_id", customerId)
-    .maybeSingle();
+  const updates = target.kind === "profile" ? profileUpdates : brandUpdates;
+  const enrichedUpdates = customerId
+    ? { ...updates, stripe_customer_id: customerId }
+    : updates;
 
-  if (brand) {
-    await getAdminClient()
-      .from("brands")
-      .update(brandUpdates)
-      .eq("stripe_customer_id", customerId);
+  const { data, error } = await getAdminClient()
+    .from(target.kind === "profile" ? "profiles" : "brands")
+    .update(enrichedUpdates)
+    .eq(target.matchColumn, target.matchValue)
+    .select("id");
+
+  if (error) {
+    console.error("[stripe/webhook] updateByCustomerIdTyped error:", error);
+    throw error;
+  }
+  if (!data || data.length === 0) {
+    console.error(
+      "[stripe/webhook] updateByCustomerIdTyped affected 0 rows",
+      { customerId, metadata, target },
+    );
   }
 }
 
@@ -205,11 +288,19 @@ export async function POST(req: NextRequest) {
         // customer.subscription.created event fires right after checkout and
         // is responsible for writing current_period_end + cancel_at_period_end.
         // This handler remains a tier + status primer only.
+        //
+        // 2026-07-09: pass session.metadata to updateByCustomerIdTyped so
+        // routing can use brand_id / supabase_user_id when present.
         const session = event.data.object as Stripe.Checkout.Session;
-        const customerId = session.customer as string;
-        if (!customerId) break;
+        const customerId = (session.customer as string) || null;
+        const metadata =
+          (session.metadata as StripeMetadata | null) ?? null;
+        if (!customerId && !metadata?.brand_id && !metadata?.supabase_user_id) {
+          break;
+        }
         await updateByCustomerIdTyped(
           customerId,
+          metadata,
           { subscription_tier: "pro", subscription_status: "active" },
           { subscription_tier: "brand_pro", subscription_status: "active" },
         );
@@ -218,8 +309,12 @@ export async function POST(req: NextRequest) {
 
       case "customer.subscription.created": {
         const subscription = event.data.object as Stripe.Subscription;
-        const customerId = subscription.customer as string;
-        if (!customerId) break;
+        const customerId = (subscription.customer as string) || null;
+        const metadata =
+          (subscription.metadata as StripeMetadata | null) ?? null;
+        if (!customerId && !metadata?.brand_id && !metadata?.supabase_user_id) {
+          break;
+        }
         const status = subscription.status;
         // [Fix B] Extend with period end + cancel_at_period_end on the
         // creation event so the settings card shows a renewal date immediately
@@ -228,6 +323,7 @@ export async function POST(req: NextRequest) {
         const cancelAtPeriodEnd = subscription.cancel_at_period_end;
         await updateByCustomerIdTyped(
           customerId,
+          metadata,
           {
             subscription_tier: "pro",
             subscription_status: status,
@@ -246,8 +342,12 @@ export async function POST(req: NextRequest) {
 
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription;
-        const customerId = subscription.customer as string;
-        if (!customerId) break;
+        const customerId = (subscription.customer as string) || null;
+        const metadata =
+          (subscription.metadata as StripeMetadata | null) ?? null;
+        if (!customerId && !metadata?.brand_id && !metadata?.supabase_user_id) {
+          break;
+        }
         const status = subscription.status;
         // [Fix B] Compute once and reuse across branches.
         const periodEnd = periodEndIso(subscription);
@@ -259,6 +359,7 @@ export async function POST(req: NextRequest) {
           // stays active, cancel_at_period_end flips to true).
           await updateByCustomerIdTyped(
             customerId,
+            metadata,
             {
               subscription_tier: "pro",
               subscription_status: status,
@@ -275,7 +376,7 @@ export async function POST(req: NextRequest) {
         } else if (status === "past_due") {
           // [Fix B] Past-due also refreshes both fields — the renewal date
           // still displays, but the status signals dunning.
-          await updateByCustomerId(customerId, {
+          await updateByCustomerId(customerId, metadata, {
             subscription_status: "past_due",
             subscription_current_period_end: periodEnd,
             subscription_cancel_at_period_end: cancelAtPeriodEnd,
@@ -285,6 +386,7 @@ export async function POST(req: NextRequest) {
           // flag — the sub is fully gone, no renewal or end-date relevant.
           await updateByCustomerIdTyped(
             customerId,
+            metadata,
             {
               subscription_tier: "free",
               subscription_status: "canceled",
@@ -304,12 +406,17 @@ export async function POST(req: NextRequest) {
 
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription;
-        const customerId = subscription.customer as string;
-        if (!customerId) break;
+        const customerId = (subscription.customer as string) || null;
+        const metadata =
+          (subscription.metadata as StripeMetadata | null) ?? null;
+        if (!customerId && !metadata?.brand_id && !metadata?.supabase_user_id) {
+          break;
+        }
         // [Fix B] Subscription fully removed — clear period end and reset
         // cancel flag, mirroring the canceled/unpaid branch above.
         await updateByCustomerIdTyped(
           customerId,
+          metadata,
           {
             subscription_tier: "free",
             subscription_status: "canceled",
