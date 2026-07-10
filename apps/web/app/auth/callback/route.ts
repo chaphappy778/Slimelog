@@ -159,6 +159,18 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
+      // Password recovery short-circuit: when /forgot-password kicked off
+      // the flow, it set redirectTo to /auth/callback?next=/reset-password.
+      // At this point the exchange has established a valid recovery
+      // session (cookies are set). We just need to hand the user to
+      // /reset-password with the ?flow=recovery tag intact so that page
+      // recognizes the session as "granted by recovery" and unlocks the
+      // reset form. Skipping the DOB / marketing / referral / username-
+      // interstitial logic below because this is not a signup.
+      if (next.startsWith("/reset-password")) {
+        return NextResponse.redirect(`${origin}${next}`);
+      }
+
       const {
         data: { user },
       } = await supabase.auth.getUser();

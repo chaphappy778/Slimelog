@@ -18,7 +18,17 @@ function ForgotPasswordPageInner() {
 
     startTransition(async () => {
       const supabase = createClient();
-      const redirectTo = `${window.location.origin}/reset-password`;
+      // Route recovery through /auth/callback so the PKCE code exchange
+      // runs server-side, where the code_verifier cookie is actually
+      // accessible. @supabase/ssr stores the verifier in an HTTP-only
+      // cookie; a client-side exchangeCodeForSession call can't read
+      // it and fails with "PKCE code verifier not found in storage."
+      //
+      // /auth/callback recognizes /reset-password as the `next` and
+      // short-circuits the signup logic (see the recovery guard there).
+      const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(
+        "/reset-password?flow=recovery",
+      )}`;
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo,
       });
