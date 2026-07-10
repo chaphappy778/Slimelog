@@ -123,6 +123,13 @@ async function applyReferralIfPresent(
 }
 
 export async function GET(request: NextRequest) {
+  // TEMP: unconditional entry log to confirm this route is running the
+  // deployed code. Remove once referral debugging is done.
+  console.log("[auth/callback] ENTRY", {
+    url: request.url,
+    hasCode: !!new URL(request.url).searchParams.get("code"),
+  });
+
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
 
@@ -190,6 +197,14 @@ export async function GET(request: NextRequest) {
           );
 
           if (dobFromMeta) {
+            console.log("[auth/callback] email branch fired", {
+              userId: user.id,
+              dobFromMeta,
+              marketingConsentFromMeta,
+              hasReferralInMetadata: typeof user.user_metadata?.referred_by_code,
+              referralCodeInMetadata: user.user_metadata?.referred_by_code,
+              hasReferralCookie: !!cookieStore.get("slimelog_ref")?.value,
+            });
             // Email signup: DOB was collected on the signup page and stored
             // in user metadata. Save it via admin client to bypass RLS.
             const adminClient = createAdminClient();
