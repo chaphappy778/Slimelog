@@ -128,7 +128,9 @@ function AgeVerifyPageInner() {
       const res = await fetch("/api/age-verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date_of_birth: dob, age_verified: true }),
+        // Audit HP-26 (2026-07-10): age_verified is derived server-side
+        // from the DOB now — no longer a client input.
+        body: JSON.stringify({ date_of_birth: dob }),
       });
 
       const data = await res.json();
