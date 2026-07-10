@@ -139,6 +139,30 @@ function isoDatetimeToBrevoDate(signupDateISO: string): string {
   return new Date(signupDateISO).toISOString().slice(0, 10);
 }
 
+// -----------------------------------------------------------------------------
+// Marketing consent enforcement rule (2026-07-10)
+// -----------------------------------------------------------------------------
+//
+// GDPR/CCPA compliance: any code path in SlimeLog that sends promotional
+// email MUST filter recipients to profiles.marketing_consent = true before
+// dispatching. Transactional emails (password reset, receipts, brand claim
+// notices) are exempt and do NOT check this flag.
+//
+// When building a new marketing-email route:
+//   1. Read the sender list from public.profiles WHERE marketing_consent = true
+//      (or query the equivalent Brevo list; both are kept in sync via
+//      syncContactMarketingConsent below).
+//   2. Do NOT bypass the flag "for one-time sends" or "for very important
+//      updates" — regulators do not distinguish.
+//   3. Always let Brevo handle unsubscribe-link injection on marketing sends
+//      (their compliance layer). Do not build custom marketing templates
+//      that ship without that link.
+//
+// The syncContactMarketingConsent helper below keeps Brevo's list membership
+// in lockstep with profiles.marketing_consent — call it whenever the flag
+// flips (signup, settings toggle, admin action).
+// -----------------------------------------------------------------------------
+
 // Public function: add-or-update a contact on the SlimeLog waitlist
 export async function addContactToWaitlist(params: {
   email: string;
@@ -252,5 +276,137 @@ export async function addContactToWaitlist(params: {
       success: false,
       error: `Brevo fetch failed: ${message}`,
     };
+  }
+}
+
+// -----------------------------------------------------------------------------
+// syncContactMarketingConsent (2026-07-10)
+// -----------------------------------------------------------------------------
+//
+// Keeps Brevo list membership in lockstep with profiles.marketing_consent.
+// Called on:
+//   - New signup with consent = true (adds to list)
+//   - Settings toggle from false → true (adds to list)
+//   - Settings toggle from true → false (removes from list)
+//   - Admin/support action changing the flag
+//
+// Direction:
+//   consent = true  → upsert contact via /v3/contacts (same list add path
+//                     as addContactToWaitlist, so a converted waitlist
+//                     user stays reachable). updateEnabled: true handles
+//                     the "already exists" case cleanly.
+//   consent = false → remove from the list via
+//                     DELETE /v3/contacts/lists/{listId}/contacts/remove
+//                     which pulls them from the list but leaves the
+//                     contact record intact (Brevo will still show them
+//                     in Contacts, just not on the sending list).
+//
+// Errors are returned, never thrown — the calling route stays successful
+// so we don't fail a settings save because Brevo is temporarily unreachable.
+// The retry story is manual (admin can re-toggle to re-sync). If we ever
+// need more robust reconciliation, a periodic cron running a "reconcile
+// consent" job over profiles + Brevo can catch drift.
+
+export type SyncMarketingConsentResult =
+  | { success: true }
+  | { success: false; error: string };
+
+export async function syncContactMarketingConsent(params: {
+  email: string;
+  marketingConsent: boolean;
+  firstName?: string;
+  source?: string;
+}): Promise<SyncMarketingConsentResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  const listIdRaw = process.env.BREVO_WAITLIST_LIST_ID;
+
+  if (!apiKey) {
+    return { success: false, error: "BREVO_API_KEY is not configured" };
+  }
+  if (!listIdRaw) {
+    return {
+      success: false,
+      error: "BREVO_WAITLIST_LIST_ID is not configured",
+    };
+  }
+  const listId = Number.parseInt(listIdRaw, 10);
+  if (!Number.isFinite(listId)) {
+    return {
+      success: false,
+      error: `BREVO_WAITLIST_LIST_ID is not a valid number: ${listIdRaw}`,
+    };
+  }
+
+  // Consent = true → upsert contact on the list. Reuse the same POST
+  // /v3/contacts endpoint as the waitlist path so returning users get
+  // updated instead of duplicated.
+  if (params.marketingConsent) {
+    const attributes: BrevoContactAttributes = {
+      MARKETING_OPT_IN: true,
+      SIGNUP_SOURCE: params.source ?? "signup",
+      SIGNUP_DATE: isoDatetimeToBrevoDate(new Date().toISOString()),
+    };
+    if (params.firstName && params.firstName.trim().length > 0) {
+      attributes.FIRSTNAME = params.firstName.trim();
+    }
+    const body: BrevoCreateContactRequest = {
+      email: params.email,
+      attributes,
+      listIds: [listId],
+      updateEnabled: true,
+    };
+    try {
+      const response = await fetch("https://api.brevo.com/v3/contacts", {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "api-key": apiKey,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      if (response.ok || response.status === 204) return { success: true };
+      const text = await response.text();
+      return {
+        success: false,
+        error: `Brevo ${response.status}: ${text || "unknown error"}`,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { success: false, error: `Brevo fetch failed: ${message}` };
+    }
+  }
+
+  // Consent = false → remove from the list.
+  //
+  // Brevo endpoint: POST /v3/contacts/lists/{listId}/contacts/remove
+  // (yes, POST not DELETE — that's their API). Body accepts either
+  // { emails: [...] } or { ids: [...] } or { all: true }. We use emails.
+  try {
+    const response = await fetch(
+      `https://api.brevo.com/v3/contacts/lists/${listId}/contacts/remove`,
+      {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "api-key": apiKey,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ emails: [params.email] }),
+      },
+    );
+    if (response.ok || response.status === 204) return { success: true };
+    // Brevo returns 400 when the email isn't on the list — treat that as
+    // success from our perspective since the desired end-state is "not on
+    // the list."
+    if (response.status === 400) return { success: true };
+    const text = await response.text();
+    return {
+      success: false,
+      error: `Brevo ${response.status}: ${text || "unknown error"}`,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `Brevo fetch failed: ${message}` };
   }
 }

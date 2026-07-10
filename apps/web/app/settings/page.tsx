@@ -1,7 +1,7 @@
 // apps/web/app/settings/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
@@ -10,6 +10,7 @@ import PageWrapper from "@/components/PageWrapper";
 // of instantiating a fresh createBrowserClient here. Prevents duplicate
 // auth listeners, cookie races, and GoTrue memory leaks across pages.
 import { createClient } from "@/lib/supabase/client";
+import { updateMarketingConsent } from "@/lib/profile-actions";
 
 const supabase = createClient();
 
@@ -18,6 +19,7 @@ type Profile = {
   avatar_url: string | null;
   display_name: string | null;
   subscription_tier: string;
+  marketing_consent: boolean;
 };
 
 const sectionStyle = {
@@ -115,6 +117,13 @@ export default function SettingsPage() {
   // holds the password only until the fetch resolves.
   const [deletePassword, setDeletePassword] = useState("");
   const [signOutLoading, setSignOutLoading] = useState(false);
+  // Marketing consent toggle (2026-07-10). Optimistic UI: flip immediately,
+  // roll back if the server action fails. useTransition keeps the toggle
+  // interactive while the round-trip is in flight.
+  const [marketingConsentPending, startMarketingTransition] = useTransition();
+  const [marketingConsentError, setMarketingConsentError] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -124,7 +133,9 @@ export default function SettingsPage() {
       }
       const { data: prof } = await supabase
         .from("profiles")
-        .select("username, avatar_url, display_name, subscription_tier")
+        .select(
+          "username, avatar_url, display_name, subscription_tier, marketing_consent",
+        )
         .eq("id", data.user.id)
         .maybeSingle();
       setProfile({
@@ -132,10 +143,31 @@ export default function SettingsPage() {
         avatar_url: prof?.avatar_url ?? null,
         display_name: prof?.display_name ?? null,
         subscription_tier: prof?.subscription_tier ?? "free",
+        marketing_consent: Boolean(prof?.marketing_consent),
       });
       setAuthChecked(true);
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleMarketingConsentToggle(next: boolean) {
+    if (!profile) return;
+    // Optimistic flip. Snapshot the current value so we can revert if the
+    // server action fails.
+    const previous = profile.marketing_consent;
+    setProfile({ ...profile, marketing_consent: next });
+    setMarketingConsentError(null);
+    startMarketingTransition(async () => {
+      const result = await updateMarketingConsent(next);
+      if (!result.success) {
+        setProfile((p) =>
+          p ? { ...p, marketing_consent: previous } : p,
+        );
+        setMarketingConsentError(
+          result.error ?? "Couldn't save. Please try again.",
+        );
+      }
+    });
+  }
 
   async function handleSignOut() {
     if (signOutLoading) return;
@@ -308,6 +340,82 @@ export default function SettingsPage() {
                 )
               }
             />
+          </div>
+        </div>
+
+        {/* EMAIL PREFERENCES */}
+        <div>
+          <SectionHeader label="Email Preferences" />
+          <div
+            className="rounded-2xl overflow-hidden"
+            style={sectionStyle}
+          >
+            <div className="flex items-center gap-3 px-4 py-3.5">
+              <span
+                className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+                style={rowIconStyle}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width={18}
+                  height={18}
+                  className="text-slime-muted"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-slime-text">
+                  Marketing emails
+                </p>
+                <p className="text-[11px] text-slime-muted leading-tight mt-0.5">
+                  Drops, brand launches, and product updates.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={profile?.marketing_consent ?? false}
+                aria-label="Toggle marketing emails"
+                disabled={marketingConsentPending}
+                onClick={() =>
+                  handleMarketingConsentToggle(
+                    !(profile?.marketing_consent ?? false),
+                  )
+                }
+                className="relative shrink-0 transition-opacity disabled:opacity-60"
+                style={{
+                  width: "42px",
+                  height: "24px",
+                  borderRadius: "9999px",
+                  background: profile?.marketing_consent
+                    ? "linear-gradient(135deg, #39FF14, #00F0FF)"
+                    : "rgba(255,255,255,0.15)",
+                }}
+              >
+                <span
+                  className="absolute top-0.5 rounded-full transition-all"
+                  style={{
+                    width: "20px",
+                    height: "20px",
+                    background: "#0A0A0A",
+                    left: profile?.marketing_consent ? "20px" : "2px",
+                  }}
+                />
+              </button>
+            </div>
+            {marketingConsentError && (
+              <p
+                className="px-4 pb-3 text-[11px]"
+                style={{ color: "#FF00E5" }}
+              >
+                {marketingConsentError}
+              </p>
+            )}
           </div>
         </div>
 

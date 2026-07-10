@@ -77,15 +77,61 @@ export async function GET(request: NextRequest) {
           const dobFromMeta = user.user_metadata?.date_of_birth as
             | string
             | undefined;
+          // Marketing consent metadata (2026-07-10): the signup form ships
+          // marketing_consent as boolean. Falsy/missing → we do nothing;
+          // the profile default is already false. Truthy → we flip it and
+          // stamp marketing_consented_at with NOW() so the audit trail
+          // captures the grant timestamp. Brevo sync happens in the same
+          // call so the list membership stays in lockstep. Any failure to
+          // sync Brevo is logged but does not block signup.
+          const marketingConsentFromMeta = Boolean(
+            user.user_metadata?.marketing_consent,
+          );
 
           if (dobFromMeta) {
             // Email signup: DOB was collected on the signup page and stored
             // in user metadata. Save it via admin client to bypass RLS.
             const adminClient = createAdminClient();
+            const profileUpdate: Record<string, unknown> = {
+              date_of_birth: dobFromMeta,
+              age_verified: true,
+            };
+            if (marketingConsentFromMeta) {
+              profileUpdate.marketing_consent = true;
+              profileUpdate.marketing_consented_at = new Date().toISOString();
+            }
             await adminClient
               .from("profiles")
-              .update({ date_of_birth: dobFromMeta, age_verified: true })
+              .update(profileUpdate)
               .eq("id", user.id);
+
+            // Sync Brevo list membership if the user opted in. We don't
+            // await failure — sync errors get logged but don't block the
+            // redirect. Only run for consent = true; leaving consent
+            // false is a no-op and doesn't need to touch Brevo.
+            if (marketingConsentFromMeta && user.email) {
+              try {
+                const { syncContactMarketingConsent } = await import(
+                  "@/lib/brevo"
+                );
+                const result = await syncContactMarketingConsent({
+                  email: user.email,
+                  marketingConsent: true,
+                  source: "signup",
+                });
+                if (!result.success) {
+                  console.error(
+                    "[auth/callback] Brevo sync failed on signup:",
+                    result.error,
+                  );
+                }
+              } catch (brevoErr) {
+                console.error(
+                  "[auth/callback] Brevo sync threw on signup:",
+                  brevoErr,
+                );
+              }
+            }
 
             // Re-fetch profile after update so username check uses fresh data
             const { data: refreshedProfile } = await supabase
@@ -103,6 +149,7 @@ export async function GET(request: NextRequest) {
             return NextResponse.redirect(`${origin}${next}`);
           } else {
             // Google OAuth: no DOB in metadata — send to age verify page.
+            // Marketing consent for OAuth users is captured on /welcome.
             return NextResponse.redirect(
               `${origin}/age-verify?next=${encodeURIComponent(next)}`,
             );

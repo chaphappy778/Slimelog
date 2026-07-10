@@ -231,6 +231,76 @@ export async function updateProfile(
   return { success: true };
 }
 
+// ─── Marketing consent toggle (2026-07-10) ────────────────────────────────────
+//
+// Called from /settings when the user flips the "email me about drops"
+// switch. Writes profiles.marketing_consent + marketing_consented_at,
+// then syncs Brevo list membership. Failing Brevo sync does not fail the
+// action — the DB row is the source of truth and Brevo drift is
+// eventually reconciled by re-flipping the toggle.
+
+type UpdateMarketingConsentResult = {
+  success: boolean;
+  error?: string;
+};
+
+export async function updateMarketingConsent(
+  marketingConsent: boolean,
+): Promise<UpdateMarketingConsentResult> {
+  const supabase = await getSupabaseServerClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return { success: false, error: "You must be logged in." };
+  }
+
+  const payload: Record<string, unknown> = {
+    marketing_consent: marketingConsent,
+    updated_at: new Date().toISOString(),
+  };
+  // Only stamp consented_at on the initial grant (or a re-grant after
+  // withdrawal). On withdrawal we leave marketing_consented_at intact
+  // as an audit trail of the original grant.
+  if (marketingConsent) {
+    payload.marketing_consented_at = new Date().toISOString();
+  }
+
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update(payload)
+    .eq("id", user.id);
+
+  if (updateError) {
+    console.error("[updateMarketingConsent] update failed:", updateError.message);
+    return { success: false, error: "Failed to save. Please try again." };
+  }
+
+  // Brevo sync (best-effort). Add-on-consent and remove-on-withdrawal are
+  // both handled inside the helper.
+  if (user.email) {
+    try {
+      const { syncContactMarketingConsent } = await import("@/lib/brevo");
+      const result = await syncContactMarketingConsent({
+        email: user.email,
+        marketingConsent,
+        source: "settings",
+      });
+      if (!result.success) {
+        console.error(
+          "[updateMarketingConsent] Brevo sync failed:",
+          result.error,
+        );
+      }
+    } catch (brevoErr) {
+      console.error("[updateMarketingConsent] Brevo sync threw:", brevoErr);
+    }
+  }
+
+  return { success: true };
+}
+
 export async function checkUsernameAvailable(
   username: string,
 ): Promise<boolean> {
@@ -256,6 +326,11 @@ export async function checkUsernameAvailable(
 type OnboardingProfileInput = {
   username: string;
   avatar_url?: string;
+  // Marketing consent captured on /welcome (2026-07-10). Optional because
+  // the checkbox is optional in the UI. Undefined = don't touch the flag;
+  // true = opt in + stamp consented_at; false = explicit opt-out (default
+  // anyway, but explicit).
+  marketing_consent?: boolean;
 };
 
 export async function updateOnboardingProfile(
@@ -295,6 +370,13 @@ export async function updateOnboardingProfile(
     updated_at: new Date().toISOString(),
   };
   if (input.avatar_url) payload.avatar_url = input.avatar_url;
+  if (input.marketing_consent === true) {
+    payload.marketing_consent = true;
+    payload.marketing_consented_at = new Date().toISOString();
+  } else if (input.marketing_consent === false) {
+    payload.marketing_consent = false;
+    // Preserve marketing_consented_at as-is: audit trail.
+  }
 
   const { error: updateError } = await supabase
     .from("profiles")
@@ -306,6 +388,30 @@ export async function updateOnboardingProfile(
       return { success: false, error: "That username is already taken." };
     }
     return { success: false, error: "Failed to save. Please try again." };
+  }
+
+  // Sync Brevo membership when the user opts in on /welcome (typical OAuth
+  // path). Failures are logged but do not block onboarding completion.
+  if (input.marketing_consent === true && user.email) {
+    try {
+      const { syncContactMarketingConsent } = await import("@/lib/brevo");
+      const result = await syncContactMarketingConsent({
+        email: user.email,
+        marketingConsent: true,
+        source: "welcome",
+      });
+      if (!result.success) {
+        console.error(
+          "[updateOnboardingProfile] Brevo sync failed:",
+          result.error,
+        );
+      }
+    } catch (brevoErr) {
+      console.error(
+        "[updateOnboardingProfile] Brevo sync threw:",
+        brevoErr,
+      );
+    }
   }
 
   return { success: true };

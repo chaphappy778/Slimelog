@@ -200,6 +200,9 @@ function WelcomeInner() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Step 2 — marketing consent (default off, GDPR opt-in)
+  const [marketingConsent, setMarketingConsent] = useState(false);
+
   // Shared
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -318,6 +321,7 @@ function WelcomeInner() {
     const result = await updateOnboardingProfile({
       username,
       avatar_url: avatarUrl,
+      marketing_consent: marketingConsent,
     });
 
     if (!result.success) {
@@ -327,7 +331,7 @@ function WelcomeInner() {
     }
 
     router.push(next);
-  }, [submitting, userId, avatarFile, username, next, router]);
+  }, [submitting, userId, avatarFile, username, marketingConsent, next, router]);
 
   // ── Step 2: Skip ──
   const handleSkip = useCallback(async () => {
@@ -335,7 +339,10 @@ function WelcomeInner() {
     setSubmitting(true);
     setServerError(null);
 
-    const result = await updateOnboardingProfile({ username });
+    const result = await updateOnboardingProfile({
+      username,
+      marketing_consent: marketingConsent,
+    });
 
     if (!result.success) {
       setServerError(result.error ?? "Something went wrong. Please try again.");
@@ -344,7 +351,7 @@ function WelcomeInner() {
     }
 
     router.push(next);
-  }, [submitting, username, next, router]);
+  }, [submitting, username, marketingConsent, next, router]);
 
   const canContinue = usernameStatus === "available" && !submitting;
   const canFinish = !submitting && !avatarUploading;
@@ -580,11 +587,32 @@ function WelcomeInner() {
                 </p>
               )}
 
+              <label
+                className="mt-6 flex items-start gap-3 cursor-pointer"
+                htmlFor="welcome-marketing-consent"
+              >
+                <input
+                  id="welcome-marketing-consent"
+                  type="checkbox"
+                  checked={marketingConsent}
+                  onChange={(e) => setMarketingConsent(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded shrink-0"
+                  style={{ accentColor: "#39FF14" }}
+                />
+                <span
+                  className="text-xs leading-relaxed"
+                  style={{ color: "rgba(255,255,255,0.5)" }}
+                >
+                  Send me occasional emails about drop releases, brand launches,
+                  and new SlimeLog features. You can unsubscribe any time.
+                </span>
+              </label>
+
               <button
                 type="button"
                 onClick={handleFinish}
                 disabled={!canFinish}
-                className="w-full mt-6 py-3.5 rounded-2xl text-sm font-black transition-opacity"
+                className="w-full mt-5 py-3.5 rounded-2xl text-sm font-black transition-opacity"
                 style={{
                   background: canFinish
                     ? "linear-gradient(135deg, #39FF14, #00F0FF)"

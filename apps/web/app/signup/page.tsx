@@ -53,6 +53,9 @@ function SignupPageInner() {
   const [dobYear, setDobYear] = useState<string>("");
 
   const [parentalConsent, setParentalConsent] = useState(false);
+  // Marketing consent: unchecked by default (GDPR opt-in-by-affirmative-action).
+  // Saved to profiles.marketing_consent via auth callback reading user_metadata.
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -131,6 +134,7 @@ function SignupPageInner() {
           emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
           data: {
             date_of_birth: dob,
+            marketing_consent: marketingConsent,
           },
         },
       });
@@ -573,6 +577,19 @@ function SignupPageInner() {
                 </label>
               </div>
             )}
+
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={marketingConsent}
+                onChange={(e) => setMarketingConsent(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-slime-border bg-slime-surface accent-slime-accent shrink-0"
+              />
+              <span className="text-xs text-slime-muted leading-relaxed">
+                Send me occasional emails about drop releases, brand launches,
+                and new SlimeLog features. You can unsubscribe any time.
+              </span>
+            </label>
 
             <button
               type="submit"

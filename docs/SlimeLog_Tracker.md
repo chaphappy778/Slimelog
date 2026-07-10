@@ -49,7 +49,7 @@ Strategic and planning documents that inform work below. Refresh from these befo
 | 4 | Push notifications | MEDIUM | READY | Drop alerts. Infrastructure not started. |
 | 5 | Referral program | MEDIUM | READY | Invite a friend, both get 1 month Pro free. |
 | 16 | Data export (GDPR) | MEDIUM | READY | Button in Settings — JSON/CSV. |
-| 17 | Marketing consent flag | MEDIUM | READY | New migration + settings UI + unsubscribe. |
+| 17 | Marketing consent flag | MEDIUM | DONE | 2026-07-10: mig 61 adds profiles.marketing_consent + marketing_consented_at (default false, GDPR opt-in). Captured on /signup + /welcome + /settings toggle. Brevo sync via syncContactMarketingConsent(). Enforcement comment in lib/brevo.ts requires all marketing routes to filter marketing_consent = true. |
 | 19 | In-feed advertising | MEDIUM | DEFERRED | Free tier only. Defer post-launch. |
 | 20 | Double toast on Pro upgrade | MEDIUM | READY | Two toasts fire on subscription completion. |
 | 21 | Duplicate subscriptions check | MEDIUM | READY | Add check in checkout route. |
