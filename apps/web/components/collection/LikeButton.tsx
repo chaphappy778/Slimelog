@@ -29,21 +29,19 @@ export default function LikeButton({
   const pathname = usePathname();
 
   // 2026-07-09: sync local state when the parent re-renders with new
-  // props. Without this, after router.refresh() the feed page passes
-  // fresh initialLiked/initialCount but LikeButton's local state stays
-  // put (React preserves useState across re-renders as long as the
-  // component doesn't unmount). Symptom: hearts don't update on the
-  // feed after back-navigation from the detail overlay.
-  //
-  // The guard on `pending` prevents a mid-flight optimistic update
-  // from being clobbered by a stale prop value while the mutation is
-  // in flight. Once pending flips back to false, the next prop change
-  // syncs cleanly.
+  // props (e.g., after router.refresh() picks up the fresh server
+  // data). Only depend on the incoming prop values themselves — an
+  // earlier revision also included `pending` in the deps, which
+  // caused a "flash" on click: setPending(false) fired the effect
+  // while initialLiked was still stale from the parent's not-yet-
+  // refreshed render, briefly reverting the optimistic UI. The guard
+  // against clobbering mid-flight optimistic updates isn't needed
+  // because router.refresh() is called AFTER setPending(false), so
+  // props only change once pending is already false.
   useEffect(() => {
-    if (pending) return;
     setLiked(initialLiked);
     setCount(initialCount);
-  }, [initialLiked, initialCount, pending]);
+  }, [initialLiked, initialCount]);
 
   async function handleToggle() {
     // [Change 2 — #35] Logged-out users get routed to signup instead of
