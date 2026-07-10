@@ -4,6 +4,9 @@ import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isAdminUser } from "@/lib/is-admin-check";
+// Audit HP-25 (2026-07-10): escape brand-supplied text before it
+// lands in the transactional email HTML.
+import { escapeHtml } from "@/lib/escape-html";
 
 export const runtime = "nodejs";
 
@@ -24,6 +27,14 @@ const FOOTER_HTML = `
 `;
 
 function approvalEmailHtml(brandName: string, brandSlug: string): string {
+  // Audit HP-25 (2026-07-10): brandName is admin-approved but ultimately
+  // originates from user submissions; escape before HTML interpolation
+  // so a brand named e.g. </p><script>... can't inject payload into the
+  // approval email.
+  const safeBrandName = escapeHtml(brandName);
+  // brandSlug is DB-generated (slug format), so no user-supplied HTML
+  // ever gets in, but interpolating into a URL context so no escape
+  // needed.
   const dashboardUrl = `${SITE_URL}/brand-dashboard/${brandSlug}`;
   return `<!DOCTYPE html>
 <html>
@@ -33,7 +44,7 @@ function approvalEmailHtml(brandName: string, brandSlug: string): string {
       Your brand claim was approved
     </h1>
     <p style="font-size:15px;line-height:1.6;color:#e5e5e5;margin:0 0 16px 0;">
-      Welcome to SlimeLog. We've verified your claim for <strong>${brandName}</strong> and you now have access to the brand dashboard.
+      Welcome to SlimeLog. We've verified your claim for <strong>${safeBrandName}</strong> and you now have access to the brand dashboard.
     </p>
     <p style="font-size:15px;line-height:1.6;color:#e5e5e5;margin:0 0 24px 0;">
       From the dashboard you can manage your brand profile, schedule drops, and see analytics on how the community is engaging with your products.
@@ -54,6 +65,8 @@ function approvalEmailHtml(brandName: string, brandSlug: string): string {
 }
 
 function autoRejectionEmailHtml(brandName: string): string {
+  // Audit HP-25 (2026-07-10): same escape as approvalEmailHtml.
+  const safeBrandName = escapeHtml(brandName);
   return `<!DOCTYPE html>
 <html>
 <body style="margin:0;padding:0;background:#0A0A0A;font-family:Inter,Helvetica,Arial,sans-serif;color:#fff;">
@@ -62,7 +75,7 @@ function autoRejectionEmailHtml(brandName: string): string {
       Update on your SlimeLog brand claim
     </h1>
     <p style="font-size:15px;line-height:1.6;color:#e5e5e5;margin:0 0 16px 0;">
-      Thanks for submitting a claim for <strong>${brandName}</strong>.
+      Thanks for submitting a claim for <strong>${safeBrandName}</strong>.
     </p>
     <p style="font-size:15px;line-height:1.6;color:#e5e5e5;margin:0 0 16px 0;">
       Another claim for this brand was approved, so we've closed yours. If you believe the wrong person was approved, please reach out to <a href="mailto:support@slimelog.com" style="color:#00F0FF;">support@slimelog.com</a> and we'll review the situation.

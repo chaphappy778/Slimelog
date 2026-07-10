@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { constantTimeEqual, hashVerificationCode } from "@/lib/brand-claims";
 import { checkRateLimit } from "@/lib/rate-limit";
+// Audit HP-25 (2026-07-10): shared HTML entity escaper.
+import { escapeHtml } from "@/lib/escape-html";
 
 export const runtime = "nodejs";
 
@@ -262,11 +264,5 @@ function buildAdminNotificationEmail(p: {
   `.trim();
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
+// Audit HP-25 (2026-07-10): escapeHtml moved to lib/escape-html.ts;
+// import at the top of the file.

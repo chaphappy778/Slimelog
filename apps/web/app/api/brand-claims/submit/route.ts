@@ -11,6 +11,8 @@ import {
   validateBusinessEmail,
 } from "@/lib/brand-claims";
 import type { BrandClaimRole } from "@/lib/types";
+// Audit HP-25 (2026-07-10): shared HTML entity escaper.
+import { escapeHtml } from "@/lib/escape-html";
 
 export const runtime = "nodejs";
 
@@ -295,11 +297,5 @@ function buildCodeEmail(code: string, brandName: string): string {
   `.trim();
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
+// Audit HP-25 (2026-07-10): escapeHtml moved to lib/escape-html.ts;
+// import at the top of the file.

@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isAdminUser } from "@/lib/is-admin-check";
 import { type RejectionReasonCode, REJECTION_REASON_LABELS } from "@/lib/types";
+// Audit HP-25 (2026-07-10): shared HTML entity escaper.
+import { escapeHtml } from "@/lib/escape-html";
 
 export const runtime = "nodejs";
 
@@ -33,14 +35,9 @@ const FOOTER_HTML = `
   </p>
 `;
 
-function escapeHtml(input: string): string {
-  return input
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
+// Audit HP-25 (2026-07-10): escapeHtml moved to lib/escape-html.ts
+// so all four email routes share one implementation.
+// (Import added at the top of the file.)
 
 function isValidReasonCode(value: unknown): value is RejectionReasonCode {
   return (
