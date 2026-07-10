@@ -14,6 +14,7 @@ import { cookies } from "next/headers";
 import PageWrapper from "@/components/PageWrapper";
 import PageHeader from "@/components/PageHeader";
 import FollowBrandButton from "@/components/FollowBrandButton";
+import ShareButton from "@/components/ShareButton";
 import ClaimBrandButton from "@/components/brand/ClaimBrandButton";
 import BannerLightbox from "./components/BannerLightbox";
 import DropCard from "./components/DropCard";
@@ -417,7 +418,7 @@ export default async function BrandPage({
             </div>
           </div>
 
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
             <h1
               className="text-2xl font-black"
               style={{
@@ -438,6 +439,13 @@ export default async function BrandPage({
                 <path d="M12 0l3.09 5.26L21 6l-4.5 4.39L17.18 17 12 14.27 6.82 17l.68-6.61L3 6l5.91-.74L12 0z" />
               </svg>
             )}
+            <div className="ml-auto">
+              <ShareButton
+                path={`/brands/${brand.slug}`}
+                title={`${brand.name} on SlimeLog`}
+                text={`Check out ${brand.name} on SlimeLog.`}
+              />
+            </div>
           </div>
 
           {brand.bio && (

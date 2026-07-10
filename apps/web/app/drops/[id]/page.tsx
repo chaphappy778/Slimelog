@@ -7,6 +7,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import PageWrapper from "@/components/PageWrapper";
 import PageHeader from "@/components/PageHeader";
+import ShareButton from "@/components/ShareButton";
 import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
 import type { SlimeBaseType } from "@/lib/types";
 
@@ -337,15 +338,22 @@ export default async function DropPage({
             )}
           </Link>
 
-          <h1
-            className="text-3xl font-black leading-tight"
-            style={{
-              color: "#fff",
-              fontFamily: "Montserrat, Inter, sans-serif",
-            }}
-          >
-            {drop.name}
-          </h1>
+          <div className="flex items-start justify-between gap-3">
+            <h1
+              className="text-3xl font-black leading-tight flex-1 min-w-0"
+              style={{
+                color: "#fff",
+                fontFamily: "Montserrat, Inter, sans-serif",
+              }}
+            >
+              {drop.name}
+            </h1>
+            <ShareButton
+              path={`/drops/${drop.id}`}
+              title={`${drop.name} — ${brand.name}`}
+              text={`${brand.name} drop I'm watching on SlimeLog: ${drop.name}`}
+            />
+          </div>
 
           {drop.description && (
             <p className="mt-3 text-sm text-slime-text/80 leading-relaxed">

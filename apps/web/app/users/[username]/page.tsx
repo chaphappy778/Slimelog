@@ -8,6 +8,7 @@ import { cookies } from "next/headers";
 import PageWrapper from "@/components/PageWrapper";
 import PageHeader from "@/components/PageHeader";
 import FollowUserButton from "@/components/FollowUserButton";
+import ShareButton from "@/components/ShareButton";
 import PublicFeaturedSlimes from "@/components/profile/PublicFeaturedSlimes";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -436,12 +437,18 @@ export default async function UserPage({
               </div>
             </div>
 
-            {/* Follow button */}
-            <div className="mt-2">
+            {/* Follow + Share buttons */}
+            <div className="mt-2 flex items-center gap-2">
               <FollowUserButton
                 targetUserId={profile.id}
                 currentUserId={currentUserId}
                 initialIsFollowing={initialIsFollowing}
+              />
+              <ShareButton
+                path={`/users/${profile.username}`}
+                title={`@${profile.username} on SlimeLog`}
+                text={`Check out @${profile.username}'s slime collection on SlimeLog.`}
+                label="Share"
               />
             </div>
 

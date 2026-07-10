@@ -11,6 +11,7 @@ import LikeButton from "@/components/collection/LikeButton";
 import ReportButton from "@/components/ReportButton";
 import ClientComments from "@/components/collection/ClientComments";
 import DeleteLogButton from "@/components/DeleteLogButton";
+import ShareButton from "@/components/ShareButton";
 import { safeRedirect } from "@/lib/safe-redirect";
 import {
   SLIME_BASE_TYPE_COLORS,
@@ -278,15 +279,22 @@ export default async function SlimePage({
 
           {/* Title + brand */}
           <header className="flex flex-col gap-1.5">
-            <h1
-              className="text-2xl font-black leading-tight"
-              style={{
-                color: "#fff",
-                fontFamily: "Montserrat, Inter, sans-serif",
-              }}
-            >
-              {log.slime_name ?? "Unnamed Slime"}
-            </h1>
+            <div className="flex items-start justify-between gap-3">
+              <h1
+                className="text-2xl font-black leading-tight flex-1 min-w-0"
+                style={{
+                  color: "#fff",
+                  fontFamily: "Montserrat, Inter, sans-serif",
+                }}
+              >
+                {log.slime_name ?? "Unnamed Slime"}
+              </h1>
+              <ShareButton
+                path={`/slimes/${log.id}`}
+                title={log.slime_name ?? "A slime on SlimeLog"}
+                text={`I rated this on SlimeLog: ${log.slime_name ?? "check out this slime"}${log.brand_name_raw ? ` by ${log.brand_name_raw}` : ""}.`}
+              />
+            </div>
             {log.brand_name_raw && (
               <div className="text-sm">
                 {brandSlug ? (
