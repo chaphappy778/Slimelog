@@ -285,7 +285,7 @@ function ScreenLogFirst({ onNext }: { onNext: () => void }) {
   const steps: [string, string][] = [
     ["Photograph it", "Your own shot of the tub"],
     ["Pick the brand", "Search makers or add a new one"],
-    ["Rate what matters", "Poke, stretch, scent, and more"],
+    ["Rate what matters", "Texture, sound, aesthetic, and more"],
     ["Log it", "It lands on your shelf and feed"],
   ];
 
@@ -480,10 +480,14 @@ function DemoRatingSlider({ label, value }: { label: string; value: number }) {
 function ScreenRateAxes({ onNext }: { onNext: () => void }) {
   // Fixed demo values that make the preview feel alive without needing
   // interactivity. Numbers chosen to show a mix — high, mid, low.
+  // Labels + demo values must match the real RATING_FIELDS in
+  // apps/web/app/log/page.tsx so users see the same UI in onboarding
+  // that they'll interact with during their first log. Overall is
+  // deliberately excluded from the preview — it's the computed one.
   const demoAxes: [string, number][] = [
-    ["Poke feel", 4.5],
-    ["Stretch", 3.75],
-    ["Scent", 4],
+    ["Texture", 4.5],
+    ["Sound / ASMR", 3.75],
+    ["Aesthetic", 4],
   ];
   const baseTypes = ["Butter", "Cloud", "Floam", "Clear", "Jelly"];
 
