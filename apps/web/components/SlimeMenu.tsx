@@ -19,6 +19,7 @@ import {
   Menu,
   ChevronRight,
   Shield,
+  Share2,
 } from "lucide-react";
 
 // [T13] Module-level Supabase client — absolute rule: never instantiate
@@ -277,6 +278,12 @@ export default function SlimeMenu() {
                 href="/collection?tab=wishlist"
                 icon={<Heart className="w-5 h-5" />}
                 label="My Wishlist"
+                onClose={handleClose}
+              />
+              <NavItem
+                href="/invite"
+                icon={<Share2 className="w-5 h-5" />}
+                label="Invite Friends"
                 onClose={handleClose}
               />
               <NavItem
