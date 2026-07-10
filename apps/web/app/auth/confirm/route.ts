@@ -135,6 +135,27 @@ export async function GET(request: NextRequest) {
 
   const user = data.user;
 
+  // Password recovery flow: verifyOtp above already established a
+  // short-lived recovery session. Route the user straight to
+  // /reset-password so they can pick a new password. Skipping the DOB /
+  // marketing / referral / username-interstitial logic because this is
+  // NOT a signup — the user already exists, we just need to hand them
+  // the reset form. Route via `next` if it looks like a reset page,
+  // otherwise force /reset-password so the flow always terminates
+  // somewhere useful.
+  if (type === "recovery") {
+    // Force /reset-password as the destination and tag the URL with
+    // ?flow=recovery so the client can distinguish "session exists
+    // because a recovery just completed" from "session exists because
+    // the user happened to be signed in." Without the tag, a normally
+    // signed-in user visiting /reset-password could bypass the
+    // change-password guardrails (current-password re-verify), which
+    // is the escalation risk we want to avoid.
+    const base = next.startsWith("/reset-password") ? next : "/reset-password";
+    const separator = base.includes("?") ? "&" : "?";
+    return NextResponse.redirect(`${origin}${base}${separator}flow=recovery`);
+  }
+
   // Metadata channels populated by /signup form
   const dobFromMeta = user.user_metadata?.date_of_birth as string | undefined;
   const marketingConsentFromMeta = Boolean(

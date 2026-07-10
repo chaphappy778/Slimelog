@@ -3,13 +3,21 @@
 
 import { useState, useEffect, useTransition, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { AuthChangeEvent } from "@supabase/supabase-js";
 import FloatingPills from "@/components/FloatingPills";
 
 function ResetPasswordPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Recovery tag set by /auth/confirm when it routes a password-recovery
+  // OTP verification here. Presence of ?flow=recovery is the signal that
+  // "session exists because the user just completed the recovery link,"
+  // not "session exists because they were already signed in." Without
+  // this we'd let any signed-in user bypass the current-password re-
+  // verify guardrail on /settings/password.
+  const isRecoveryFlow = searchParams.get("flow") === "recovery";
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -20,27 +28,66 @@ function ResetPasswordPageInner() {
 
   useEffect(() => {
     const supabase = createClient();
+
+    // Two ways this page can land in the "recovery-ready" state:
+    //
+    // 1. The user arrives with a fresh implicit-flow token in the URL hash
+    //    — the SDK picks that up and fires PASSWORD_RECOVERY as it swaps
+    //    the hash for a session. This is the pre-existing path.
+    //
+    // 2. The user arrives via a redirect from /auth/confirm, which
+    //    already ran verifyOtp server-side and set the session cookies
+    //    on the way in. In this case the SDK's onAuthStateChange fires
+    //    SIGNED_IN (or INITIAL_SESSION) instead of PASSWORD_RECOVERY,
+    //    because from the client's perspective the auth handshake
+    //    already happened. We detect this by checking for an existing
+    //    session on mount — if one is present, we're ready.
+    //
+    // This was #33: previously we only listened for PASSWORD_RECOVERY,
+    // so path #2 (the new /auth/confirm-driven flow) always hit the
+    // 3-second timeout and rendered "Link invalid or expired," even
+    // though the reset session was fully valid.
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event: AuthChangeEvent) => {
+      // PASSWORD_RECOVERY fires when the SDK picks up an implicit-flow
+      // recovery token from the URL hash — always trust it.
+      // SIGNED_IN fires for any successful auth, so we only trust it
+      // when the URL carries the recovery tag from /auth/confirm.
       if (event === "PASSWORD_RECOVERY") {
+        setRecoveryReady(true);
+      } else if (event === "SIGNED_IN" && isRecoveryFlow) {
         setRecoveryReady(true);
       }
     });
 
-    // If no recovery event fires within 3 seconds, assume the link is bad.
+    // Check up-front for an already-established session (path #2 above).
+    // Only trust it if the URL bears the recovery tag — otherwise a
+    // normally-signed-in user visiting /reset-password would silently
+    // be handed the reset form, which would bypass the current-password
+    // re-verify we require on /settings/password.
+    if (isRecoveryFlow) {
+      supabase.auth.getSession().then(({ data }) => {
+        if (data.session) setRecoveryReady(true);
+      });
+    }
+
+    // If neither path resolves within 5 seconds, treat as bad link.
+    // Increased from 3s → 5s to give the server-verified path some
+    // headroom on cold-start Vercel functions.
     const timeoutId = setTimeout(() => {
       setRecoveryReady((ready) => {
         if (!ready) setTokenError(true);
         return ready;
       });
-    }, 3000);
+    }, 5000);
 
     return () => {
       subscription.unsubscribe();
       clearTimeout(timeoutId);
     };
-  }, []);
+  }, [isRecoveryFlow]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
