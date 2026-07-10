@@ -375,10 +375,116 @@ function ScreenLogFirst({ onNext }: { onNext: () => void }) {
 
 // ─── Screen 3: Rate what matters ──────────────────────────────────────────
 
+// Demo slider — visual-only preview of the app's real RatingSlider
+// (components/RatingSlider.tsx). Shown on screen 3 so the walkthrough
+// shows users the actual UI they'll see when logging, not an abstract
+// radar chart. Not interactive here on purpose; users interact with the
+// live sliders inside the log flow.
+function DemoRatingSlider({ label, value }: { label: string; value: number }) {
+  const pct = (value / 5) * 100;
+  const fillGradient = "linear-gradient(90deg, #2D0A4E 0%, #00F0FF 50%, #39FF14 100%)";
+  const TICKS = 11;
+  return (
+    <div
+      style={{
+        padding: "10px 0",
+        borderBottom: "1px solid rgba(45,10,78,0.5)",
+      }}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <span
+          className="text-xs font-medium"
+          style={{
+            color: "rgba(245,245,245,0.75)",
+            fontFamily: "Montserrat, Inter, sans-serif",
+          }}
+        >
+          {label}
+        </span>
+        <span
+          className="text-sm font-bold"
+          style={{
+            color: "#00F0FF",
+            fontFamily: "Montserrat, Inter, sans-serif",
+            minWidth: 28,
+            textAlign: "right",
+          }}
+        >
+          {value}
+        </span>
+      </div>
+      {/* Track + fill + thumb, mirroring RatingSlider.tsx */}
+      <div className="relative w-full" style={{ height: 20 }}>
+        <div
+          className="absolute left-0"
+          style={{
+            top: "50%",
+            transform: "translateY(-50%)",
+            width: "100%",
+            height: 6,
+            borderRadius: 3,
+            background: "rgba(45,10,78,0.6)",
+          }}
+        />
+        <div
+          className="absolute left-0 overflow-hidden"
+          style={{
+            top: "50%",
+            transform: "translateY(-50%)",
+            width: `${pct}%`,
+            height: 6,
+            borderRadius: 3,
+          }}
+        >
+          <div
+            style={{
+              width: pct > 0 ? `${10000 / pct}%` : "100%",
+              height: "100%",
+              background: fillGradient,
+            }}
+          />
+        </div>
+        <div
+          className="absolute rounded-full"
+          style={{
+            top: "50%",
+            left: `${pct}%`,
+            transform: "translate(-50%, -50%)",
+            width: 18,
+            height: 18,
+            background: "#ffffff",
+            boxShadow: "0 0 8px rgba(57,255,20,0.6)",
+          }}
+        />
+      </div>
+      <div
+        className="flex justify-between w-full mt-1"
+        style={{ paddingLeft: 1, paddingRight: 1 }}
+      >
+        {Array.from({ length: TICKS }).map((_, i) => (
+          <div
+            key={i}
+            style={{
+              width: 1,
+              height: 4,
+              background: "rgba(255,255,255,0.15)",
+              flexShrink: 0,
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ScreenRateAxes({ onNext }: { onNext: () => void }) {
-  // 5 axes arranged around a pentagon (approximate positions via absolute
-  // positioning inside a fixed-size square container).
-  const axes = ["Poke feel", "Glossy", "Stretch", "Holo", "Scent"];
+  // Fixed demo values that make the preview feel alive without needing
+  // interactivity. Numbers chosen to show a mix — high, mid, low.
+  const demoAxes: [string, number][] = [
+    ["Poke feel", 4.5],
+    ["Stretch", 3.75],
+    ["Scent", 4],
+  ];
   const baseTypes = ["Butter", "Cloud", "Floam", "Clear", "Jelly"];
 
   return (
@@ -402,61 +508,42 @@ function ScreenRateAxes({ onNext }: { onNext: () => void }) {
         </p>
       </div>
 
-      {/* Radar-ish axis chip cluster */}
+      {/* Preview of the actual rating sliders from the log flow */}
       <div
-        className="relative w-64 h-64 mx-auto"
+        className="rounded-2xl px-5 py-2"
         style={{
-          background:
-            "radial-gradient(circle at center, rgba(0,240,255,0.08), transparent 65%)",
+          background: "rgba(45,10,78,0.3)",
+          border: "1px solid rgba(45,10,78,0.7)",
         }}
       >
-        {/* Center blob */}
-        <div
-          className="absolute left-1/2 top-1/2 w-14 h-14 -translate-x-1/2 -translate-y-1/2 rounded-full"
-          style={{
-            background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-            boxShadow: "0 0 40px rgba(57,255,20,0.4)",
-          }}
-        />
-
-        {axes.map((axis, i) => {
-          // Distribute 5 chips evenly around the ring
-          const angle = (i / axes.length) * Math.PI * 2 - Math.PI / 2;
-          const radius = 100;
-          const x = 50 + (radius * Math.cos(angle)) / 2;
-          const y = 50 + (radius * Math.sin(angle)) / 2;
-          return (
-            <span
-              key={axis}
-              className="absolute -translate-x-1/2 -translate-y-1/2 text-xs font-bold px-3 py-1.5 rounded-full whitespace-nowrap"
-              style={{
-                left: `${x}%`,
-                top: `${y}%`,
-                background: "rgba(45,10,78,0.8)",
-                border: "1px solid rgba(0,240,255,0.35)",
-                color: "#00F0FF",
-              }}
-            >
-              {axis}
-            </span>
-          );
-        })}
+        {demoAxes.map(([label, val]) => (
+          <DemoRatingSlider key={label} label={label} value={val} />
+        ))}
       </div>
 
-      <div className="flex flex-wrap gap-1.5 justify-center">
-        {baseTypes.map((t) => (
-          <span
-            key={t}
-            className="text-[11px] font-semibold px-2.5 py-1 rounded-full"
-            style={{
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.15)",
-              color: "rgba(255,255,255,0.7)",
-            }}
-          >
-            {t}
-          </span>
-        ))}
+      {/* Base type chips */}
+      <div>
+        <p
+          className="text-[10px] font-black tracking-widest uppercase text-center mb-2"
+          style={{ color: "rgba(255,255,255,0.5)" }}
+        >
+          Base types
+        </p>
+        <div className="flex flex-wrap gap-1.5 justify-center">
+          {baseTypes.map((t) => (
+            <span
+              key={t}
+              className="text-[11px] font-semibold px-2.5 py-1 rounded-full"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                color: "rgba(255,255,255,0.7)",
+              }}
+            >
+              {t}
+            </span>
+          ))}
+        </div>
       </div>
 
       <p
