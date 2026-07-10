@@ -465,18 +465,31 @@ export default function SlimesSplitPanel({
         </div>
       </div>
 
-      {/* ── Mobile sheet overlay ── */}
+      {/* ── Mobile sheet overlay ──
+          2026-07-09: switched from a bottom-anchored sheet
+          (alignItems: flex-end + absolute bottom-0) to a viewport-
+          centered fixed modal. Matches the report + delete modal
+          pattern from earlier today's UX pass. The old bottom-sheet
+          layout felt cramped with too much of the parent list
+          peeking through the top; centering fills the visual weight
+          properly and keeps things consistent across the app.
+          Full-screen edit form is queued as a pre-launch polish
+          item (Option C in the design conversation). */}
       {(mode === "detail" || mode === "add" || mode === "edit") && (
         <div
-          className="md:hidden fixed inset-0 z-50"
-          style={{ background: "rgba(10,10,10,0.8)" }}
+          className="md:hidden fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(10,10,10,0.8)", padding: 16 }}
+          onClick={() => setMode("empty")}
         >
           <div
-            className="absolute bottom-0 left-0 right-0 rounded-t-2xl overflow-y-auto"
+            className="rounded-2xl overflow-y-auto w-full"
+            onClick={(e) => e.stopPropagation()}
             style={{
               background: "#0A0A0A",
               border: "1px solid rgba(45,10,78,0.8)",
-              maxHeight: "85vh",
+              maxWidth: 480,
+              maxHeight: "calc(100dvh - 32px)",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
             }}
           >
             {/* Handle + close */}
@@ -487,10 +500,9 @@ export default function SlimesSplitPanel({
                 borderBottom: "1px solid rgba(45,10,78,0.4)",
               }}
             >
-              <div
-                className="w-8 h-1 rounded-full mx-auto absolute left-1/2 -translate-x-1/2 top-2"
-                style={{ background: "rgba(45,10,78,0.8)" }}
-              />
+              {/* 2026-07-09: drag handle removed — no longer a bottom
+                  sheet (now viewport-centered), so the swipe-to-dismiss
+                  affordance would be misleading. */}
               <p
                 className="text-sm font-bold text-white mt-2"
                 style={{ fontFamily: "Montserrat, sans-serif" }}

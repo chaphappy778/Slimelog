@@ -10,14 +10,11 @@
 // the comments thread appears.
 
 import { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
 import CommentSection from "@/components/collection/CommentSection";
+// Audit hp-24 (2026-07-09): use the shared browser singleton.
+import { createClient } from "@/lib/supabase/client";
 
-// Module-level client per absolute rule 6.
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+const supabase = createClient();
 
 interface Props {
   logId: string;

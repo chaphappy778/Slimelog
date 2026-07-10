@@ -3,17 +3,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
 import { useToast } from "@/components/Toast";
 import ReportButton from "@/components/ReportButton";
 import CommentLikeButton from "@/components/collection/CommentLikeButton";
 import CommentInputGate from "@/components/collection/CommentInputGate";
+// Audit hp-24 (2026-07-09): use the shared browser singleton.
+import { createClient } from "@/lib/supabase/client";
 
-// Module-level client
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+const supabase = createClient();
 
 interface Comment {
   id: string;

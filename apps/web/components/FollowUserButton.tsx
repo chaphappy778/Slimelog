@@ -3,8 +3,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
 import { safeRedirect } from "@/lib/safe-redirect";
+// Audit hp-24 (2026-07-09): use the shared browser singleton.
+import { createClient } from "@/lib/supabase/client";
 
 interface FollowUserButtonProps {
   targetUserId: string;
@@ -12,11 +13,7 @@ interface FollowUserButtonProps {
   initialIsFollowing: boolean;
 }
 
-// Module-level Supabase client — never inside component body
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+const supabase = createClient();
 
 export default function FollowUserButton({
   targetUserId,

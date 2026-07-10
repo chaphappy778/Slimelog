@@ -3,12 +3,10 @@
 // T72 — hashtag-style keyword tag input with autocomplete
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+// Audit hp-24 (2026-07-09): use the shared browser singleton.
+import { createClient } from "@/lib/supabase/client";
 
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+const supabase = createClient();
 
 const inputCls =
   "w-full rounded-xl bg-slime-surface border border-slime-border px-4 py-3 text-sm text-slime-text placeholder:text-slime-muted focus:outline-none focus:ring-1 focus:ring-slime-accent/40 focus:border-slime-accent/50 transition";

@@ -3,15 +3,11 @@
 
 import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
 import { safeRedirect } from "@/lib/safe-redirect";
+// Audit hp-24 (2026-07-09): use the shared browser singleton.
+import { createClient } from "@/lib/supabase/client";
 
-// [Change 1] Module-level client (absolute rule). Previously inside the
-// component body, which caused "No API key" 400 errors per project gotchas.
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+const supabase = createClient();
 
 interface Props {
   logId: string;
