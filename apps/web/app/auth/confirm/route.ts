@@ -3,14 +3,89 @@
 // This works cross-browser and cross-device, unlike the /auth/callback
 // PKCE flow which requires the code verifier cookie from the original session.
 //
+// This is the route that fires for actual email signups. /auth/callback
+// is only for OAuth (Google, etc). Any post-signup profile work needs
+// to be duplicated in both routes — an earlier version of this file
+// wrote only DOB + age_verified, which is why marketing consent and
+// referral relationships were being silently dropped for email signups.
+//
 // Supabase email template should link to:
 //   {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup&next=/welcome
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { safeRedirect } from "@/lib/safe-redirect";
+
+// Referral code shape must match DB CHECK on profiles.referral_code
+// (mig 62): 6 chars, uppercase alphanumeric only.
+const REFERRAL_CODE_RE = /^[A-Z0-9]{6}$/;
+
+async function applyReferralIfPresent(
+  userId: string,
+  metadataCode: unknown,
+  cookieCode: string | undefined,
+  adminClient: SupabaseClient,
+): Promise<void> {
+  const raw =
+    (typeof metadataCode === "string" ? metadataCode : null) ??
+    cookieCode ??
+    null;
+  console.log("[referral/confirm] input", {
+    userId,
+    metadataCodeType: typeof metadataCode,
+    metadataCode,
+    hasCookie: !!cookieCode,
+    resolvedRaw: raw,
+  });
+  if (!raw) return;
+  const code = raw.trim().toUpperCase();
+  if (!REFERRAL_CODE_RE.test(code)) {
+    console.log("[referral/confirm] bad shape:", code);
+    return;
+  }
+
+  const { data: existing, error: existingErr } = await adminClient
+    .from("profiles")
+    .select("referred_by_user_id")
+    .eq("id", userId)
+    .single();
+  if (existingErr) {
+    console.error("[referral/confirm] existing lookup:", existingErr.message);
+    return;
+  }
+  if (existing?.referred_by_user_id) {
+    console.log("[referral/confirm] already set, skipping");
+    return;
+  }
+
+  const { data: referrer, error: referrerErr } = await adminClient
+    .from("profiles")
+    .select("id, username")
+    .eq("referral_code", code)
+    .maybeSingle();
+  if (referrerErr) {
+    console.error("[referral/confirm] referrer lookup:", referrerErr.message);
+    return;
+  }
+  if (!referrer) {
+    console.log("[referral/confirm] no referrer for code", code);
+    return;
+  }
+  if (referrer.id === userId) return;
+
+  const { error: updateError } = await adminClient
+    .from("profiles")
+    .update({ referred_by_user_id: referrer.id })
+    .eq("id", userId);
+  if (updateError) {
+    console.error("[referral/confirm] update failed:", updateError.message);
+    return;
+  }
+  console.log("[referral/confirm] applied", { referrerUsername: referrer.username });
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -60,15 +135,63 @@ export async function GET(request: NextRequest) {
 
   const user = data.user;
 
-  // Save DOB from signup metadata and mark age_verified via admin client
+  // Metadata channels populated by /signup form
   const dobFromMeta = user.user_metadata?.date_of_birth as string | undefined;
+  const marketingConsentFromMeta = Boolean(
+    user.user_metadata?.marketing_consent,
+  );
+
+  console.log("[auth/confirm] metadata", {
+    userId: user.id,
+    hasDob: !!dobFromMeta,
+    marketingConsentFromMeta,
+    referredByCode: user.user_metadata?.referred_by_code,
+  });
 
   if (dobFromMeta) {
     const adminClient = createAdminClient();
+    const profileUpdate: Record<string, unknown> = {
+      date_of_birth: dobFromMeta,
+      age_verified: true,
+    };
+    if (marketingConsentFromMeta) {
+      profileUpdate.marketing_consent = true;
+      profileUpdate.marketing_consented_at = new Date().toISOString();
+    }
     await adminClient
       .from("profiles")
-      .update({ date_of_birth: dobFromMeta, age_verified: true })
+      .update(profileUpdate)
       .eq("id", user.id);
+
+    // Apply referral if the signup page passed one via user_metadata
+    // (primary) or the slimelog_ref cookie (fallback). Silently no-ops
+    // when the code is missing, malformed, or already applied.
+    await applyReferralIfPresent(
+      user.id,
+      user.user_metadata?.referred_by_code,
+      cookieStore.get("slimelog_ref")?.value,
+      adminClient,
+    );
+
+    // Sync Brevo list membership if the user opted in on signup.
+    if (marketingConsentFromMeta && user.email) {
+      try {
+        const { syncContactMarketingConsent } = await import("@/lib/brevo");
+        const result = await syncContactMarketingConsent({
+          email: user.email,
+          marketingConsent: true,
+          source: "signup",
+        });
+        if (!result.success) {
+          console.error(
+            "[auth/confirm] Brevo sync failed on signup:",
+            result.error,
+          );
+        }
+      } catch (brevoErr) {
+        console.error("[auth/confirm] Brevo sync threw:", brevoErr);
+      }
+    }
   }
 
   // Check if user needs username interstitial
