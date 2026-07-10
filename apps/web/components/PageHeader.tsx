@@ -5,7 +5,8 @@ import Link from "next/link";
 // [Change 4 — T31] Add useRouter alongside the existing usePathname import.
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+// Audit hp-24 (2026-07-09): use the shared browser singleton.
+import { createClient } from "@/lib/supabase/client";
 import SlimeMenu from "@/components/SlimeMenu";
 import { safeRedirect } from "@/lib/safe-redirect";
 // [Change 8 — T31 v2] Use the in-app navigation history stack instead of
@@ -18,10 +19,7 @@ import {
 } from "@/lib/navigation-history";
 
 // [Change 1 — #35] Module-level client for the auth check.
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+const supabase = createClient();
 
 // [Change 5 — T31] Route matcher for back button visibility.
 // Detail/leaf pages where users need an affordance to navigate back.

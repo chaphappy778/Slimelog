@@ -3,15 +3,12 @@
 
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
 import BottomNav from "@/components/BottomNav";
 import SignupCTABanner from "@/components/SignupCTABanner";
+// Audit hp-24 (2026-07-09): use the shared browser singleton.
+import { createClient } from "@/lib/supabase/client";
 
-// Module-level client (absolute rule).
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+const supabase = createClient();
 
 // [Change 1 — #35] Public routes where logged-out users should see the
 // signup CTA banner. Match either exact path or the path's prefix +"/".

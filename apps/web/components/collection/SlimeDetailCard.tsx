@@ -5,7 +5,8 @@ import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
+// Audit hp-24 (2026-07-09): use the shared browser singleton.
+import { createClient } from "@/lib/supabase/client";
 import {
   SLIME_BASE_TYPE_COLORS,
   SLIME_BASE_TYPE_LABELS,
@@ -22,10 +23,7 @@ import { deleteSlimeLog } from "@/lib/slime-actions";
 
 // ─── Supabase (module-level) ──────────────────────────────────────────────────
 
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+const supabase = createClient();
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

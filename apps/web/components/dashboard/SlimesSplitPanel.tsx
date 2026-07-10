@@ -2,15 +2,12 @@
 "use client";
 
 import { useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
 // [Change 1] — SLIME_BASE_TYPE_LABELS and SlimeBaseType imported; local arrays removed
 import { SLIME_BASE_TYPE_LABELS, SlimeBaseType } from "@/lib/types";
+// Audit hp-24 (2026-07-09): use the shared browser singleton.
+import { createClient } from "@/lib/supabase/client";
 
-// [Change 8] — module-level createBrowserClient; createClient import removed
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+const supabase = createClient();
 
 type FilterTab = "all" | "active" | "limited" | "discontinued";
 

@@ -3,18 +3,15 @@
 
 import { useState, useRef, useCallback } from "react";
 import Link from "next/link";
-import { createBrowserClient } from "@supabase/ssr";
 import {
   ValidationError,
   optionalHttpUrl,
   optionalSupabaseUrl,
 } from "@/lib/api-validation";
+// Audit hp-24 (2026-07-09): use the shared browser singleton.
+import { createClient } from "@/lib/supabase/client";
 
-// Module-level createBrowserClient — not inside component
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+const supabase = createClient();
 
 // [Change 3] Local prop interface — Brand is not exported from @/lib/types
 // Added youtube_handle, pinterest_handle, twitter_handle

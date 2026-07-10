@@ -4,7 +4,8 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { createBrowserClient } from "@supabase/ssr";
+// Audit hp-24 (2026-07-09): use the shared browser singleton.
+import { createClient } from "@/lib/supabase/client";
 import { isAdminUser } from "@/lib/is-admin-check";
 import {
   Layers,
@@ -23,10 +24,7 @@ import {
 // [T13] Module-level Supabase client — absolute rule: never instantiate
 // inside component body, useEffect, or event handlers. Shared across
 // the profile-fetch useEffect.
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+const supabase = createClient();
 
 type UserProfile = {
   username: string | null;

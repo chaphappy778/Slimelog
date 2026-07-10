@@ -6,16 +6,13 @@
 // onDone receives the final saved IDs so the parent can update display without a refetch.
 
 import { useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
 import { SLIME_BASE_TYPE_LABELS, type SlimeBaseType } from "@/lib/types";
 import { useToast } from "@/components/Toast"; // [Change 1] Import useToast
+// Audit hp-24 (2026-07-09): use the shared browser singleton.
+import { createClient } from "@/lib/supabase/client";
 
-// [Change 2] Module-level client — was inside component body (absolute rule violation)
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+const supabase = createClient();
 
 type CandidateLog = {
   id: string;
