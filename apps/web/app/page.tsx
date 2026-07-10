@@ -7,6 +7,7 @@ import FeedTabs from "@/components/FeedTabs";
 import FeedCard, { type FeedCardLog } from "@/components/FeedCard";
 import PageHeader from "@/components/PageHeader";
 import PageWrapper from "@/components/PageWrapper";
+import OnboardingGate from "@/components/onboarding/OnboardingGate";
 
 // ─── Internal query row types ──────────────────────────────────────────────────
 // [Change 1 — #35] These types now describe the profiles_public projection
@@ -456,6 +457,10 @@ export default async function HomePage({
   return (
     <PageWrapper dots glow="cyan">
       <PageHeader />
+      {/* First-login walkthrough — client-side gated by
+          profiles.onboarding_completed_at. Renders nothing for repeat
+          visitors. */}
+      <OnboardingGate />
 
       <div className="pt-14">
         {/* Feed header */}

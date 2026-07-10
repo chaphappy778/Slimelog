@@ -58,7 +58,7 @@ Strategic and planning documents that inform work below. Refresh from these befo
 | 28 | Search | MEDIUM | READY | Global search across slimes, brands, users. |
 | 29 | In-app notifications | MEDIUM | READY | Notification bell with feed. |
 | 30 | Sharing | MEDIUM | DONE | 2026-07-10: shipped alongside #5. `<ShareButton>` component (native Web Share API on mobile, clipboard fallback on desktop) on slime detail / drop detail / brand / user profile / /profile pages. Auto-appends signed-in user's `?ref=CODE` so every share doubles as an invite link. |
-| 31 | Onboarding | MEDIUM | READY | First-time user walkthrough. |
+| 31 | Onboarding | MEDIUM | DONE | 2026-07-10: 4-screen full-screen modal on first login (Welcome / Log your first slime / Rate what matters / Invite friends). Gated by profiles.onboarding_completed_at (mig 64). OnboardingGate mounts on / (feed) and only renders for users with null completion timestamp. Skip and Complete both stamp completion via /api/account/onboarding-complete. Step position persisted to localStorage (survives refresh). All visuals geometric — no AI art per community sensitivity. Referral code + milestone ladder on screen 4 wires into the referral system. |
 | 32 | Slime type guide pages | MEDIUM | READY | Educational content per type. |
 | 34 | Profile completeness nudge | MEDIUM | READY | Prompt to add avatar, bio. |
 | 44 | Brand dashboard subscription card | MEDIUM | READY | Show current tier + upgrade CTA. |
