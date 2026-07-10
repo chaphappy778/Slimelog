@@ -2,17 +2,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageWrapper from "@/components/PageWrapper";
 import UpgradeButton from "@/components/UpgradeButton";
+// Audit hp-24 (2026-07-09): use the shared browser singleton
+// (lib/supabase/client.ts) instead of instantiating a fresh
+// createBrowserClient here. Prevents duplicate auth listeners and
+// GoTrue memory leaks when the user navigates across settings pages.
+import { createClient } from "@/lib/supabase/client";
 
-// Module-level client — absolute rule
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+// Module-level client — absolute rule. Singleton internally.
+const supabase = createClient();
 
 const sectionStyle = {
   background: "rgba(45,10,78,0.25)",

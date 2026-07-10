@@ -14,7 +14,8 @@ import type { LogSlimeInput } from "@/lib/slime-actions";
 import { SLIME_BASE_TYPE_LABELS, SCENT_STRENGTH_LABELS } from "@/lib/types";
 import type { SlimeBaseType, ScentStrength } from "@/lib/types";
 import { ImageUpload } from "@/components/ImageUpload";
-import { createBrowserClient } from "@supabase/ssr";
+// Audit hp-24 (2026-07-09): use the shared browser singleton.
+import { createClient } from "@/lib/supabase/client";
 import PageWrapper from "@/components/PageWrapper";
 import FloatingPills from "@/components/FloatingPills";
 import BrandSearchInput from "@/components/BrandSearchInput";
@@ -280,10 +281,7 @@ function LogPageInner() {
 
   if (typeof window !== "undefined" && !userIdFetchedRef.current) {
     userIdFetchedRef.current = true;
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    );
+    const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => {
       setUserId(data.user?.id ?? null);
     });

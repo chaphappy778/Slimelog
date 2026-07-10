@@ -2,16 +2,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import PageWrapper from "@/components/PageWrapper";
+// Audit hp-24 (2026-07-09): use the shared browser singleton instead
+// of instantiating a fresh createBrowserClient here. Prevents duplicate
+// auth listeners, cookie races, and GoTrue memory leaks across pages.
+import { createClient } from "@/lib/supabase/client";
 
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+const supabase = createClient();
 
 type Profile = {
   username: string | null;
