@@ -39,6 +39,7 @@ Strategic and planning documents that inform work below. Refresh from these befo
 | 22 | RevenueCat integration | HIGH | BLOCKED | Re-blocked on D&B address propagation post-May 6. iOS IAP for User Pro. |
 | 23 | Capacitor packaging for iOS | HIGH | BLOCKED | Same chain as #22. |
 | 26 | App Store review checklist | HIGH | IN PROGRESS | Final review pre-submission. |
+| 33 | Password reset link broken | HIGH | DONE | 2026-07-10: root cause was PKCE code_verifier missing from browser storage — @supabase/ssr stores it in HTTP-only cookies accessible only server-side, but /reset-password was trying to exchange the code client-side. Fix: /forgot-password now sets redirectTo=/auth/callback?next=/reset-password?flow=recovery, /auth/callback short-circuits recovery flows by exchanging the code server-side then redirecting to the reset form with an established session. /reset-password recognizes ?flow=recovery + existing session as the ready state. |
 
 ---
 
@@ -47,8 +48,8 @@ Strategic and planning documents that inform work below. Refresh from these befo
 | # | Issue | Priority | Status | Notes |
 | --- | --- | --- | --- | --- |
 | 4 | Push notifications | MEDIUM | READY | Drop alerts. Infrastructure not started. |
-| 5 | Referral program | MEDIUM | READY | Invite a friend, both get 1 month Pro free. |
-| 16 | Data export (GDPR) | MEDIUM | READY | Button in Settings — JSON/CSV. |
+| 5 | Referral program | MEDIUM | DONE | 2026-07-10: shipped as combined feature with #30. Mig 62 (schema + code gen + backfill) + mig 63 (activation trigger + milestone rewards). ?ref= capture at signup + cookie fallback for OAuth. /invite dashboard + /i/[code] short-link. Milestones 5/25/100 → +1/+6/+12 Pro months, additive. Root-cause bug: /auth/confirm route was the actual email signup path, not /auth/callback — earlier fixes were on the wrong route. Also caught unrelated bug: /welcome page overwriting marketing_consent for email signups. |
+| 16 | Data export (GDPR) | MEDIUM | DONE | 2026-07-10: /api/account/data-export returns a JSON download containing every row of user-owned data across profiles, collection_logs, brand_ratings, follows (both directions), brand_follows, comments, likes, comment_likes, notifications, activity_feed, slimes_created, brands_owned, brand_claims. Auth via session — never accepts a user_id from the request. Wrapped with _meta block (schema version + timestamp) for future export upgrade compatibility. Button in Settings → Privacy & Data. |
 | 17 | Marketing consent flag | MEDIUM | DONE | 2026-07-10: mig 61 adds profiles.marketing_consent + marketing_consented_at (default false, GDPR opt-in). Captured on /signup + /welcome + /settings toggle. Brevo sync via syncContactMarketingConsent(). Enforcement comment in lib/brevo.ts requires all marketing routes to filter marketing_consent = true. |
 | 19 | In-feed advertising | MEDIUM | DEFERRED | Free tier only. Defer post-launch. |
 | 20 | Double toast on Pro upgrade | MEDIUM | READY | Two toasts fire on subscription completion. |
@@ -56,7 +57,7 @@ Strategic and planning documents that inform work below. Refresh from these befo
 | 25 | Pro upgrade button in SlimeMenu | MEDIUM | BLOCKED | Deferred with RevenueCat. |
 | 28 | Search | MEDIUM | READY | Global search across slimes, brands, users. |
 | 29 | In-app notifications | MEDIUM | READY | Notification bell with feed. |
-| 30 | Sharing | MEDIUM | READY | Share to Instagram, Twitter. OG images shipped. |
+| 30 | Sharing | MEDIUM | DONE | 2026-07-10: shipped alongside #5. `<ShareButton>` component (native Web Share API on mobile, clipboard fallback on desktop) on slime detail / drop detail / brand / user profile / /profile pages. Auto-appends signed-in user's `?ref=CODE` so every share doubles as an invite link. |
 | 31 | Onboarding | MEDIUM | READY | First-time user walkthrough. |
 | 32 | Slime type guide pages | MEDIUM | READY | Educational content per type. |
 | 34 | Profile completeness nudge | MEDIUM | READY | Prompt to add avatar, bio. |

@@ -434,6 +434,58 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* PRIVACY & DATA */}
+        <div>
+          <SectionHeader label="Privacy & Data" />
+          <div className="rounded-2xl overflow-hidden" style={sectionStyle}>
+            <a
+              href="/api/account/data-export"
+              className="flex items-center gap-3 px-4 py-3.5 active:bg-slime-surface/50 transition-colors"
+            >
+              <span
+                className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+                style={rowIconStyle}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width={18}
+                  height={18}
+                  className="text-slime-muted"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-slime-text">
+                  Download my data
+                </p>
+                <p className="text-[11px] text-slime-muted leading-tight mt-0.5">
+                  Full JSON export of your collection, ratings, comments, and
+                  more.
+                </p>
+              </div>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-slime-muted shrink-0"
+                aria-hidden="true"
+              >
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </a>
+          </div>
+        </div>
+
         {/* LEGAL */}
         <div>
           <SectionHeader label="Legal" />
