@@ -201,7 +201,12 @@ function WelcomeInner() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Step 2 — marketing consent (default off, GDPR opt-in)
+  // Only shown to OAuth signups. Email signups already answered on /signup;
+  // showing it a second time here is confusing and looks like we lost their
+  // answer. We detect email-vs-OAuth via user.app_metadata.provider set by
+  // Supabase Auth on the user record.
   const [marketingConsent, setMarketingConsent] = useState(false);
+  const [showMarketingConsent, setShowMarketingConsent] = useState(false);
 
   // Shared
   const [submitting, setSubmitting] = useState(false);
@@ -217,6 +222,13 @@ function WelcomeInner() {
         return;
       }
       setUserId(user.id);
+      // Show marketing consent checkbox only for OAuth signups. Email
+      // signups already answered on /signup and we don't want to look like
+      // we lost their answer. Supabase Auth sets app_metadata.provider on
+      // every user; "email" = email/password signup, anything else (google,
+      // apple, github, etc.) = OAuth.
+      const provider = user.app_metadata?.provider;
+      setShowMarketingConsent(!!provider && provider !== "email");
       // If user already has a real username, they don't need this page
       supabase
         .from("profiles")
@@ -587,32 +599,37 @@ function WelcomeInner() {
                 </p>
               )}
 
-              <label
-                className="mt-6 flex items-start gap-3 cursor-pointer"
-                htmlFor="welcome-marketing-consent"
-              >
-                <input
-                  id="welcome-marketing-consent"
-                  type="checkbox"
-                  checked={marketingConsent}
-                  onChange={(e) => setMarketingConsent(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded shrink-0"
-                  style={{ accentColor: "#39FF14" }}
-                />
-                <span
-                  className="text-xs leading-relaxed"
-                  style={{ color: "rgba(255,255,255,0.5)" }}
+              {showMarketingConsent && (
+                <label
+                  className="mt-6 flex items-start gap-3 cursor-pointer"
+                  htmlFor="welcome-marketing-consent"
                 >
-                  Send me occasional emails about drop releases, brand launches,
-                  and new SlimeLog features. You can unsubscribe any time.
-                </span>
-              </label>
+                  <input
+                    id="welcome-marketing-consent"
+                    type="checkbox"
+                    checked={marketingConsent}
+                    onChange={(e) => setMarketingConsent(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded shrink-0"
+                    style={{ accentColor: "#39FF14" }}
+                  />
+                  <span
+                    className="text-xs leading-relaxed"
+                    style={{ color: "rgba(255,255,255,0.5)" }}
+                  >
+                    Send me occasional emails about drop releases, brand
+                    launches, and new SlimeLog features. You can unsubscribe any
+                    time.
+                  </span>
+                </label>
+              )}
 
               <button
                 type="button"
                 onClick={handleFinish}
                 disabled={!canFinish}
-                className="w-full mt-5 py-3.5 rounded-2xl text-sm font-black transition-opacity"
+                className={`w-full ${
+                  showMarketingConsent ? "mt-5" : "mt-6"
+                } py-3.5 rounded-2xl text-sm font-black transition-opacity`}
                 style={{
                   background: canFinish
                     ? "linear-gradient(135deg, #39FF14, #00F0FF)"
