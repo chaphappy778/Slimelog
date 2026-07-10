@@ -11,13 +11,28 @@ import FloatingPills from "@/components/FloatingPills";
 function ResetPasswordPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  // Recovery tag set by /auth/confirm when it routes a password-recovery
-  // OTP verification here. Presence of ?flow=recovery is the signal that
-  // "session exists because the user just completed the recovery link,"
-  // not "session exists because they were already signed in." Without
-  // this we'd let any signed-in user bypass the current-password re-
-  // verify guardrail on /settings/password.
-  const isRecoveryFlow = searchParams.get("flow") === "recovery";
+  // Recovery signals — TWO possible URL shapes deliver a user here:
+  //
+  //   (a) /reset-password?flow=recovery
+  //         Set by /auth/confirm after it runs verifyOtp server-side.
+  //
+  //   (b) /reset-password?code=<pkce-code>
+  //         Set directly by Supabase's default recovery email template
+  //         (skips /auth/confirm entirely). We treat this as a recovery
+  //         intent AND manually exchange the code for a session below —
+  //         @supabase/ssr's browser client does NOT auto-detect ?code=
+  //         in the URL (that pattern is reserved for server-side routes
+  //         like /auth/callback). Without the manual exchange the code
+  //         sits unused and the page times out to the "invalid" state.
+  //
+  // The ?flow=recovery tag OR the presence of ?code= is the signal that
+  // "any session we see was granted by recovery," not "user is signed
+  // in." This gates the "let this page reset a password" flow so a
+  // normally-signed-in visitor can't bypass /settings/password's
+  // current-password re-verify.
+  const recoveryCode = searchParams.get("code");
+  const isRecoveryFlow =
+    searchParams.get("flow") === "recovery" || !!recoveryCode;
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -62,16 +77,38 @@ function ResetPasswordPageInner() {
       }
     });
 
-    // Check up-front for an already-established session (path #2 above).
-    // Only trust it if the URL bears the recovery tag — otherwise a
-    // normally-signed-in user visiting /reset-password would silently
-    // be handed the reset form, which would bypass the current-password
-    // re-verify we require on /settings/password.
-    if (isRecoveryFlow) {
-      supabase.auth.getSession().then(({ data }) => {
+    // If we landed with a raw ?code= param (Supabase's default recovery
+    // email template), exchange it for a session before checking the
+    // ready state. Without this the code sits unused and every attempt
+    // times out to "invalid or expired."
+    async function initRecovery() {
+      if (recoveryCode) {
+        const { error: exchangeError } =
+          await supabase.auth.exchangeCodeForSession(recoveryCode);
+        if (exchangeError) {
+          // Real errors here (expired token, bad code, replay attempt)
+          // should surface the "invalid or expired" screen so we don't
+          // hang for the full timeout.
+          console.error(
+            "[reset-password] exchangeCodeForSession failed:",
+            exchangeError.message,
+          );
+          setTokenError(true);
+          return;
+        }
+        setRecoveryReady(true);
+        return;
+      }
+
+      // No code in URL — either the implicit-flow hash path (handled by
+      // onAuthStateChange PASSWORD_RECOVERY) or /auth/confirm-driven
+      // path (session already exists, ?flow=recovery tag present).
+      if (isRecoveryFlow) {
+        const { data } = await supabase.auth.getSession();
         if (data.session) setRecoveryReady(true);
-      });
+      }
     }
+    initRecovery();
 
     // If neither path resolves within 5 seconds, treat as bad link.
     // Increased from 3s → 5s to give the server-verified path some
@@ -87,7 +124,7 @@ function ResetPasswordPageInner() {
       subscription.unsubscribe();
       clearTimeout(timeoutId);
     };
-  }, [isRecoveryFlow]);
+  }, [isRecoveryFlow, recoveryCode]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
