@@ -330,10 +330,16 @@ function WelcomeInner() {
       setAvatarUploading(false);
     }
 
+    // Only pass marketing_consent when the checkbox was actually rendered
+    // (OAuth flow). For email signups the checkbox is hidden and consent
+    // was already captured on /signup — passing false here would silently
+    // revert the user's opt-in from moments earlier.
     const result = await updateOnboardingProfile({
       username,
       avatar_url: avatarUrl,
-      marketing_consent: marketingConsent,
+      ...(showMarketingConsent
+        ? { marketing_consent: marketingConsent }
+        : {}),
     });
 
     if (!result.success) {
@@ -351,9 +357,13 @@ function WelcomeInner() {
     setSubmitting(true);
     setServerError(null);
 
+    // Same rule as handleFinish — only pass marketing_consent when the
+    // checkbox was rendered.
     const result = await updateOnboardingProfile({
       username,
-      marketing_consent: marketingConsent,
+      ...(showMarketingConsent
+        ? { marketing_consent: marketingConsent }
+        : {}),
     });
 
     if (!result.success) {

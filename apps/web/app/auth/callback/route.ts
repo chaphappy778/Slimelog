@@ -43,48 +43,83 @@ async function applyReferralIfPresent(
   cookieCode: string | undefined,
   adminClient: SupabaseClient,
 ): Promise<void> {
+  // Verbose logging enabled 2026-07-10 while diagnosing why referrals
+  // don't stick. Remove or gate on NODE_ENV once we've traced it.
   const raw =
     (typeof metadataCode === "string" ? metadataCode : null) ??
     cookieCode ??
     null;
-  if (!raw) return;
+  console.log("[referral] input", {
+    userId,
+    metadataCodeType: typeof metadataCode,
+    metadataCode,
+    hasCookie: !!cookieCode,
+    resolvedRaw: raw,
+  });
+  if (!raw) {
+    console.log("[referral] no code — skipping");
+    return;
+  }
   const code = raw.trim().toUpperCase();
-  if (!REFERRAL_CODE_RE.test(code)) return;
+  if (!REFERRAL_CODE_RE.test(code)) {
+    console.log("[referral] bad shape — skipping:", code);
+    return;
+  }
 
-  // Immutability: never overwrite an existing referrer. This shouldn't
-  // fire in practice (auth callback runs once per signup) but is a
-  // defense against a re-triggered callback + stale cookie combo.
-  const { data: existing } = await adminClient
+  // Immutability: never overwrite an existing referrer.
+  const { data: existing, error: existingErr } = await adminClient
     .from("profiles")
     .select("referred_by_user_id")
     .eq("id", userId)
     .single();
-  if (existing?.referred_by_user_id) return;
+  if (existingErr) {
+    console.error("[referral] existing lookup errored:", existingErr.message);
+    return;
+  }
+  if (existing?.referred_by_user_id) {
+    console.log("[referral] already set — skipping");
+    return;
+  }
 
-  // Look up the referrer by code. Bad/nonexistent codes fail silently —
-  // we don't want to block signup on a mistyped invite link.
-  const { data: referrer } = await adminClient
+  // Look up the referrer by code.
+  const { data: referrer, error: referrerErr } = await adminClient
     .from("profiles")
-    .select("id")
+    .select("id, username")
     .eq("referral_code", code)
     .maybeSingle();
-  if (!referrer) return;
-  // Guard against self-referral (belt-and-braces with the DB CHECK).
-  if (referrer.id === userId) return;
+  if (referrerErr) {
+    console.error("[referral] referrer lookup errored:", referrerErr.message);
+    return;
+  }
+  if (!referrer) {
+    console.log("[referral] no referrer for code:", code);
+    return;
+  }
+  if (referrer.id === userId) {
+    console.log("[referral] self-referral blocked");
+    return;
+  }
 
-  const { error: updateError } = await adminClient
+  console.log("[referral] applying:", {
+    referrerId: referrer.id,
+    referrerUsername: referrer.username,
+  });
+
+  const { error: updateError, data: updated } = await adminClient
     .from("profiles")
     .update({ referred_by_user_id: referrer.id })
-    .eq("id", userId);
+    .eq("id", userId)
+    .select("id, referred_by_user_id");
 
   if (updateError) {
-    // Log but don't block signup — a failed referral is disappointing
-    // but shouldn't prevent the user from getting into the app.
     console.error(
-      "[auth/callback] Failed to apply referral:",
+      "[referral] update failed:",
       updateError.message,
+      updateError.details,
     );
+    return;
   }
+  console.log("[referral] update result:", updated);
 }
 
 export async function GET(request: NextRequest) {
