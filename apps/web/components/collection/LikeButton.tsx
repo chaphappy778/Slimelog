@@ -1,7 +1,7 @@
 // apps/web/components/collection/LikeButton.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { safeRedirect } from "@/lib/safe-redirect";
 // Audit hp-24 (2026-07-09): use the shared browser singleton.
@@ -27,6 +27,23 @@ export default function LikeButton({
   const [pending, setPending] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+
+  // 2026-07-09: sync local state when the parent re-renders with new
+  // props. Without this, after router.refresh() the feed page passes
+  // fresh initialLiked/initialCount but LikeButton's local state stays
+  // put (React preserves useState across re-renders as long as the
+  // component doesn't unmount). Symptom: hearts don't update on the
+  // feed after back-navigation from the detail overlay.
+  //
+  // The guard on `pending` prevents a mid-flight optimistic update
+  // from being clobbered by a stale prop value while the mutation is
+  // in flight. Once pending flips back to false, the next prop change
+  // syncs cleanly.
+  useEffect(() => {
+    if (pending) return;
+    setLiked(initialLiked);
+    setCount(initialCount);
+  }, [initialLiked, initialCount, pending]);
 
   async function handleToggle() {
     // [Change 2 — #35] Logged-out users get routed to signup instead of
