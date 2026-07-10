@@ -67,6 +67,11 @@ Strategic and planning documents that inform work below. Refresh from these befo
 | T47 | Email editing during claim flow step 1 | MEDIUM | READY | Chat 9. PATCH existing pending claim instead of forcing restart on typo. |
 | T51 | Standardized rejection reason dropdown | MEDIUM | READY | Chat 9. 5 standardized reasons + Other (please specify) for admin reject UX. |
 | T52 | Hide consumer bottom nav on admin pages | MEDIUM | READY | Chat 9. BottomNavWrapper should detect /admin/* and return null. |
+| T99 | Signup page copy polish | MEDIUM | READY | 2026-07-10. "few slime names + n46 others" microcopy needs upgrade. Feels placeholder-y. Rework during launch-prep polish sprint. |
+| T100 | SlimesSplitPanel full-screen edit form | MEDIUM | READY | 2026-07-09. Currently centered modal (Option B); Option C = full-screen edit page on mobile. Post-audit polish. |
+| T101 | Slime detail card load perf | MEDIUM | READY | 2026-07-09. 1.4-2.5s load time on `/slimes/[id]`. Profile via DevTools Network + Performance tabs; likely multiple round-trips. Optimize before launch. |
+| T102 | Admin subscription toggle | MEDIUM | READY | 2026-07-09. Admin-only toggle to flip subscription_tier without going through Stripe — for QA + fresh account test cycles pre-launch. |
+| T103 | Sync-from-Stripe admin escape hatch | MEDIUM | READY | 2026-07-09. Manual button that queries Stripe for a user/brand's current subscription state and updates the row. Backstop for webhook drift. |
 
 ---
 

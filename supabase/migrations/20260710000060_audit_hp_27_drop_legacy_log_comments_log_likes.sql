@@ -1,0 +1,48 @@
+-- Audit HP-27 (2026-07-10): drop legacy log_comments + log_likes tables.
+--
+-- Context
+-- -------
+-- The initial schema (mig 20260324000001) shipped with:
+--   public.log_likes    — (user_id, log_id) composite PK
+--   public.log_comments — id PK + body + timestamps + updated_at trigger
+--
+-- Both were later superseded:
+--   public.comments — mig 20260403000016 (uses body length CHECK ≤ 500)
+--   public.likes    — used by LikeButton / feed queries
+--
+-- The audit called out that the legacy tables still exist with their
+-- original RLS policies (still enforced, but the polymorphic split
+-- means writes could theoretically land in either place if any code
+-- path targeted the old tables). A grep of the entire apps/web/
+-- codebase confirms zero code paths currently reference log_comments
+-- or log_likes — only a comment in api/report/route.ts flagging this
+-- as the pending drop.
+--
+-- Fix
+-- ---
+-- DROP TABLE CASCADE on both, letting Postgres clean up:
+--   - RLS policies attached to each table
+--   - log_comments_updated_at trigger
+--   - Any indexes created implicitly on PK or explicitly elsewhere
+--
+-- No incoming FK references exist (verified via grep of migrations
+-- directory), so CASCADE only removes objects owned by these tables.
+--
+-- Data loss note
+-- --------------
+-- Any rows in log_likes or log_comments are permanently discarded.
+-- No migration path from legacy to new tables is being written
+-- because:
+--   (a) the codebase hasn't written to these tables since mig
+--       20260403000016 (2026-04-03); any rows are stale test data
+--       from before that cutover.
+--   (b) the new `comments` table exists at the same conceptual level
+--       and if we cared about historical rows we'd have merged them
+--       months ago.
+--
+-- If anyone ever needs those rows back, they exist in Postgres
+-- point-in-time recovery (Supabase Pro retains 7 days).
+
+DROP TABLE IF EXISTS public.log_likes CASCADE;
+
+DROP TABLE IF EXISTS public.log_comments CASCADE;
