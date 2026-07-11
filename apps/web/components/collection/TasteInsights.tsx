@@ -143,9 +143,13 @@ export default function TasteInsights({
         </p>
       </div>
 
-      {/* Radar */}
+      {/* Radar — viewBox expanded on both sides so the label text
+          (previously cut off at 10.5px, especially "Creativity" and
+          "Aesthetic" which extend past the polygon edge) has real
+          room. Rendered a touch larger to compensate for the extra
+          padding so the polygon stays visually prominent. */}
       <div className="flex justify-center">
-        <svg viewBox="0 0 220 224" width="200" height="204">
+        <svg viewBox="-40 -10 300 244" width="260" height="212">
           {gridPolygons.map((points, idx) => (
             <polygon
               key={idx}
