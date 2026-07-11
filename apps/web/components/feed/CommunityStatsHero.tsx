@@ -168,11 +168,22 @@ export default function CommunityStatsHero({
         </div>
       </div>
 
-      {/* Two stat cards */}
+      {/* Two stat cards. Delta line under each label shows the weekly
+          growth signal in green:
+          - "all time" view: "+N this week" (grounded on the weekly count)
+          - "this week" view: "new this week" (the whole card IS the delta)
+          Data reuses the server-side weekly counts already in `stats`;
+          no additional queries or tracking columns needed. Same pattern
+          will slot into the admin analytics view later. */}
       <div className="grid grid-cols-2 gap-3">
         <StatCard
           value={displayedSlimers}
           label="users"
+          delta={
+            range === "all"
+              ? `+${stats.slimersThisWeek.toLocaleString()} this week`
+              : "new this week"
+          }
           icon={<Users className="w-7 h-7" strokeWidth={2} />}
           iconColor="#39FF14"
           gradient="linear-gradient(135deg, #39FF14, #00F0FF)"
@@ -181,6 +192,11 @@ export default function CommunityStatsHero({
         <StatCard
           value={displayedSlimes}
           label="slimes logged"
+          delta={
+            range === "all"
+              ? `+${stats.slimesThisWeek.toLocaleString()} this week`
+              : "new this week"
+          }
           icon={<Droplet className="w-7 h-7" strokeWidth={2} />}
           iconColor="#00F0FF"
           gradient="linear-gradient(135deg, #00F0FF, #FF00E5)"
@@ -229,6 +245,7 @@ export default function CommunityStatsHero({
 function StatCard({
   value,
   label,
+  delta,
   icon,
   iconColor,
   gradient,
@@ -236,6 +253,7 @@ function StatCard({
 }: {
   value: number;
   label: string;
+  delta: string;
   icon: React.ReactNode;
   iconColor: string;
   gradient: string;
@@ -292,6 +310,12 @@ function StatCard({
         style={{ color: "rgba(255,255,255,0.5)" }}
       >
         {label}
+      </div>
+      <div
+        className="relative mt-1 text-[11px] font-bold"
+        style={{ color: "#39FF14" }}
+      >
+        {delta}
       </div>
     </div>
   );
