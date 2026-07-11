@@ -252,7 +252,7 @@ export default function SlimeMenu() {
               <NavItem
                 href="/collection"
                 icon={<Layers className="w-5 h-5" />}
-                label="My Collection"
+                label="My Shelf"
                 onClose={handleClose}
               />
               <NavItem

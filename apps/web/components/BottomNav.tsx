@@ -35,7 +35,12 @@ const NAV_ITEMS = [
     ),
   },
   {
-    label: "Collection",
+    // 2026-07-11: renamed "Collection" → "My Shelf" to match the new
+    // page framing (MY SHELF eyebrow + shelf-hero). Warmer language,
+    // shorter tap target label, matches the personal-shelf voice we
+    // just introduced on /collection. Route stays /collection so
+    // existing links + deep links keep working.
+    label: "My Shelf",
     href: "/collection",
     colorActive: "text-slime-accent", // green — keep
     icon: (active: boolean) => (
