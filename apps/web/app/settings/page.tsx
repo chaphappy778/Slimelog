@@ -170,9 +170,25 @@ export default function SettingsPage() {
   async function handleSignOut() {
     if (signOutLoading) return;
     setSignOutLoading(true);
-    await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
+    // 2026-07-11: the previous flow was
+    //   await signOut() → router.push("/") → router.refresh()
+    // and would frequently freeze after signOut because:
+    //   (a) the useEffect above sees user=null and races to redirect to /login,
+    //   (b) router.push("/") also fires, so two competing navigations queue up,
+    //   (c) router.refresh() re-invalidates while the tree is unmounting.
+    //
+    // Now: sign out and hard-navigate with window.location. That
+    // detonates the React tree cleanly and starts a fresh page load with
+    // no residual state or race.
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("[settings] signOut failed:", err);
+      // Continue to redirect anyway — the local session is stale enough
+      // that reloading /login is better than leaving the user stuck.
+    }
+    // Full navigation bypasses React state entirely.
+    window.location.href = "/";
   }
 
   async function handleDeleteAccount() {
@@ -199,9 +215,14 @@ export default function SettingsPage() {
         setDeleteLoading(false);
         return;
       }
-      await supabase.auth.signOut();
-      router.push("/");
-      router.refresh();
+      // Same pattern as handleSignOut — hard-navigate to prevent the
+      // useEffect + router.push race.
+      try {
+        await supabase.auth.signOut();
+      } catch (err) {
+        console.error("[settings] signOut after delete failed:", err);
+      }
+      window.location.href = "/";
     } catch {
       setDeletePassword("");
       setDeleteError("Something went wrong. Please try again.");
