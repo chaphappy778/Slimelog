@@ -192,7 +192,12 @@ export default function SlimeMenu() {
         <>
           <div
             ref={overlayRef}
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[2px]"
+            // 2026-07-11: bumped z-index tiers so the drawer sits above
+            // PageHeader (fixed z-30 + backdrop-filter stacking context)
+            // and any feed-page overlay elements. Was showing feed content
+            // "through" the drawer after the header Option A restyle
+            // introduced the backdrop-filter stacking context.
+            className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-[2px]"
             style={{
               animation: isAnimatingOut
                 ? "fadeOut 280ms ease forwards"
@@ -206,7 +211,7 @@ export default function SlimeMenu() {
             role="dialog"
             aria-modal="true"
             aria-label="Navigation menu"
-            className="fixed top-0 right-0 z-50 h-full w-[80vw] max-w-[320px] flex flex-col overflow-y-auto shadow-2xl"
+            className="fixed top-0 right-0 z-[95] h-full w-[80vw] max-w-[320px] flex flex-col overflow-y-auto shadow-2xl"
             style={{
               background: "#1A0A2E",
               borderLeft: "1px solid rgba(57, 255, 20, 0.12)",
