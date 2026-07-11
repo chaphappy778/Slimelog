@@ -187,7 +187,7 @@ export default function CommunityStatsHero({
           icon={<Users className="w-7 h-7" strokeWidth={2} />}
           iconColor="#39FF14"
           gradient="linear-gradient(135deg, #39FF14, #00F0FF)"
-          glowColor="rgba(57,255,20,0.35)"
+          glowColor="rgba(57,255,20,0.55)"
         />
         <StatCard
           value={displayedSlimes}
@@ -200,7 +200,7 @@ export default function CommunityStatsHero({
           icon={<Droplet className="w-7 h-7" strokeWidth={2} />}
           iconColor="#00F0FF"
           gradient="linear-gradient(135deg, #00F0FF, #FF00E5)"
-          glowColor="rgba(0,240,255,0.35)"
+          glowColor="rgba(0,240,255,0.55)"
         />
       </div>
 
@@ -259,15 +259,35 @@ function StatCard({
   gradient: string;
   glowColor: string;
 }) {
+  // 2026-07-11: bumped the stat card visuals — the previous
+  // purple-on-purple was barely distinguishable from the feed
+  // background. Now we have:
+  //   - accent-colored border (green/cyan or cyan/magenta) at higher
+  //     opacity, so the card outline reads as a lit chip
+  //   - a diagonal gradient wash inside the card using the accent
+  //     colors at low opacity (behind the glow orb) so the whole
+  //     card carries the same accent
+  //   - an outer glow drop shadow so the card lifts off the background
   return (
     <div
       className="relative overflow-hidden rounded-3xl p-4"
       style={{
-        background: "rgba(45,10,78,0.3)",
-        border: "1px solid rgba(45,10,78,0.8)",
-        boxShadow: "inset 0 0 24px rgba(45,10,78,0.15)",
+        background: `${gradient}, rgba(45,10,78,0.4)`,
+        backgroundBlendMode: "overlay, normal",
+        border: `1px solid ${iconColor}66`,
+        boxShadow: `0 0 24px ${iconColor}25, inset 0 0 32px rgba(45,10,78,0.25)`,
       }}
     >
+      {/* Additional gradient wash overlay so the accent shows through
+          even on displays that don't honor backgroundBlendMode well. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background: gradient,
+          opacity: 0.12,
+        }}
+      />
       {/* Ambient glow orb behind the number */}
       <div
         aria-hidden="true"

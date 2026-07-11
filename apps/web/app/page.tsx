@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import FeedTabs from "@/components/FeedTabs";
-import FeedCard, { type FeedCardLog } from "@/components/FeedCard";
+import { type FeedCardLog } from "@/components/FeedCard";
 import PageHeader from "@/components/PageHeader";
 import PageWrapper from "@/components/PageWrapper";
 import OnboardingGate from "@/components/onboarding/OnboardingGate";
@@ -12,6 +12,10 @@ import OnboardingGate from "@/components/onboarding/OnboardingGate";
 import CommunityStatsHero, {
   type CommunityStats,
 } from "@/components/feed/CommunityStatsHero";
+// Feed rework batch 3 (2026-07-11): client wrapper that renders the
+// density toggle + day-bucket dividers + card list. Manages its own
+// localStorage-backed density state.
+import FeedListClient from "@/components/feed/FeedListClient";
 
 // ─── Internal query row types ──────────────────────────────────────────────────
 // [Change 1 — #35] These types now describe the profiles_public projection
@@ -74,135 +78,8 @@ function normaliseProfile(
   return raw;
 }
 
-// ─── Day-bucket dividers (feed rework batch 2, 2026-07-11) ────────────────────
-//
-// Group logs into three buckets and interleave the divider labels:
-//   Today       — created_at within the current UTC day
-//   This week   — within the last 7 UTC days, but not today
-//   Earlier     — everything else
-//
-// UTC-based on purpose: server render + client hydration match without a
-// reshuffle flash. Users far from UTC will see "Today" read off by a few
-// hours; that's acceptable at current scale per the T105 discussion. If
-// it becomes an issue we can revisit with a client-side reshuffle.
-
-type BucketKey = "today" | "week" | "earlier";
-const BUCKET_LABELS: Record<BucketKey, string> = {
-  today: "Today",
-  week: "This week",
-  earlier: "Earlier",
-};
-
-function bucketLogsByDay(logs: FeedCardLog[]): Array<{
-  key: BucketKey;
-  logs: FeedCardLog[];
-}> {
-  const now = new Date();
-  const todayStart = new Date(
-    Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate(),
-      0,
-      0,
-      0,
-      0,
-    ),
-  );
-  const sevenDaysAgo = new Date(
-    todayStart.getTime() - 7 * 24 * 60 * 60 * 1000,
-  );
-
-  const buckets: Record<BucketKey, FeedCardLog[]> = {
-    today: [],
-    week: [],
-    earlier: [],
-  };
-  for (const log of logs) {
-    const t = new Date(log.created_at).getTime();
-    if (t >= todayStart.getTime()) buckets.today.push(log);
-    else if (t >= sevenDaysAgo.getTime()) buckets.week.push(log);
-    else buckets.earlier.push(log);
-  }
-
-  // Preserve the incoming order within each bucket, and only emit buckets
-  // that actually have content.
-  const result: Array<{ key: BucketKey; logs: FeedCardLog[] }> = [];
-  (["today", "week", "earlier"] as BucketKey[]).forEach((key) => {
-    if (buckets[key].length > 0) result.push({ key, logs: buckets[key] });
-  });
-  return result;
-}
-
-function DayDivider({
-  label,
-  count,
-  emphasized,
-}: {
-  label: string;
-  count: number;
-  emphasized?: boolean;
-}) {
-  return (
-    <div className="flex items-center gap-3 mt-6 mb-3">
-      <span
-        className="text-[13px] font-black uppercase tracking-wider"
-        style={{
-          fontFamily: "Montserrat, sans-serif",
-          color: emphasized ? "#39FF14" : "#ffffff",
-        }}
-      >
-        {label}
-      </span>
-      <span
-        className="flex-1 h-px"
-        style={{
-          background:
-            "linear-gradient(90deg, rgba(120,60,180,0.55), transparent)",
-        }}
-      />
-      <span
-        className="text-[11px] font-semibold"
-        style={{ color: "rgba(255,255,255,0.4)" }}
-      >
-        {count} log{count === 1 ? "" : "s"}
-      </span>
-    </div>
-  );
-}
-
-function FeedListWithDividers({
-  logs,
-  brandSlugMap,
-  currentUserId,
-}: {
-  logs: FeedCardLog[];
-  brandSlugMap: Record<string, string>;
-  currentUserId: string | null;
-}) {
-  const buckets = bucketLogsByDay(logs);
-  return (
-    <div className="flex flex-col gap-3">
-      {buckets.map(({ key, logs: bucketLogs }, i) => (
-        <div key={key} className="flex flex-col gap-3">
-          <DayDivider
-            label={BUCKET_LABELS[key]}
-            count={bucketLogs.length}
-            emphasized={key === "today" && i === 0}
-          />
-          {bucketLogs.map((log) => (
-            <FeedCard
-              key={log.id}
-              log={log}
-              brandSlugMap={brandSlugMap}
-              currentUserId={currentUserId}
-            />
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
+// (Day-bucket dividers + density toggle now live in the client
+// component <FeedListClient>. Feed rework batches 2 + 3, 2026-07-11.)
 
 // ─── Empty states ──────────────────────────────────────────────────────────────
 
@@ -759,12 +636,11 @@ export default async function HomePage({
                   <EmptyFeed />
                 )
               ) : (
-                // Feed rework batch 2 (2026-07-11): group logs by day
-                // bucket (Today / This week / Earlier) and interleave
-                // divider labels. Bucketing uses UTC ISO strings so
-                // there's no server/client mismatch — see note at
-                // bucketLogsByDay() call site.
-                <FeedListWithDividers
+                // Feed rework batches 2 + 3 (2026-07-11): FeedListClient
+                // owns the density state and renders either photo-hero
+                // (Card A, default) or compact list (Card C) with the
+                // same day-bucket dividers around both.
+                <FeedListClient
                   logs={displayLogs}
                   brandSlugMap={brandSlugMap}
                   currentUserId={user?.id ?? null}
