@@ -148,6 +148,22 @@ export async function POST(req: NextRequest) {
   // canceled, unpaid, incomplete) keeps the status Stripe reports but
   // still marks tier=pro if there's a period_end in the future — we
   // let the DB row carry the raw truth rather than pre-collapsing it.
+  // Tier value differs by target: profiles CHECK is ('free', 'pro'),
+  // brands CHECK is ('free', 'brand_pro'). Pick the one that satisfies
+  // the constraint on this row.
+  const activeTierValue = target_type === "brand" ? "brand_pro" : "pro";
+  // subscription_status CHECK on both tables is
+  // ('active', 'canceled', 'past_due', 'trialing') OR null. Stripe can
+  // return other lifecycle states (unpaid / incomplete /
+  // incomplete_expired / paused), so we coerce those to null and let the
+  // tier field carry the "not paying" signal.
+  const ALLOWED_STATUSES = new Set([
+    "active",
+    "canceled",
+    "past_due",
+    "trialing",
+  ]);
+
   const updatePayload: {
     subscription_tier: string;
     subscription_status: string | null;
@@ -162,11 +178,15 @@ export async function POST(req: NextRequest) {
 
   if (best) {
     const ACTIVE = new Set(["active", "trialing"]);
-    updatePayload.subscription_status = best.status;
+    updatePayload.subscription_status = ALLOWED_STATUSES.has(best.status)
+      ? best.status
+      : null;
     updatePayload.subscription_current_period_end = periodEndIso(best);
     updatePayload.subscription_cancel_at_period_end =
       !!best.cancel_at_period_end;
-    updatePayload.subscription_tier = ACTIVE.has(best.status) ? "pro" : "free";
+    updatePayload.subscription_tier = ACTIVE.has(best.status)
+      ? activeTierValue
+      : "free";
   }
 
   const { data: updated, error: updateErr } = await admin

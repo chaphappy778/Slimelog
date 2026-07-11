@@ -25,15 +25,17 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isAdminUser } from "@/lib/is-admin-check";
 
-const VALID_TIERS = new Set(["free", "pro"]);
+// Client-facing tier vocab is normalized to "free" / "pro" regardless of
+// target — the route translates "pro" → "brand_pro" internally when the
+// row is a brand, so the DB CHECK constraints (profiles: free|pro,
+// brands: free|brand_pro) don't have to leak into the UI.
+const VALID_UI_TIERS = new Set(["free", "pro"]);
+// subscription_status CHECK on both tables allows this narrow set + null.
 const VALID_STATUSES = new Set([
   "active",
   "trialing",
   "past_due",
   "canceled",
-  "unpaid",
-  "incomplete",
-  "incomplete_expired",
 ]);
 
 export async function POST(req: NextRequest) {
@@ -70,9 +72,9 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
-  if (typeof tier !== "string" || !VALID_TIERS.has(tier)) {
+  if (typeof tier !== "string" || !VALID_UI_TIERS.has(tier)) {
     return NextResponse.json(
-      { error: `tier must be one of: ${[...VALID_TIERS].join(", ")}` },
+      { error: `tier must be one of: ${[...VALID_UI_TIERS].join(", ")}` },
       { status: 400 },
     );
   }
@@ -92,13 +94,22 @@ export async function POST(req: NextRequest) {
   // a stale "active" flag on a downgraded row.
   const effectiveStatus = tier === "free" ? null : status;
 
+  // Translate "pro" to the DB value that satisfies the CHECK constraint
+  // on this target's table. Profiles: 'pro'. Brands: 'brand_pro'.
+  const dbTier =
+    tier === "pro"
+      ? target_type === "brand"
+        ? "brand_pro"
+        : "pro"
+      : "free";
+
   const admin = createAdminClient();
   const table = target_type === "brand" ? "brands" : "profiles";
 
   const { data: updated, error } = await admin
     .from(table)
     .update({
-      subscription_tier: tier,
+      subscription_tier: dbTier,
       subscription_status: effectiveStatus,
     })
     .eq("id", target_id)
