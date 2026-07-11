@@ -179,7 +179,7 @@ export default function TasteInsights({
           )}
           {/* Axis labels — positioned just outside the outer ring */}
           {axisAverages.map(({ label }, i) => {
-            const [x, y] = pointOnAxis(i, R + 14);
+            const [x, y] = pointOnAxis(i, R + 16);
             // Anchor + baseline for the six clock positions.
             const anchor =
               i === 0
@@ -195,9 +195,9 @@ export default function TasteInsights({
                 x={x.toFixed(1)}
                 y={y.toFixed(1)}
                 textAnchor={anchor as "middle" | "start" | "end"}
-                fontSize="8.5"
+                fontSize="10.5"
                 fontWeight={600}
-                fill="rgba(255,255,255,0.65)"
+                fill="rgba(255,255,255,0.75)"
                 style={{ fontFamily: "system-ui" }}
               >
                 {label}
