@@ -10,10 +10,17 @@ import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
 import type { CollectionLog, SlimeBaseType } from "@/lib/types";
 import PageHeader from "@/components/PageHeader";
 import PageWrapper from "@/components/PageWrapper";
-import CollectionSummaryChart from "@/components/collection/CollectionSummaryChart";
 import ViewToggle from "@/components/collection/ViewToggle";
 import SpiralView from "@/components/collection/SpiralView";
 import GalaxyView from "@/components/collection/GalaxyView";
+// Collection rework batch A (2026-07-11):
+import ShelfHero, {
+  type ShelfStats,
+} from "@/components/collection/ShelfHero";
+import CollectionFilterPills, {
+  type FilterKey,
+  type SortKey,
+} from "@/components/collection/CollectionFilterPills";
 
 type View = "cards" | "spiral" | "galaxy";
 
@@ -256,10 +263,18 @@ export default function CollectionPage() {
   const [logs, setLogs] = useState<CollectionLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"all" | "collection" | "wishlist">(
-    "all",
-  );
+  const [filter, setFilter] = useState<FilterKey>("all");
+  const [sort, setSort] = useState<SortKey>("recent");
   const [view, setView] = useState<View>("cards");
+  const [universe, setUniverse] = useState<{
+    topBaseLabel: string | null;
+    userCount: number;
+    communityCount: number;
+  }>({
+    topBaseLabel: null,
+    userCount: 0,
+    communityCount: 0,
+  });
 
   const [likeData, setLikeData] = useState<LikeDataMap>({});
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -346,90 +361,156 @@ export default function CollectionPage() {
     return true;
   });
 
+  // Apply sort (batch A).
+  const sorted = [...filtered].sort((a, b) => {
+    if (sort === "score")
+      return (b.rating_overall ?? -1) - (a.rating_overall ?? -1);
+    if (sort === "added")
+      return (
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+    // recent = updated_at desc
+    return (
+      new Date(b.updated_at ?? b.created_at).getTime() -
+      new Date(a.updated_at ?? a.created_at).getTime()
+    );
+  });
+
   const collectionCount = logs.filter((l) => !l.in_wishlist).length;
   const wishlistCount = logs.filter((l) => l.in_wishlist).length;
+
+  // ── Shelf hero stats (batch A) ──────────────────────────────────────────
+  //
+  // All derived client-side from the fetched logs. Owned = not-wishlist.
+  // Avg score across owned logs that have a rating. Top base = mode of
+  // base_type across owned logs. Weeks active = weeks since first log
+  // (min of created_at across all logs). This month = logs created in
+  // the current calendar month.
+  const ownedLogs = logs.filter((l) => !l.in_wishlist);
+  const scoredOwned = ownedLogs.filter(
+    (l): l is CollectionLog & { rating_overall: number } =>
+      typeof l.rating_overall === "number",
+  );
+  const avgScore = scoredOwned.length
+    ? scoredOwned.reduce((sum, l) => sum + l.rating_overall, 0) /
+      scoredOwned.length
+    : null;
+
+  const baseCounts: Partial<Record<SlimeBaseType, number>> = {};
+  for (const l of ownedLogs) {
+    if (l.base_type) {
+      const k = l.base_type as SlimeBaseType;
+      baseCounts[k] = (baseCounts[k] ?? 0) + 1;
+    }
+  }
+  let topBase: SlimeBaseType | null = null;
+  let topBaseCount = 0;
+  for (const [k, c] of Object.entries(baseCounts)) {
+    if ((c ?? 0) > topBaseCount) {
+      topBase = k as SlimeBaseType;
+      topBaseCount = c ?? 0;
+    }
+  }
+  const topBaseLabel = topBase
+    ? (SLIME_BASE_TYPE_LABELS[topBase] ?? null)
+    : null;
+
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const thisMonthCount = logs.filter(
+    (l) => new Date(l.created_at) >= monthStart,
+  ).length;
+
+  const firstLogTime = logs.length
+    ? Math.min(...logs.map((l) => new Date(l.created_at).getTime()))
+    : Date.now();
+  const weeksActive = Math.max(
+    1,
+    Math.floor((Date.now() - firstLogTime) / (7 * 24 * 60 * 60 * 1000)),
+  );
+
+  const stats: ShelfStats = {
+    ownedCount: collectionCount,
+    avgScore,
+    topBaseLabel,
+    weeksActive,
+    thisMonthCount,
+    universeTopBaseLabel: universe.topBaseLabel,
+    universeUserCount: universe.userCount,
+    universeCommunityCount: universe.communityCount,
+  };
+
+  // ── Universe hook: community-tracked denominator ────────────────────────
+  //
+  // Runs whenever the user's top base type changes. Queries the count of
+  // DISTINCT slime_ids across all is_public collection_logs with that
+  // base_type — this is the "community universe of butter slimes" figure.
+  // If distinct slime_id data isn't clean enough, we fall back to a
+  // simple row count, which is still a directional signal.
+  useEffect(() => {
+    if (!topBase || !topBaseLabel) {
+      setUniverse({
+        topBaseLabel: null,
+        userCount: 0,
+        communityCount: 0,
+      });
+      return;
+    }
+    const supabase = createClient();
+    let cancelled = false;
+    supabase
+      .from("collection_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("is_public", true)
+      .eq("base_type", topBase)
+      .then(({ count }) => {
+        if (cancelled) return;
+        const userCount = ownedLogs.filter((l) => l.base_type === topBase)
+          .length;
+        setUniverse({
+          topBaseLabel,
+          userCount,
+          communityCount: count ?? 0,
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topBase, topBaseLabel, ownedLogs.length]);
 
   return (
     <PageWrapper dots glow="cyan">
       <PageHeader />
 
-      <div className="pt-14 px-4 py-8">
+      <div className="pt-14 px-4 py-6">
         <div className="max-w-md mx-auto">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1
-                className="text-2xl font-extrabold tracking-tight"
-                style={{
-                  background: "linear-gradient(90deg, #00F0FF, #39FF14)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                }}
-              >
-                My Slimes
-              </h1>
-              {!loading && (
-                <p className="text-sm text-slime-muted mt-0.5">
-                  {collectionCount} in collection · {wishlistCount} on wishlist
-                </p>
-              )}
-            </div>
-            <Link
-              href="/wishlist"
-              className="text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
-              style={{
-                color: "#CC44FF",
-                background: "rgba(204,68,255,0.08)",
-                border: "1px solid rgba(204,68,255,0.25)",
-                fontFamily: "Montserrat, sans-serif",
-              }}
-            >
-              Wishlist
-            </Link>
-          </div>
-
-          {/* View toggle */}
+          {/* Shelf hero (batch A). The old header block — "My Slimes"
+              gradient title + counts + wishlist route-away button —
+              was replaced. Wishlist now lives as an inline filter pill
+              below; /wishlist stays a working deep link. */}
           {!loading && !error && logs.length > 0 && (
-            <div className="mb-4">
-              <ViewToggle active={view} onChange={setView} />
-            </div>
+            <ShelfHero stats={stats} />
           )}
 
-          {/* Donut summary chart — only on Cards view */}
-          {!loading && !error && logs.length > 0 && view === "cards" && (
-            <CollectionSummaryChart logs={filtered} />
+          {/* View toggle — segmented pill (batch A). */}
+          {!loading && !error && logs.length > 0 && (
+            <ViewToggle active={view} onChange={setView} />
           )}
 
-          {/* Filter tabs — only on Cards view */}
+          {/* Feed-style filter pills + inline sort — Cards view only. */}
           {!loading && !error && logs.length > 0 && view === "cards" && (
-            <div className="flex gap-2 mb-6">
-              {(["all", "collection", "wishlist"] as const).map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setFilter(f)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition capitalize ${
-                    filter === f
-                      ? "text-slime-bg"
-                      : "bg-slime-surface border border-slime-border text-slime-muted hover:border-slime-accent/50"
-                  }`}
-                  style={
-                    filter === f
-                      ? {
-                          background:
-                            "linear-gradient(135deg, #39FF14, #00F0FF)",
-                        }
-                      : undefined
-                  }
-                >
-                  {f === "all"
-                    ? `All (${logs.length})`
-                    : f === "collection"
-                      ? `Collection (${collectionCount})`
-                      : `Wishlist (${wishlistCount})`}
-                </button>
-              ))}
-            </div>
+            <CollectionFilterPills
+              filter={filter}
+              setFilter={setFilter}
+              sort={sort}
+              setSort={setSort}
+              counts={{
+                all: logs.length,
+                collection: collectionCount,
+                wishlist: wishlistCount,
+              }}
+            />
           )}
 
           {/* Loading */}
@@ -454,9 +535,9 @@ export default function CollectionPage() {
           {/* Views */}
           {!loading && !error && logs.length > 0 && (
             <>
-              {view === "cards" && filtered.length > 0 && (
-                <div className="flex flex-col gap-4">
-                  {filtered.map((log) => (
+              {view === "cards" && sorted.length > 0 && (
+                <div className="flex flex-col gap-4 mt-2">
+                  {sorted.map((log) => (
                     <SlimeCard key={log.id} log={log} />
                   ))}
                 </div>
