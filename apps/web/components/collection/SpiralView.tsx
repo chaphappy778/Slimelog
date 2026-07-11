@@ -52,28 +52,12 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+// 2026-07-11 (batch D refactor): always color by base_type. Previous
+// fallback path used the log's first color, which meant two Butter
+// slimes (one peach, one coral) rendered as different node colors —
+// which broke the visual language "color = base type". Legend under
+// the canvas relies on this consistency.
 function getBlobColor(log: CollectionLog): string {
-  if (log.colors && log.colors.length > 0) {
-    const colorMap: Record<string, string> = {
-      pink: "#FF6B9D",
-      green: "#39FF14",
-      blue: "#00F0FF",
-      purple: "#9B59B6",
-      white: "#F5F5F5",
-      yellow: "#FFE66D",
-      orange: "#FFB347",
-      red: "#E74C3C",
-      cyan: "#00F0FF",
-      magenta: "#FF00E5",
-      teal: "#4ECDC4",
-      black: "#333",
-    };
-    const c = log.colors[0].toLowerCase();
-    for (const [key, val] of Object.entries(colorMap)) {
-      if (c.includes(key)) return val;
-    }
-  }
-  // [Change SV2] base_type replaces slime_type.
   if (log.base_type && TYPE_COLORS[log.base_type as SlimeBaseType]) {
     return TYPE_COLORS[log.base_type as SlimeBaseType];
   }
@@ -129,6 +113,17 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
       : logs.filter(
           (l) => l.brand_name_raw && selectedBrands.has(l.brand_name_raw),
         );
+
+  // 2026-07-11 (batch D refactor): sort by created_at desc so the newest
+  // log occupies index 0 (center of the spiral) and older logs fan out.
+  // The design's ask: "newest inward" — reads as time on a spiral so the
+  // page conveys a chronological signal, not just a decorative arrangement.
+  const sortedForSpiral = useCallback((source: CollectionLog[]) => {
+    return [...source].sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+  }, []);
 
   const calcAutoFit = useCallback((logsToFit: CollectionLog[]): Transform => {
     if (logsToFit.length === 0) return { x: 0, y: 0, scale: 1 };
@@ -197,7 +192,12 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
       log: CollectionLog;
     }> = [];
 
-    filteredLogs.forEach((log, i) => {
+    // Positions the newest log at the center (i=0). Older logs walk
+    // outward in a phyllotaxis pattern — same golden-ratio geometry as
+    // before, but now the axis carries temporal meaning.
+    const drawOrder = sortedForSpiral(filteredLogs);
+
+    drawOrder.forEach((log, i) => {
       const angle = i * ((2 * Math.PI) / PHI);
       const dist = Math.sqrt(i + 1) * SPACING;
       const x = cx + Math.cos(angle) * dist;
@@ -226,9 +226,24 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
       positions.push({ x, y, r, log });
     });
 
+    // 2026-07-11 (batch D refactor): "now" marker at center + a soft
+    // radial hint that reinforces "newer = closer to now". Positioned
+    // AFTER the blob loop so it lays on top of the innermost node's
+    // shadow but not the node itself (the newest log at i=0 sits at
+    // exactly cx,cy so its blob occludes this label anyway — but the
+    // hint text is visible around it).
+    ctx.fillStyle = "rgba(255,255,255,0.6)";
+    ctx.font = "bold 13px Montserrat, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("now", cx, cy - 28);
+    ctx.fillStyle = "rgba(255,255,255,0.3)";
+    ctx.font = "10px system-ui";
+    ctx.fillText("newest inward · oldest outward", cx, cy + 200);
+
     ctx.restore();
     blobPositions.current = positions;
-  }, [filteredLogs]);
+  }, [filteredLogs, sortedForSpiral]);
 
   useEffect(() => {
     draw();
@@ -689,11 +704,99 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
     </div>
   );
 
+  // 2026-07-11 (batch D refactor): base-type color legend under the
+  // canvas. Only shows types that are actually present in the filtered
+  // logs — no dead entries. Reads as the key to the "color = base type,
+  // size = your score" language the design was after.
+  const legendEntries: { label: string; color: string }[] = (() => {
+    const seen = new Set<string>();
+    const entries: { label: string; color: string }[] = [];
+    for (const log of filteredLogs) {
+      const key = log.base_type ?? "";
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      const color = TYPE_COLORS[key as SlimeBaseType] ?? "#39FF14";
+      const label = key
+        .split("_")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+      entries.push({ label, color });
+    }
+    return entries.sort((a, b) => a.label.localeCompare(b.label));
+  })();
+
+  const legendBlock = tab === "spiral" && legendEntries.length > 0 && (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 8,
+        padding: "10px 12px",
+        background: "rgba(45,10,78,0.3)",
+        border: "1px solid rgba(45,10,78,0.7)",
+        borderRadius: 12,
+      }}
+      aria-label="Base type color legend"
+    >
+      <span
+        style={{
+          fontSize: 10.5,
+          fontWeight: 800,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: "rgba(255,255,255,0.4)",
+          alignSelf: "center",
+          marginRight: 4,
+        }}
+      >
+        Legend
+      </span>
+      {legendEntries.map(({ label, color }) => (
+        <span
+          key={label}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 11,
+            fontWeight: 600,
+            color: "rgba(255,255,255,0.75)",
+          }}
+        >
+          <span
+            aria-hidden="true"
+            style={{
+              width: 9,
+              height: 9,
+              borderRadius: 999,
+              background: color,
+              boxShadow: `0 0 6px ${hexToRgba(color, 0.6)}`,
+              display: "inline-block",
+            }}
+          />
+          {label}
+        </span>
+      ))}
+      <span
+        style={{
+          fontSize: 10,
+          fontWeight: 600,
+          color: "rgba(255,255,255,0.35)",
+          alignSelf: "center",
+          marginLeft: "auto",
+        }}
+      >
+        color = base · size = score
+      </span>
+    </div>
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {tabBar}
       {tab === "spiral" && brandFilter}
       {tab === "spiral" && canvasBlock}
+      {legendBlock}
       {tab === "spiral" && detailCard}
       {tab === "spiral" && filteredLogs.length === 0 && (
         <div

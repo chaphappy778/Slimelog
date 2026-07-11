@@ -31,24 +31,38 @@ const DEFAULT_PALETTE = [
   "#8BC34A",
 ];
 
-const STORAGE_KEY = "slimelog_brand_colors";
 const CANVAS_SIZE = 600;
 
-function loadBrandColors(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
+// 2026-07-11 (batch D refactor): swapped the localStorage-random brand
+// color assignment (each user saw different hues, and cleared storage
+// meant reshuffling) for a deterministic hash-to-palette. Same brand
+// always renders the same color for every user across every device.
+// This unlocks the possibility of a shared color-language across the
+// app — e.g. brand pill colors could match galaxy hub colors — without
+// requiring us to persist anything.
+function hashString(str: string): number {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = (h * 31 + str.charCodeAt(i)) | 0;
   }
+  return Math.abs(h);
 }
 
-function saveBrandColors(colors: Record<string, string>) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(colors));
-  } catch {
-    // ignore
-  }
+function brandColor(brand: string): string {
+  return DEFAULT_PALETTE[hashString(brand) % DEFAULT_PALETTE.length];
+}
+
+// Legacy no-op wrappers kept so the historical call sites in this file
+// still compile without a shape change. Removed in a follow-up cleanup.
+function loadBrandColors(): Record<string, string> {
+  return {};
+}
+
+function saveBrandColors(_colors: Record<string, string>) {
+  // ignore — the file previously mutated localStorage on every render
+  // when a new brand appeared. Now handled by the deterministic hash
+  // above.
+  void _colors;
 }
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -125,20 +139,15 @@ export default function GalaxyView({ logs, likeData, currentUserId }: Props) {
   }, [transform]);
 
   useEffect(() => {
-    const stored = loadBrandColors();
+    // 2026-07-11 (batch D refactor): deterministic hash → palette
+    // instead of localStorage-driven random. Same brand always gets
+    // the same color for every user; nothing to persist.
     const brands = Array.from(
       new Set(logs.map((l) => l.brand_name_raw).filter(Boolean)),
     ) as string[];
-    const merged = { ...stored };
-    let dirty = false;
-    brands.forEach((brand, i) => {
-      if (!merged[brand]) {
-        merged[brand] = DEFAULT_PALETTE[i % DEFAULT_PALETTE.length];
-        dirty = true;
-      }
-    });
-    if (dirty) saveBrandColors(merged);
-    setBrandColors(merged);
+    const map: Record<string, string> = {};
+    for (const b of brands) map[b] = brandColor(b);
+    setBrandColors(map);
   }, [logs]);
 
   const brands = Array.from(
@@ -790,10 +799,104 @@ export default function GalaxyView({ logs, likeData, currentUserId }: Props) {
     </div>
   );
 
+  // 2026-07-11 (batch D refactor): explanatory strip under the canvas.
+  // Clarifies the visual language ("hubs = brands, node size = your
+  // score, lines = which brand a slime came from"). Shows an active
+  // brand chip if one is highlighted so the user has a fingerhold on
+  // what they're looking at.
+  const brandsInScene = Array.from(
+    new Set(logs.map((l) => l.brand_name_raw).filter(Boolean)),
+  ) as string[];
+  const legendBlock = brandsInScene.length > 0 && (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 8,
+        padding: "10px 12px",
+        background: "rgba(45,10,78,0.3)",
+        border: "1px solid rgba(45,10,78,0.7)",
+        borderRadius: 12,
+        fontSize: 11,
+      }}
+      aria-label="Galaxy legend"
+    >
+      <span
+        style={{
+          fontSize: 10.5,
+          fontWeight: 800,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: "rgba(255,255,255,0.4)",
+          marginRight: 4,
+        }}
+      >
+        Legend
+      </span>
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          fontWeight: 600,
+          color: "rgba(255,255,255,0.75)",
+        }}
+      >
+        <span
+          aria-hidden="true"
+          style={{
+            width: 12,
+            height: 12,
+            borderRadius: 999,
+            background: "#39FF14",
+            border: "1px solid rgba(255,255,255,0.35)",
+            boxShadow: "0 0 6px rgba(57,255,20,0.55)",
+            display: "inline-block",
+          }}
+        />
+        Brand hub
+      </span>
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          fontWeight: 600,
+          color: "rgba(255,255,255,0.75)",
+        }}
+      >
+        <span
+          aria-hidden="true"
+          style={{
+            width: 7,
+            height: 7,
+            borderRadius: 999,
+            background: "#00F0FF",
+            display: "inline-block",
+          }}
+        />
+        Your slime · size = score
+      </span>
+      <span
+        style={{
+          color: "rgba(255,255,255,0.35)",
+          fontWeight: 600,
+          marginLeft: "auto",
+        }}
+      >
+        {highlightedBrand
+          ? `Focused: ${highlightedBrand}`
+          : `${brandsInScene.length} brand${brandsInScene.length === 1 ? "" : "s"} in view`}
+      </span>
+    </div>
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {brandScroller}
       {canvasBlock}
+      {legendBlock}
       {detailCard}
     </div>
   );
