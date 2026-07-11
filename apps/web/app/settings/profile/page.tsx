@@ -334,12 +334,24 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
   }
 
   // ── upgrade toast ──────────────────────────────────────────────────────────
+  //
+  // #20: two toasts were firing on Pro upgrade return. Root cause was the
+  // effect re-running on remount — React 18/19 strict mode fires effects
+  // twice in dev, and any component-level re-mount in prod would repeat
+  // the toast because the useEffect deps are `[]` (an intentional "run
+  // once on mount" hint). The dedupe here is a hard ref-guard so the
+  // block can never fire more than once per page-load regardless of
+  // remount cycles.
+  const upgradeToastFiredRef = useRef(false);
   useEffect(() => {
+    if (upgradeToastFiredRef.current) return;
     const upgraded = searchParams.get("upgraded") === "true";
     const alreadyPro = searchParams.get("already_pro") === "true";
+    if (!(upgraded || alreadyPro)) return;
+    upgradeToastFiredRef.current = true;
     if (upgraded) showToast("Welcome to SlimeLog Pro!", "success");
-    else if (alreadyPro) showToast("You're already subscribed to Pro.", "info");
-    if (upgraded || alreadyPro) router.replace("/settings/profile");
+    else showToast("You're already subscribed to Pro.", "info");
+    router.replace("/settings/profile");
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── profile fetch ──────────────────────────────────────────────────────────

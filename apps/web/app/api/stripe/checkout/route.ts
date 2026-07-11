@@ -176,14 +176,78 @@ export async function POST(req: NextRequest) {
       sessionMetadata = { brand_id: brand_id! };
     }
 
-    // [Fix 2A] If the caller is already in an active or trialing subscription,
-    // don't create a second checkout session. Create a billing portal session
-    // for the existing customer and return { already_active, portal_url } so
-    // the client can show a toast and redirect to subscription management.
-    if (
-      currentSubscriptionStatus &&
-      ACTIVE_STATUSES.has(currentSubscriptionStatus)
-    ) {
+    // [Fix 2A] DB-based check: fast path using our own subscription_status
+    // column. Catches the common case without a Stripe round-trip.
+    let alreadyActive =
+      !!currentSubscriptionStatus &&
+      ACTIVE_STATUSES.has(currentSubscriptionStatus);
+
+    // #21 (2026-07-10): belt-and-braces authoritative check against Stripe.
+    // The DB column can drift out of sync with Stripe reality — the HP-8
+    // trigger bug (mig 59) is one recent example where webhook updates
+    // silently no-op'd. Without querying Stripe here, a customer with a
+    // still-live Stripe subscription but a stale `null` in the DB could
+    // successfully create a SECOND checkout session and get double-billed.
+    //
+    // We only make this call when the DB says "not active," which means
+    // the extra round-trip only fires when we're about to potentially
+    // duplicate. Truly active users hit the fast path above.
+    if (!alreadyActive) {
+      try {
+        const stripeSubs = await stripe.subscriptions.list({
+          customer: customerId,
+          status: "all",
+          limit: 5,
+        });
+        const liveSub = stripeSubs.data.find((s) =>
+          ACTIVE_STATUSES.has(s.status),
+        );
+        if (liveSub) {
+          alreadyActive = true;
+          // Reconcile the DB drift so we don't need to re-query on every
+          // subsequent checkout attempt. Uses the same target-table split
+          // as the webhook — brand mode → brands, user mode → profiles.
+          // current_period_end lives on the subscription item in Stripe
+          // API 2026-03-25.dahlia (matches the webhook's handling).
+          try {
+            const table = mode === "brand" ? "brands" : "profiles";
+            const idValue = mode === "brand" ? brand_id! : user.id;
+            const periodEnd = liveSub.items?.data?.[0]?.current_period_end;
+            await getAdminClient()
+              .from(table)
+              .update({
+                subscription_status: liveSub.status,
+                subscription_current_period_end: periodEnd
+                  ? new Date(periodEnd * 1000).toISOString()
+                  : null,
+              })
+              .eq("id", idValue);
+          } catch (reconcileErr) {
+            console.error(
+              "[checkout] Failed to reconcile subscription_status from Stripe:",
+              reconcileErr,
+            );
+            // Reconciliation failure is non-fatal — we still route to
+            // the portal to prevent the duplicate.
+          }
+        }
+      } catch (stripeListErr) {
+        console.error(
+          "[checkout] Stripe subscriptions.list failed — falling back to DB check only:",
+          stripeListErr,
+        );
+        // If Stripe is unreachable, we've already got the DB check above.
+        // Better to permit the potential-duplicate than to block the
+        // legitimate first-time purchase.
+      }
+    }
+
+    // If EITHER the DB check or the Stripe check says the caller already
+    // has an active subscription, don't create a second checkout session.
+    // Create a billing portal session for the existing customer and
+    // return { already_active, portal_url } so the client can show a
+    // toast and redirect to subscription management.
+    if (alreadyActive) {
       const portalSession = await stripe.billingPortal.sessions.create({
         customer: customerId,
         return_url: cancel_url,
