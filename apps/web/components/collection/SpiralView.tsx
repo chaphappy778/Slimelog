@@ -226,20 +226,12 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
       positions.push({ x, y, r, log });
     });
 
-    // 2026-07-11 (batch D refactor): "now" marker at center + a soft
-    // radial hint that reinforces "newer = closer to now". Positioned
-    // AFTER the blob loop so it lays on top of the innermost node's
-    // shadow but not the node itself (the newest log at i=0 sits at
-    // exactly cx,cy so its blob occludes this label anyway — but the
-    // hint text is visible around it).
-    ctx.fillStyle = "rgba(255,255,255,0.6)";
-    ctx.font = "bold 13px Montserrat, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("now", cx, cy - 28);
-    ctx.fillStyle = "rgba(255,255,255,0.3)";
-    ctx.font = "10px system-ui";
-    ctx.fillText("newest inward · oldest outward", cx, cy + 200);
+    // 2026-07-11: dropped the "now" + "newest inward · oldest outward"
+    // canvas text. Read as clutter over the innermost cluster; users
+    // can tap circles to inspect individual logs and the legend below
+    // already tells them what the color/size mean. The temporal
+    // arrangement stays (sortedForSpiral above) — it's still baked
+    // into where dots sit, just without the label narration.
 
     ctx.restore();
     blobPositions.current = positions;
@@ -500,7 +492,17 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
           width: "100%",
           padding: "10px 14px",
           background: "rgba(45,10,78,0.4)",
-          border: "1px solid rgba(45,10,78,0.7)",
+          // 2026-07-11: highlight the entire dropdown row when brands
+          // are selected. Border shifts from muted purple \u2192 cyan glow
+          // so the affordance reads as "actionable \u2014 tap me to open."
+          border:
+            selectedBrands.size > 0
+              ? "1px solid rgba(0,240,255,0.55)"
+              : "1px solid rgba(45,10,78,0.7)",
+          boxShadow:
+            selectedBrands.size > 0
+              ? "0 0 12px rgba(0,240,255,0.25)"
+              : "none",
           borderRadius: 10,
           color: selectedBrands.size > 0 ? "#00F0FF" : "rgba(255,255,255,0.6)",
           fontSize: 14,
@@ -516,8 +518,28 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
             ? "All Brands"
             : `${selectedBrands.size} brand${selectedBrands.size > 1 ? "s" : ""} selected`}
         </span>
-        <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 12 }}>
-          {brandDropdownOpen ? "\u25b2" : "\u25bc"}
+        {/* 2026-07-11: pop the chevron in neon cyan when there are
+            selected brands, so users have a clear "tap me" cue. Adds
+            a soft cyan glow when open to signal expanded state. */}
+        <span
+          style={{
+            color:
+              selectedBrands.size > 0
+                ? "#00F0FF"
+                : "rgba(255,255,255,0.4)",
+            fontSize: 13,
+            fontWeight: selectedBrands.size > 0 ? 700 : 400,
+            textShadow:
+              selectedBrands.size > 0
+                ? "0 0 6px rgba(0,240,255,0.75)"
+                : "none",
+            transition: "transform 160ms ease",
+            transform: brandDropdownOpen ? "rotate(180deg)" : "rotate(0)",
+            display: "inline-block",
+            lineHeight: 1,
+          }}
+        >
+          {"\u25bc"}
         </span>
       </button>
       {brandDropdownOpen && (
