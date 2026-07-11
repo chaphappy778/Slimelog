@@ -5,6 +5,10 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import type { CollectionLog } from "@/lib/types";
 import SlimeDetailCard from "@/components/collection/SlimeDetailCard";
 import type { LikeDataMap } from "@/app/collection/page";
+// 2026-07-11 (T108): fetch brand logos so each galaxy hub can render
+// its real brand image instead of a solid color puck. Falls back to
+// the hash-color hub when a brand hasn't uploaded a logo yet.
+import { createClient } from "@/lib/supabase/client";
 
 // [Change 1] Added likeData and currentUserId to Props.
 interface Props {
@@ -114,6 +118,14 @@ type CanvasNode = NodeData | HubData;
 export default function GalaxyView({ logs, likeData, currentUserId }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [brandColors, setBrandColors] = useState<Record<string, string>>({});
+  // T108 (2026-07-11): brand logos rendered on the hub. Loaded async
+  // and passed to draw(); the callback dep on this state triggers a
+  // redraw when new logos finish loading. Fallback to the color hub
+  // stays in place — nothing breaks if a brand has no logo or the
+  // image fails.
+  const [brandLogos, setBrandLogos] = useState<
+    Record<string, HTMLImageElement>
+  >({});
   const [transform, setTransform] = useState<Transform>({
     x: 0,
     y: 0,
@@ -148,6 +160,62 @@ export default function GalaxyView({ logs, likeData, currentUserId }: Props) {
     const map: Record<string, string> = {};
     for (const b of brands) map[b] = brandColor(b);
     setBrandColors(map);
+  }, [logs]);
+
+  // T108 (2026-07-11): fetch brand logos and progressively load images.
+  // - Query `brands` by name_raw for the brands in the user's shelf
+  // - For each brand with a logo_url, kick off image load
+  // - As each image finishes, add it to state so draw() picks it up
+  // Case-insensitive match; a brand missing from the table or lacking a
+  // logo just falls through to the color hub.
+  useEffect(() => {
+    const brandNames = Array.from(
+      new Set(logs.map((l) => l.brand_name_raw).filter(Boolean)),
+    ) as string[];
+    if (brandNames.length === 0) return;
+
+    let cancelled = false;
+    const supabase = createClient();
+
+    (async () => {
+      // Use per-name ilike so we survive case differences in brand_name_raw
+      // versus the canonical brands.name_raw. Batched via Promise.all.
+      const results = await Promise.all(
+        brandNames.map((name) =>
+          supabase
+            .from("brands")
+            .select("name_raw, logo_url")
+            .ilike("name_raw", name)
+            .maybeSingle(),
+        ),
+      );
+      if (cancelled) return;
+
+      const nameToUrl: Record<string, string> = {};
+      results.forEach((res, idx) => {
+        const rec = res.data as { logo_url?: string | null } | null;
+        if (rec?.logo_url) nameToUrl[brandNames[idx]] = rec.logo_url;
+      });
+
+      // Kick off image loads. As each resolves, splice into state so the
+      // draw callback re-runs and the hub swaps color → logo.
+      for (const [name, url] of Object.entries(nameToUrl)) {
+        const img = new window.Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          if (cancelled) return;
+          setBrandLogos((prev) => ({ ...prev, [name]: img }));
+        };
+        img.onerror = () => {
+          // Swallow: brand keeps its color hub. Don't spam console.
+        };
+        img.src = url;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [logs]);
 
   const brands = Array.from(
@@ -359,10 +427,38 @@ export default function GalaxyView({ logs, likeData, currentUserId }: Props) {
         }
       }
 
+      // T108 (2026-07-11): draw the hub as brand logo when we have one,
+      // otherwise the deterministic color puck. Color puck stays as an
+      // underlay behind logos too so transparent PNGs read cleanly and
+      // sizes remain identical whether the image loaded or not.
       ctx.beginPath();
       ctx.arc(hx, hy, hubR, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
+
+      const logoImg = brandLogos[brand];
+      if (logoImg && logoImg.complete && logoImg.naturalWidth > 0) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(hx, hy, hubR - 1, 0, Math.PI * 2);
+        ctx.clip();
+        // object-fit: cover — scale the shorter side to the diameter,
+        // center-crop the longer side. Prevents logo squish when the
+        // source image isn't square.
+        const d = (hubR - 1) * 2;
+        const iw = logoImg.naturalWidth;
+        const ih = logoImg.naturalHeight;
+        const scale = Math.max(d / iw, d / ih);
+        const dw = iw * scale;
+        const dh = ih * scale;
+        ctx.globalAlpha = alpha;
+        ctx.drawImage(logoImg, hx - dw / 2, hy - dh / 2, dw, dh);
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
+
+      ctx.beginPath();
+      ctx.arc(hx, hy, hubR, 0, Math.PI * 2);
       ctx.strokeStyle = hexToRgba("#fff", 0.3);
       ctx.lineWidth = 1.5;
       ctx.stroke();
@@ -382,7 +478,9 @@ export default function GalaxyView({ logs, likeData, currentUserId }: Props) {
 
     ctx.restore();
     nodesRef.current = nodes;
-  }, [logs, brandColors, highlightedBrand]);
+    // brandLogos in the dep list: when a new image finishes loading,
+    // setBrandLogos triggers a redraw and the hub swaps color → logo.
+  }, [logs, brandColors, brandLogos, highlightedBrand]);
 
   useEffect(() => {
     draw();
@@ -930,7 +1028,7 @@ export default function GalaxyView({ logs, likeData, currentUserId }: Props) {
             display: "inline-block",
           }}
         />
-        Hub grows with brand depth
+        Hub grows with brand depth · logo when brand joins
       </span>
       <span
         style={{
