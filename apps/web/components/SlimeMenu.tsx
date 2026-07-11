@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 // T104 (2026-07-10): pull user + profile + admin role from the shared
@@ -142,8 +143,20 @@ function WavyTop() {
 export default function SlimeMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
   const overlayRef = useRef<HTMLDivElement>(null);
+
+  // 2026-07-11: portal-mount gate. SlimeMenu is rendered inside
+  // PageHeader, which has backdrop-filter (Option A header restyle) and
+  // is fixed at z-30. backdrop-filter creates a new CSS stacking context,
+  // which meant the drawer + overlay were trapped inside PageHeader's
+  // z-30 layer no matter how high we set z-index on the drawer itself.
+  // Portaling to document.body escapes the parent stacking context so
+  // z-[95] actually places the drawer above everything.
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // T104: shared auth state. Admin gate mirrors the server-side rule
   // (role === 'admin' + email_confirmed_at present); actual authorization
@@ -188,15 +201,12 @@ export default function SlimeMenu() {
         <Menu className="w-6 h-6" />
       </button>
 
-      {isOpen && (
-        <>
+      {isOpen &&
+        mounted &&
+        createPortal(
+          <>
           <div
             ref={overlayRef}
-            // 2026-07-11: bumped z-index tiers so the drawer sits above
-            // PageHeader (fixed z-30 + backdrop-filter stacking context)
-            // and any feed-page overlay elements. Was showing feed content
-            // "through" the drawer after the header Option A restyle
-            // introduced the backdrop-filter stacking context.
             className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-[2px]"
             style={{
               animation: isAnimatingOut
@@ -345,8 +355,9 @@ export default function SlimeMenu() {
               </p>
             </div>
           </div>
-        </>
-      )}
+          </>,
+          document.body,
+        )}
 
       <style>{`
         @keyframes slimeDrip { 0% { transform: translateY(-100%) scaleY(0.3); transform-origin: top right; opacity: 0; } 60% { transform: translateY(4px) scaleY(1.02); opacity: 1; } 80% { transform: translateY(-2px) scaleY(0.98); } 100% { transform: translateY(0) scaleY(1); opacity: 1; } }
