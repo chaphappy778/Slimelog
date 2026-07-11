@@ -2,13 +2,13 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 import BottomNav from "@/components/BottomNav";
 import SignupCTABanner from "@/components/SignupCTABanner";
-// Audit hp-24 (2026-07-09): use the shared browser singleton.
-import { createClient } from "@/lib/supabase/client";
-
-const supabase = createClient();
+// T104 follow-up (2026-07-11): use shared AuthProvider so BottomNavWrapper
+// stays in lockstep with PageHeader / SlimeMenu on sign-in/out events.
+// Previously ran its own getSession() which could drift on partial
+// sign-out.
+import { useAuth } from "@/components/AuthProvider";
 
 // [Change 1 — #35] Public routes where logged-out users should see the
 // signup CTA banner. Match either exact path or the path's prefix +"/".
@@ -22,13 +22,8 @@ function isPublicRouteForLoggedOut(pathname: string): boolean {
 
 export default function BottomNavWrapper() {
   const pathname = usePathname();
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setIsLoggedIn(!!data.session);
-    });
-  }, []);
+  const { user, loading } = useAuth();
+  const isLoggedIn: boolean | null = loading ? null : !!user;
 
   // [Change 2 — Bundle C] Suppress on all admin routes regardless of auth
   // state. The consumer bottom nav has no place in the admin surface.

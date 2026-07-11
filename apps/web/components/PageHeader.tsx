@@ -4,10 +4,13 @@
 import Link from "next/link";
 // [Change 4 — T31] Add useRouter alongside the existing usePathname import.
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-// Audit hp-24 (2026-07-09): use the shared browser singleton.
-import { createClient } from "@/lib/supabase/client";
 import SlimeMenu from "@/components/SlimeMenu";
+// T104 follow-up (2026-07-11): use shared AuthProvider so PageHeader's
+// isLoggedIn stays in lockstep with the rest of the tree (previously it
+// held its own getSession() result which could drift on partial sign-out
+// and leave the avatar + hamburger hidden while the rest of the app
+// still thought the user was signed in).
+import { useAuth } from "@/components/AuthProvider";
 import { safeRedirect } from "@/lib/safe-redirect";
 // [Change 8 — T31 v2] Use the in-app navigation history stack instead of
 // the unreliable router.back() / document.referrer approach.
@@ -17,9 +20,6 @@ import {
   popNavigationHistory,
   requestScrollRestore,
 } from "@/lib/navigation-history";
-
-// [Change 1 — #35] Module-level client for the auth check.
-const supabase = createClient();
 
 // [Change 5 — T31] Route matcher for back button visibility.
 // Detail/leaf pages where users need an affordance to navigate back.
@@ -75,14 +75,12 @@ export default function PageHeader() {
     router.push(path, { scroll: false });
   };
 
-  // [Change 2 — #35] Auth state — null = resolving, true/false = resolved.
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setIsLoggedIn(!!data.session);
-    });
-  }, []);
+  // [Change 2 — #35] Auth state — resolved from AuthProvider so this
+  // never drifts out of sync with the rest of the tree. During the
+  // initial load `loading === true`; we treat that as "resolving" and
+  // render nothing on the right to avoid flicker.
+  const { user, loading } = useAuth();
+  const isLoggedIn: boolean | null = loading ? null : !!user;
 
   // Validated path for the Sign Up CTA's `next` param.
   const next = safeRedirect(pathname ?? "/", "/landing");
