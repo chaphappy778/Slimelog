@@ -203,7 +203,10 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
       const rating = log.rating_overall ?? null;
-      const r = rating !== null ? 6 + (rating / 5) * 14 : 10;
+      // 2026-07-11 (D.1): wider dot size range so score contrast reads.
+      // Previous 6–20px was almost uniform in a packed spiral. Now
+      // 8–24px — the difference between a 2★ and a 5★ dot is real.
+      const r = rating !== null ? 8 + (rating / 5) * 16 : 12;
       const color = getBlobColor(log);
 
       if (rating === 5) {
@@ -801,14 +804,48 @@ export default function SpiralView({ logs, likeData, currentUserId }: Props) {
       ))}
       <span
         style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+          marginLeft: "auto",
           fontSize: 10,
           fontWeight: 600,
-          color: "rgba(255,255,255,0.35)",
-          alignSelf: "center",
-          marginLeft: "auto",
+          color: "rgba(255,255,255,0.5)",
         }}
       >
-        color = base · size = score
+        {/* Mini size scale — dot examples that teach "size = score"
+            at a glance. Three points: low, mid, top. */}
+        <span
+          aria-hidden="true"
+          style={{
+            width: 5,
+            height: 5,
+            borderRadius: 999,
+            background: "rgba(255,255,255,0.7)",
+            display: "inline-block",
+          }}
+        />
+        <span
+          aria-hidden="true"
+          style={{
+            width: 9,
+            height: 9,
+            borderRadius: 999,
+            background: "rgba(255,255,255,0.75)",
+            display: "inline-block",
+          }}
+        />
+        <span
+          aria-hidden="true"
+          style={{
+            width: 14,
+            height: 14,
+            borderRadius: 999,
+            background: "rgba(255,255,255,0.8)",
+            display: "inline-block",
+          }}
+        />
+        <span style={{ marginLeft: 4 }}>1★ → 5★</span>
       </span>
     </div>
   );

@@ -249,7 +249,10 @@ export default function GalaxyView({ logs, likeData, currentUserId }: Props) {
         const ny = hy + Math.sin(angle) * dist;
 
         const rating = log.rating_overall ?? null;
-        const r = rating !== null ? 4 + (rating / 5) * 12 : 8;
+        // 2026-07-11 (D.1): wider satellite size range so score
+        // contrast actually reads. Previous 4–16px felt uniform;
+        // 6–26px makes a 5★ dot visibly tower over a 2★.
+        const r = rating !== null ? 6 + (rating / 5) * 20 : 10;
         const nodeColor = lightenHex(color, j * 3);
         const isFiveStar = rating === 5;
 
@@ -300,16 +303,64 @@ export default function GalaxyView({ logs, likeData, currentUserId }: Props) {
 
       ctx.globalAlpha = alpha;
 
-      const hubGrad = ctx.createRadialGradient(hx, hy, 0, hx, hy, 28);
+      // 2026-07-11 (D.1): hub grows with collection depth. Formula
+      // interpolates linearly to r=38 at count=30, then caps. Beyond
+      // that, extra rings + halo layers stack so the "galaxy is still
+      // growing" feeling holds even after the radius maxes out.
+      const brandCount = branchLogs.length;
+      const growth = Math.min(30, brandCount) / 30; // 0..1
+      const hubR = 12 + growth * 26; // 12 (empty-ish) to 38 (cap)
+      const haloR = hubR + 10;
+
+      // Base soft halo around the hub.
+      const hubGrad = ctx.createRadialGradient(hx, hy, 0, hx, hy, haloR);
       hubGrad.addColorStop(0, hexToRgba(color, 0.4));
       hubGrad.addColorStop(1, hexToRgba(color, 0));
       ctx.fillStyle = hubGrad;
       ctx.beginPath();
-      ctx.arc(hx, hy, 28, 0, Math.PI * 2);
+      ctx.arc(hx, hy, haloR, 0, Math.PI * 2);
       ctx.fill();
 
+      // Post-cap corona effects: as the collection climbs past 30
+      // from a single brand, layer additional rings so a serious
+      // fan's hub visibly outshines a casual one even when both
+      // are at max radius.
+      if (brandCount > 30) {
+        const overCap = brandCount - 30;
+        // First expanding ring (visible past 30)
+        const corona1R = hubR + 18 + Math.min(overCap, 30) * 0.6;
+        ctx.beginPath();
+        ctx.arc(hx, hy, corona1R, 0, Math.PI * 2);
+        ctx.strokeStyle = hexToRgba(color, 0.35 * alpha);
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        // Second even wider ring (kicks in past 50)
+        if (brandCount > 50) {
+          const corona2R = hubR + 32 + Math.min(overCap - 20, 30) * 0.5;
+          ctx.beginPath();
+          ctx.arc(hx, hy, corona2R, 0, Math.PI * 2);
+          ctx.strokeStyle = hexToRgba(color, 0.2 * alpha);
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+        // Third: sparkle dots orbiting past 100 \u2014 signals "top tier"
+        if (brandCount > 100) {
+          const sparkleR = hubR + 46;
+          const sparkles = 6;
+          for (let s = 0; s < sparkles; s++) {
+            const a = (s / sparkles) * Math.PI * 2;
+            const sx = hx + Math.cos(a) * sparkleR;
+            const sy = hy + Math.sin(a) * sparkleR;
+            ctx.beginPath();
+            ctx.arc(sx, sy, 2, 0, Math.PI * 2);
+            ctx.fillStyle = hexToRgba(color, 0.7 * alpha);
+            ctx.fill();
+          }
+        }
+      }
+
       ctx.beginPath();
-      ctx.arc(hx, hy, 20, 0, Math.PI * 2);
+      ctx.arc(hx, hy, hubR, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
       ctx.strokeStyle = hexToRgba("#fff", 0.3);
@@ -322,11 +373,11 @@ export default function GalaxyView({ logs, likeData, currentUserId }: Props) {
         ctx.fillStyle = hexToRgba("#fff", alpha);
         ctx.textAlign = "center";
         const label = brand.length > 14 ? brand.slice(0, 13) + "\u2026" : brand;
-        ctx.fillText(label, hx, hy + 20 + fontSize + 4);
+        ctx.fillText(label, hx, hy + hubR + fontSize + 4);
       }
 
       ctx.globalAlpha = 1;
-      nodes.push({ x: hx, y: hy, r: 20, brand, color, isHub: true });
+      nodes.push({ x: hx, y: hy, r: hubR, brand, color, isHub: true });
     });
 
     ctx.restore();
@@ -843,11 +894,35 @@ export default function GalaxyView({ logs, likeData, currentUserId }: Props) {
           color: "rgba(255,255,255,0.75)",
         }}
       >
+        {/* Growing hub scale — three sizes teach "hub grows with
+            collection depth" at a glance. */}
         <span
           aria-hidden="true"
           style={{
-            width: 12,
-            height: 12,
+            width: 7,
+            height: 7,
+            borderRadius: 999,
+            background: "#39FF14",
+            border: "1px solid rgba(255,255,255,0.35)",
+            display: "inline-block",
+          }}
+        />
+        <span
+          aria-hidden="true"
+          style={{
+            width: 11,
+            height: 11,
+            borderRadius: 999,
+            background: "#39FF14",
+            border: "1px solid rgba(255,255,255,0.35)",
+            display: "inline-block",
+          }}
+        />
+        <span
+          aria-hidden="true"
+          style={{
+            width: 15,
+            height: 15,
             borderRadius: 999,
             background: "#39FF14",
             border: "1px solid rgba(255,255,255,0.35)",
@@ -855,13 +930,13 @@ export default function GalaxyView({ logs, likeData, currentUserId }: Props) {
             display: "inline-block",
           }}
         />
-        Brand hub
+        Hub grows with brand depth
       </span>
       <span
         style={{
           display: "inline-flex",
           alignItems: "center",
-          gap: 6,
+          gap: 4,
           fontWeight: 600,
           color: "rgba(255,255,255,0.75)",
         }}
@@ -869,14 +944,34 @@ export default function GalaxyView({ logs, likeData, currentUserId }: Props) {
         <span
           aria-hidden="true"
           style={{
-            width: 7,
-            height: 7,
+            width: 5,
+            height: 5,
             borderRadius: 999,
             background: "#00F0FF",
             display: "inline-block",
           }}
         />
-        Your slime · size = score
+        <span
+          aria-hidden="true"
+          style={{
+            width: 9,
+            height: 9,
+            borderRadius: 999,
+            background: "#00F0FF",
+            display: "inline-block",
+          }}
+        />
+        <span
+          aria-hidden="true"
+          style={{
+            width: 13,
+            height: 13,
+            borderRadius: 999,
+            background: "#00F0FF",
+            display: "inline-block",
+          }}
+        />
+        <span style={{ marginLeft: 2 }}>Slime size = score</span>
       </span>
       <span
         style={{
