@@ -648,12 +648,23 @@ export default function FeedCard({
             {log.comment_count}
           </div>
           {!isWishlist && (
-            <span
-              className="ml-auto text-[11.5px] font-bold flex items-center gap-1"
-              style={{ color: "#00F0FF" }}
+            // The parent footer div stops click propagation so LikeButton
+            // and the comment count don't accidentally open the review
+            // modal. That gate accidentally also blocked "Open review →"
+            // from doing anything, so we wire an explicit openDetail
+            // handler on this button instead of relying on parent bubbling.
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                openDetail();
+              }}
+              className="ml-auto text-[11.5px] font-bold flex items-center gap-1 transition-opacity active:opacity-70"
+              style={{ color: "#00F0FF", background: "transparent" }}
+              aria-label="Open review"
             >
               Open review →
-            </span>
+            </button>
           )}
         </div>
       </article>
