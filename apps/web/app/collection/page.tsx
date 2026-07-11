@@ -234,33 +234,120 @@ function SlimeCard({ log }: { log: CollectionLog }) {
 }
 
 function EmptyState() {
+  // Collection rework batch C (2026-07-11): geometric-only empty state
+  // matching the feed's Following-empty treatment. Blob + two concentric
+  // dashed cyan rings + line sparks (cyan, green, magenta). "My shelf"
+  // language throughout — matches the ShelfHero eyebrow and the renamed
+  // My Shelf bottom-nav tab. No emoji, on-brand voice.
   return (
-    <div className="flex flex-col items-center justify-center text-center py-20 gap-4">
-      <div
-        className="w-16 h-16 rounded-2xl flex items-center justify-center"
-        style={{
-          background: "linear-gradient(135deg, #39FF14, #00F0FF, #FF00E5)",
-        }}
-        aria-hidden="true"
-      >
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="12" r="9" stroke="#0A0A0A" strokeWidth="1.5" />
-          <circle cx="9" cy="9" r="2" stroke="#0A0A0A" strokeWidth="1" />
-          <circle cx="14" cy="8" r="1" stroke="#0A0A0A" strokeWidth="1" />
+    <div className="flex flex-col items-center justify-center text-center pt-10 pb-14 gap-3">
+      <div className="relative w-40 h-40 flex items-center justify-center">
+        {/* Dashed cyan ring — outer */}
+        <div
+          aria-hidden="true"
+          className="absolute rounded-full"
+          style={{
+            width: 160,
+            height: 160,
+            border: "1px dashed rgba(0,240,255,0.25)",
+          }}
+        />
+        {/* Dashed cyan ring — inner */}
+        <div
+          aria-hidden="true"
+          className="absolute rounded-full"
+          style={{
+            width: 112,
+            height: 112,
+            border: "1px dashed rgba(0,240,255,0.4)",
+          }}
+        />
+        {/* Blob — gradient purple → cyan with soft glow */}
+        <svg
+          width="96"
+          height="96"
+          viewBox="0 0 150 150"
+          fill="none"
+          aria-hidden="true"
+          style={{ filter: "drop-shadow(0 0 20px rgba(0,240,255,0.4))" }}
+        >
+          <defs>
+            <linearGradient id="shelfEmptyBlob" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#2D0A4E" />
+              <stop offset="1" stopColor="#00F0FF" />
+            </linearGradient>
+          </defs>
+          <path
+            fill="url(#shelfEmptyBlob)"
+            d="M62 20 C94 10 134 26 138 62 C142 96 118 130 82 133 C46 136 16 116 15 80 C14 50 32 28 62 20 Z"
+          />
+        </svg>
+        {/* Line-spark accents — cyan, green, magenta */}
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#00F0FF"
+          strokeWidth="2"
+          strokeLinecap="round"
+          aria-hidden="true"
+          className="absolute"
+          style={{ left: 16, top: 24 }}
+        >
+          <path d="M12 3v18M3 12h18" />
+        </svg>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#39FF14"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          aria-hidden="true"
+          className="absolute"
+          style={{ right: 22, bottom: 26 }}
+        >
+          <path d="M12 4v16M4 12h16" />
+        </svg>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#FF00E5"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          aria-hidden="true"
+          className="absolute"
+          style={{ right: 18, top: 22 }}
+        >
+          <path d="M12 4v16M4 12h16" />
         </svg>
       </div>
-      <div>
-        <p className="font-bold text-slime-text">Your collection is empty</p>
-        <p className="text-sm text-slime-muted mt-1">
-          Log your first slime to get started
-        </p>
-      </div>
+      <h3
+        className="text-[22px] font-black tracking-tight text-white mt-3"
+        style={{
+          fontFamily: "Montserrat, sans-serif",
+          letterSpacing: "-0.01em",
+        }}
+      >
+        Your shelf is empty
+      </h3>
+      <p className="text-sm text-slime-muted max-w-[280px] leading-snug">
+        Log your first slime and we&apos;ll start building your taste profile.
+      </p>
       <Link
         href="/log"
-        className="mt-2 px-6 py-2.5 rounded-xl text-slime-bg text-sm font-bold transition active:scale-95"
-        style={{ background: "linear-gradient(135deg, #39FF14, #00F0FF)" }}
+        className="mt-4 inline-flex items-center gap-1 px-6 py-3 rounded-2xl text-sm font-black transition active:scale-95"
+        style={{
+          background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+          color: "#0A0A0A",
+          fontFamily: "Montserrat, sans-serif",
+        }}
       >
-        Log a slime
+        Log your first slime
       </Link>
     </div>
   );
