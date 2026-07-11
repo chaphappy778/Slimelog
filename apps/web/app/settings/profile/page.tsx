@@ -10,6 +10,11 @@ import { useToast } from "@/components/Toast";
 import BrandSearchInput from "@/components/BrandSearchInput";
 // Audit hp-24 (2026-07-09): use the shared browser singleton.
 import { createClient } from "@/lib/supabase/client";
+// T104 (2026-07-10): use the shared AuthProvider for the auth gate so
+// this page doesn't fire its own duplicate getUser call. The heavier
+// per-page profile fetch (12+ social + form fields) stays local because
+// those columns aren't in AuthProvider's payload.
+import { useAuth } from "@/components/AuthProvider";
 
 // Module-level client — absolute rule. Singleton internally.
 const supabase = createClient();
@@ -1511,19 +1516,16 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
 
 export default function ProfileSettingsPage() {
   const router = useRouter();
-  const [authChecked, setAuthChecked] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
+  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) {
-        router.replace("/login");
-      } else {
-        setUserId(data.user.id);
-        setAuthChecked(true);
-      }
-    });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!authLoading && !user) {
+      router.replace("/login");
+    }
+  }, [authLoading, user, router]);
+
+  const authChecked = !authLoading;
+  const userId = user?.id ?? null;
 
   if (!authChecked || !userId) {
     return (

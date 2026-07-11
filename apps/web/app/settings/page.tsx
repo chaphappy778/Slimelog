@@ -6,10 +6,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import PageWrapper from "@/components/PageWrapper";
-// Audit hp-24 (2026-07-09): use the shared browser singleton instead
-// of instantiating a fresh createBrowserClient here. Prevents duplicate
-// auth listeners, cookie races, and GoTrue memory leaks across pages.
+// T104 (2026-07-10): rely on the shared AuthProvider for initial user +
+// profile state so this page doesn't fire its own duplicate calls.
+// Local supabase client still needed for signOut + refresh triggers.
 import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/components/AuthProvider";
 import { updateMarketingConsent } from "@/lib/profile-actions";
 
 const supabase = createClient();
@@ -107,7 +108,7 @@ function getInitials(username: string | null): string {
 
 export default function SettingsPage() {
   const router = useRouter();
-  const [authChecked, setAuthChecked] = useState(false);
+  const { user, profile: authProfile, loading: authLoading } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -125,29 +126,26 @@ export default function SettingsPage() {
     string | null
   >(null);
 
+  // T104: derive local profile shape from the shared AuthProvider once
+  // the initial fetch resolves. Redirect to /login if unauthenticated.
+  // We keep a local `profile` state (rather than reading authProfile
+  // directly in the JSX) because the marketing-consent optimistic UI
+  // needs to snapshot-and-revert independently of AuthProvider's state.
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) {
-        router.replace("/login");
-        return;
-      }
-      const { data: prof } = await supabase
-        .from("profiles")
-        .select(
-          "username, avatar_url, display_name, subscription_tier, marketing_consent",
-        )
-        .eq("id", data.user.id)
-        .maybeSingle();
-      setProfile({
-        username: prof?.username ?? null,
-        avatar_url: prof?.avatar_url ?? null,
-        display_name: prof?.display_name ?? null,
-        subscription_tier: prof?.subscription_tier ?? "free",
-        marketing_consent: Boolean(prof?.marketing_consent),
-      });
-      setAuthChecked(true);
+    if (authLoading) return;
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+    setProfile({
+      username: authProfile?.username ?? null,
+      avatar_url: authProfile?.avatar_url ?? null,
+      display_name: authProfile?.display_name ?? null,
+      subscription_tier: authProfile?.subscription_tier ?? "free",
+      marketing_consent: Boolean(authProfile?.marketing_consent),
     });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [authLoading, user, authProfile, router]);
+  const authChecked = !authLoading;
 
   function handleMarketingConsentToggle(next: boolean) {
     if (!profile) return;

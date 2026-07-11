@@ -46,6 +46,7 @@ export type AuthProfile = {
   onboarding_completed_at: string | null;
   subscription_tier: string | null;
   is_premium: boolean | null;
+  marketing_consent: boolean | null;
 };
 
 type AuthContextValue = {
@@ -61,7 +62,7 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const PROFILE_COLUMNS =
-  "id, username, avatar_url, display_name, role, referral_code, onboarding_completed_at, subscription_tier, is_premium";
+  "id, username, avatar_url, display_name, role, referral_code, onboarding_completed_at, subscription_tier, is_premium, marketing_consent";
 
 async function loadProfile(userId: string): Promise<AuthProfile | null> {
   const { data, error } = await supabase

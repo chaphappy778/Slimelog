@@ -10,6 +10,9 @@ import {
 import { safeRedirect } from "@/lib/safe-redirect";
 // Audit hp-24 (2026-07-09): use the shared browser singleton.
 import { createClient } from "@/lib/supabase/client";
+// T104 (2026-07-10): use the shared AuthProvider for the user + username
+// check so /welcome doesn't fire its own duplicate getUser + profile hit.
+import { useAuth } from "@/components/AuthProvider";
 
 // ─── Module-level Supabase client (absolute rule, singleton internally) ─────
 
@@ -186,8 +189,14 @@ function WelcomeInner() {
   const resolvedNext = safeRedirect(rawNext, "/");
   const next = resolvedNext === "/welcome" ? "/" : resolvedNext;
 
+  const {
+    user,
+    profile: authProfile,
+    loading: authLoading,
+  } = useAuth();
+
   const [step, setStep] = useState<1 | 2>(1);
-  const [userId, setUserId] = useState<string | null>(null);
+  const userId = user?.id ?? null;
 
   // Step 1 — username
   const [username, setUsername] = useState("");
@@ -214,34 +223,31 @@ function WelcomeInner() {
 
   const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
 
-  // ── Auth guard ──
+  // ── Auth guard + username interstitial gate ──
+  //
+  // T104: everything except the OAuth provider check comes from the
+  // shared AuthProvider, so we don't fire our own getUser + profile query.
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) {
-        router.replace("/login");
-        return;
-      }
-      setUserId(user.id);
-      // Show marketing consent checkbox only for OAuth signups. Email
-      // signups already answered on /signup and we don't want to look like
-      // we lost their answer. Supabase Auth sets app_metadata.provider on
-      // every user; "email" = email/password signup, anything else (google,
-      // apple, github, etc.) = OAuth.
-      const provider = user.app_metadata?.provider;
-      setShowMarketingConsent(!!provider && provider !== "email");
-      // If user already has a real username, they don't need this page
-      supabase
-        .from("profiles")
-        .select("username")
-        .eq("id", user.id)
-        .single()
-        .then(({ data }) => {
-          if (data?.username && !data.username.startsWith("user_")) {
-            router.replace("/");
-          }
-        });
-    });
-  }, [router]);
+    if (authLoading) return;
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+    // Show marketing consent checkbox only for OAuth signups. Email
+    // signups already answered on /signup and we don't want to look like
+    // we lost their answer. Supabase Auth sets app_metadata.provider on
+    // every user; "email" = email/password signup, anything else (google,
+    // apple, github, etc.) = OAuth.
+    const provider = user.app_metadata?.provider;
+    setShowMarketingConsent(!!provider && provider !== "email");
+    // If user already has a real username, they don't need this page.
+    if (
+      authProfile?.username &&
+      !authProfile.username.startsWith("user_")
+    ) {
+      router.replace("/");
+    }
+  }, [authLoading, user, authProfile, router]);
 
   // ── Username debounce check ──
   const handleUsernameChange = useCallback(

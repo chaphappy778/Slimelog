@@ -19,7 +19,15 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import PageWrapper from "@/components/PageWrapper";
+// T104 (2026-07-10): user + referral_code come from AuthProvider so we
+// avoid a duplicate getUser + profile hit. We still fetch
+// referral_activations + pro_credit_months separately because they can
+// change while the user is on this page (the activation trigger fires
+// when someone we referred logs their first slime), and we want the
+// dashboard to reflect the current DB state — not whatever was cached
+// at page-load time.
 import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/components/AuthProvider";
 
 const supabase = createClient();
 
@@ -57,38 +65,33 @@ function totalEarnedMonths(activations: number): number {
 
 export default function InvitePage() {
   const router = useRouter();
+  const { user, profile: authProfile, loading: authLoading } = useAuth();
   const [state, setState] = useState<ReferralState | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) {
-        router.replace("/login?next=/invite");
-        return;
-      }
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select(
-          "username, referral_code, referral_activations, pro_credit_months",
-        )
-        .eq("id", data.user.id)
-        .maybeSingle();
-
-      if (!profile) {
+    if (authLoading) return;
+    if (!user) {
+      router.replace("/login?next=/invite");
+      return;
+    }
+    // Just fetch the two counters that aren't in AuthProvider.
+    supabase
+      .from("profiles")
+      .select("referral_activations, pro_credit_months")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data: counters }) => {
+        setState({
+          username: authProfile?.username ?? "",
+          referralCode: authProfile?.referral_code ?? "",
+          activations: counters?.referral_activations ?? 0,
+          proCreditMonths: counters?.pro_credit_months ?? 0,
+        });
         setLoading(false);
-        return;
-      }
-
-      setState({
-        username: profile.username ?? "",
-        referralCode: profile.referral_code ?? "",
-        activations: profile.referral_activations ?? 0,
-        proCreditMonths: profile.pro_credit_months ?? 0,
       });
-      setLoading(false);
-    });
-  }, [router]);
+  }, [authLoading, user, authProfile, router]);
 
   const shareUrl =
     state && typeof window !== "undefined"
