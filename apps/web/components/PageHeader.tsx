@@ -37,6 +37,11 @@ const BACK_BUTTON_ROUTES = [
   /^\/wishlist$/,
   /^\/brands\/[^/]+\/claim$/,
   /^\/brand-verification$/,
+  // Admin sub-pages: back button routes them to /admin. Not needed on
+  // /admin itself since that's a top-level dashboard.
+  /^\/admin\/subscriptions$/,
+  /^\/admin\/waitlist$/,
+  /^\/admin\/brand-claims(\/.+)?$/,
 ];
 
 function shouldShowBackButton(pathname: string | null): boolean {

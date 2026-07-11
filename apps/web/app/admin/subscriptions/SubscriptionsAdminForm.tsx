@@ -2,9 +2,6 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-
-const supabase = createClient();
 
 type TargetType = "user" | "brand";
 
@@ -17,80 +14,34 @@ type LookupRow = {
   stripe_customer_id: string | null;
 };
 
-// Quick-lookup: email + username for user, slug + name for brand.
+// Lookup routes through /api/admin/subscriptions/lookup (server-side,
+// admin client). The initial client-side supabase query hit RLS
+// restrictions on subscription_tier / subscription_status /
+// stripe_customer_id and hung silently. The server-side path bypasses
+// RLS via service_role AND handles email-based user lookup via the
+// auth.admin API which the browser client can't touch.
 async function lookup(
   targetType: TargetType,
   query: string,
 ): Promise<LookupRow | { error: string }> {
   const q = query.trim();
   if (!q) return { error: "Enter something to look up." };
-
-  if (targetType === "user") {
-    // Try by email first (via auth.users → not accessible from anon key,
-    // so we take a different route): look up profile by username or by
-    // matching id if the input looks like a UUID. For email-based lookup
-    // the admin can copy the user id from Supabase dashboard.
-    const isUuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q);
-    const { data, error } = isUuid
-      ? await supabase
-          .from("profiles")
-          .select(
-            "id, username, subscription_tier, subscription_status, subscription_current_period_end, stripe_customer_id",
-          )
-          .eq("id", q)
-          .maybeSingle()
-      : await supabase
-          .from("profiles")
-          .select(
-            "id, username, subscription_tier, subscription_status, subscription_current_period_end, stripe_customer_id",
-          )
-          .eq("username", q.replace(/^@/, ""))
-          .maybeSingle();
-
-    if (error) return { error: error.message };
-    if (!data) return { error: "No matching user profile." };
+  try {
+    const res = await fetch("/api/admin/subscriptions/lookup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target_type: targetType, query: q }),
+    });
+    const body = await res.json();
+    if (!res.ok) return { error: body.error ?? res.statusText };
+    return body.row as LookupRow;
+  } catch (err) {
     return {
-      id: data.id,
-      label: `@${data.username ?? "(no username)"}`,
-      subscription_tier: data.subscription_tier ?? null,
-      subscription_status: data.subscription_status ?? null,
-      subscription_current_period_end:
-        data.subscription_current_period_end ?? null,
-      stripe_customer_id: data.stripe_customer_id ?? null,
+      error:
+        "Network error: " +
+        (err instanceof Error ? err.message : String(err)),
     };
   }
-
-  // Brand: match on slug (exact) first, then name.
-  const { data: bySlug } = await supabase
-    .from("brands")
-    .select(
-      "id, name, slug, subscription_tier, subscription_status, subscription_current_period_end, stripe_customer_id",
-    )
-    .eq("slug", q)
-    .maybeSingle();
-  const data =
-    bySlug ??
-    (
-      await supabase
-        .from("brands")
-        .select(
-          "id, name, slug, subscription_tier, subscription_status, subscription_current_period_end, stripe_customer_id",
-        )
-        .ilike("name", q)
-        .maybeSingle()
-    ).data;
-
-  if (!data) return { error: "No matching brand." };
-  return {
-    id: data.id,
-    label: `${data.name} (${data.slug})`,
-    subscription_tier: data.subscription_tier ?? null,
-    subscription_status: data.subscription_status ?? null,
-    subscription_current_period_end:
-      data.subscription_current_period_end ?? null,
-    stripe_customer_id: data.stripe_customer_id ?? null,
-  };
 }
 
 const SECTION_STYLE: React.CSSProperties = {
@@ -220,7 +171,7 @@ export default function SubscriptionsAdminForm() {
           onChange={(e) => setQuery(e.target.value)}
           placeholder={
             targetType === "user"
-              ? "username OR user UUID"
+              ? "email, username, or user UUID"
               : "brand slug OR exact name"
           }
           className="w-full rounded-xl px-3 py-2 text-sm"
