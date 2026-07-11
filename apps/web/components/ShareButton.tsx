@@ -18,10 +18,8 @@
 
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-
-const supabase = createClient();
+import { useCallback, useState } from "react";
+import { useAuth } from "@/components/AuthProvider";
 
 type ShareButtonProps = {
   /** Path (or full URL) to share. Referral code is appended at share time. */
@@ -58,29 +56,12 @@ export default function ShareButton({
   variant = "ghost",
   className,
 }: ShareButtonProps) {
-  // Referral code for the signed-in user (if any). We fetch it once on
-  // mount and reuse. Anonymous viewers still get a working share, just
-  // without the referral credit.
-  const [referralCode, setReferralCode] = useState<string | null>(null);
+  // T104: read referral code from the shared AuthProvider instead of
+  // firing an independent auth.getUser + profiles fetch. Anonymous
+  // viewers still get a working share, just without the referral credit.
+  const { profile } = useAuth();
+  const referralCode = profile?.referral_code ?? null;
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) return;
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("referral_code")
-        .eq("id", data.user.id)
-        .maybeSingle();
-      if (!cancelled && profile?.referral_code) {
-        setReferralCode(profile.referral_code);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const handleShare = useCallback(async () => {
     const url = appendRefParam(absoluteFromPath(path), referralCode);

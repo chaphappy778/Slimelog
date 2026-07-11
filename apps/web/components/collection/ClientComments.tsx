@@ -9,33 +9,21 @@
 // page source. Logged-out arrivals see a brief loading state before
 // the comments thread appears.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import CommentSection from "@/components/collection/CommentSection";
-// Audit hp-24 (2026-07-09): use the shared browser singleton.
-import { createClient } from "@/lib/supabase/client";
-
-const supabase = createClient();
+// T104 (2026-07-10): pull user id from the shared AuthProvider instead
+// of firing our own supabase.auth.getUser call.
+import { useAuth } from "@/components/AuthProvider";
 
 interface Props {
   logId: string;
 }
 
 export default function ClientComments({ logId }: Props) {
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [authResolved, setAuthResolved] = useState(false);
+  const { user, loading } = useAuth();
+  const currentUserId = user?.id ?? null;
+  const authResolved = !loading;
   const [commentCount, setCommentCount] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    supabase.auth.getUser().then(({ data }) => {
-      if (cancelled) return;
-      setCurrentUserId(data.user?.id ?? null);
-      setAuthResolved(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   return (
     <section

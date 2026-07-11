@@ -19,16 +19,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-
-const supabase = createClient();
+import { useAuth } from "@/components/AuthProvider";
 
 const SLIMELOG_ONBOARDING_STEP_KEY = "slimelog:onboarding_step";
 const TOTAL_SCREENS = 4;
-
-type ReferralInfo = {
-  referralCode: string | null;
-};
 
 // ─── Root ──────────────────────────────────────────────────────────────────
 
@@ -39,9 +33,9 @@ export default function OnboardingModal({
 }) {
   const [step, setStep] = useState<number>(0);
   const [dismissing, setDismissing] = useState(false);
-  const [referral, setReferral] = useState<ReferralInfo>({
-    referralCode: null,
-  });
+  // T104: pull referral code from AuthProvider instead of re-fetching.
+  const { profile } = useAuth();
+  const referralCode = profile?.referral_code ?? null;
 
   // Restore progress on mount
   useEffect(() => {
@@ -67,20 +61,7 @@ export default function OnboardingModal({
     }
   }, [step]);
 
-  // Fetch referral code for screen 4
-  useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) return;
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("referral_code")
-        .eq("id", data.user.id)
-        .maybeSingle();
-      if (profile?.referral_code) {
-        setReferral({ referralCode: profile.referral_code });
-      }
-    });
-  }, []);
+  // (Referral code now comes from useAuth() — no independent fetch.)
 
   const finish = useCallback(async () => {
     setDismissing(true);
@@ -192,7 +173,7 @@ export default function OnboardingModal({
           {step === 2 && <ScreenRateAxes onNext={goNext} />}
           {step === 3 && (
             <ScreenInvite
-              referralCode={referral.referralCode}
+              referralCode={referralCode}
               onFinish={finish}
             />
           )}

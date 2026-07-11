@@ -9,39 +9,21 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useState } from "react";
+import { useAuth } from "@/components/AuthProvider";
 import OnboardingModal from "./OnboardingModal";
 
-const supabase = createClient();
-
 export default function OnboardingGate() {
-  const [status, setStatus] = useState<"loading" | "show" | "hide">(
-    "loading",
-  );
+  // T104: consume shared AuthProvider state. `dismissed` is local so
+  // Skip / Complete tears down the modal without waiting for the DB
+  // write + shared-state re-fetch to round-trip.
+  const { profile, loading } = useAuth();
+  const [dismissed, setDismissed] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) {
-        if (!cancelled) setStatus("hide");
-        return;
-      }
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("onboarding_completed_at")
-        .eq("id", data.user.id)
-        .maybeSingle();
+  if (loading) return null;
+  if (dismissed) return null;
+  if (!profile) return null;
+  if (profile.onboarding_completed_at) return null;
 
-      if (cancelled) return;
-      setStatus(profile?.onboarding_completed_at ? "hide" : "show");
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (status !== "show") return null;
-
-  return <OnboardingModal onComplete={() => setStatus("hide")} />;
+  return <OnboardingModal onComplete={() => setDismissed(true)} />;
 }

@@ -4,9 +4,11 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-// Audit hp-24 (2026-07-09): use the shared browser singleton.
-import { createClient } from "@/lib/supabase/client";
-import { isAdminUser } from "@/lib/is-admin-check";
+// T104 (2026-07-10): pull user + profile + admin role from the shared
+// AuthProvider instead of firing our own auth.getUser + isAdminUser
+// (which triggers another profile query). Also gives us email verified /
+// role gating without a second round-trip.
+import { useAuth } from "@/components/AuthProvider";
 import {
   Layers,
   Heart,
@@ -21,11 +23,6 @@ import {
   Shield,
   Share2,
 } from "lucide-react";
-
-// [T13] Module-level Supabase client — absolute rule: never instantiate
-// inside component body, useEffect, or event handlers. Shared across
-// the profile-fetch useEffect.
-const supabase = createClient();
 
 type UserProfile = {
   username: string | null;
@@ -145,42 +142,26 @@ function WavyTop() {
 export default function SlimeMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
   const pathname = usePathname();
   const overlayRef = useRef<HTMLDivElement>(null);
+
+  // T104: shared auth state. Admin gate mirrors the server-side rule
+  // (role === 'admin' + email_confirmed_at present); actual authorization
+  // is still enforced server-side + via RLS.
+  const { user, profile: authProfile, loading } = useAuth();
+  const profile: UserProfile | null = authProfile
+    ? {
+        username: authProfile.username,
+        avatar_url: authProfile.avatar_url,
+        display_name: authProfile.display_name,
+      }
+    : null;
+  const isAdmin =
+    !!user?.email_confirmed_at && authProfile?.role === "admin";
 
   useEffect(() => {
     if (isOpen) handleClose();
   }, [pathname]); // eslint-disable-line
-
-  useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-      // Audit hp-9 (2026-07-06): role-based admin check instead of
-      // NEXT_PUBLIC_ADMIN_EMAIL string equality. This is a best-effort
-      // UI gate — actual authorization is enforced server-side + via
-      // RLS. If the check fails or errors, the admin link stays hidden.
-      if (await isAdminUser(supabase, user)) {
-        setIsAdmin(true);
-      }
-      const { data } = await supabase
-        .from("profiles")
-        .select("username, avatar_url")
-        .eq("id", user.id)
-        .maybeSingle();
-      setProfile({
-        username: data?.username ?? null,
-        avatar_url: data?.avatar_url ?? null,
-        display_name: null,
-      });
-      setLoading(false);
-    });
-  }, []);
 
   function handleOpen() {
     setIsAnimatingOut(false);
