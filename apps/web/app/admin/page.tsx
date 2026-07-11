@@ -287,6 +287,27 @@ export default async function AdminPage() {
               </svg>
             }
           />
+          <ActionCard
+            href="/admin/subscriptions"
+            title="Subscription Tools"
+            description="Sync from Stripe or manually set tier (QA)"
+            icon={
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#FF00E5"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="2" y="5" width="20" height="14" rx="2" />
+                <line x1="2" y1="10" x2="22" y2="10" />
+              </svg>
+            }
+          />
         </div>
 
         {/* Recent signups */}
