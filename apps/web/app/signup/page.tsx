@@ -371,23 +371,13 @@ function SignupPageInner() {
           <h1 className="text-2xl font-bold text-slime-cyan tracking-tight">
             Start your collection
           </h1>
-          <p className="mt-1 text-sm text-slime-muted">
-            Track, rate, and discover slimes you&apos;ll love
+          {/* T99 (2026-07-11): the earlier placeholder-y "5 slime type names
+              + 46 more" pill row got replaced with the SlimeLog tagline
+              in the subhead slot. Same visual rhythm, on-brand, no
+              TODO smell. */}
+          <p className="mt-1 text-sm font-semibold tracking-wide text-slime-magenta">
+            Rate it. Log it. Love it.
           </p>
-        </div>
-
-        <div className="flex flex-wrap gap-1.5 justify-center mb-6 opacity-60">
-          {["Butter", "Cloud", "Icee", "Clear", "Slay"].map((label) => (
-            <span
-              key={label}
-              className="rounded-full bg-slime-surface border border-slime-border px-3 py-1 text-xs text-slime-muted"
-            >
-              {label}
-            </span>
-          ))}
-          <span className="rounded-full bg-slime-surface border border-slime-border px-3 py-1 text-xs text-slime-muted">
-            +46 more
-          </span>
         </div>
 
         <div className="rounded-3xl bg-slime-card border border-slime-border backdrop-blur-sm p-6 shadow-2xl space-y-5">
