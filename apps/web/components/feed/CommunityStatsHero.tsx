@@ -122,7 +122,7 @@ export default function CommunityStatsHero({
               animation: "livedot 1.8s ease-in-out infinite",
             }}
           />
-          The community, growing
+          The community is growing
         </div>
         <div
           className="flex items-center gap-1 p-0.5 rounded-full"

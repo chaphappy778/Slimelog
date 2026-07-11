@@ -245,8 +245,18 @@ export default function FeedListClient({
                 density === "c" ? "flex flex-col gap-2" : "flex flex-col gap-3"
               }
             >
-              {bucketLogs.map((log) =>
-                density === "c" ? (
+              {bucketLogs.map((log) => {
+                // Wishlist entries always render in the compact form
+                // regardless of the user's density preference. They're
+                // "user wants slime" events with typically no photo
+                // attached, so the full photo-hero treatment reads as
+                // a giant blank card. Compact carries the same info
+                // without eating half a screen.
+                const isWishlist =
+                  log.activity_type === "wishlist_added" ||
+                  log.in_wishlist === true;
+                const useCompact = density === "c" || isWishlist;
+                return useCompact ? (
                   <FeedCardCompact
                     key={log.id}
                     log={log}
@@ -260,8 +270,8 @@ export default function FeedListClient({
                     brandSlugMap={brandSlugMap}
                     currentUserId={currentUserId}
                   />
-                ),
-              )}
+                );
+              })}
             </div>
           </div>
         ))}
