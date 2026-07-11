@@ -353,7 +353,11 @@ export default function FeedCard({
     fallbackType;
   const slimeName = log.slime_name ?? "Untitled Slime";
   const brandName = log.brand_name_raw ?? null;
-  const brandSlug = brandName ? (brandSlugMap[brandName] ?? null) : null;
+  // 2026-07-11: brandSlugMap keys are lowercased (see page.tsx builder)
+  // so lookups match regardless of case in brand_name_raw.
+  const brandSlug = brandName
+    ? (brandSlugMap[brandName.toLowerCase()] ?? null)
+    : null;
   // [Change F5] Inline relative time replaces formatDistanceToNow.
   const timeAgo = formatRelativeTime(log.created_at);
 
@@ -432,16 +436,12 @@ export default function FeedCard({
               </time>
             </div>
           </div>
-          <span
-            aria-hidden="true"
-            style={{ color: "rgba(255,255,255,0.35)", padding: 4 }}
-          >
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-              <circle cx="5" cy="12" r="1.6" />
-              <circle cx="12" cy="12" r="1.6" />
-              <circle cx="19" cy="12" r="1.6" />
-            </svg>
-          </span>
+          {/* 2026-07-11: removed the three-dot menu placeholder that
+              lived here in the initial batch 2 shipment. It looked
+              like a "visit brand" affordance (which was where the dots
+              lived on the old card) and wasn't wired to anything, so
+              taps did nothing. When we build a real post menu (report /
+              mute / etc) it goes back here. */}
         </div>
 
         {/* Photo (4:5 aspect). Gradient fallback when no image. */}
@@ -599,19 +599,33 @@ export default function FeedCard({
                 <Link
                   href={`/brands/${brandSlug}`}
                   onClick={(e) => e.stopPropagation()}
-                  className="hover:text-slime-accent transition-colors"
+                  className="inline-flex items-center gap-1 hover:text-slime-accent transition-colors"
                 >
                   {brandName}
+                  {/* Small arrow so users know the brand name is
+                      tappable (moved the "visit brand" affordance
+                      that used to live on the 3 dots to this arrow). */}
+                  <svg
+                    width="11"
+                    height="11"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
                 </Link>
               ) : (
                 <span>{brandName}</span>
               )}
-              <span
-                className="ml-1 font-medium"
-                style={{ color: "rgba(255,255,255,0.4)" }}
-              >
-                · {typeStyle.label}
-              </span>
+              {/* 2026-07-11: removed the duplicate "· Butter/Clay/etc"
+                  type label that used to sit next to the brand name.
+                  The type is already communicated by the pill overlay
+                  on the photo, so showing it here again was redundant. */}
             </div>
           )}
         </div>
@@ -648,23 +662,22 @@ export default function FeedCard({
             {log.comment_count}
           </div>
           {!isWishlist && (
-            // The parent footer div stops click propagation so LikeButton
-            // and the comment count don't accidentally open the review
-            // modal. That gate accidentally also blocked "Open review →"
-            // from doing anything, so we wire an explicit openDetail
-            // handler on this button instead of relying on parent bubbling.
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                openDetail();
-              }}
+            // "Open review →" routes to the full review page at
+            // /slimes/[id] (same destination as the old "View Full
+            // Review" button that lived at the bottom of the card).
+            // Whole-card tap still opens the in-feed SlimeDetailCard
+            // modal via openDetail — so users get a preview from a
+            // quick tap and the full experience from the explicit
+            // "Open review" click.
+            <Link
+              href={`/slimes/${log.id}`}
+              onClick={(e) => e.stopPropagation()}
               className="ml-auto text-[11.5px] font-bold flex items-center gap-1 transition-opacity active:opacity-70"
-              style={{ color: "#00F0FF", background: "transparent" }}
+              style={{ color: "#00F0FF" }}
               aria-label="Open review"
             >
               Open review →
-            </button>
+            </Link>
           )}
         </div>
       </article>

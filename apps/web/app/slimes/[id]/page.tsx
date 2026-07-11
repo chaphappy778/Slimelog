@@ -171,11 +171,15 @@ export default async function SlimePage({
       .select("username, display_name, avatar_url")
       .eq("id", log.user_id)
       .maybeSingle(),
+    // 2026-07-11: use ilike so a brand_name_raw of "goo lagoon" matches
+    // "Goo Lagoon" in the catalog. Previously used eq(), which failed
+    // silently on any case mismatch and left the brand rendering as
+    // plain text with no link — users couldn't navigate to the brand.
     log.brand_name_raw
       ? supabase
           .from("brands")
           .select("slug")
-          .eq("name", log.brand_name_raw)
+          .ilike("name", log.brand_name_raw)
           .maybeSingle()
       : Promise.resolve({ data: null }),
     supabase

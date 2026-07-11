@@ -645,17 +645,28 @@ export default async function HomePage({
     ),
   ];
 
+  // 2026-07-11: brandSlugMap now keyed by lowercased brand name so
+  // "Goo Lagoon" in the catalog matches "goo lagoon" (or any other
+  // case) in a log's brand_name_raw. Previously the .eq / .in
+  // comparison was case-sensitive, so brand links silently broke on
+  // any case mismatch. FeedCard now looks up via the lowercased key.
   let brandSlugMap: Record<string, string> = {};
 
   if (uniqueBrandNames.length > 0) {
+    // Build an OR filter of ilike clauses so the catalog fetch itself
+    // is case-insensitive (a plain .in() is case-sensitive, so we'd
+    // miss brands here before we even got to the map lookup).
+    const orClause = uniqueBrandNames
+      .map((n) => `name.ilike.${n.replace(/[,()]/g, " ")}`)
+      .join(",");
     const { data: brandRows } = await supabase
       .from("brands")
       .select("name, slug")
-      .in("name", uniqueBrandNames);
+      .or(orClause);
 
     for (const row of brandRows ?? []) {
       if (row.name && row.slug) {
-        brandSlugMap[row.name] = row.slug;
+        brandSlugMap[row.name.toLowerCase()] = row.slug;
       }
     }
   }
