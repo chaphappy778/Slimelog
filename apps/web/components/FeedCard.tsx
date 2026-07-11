@@ -357,27 +357,45 @@ export default function FeedCard({
   // [Change F5] Inline relative time replaces formatDistanceToNow.
   const timeAgo = formatRelativeTime(log.created_at);
 
+  // Batch 2 (2026-07-11): photo-hero card treatment.
+  //
+  // Photo placeholder: when log.image_url is null, we build a diagonal
+  // gradient from the first two color swatches (per spec). If there
+  // are 0 or 1 colors, we lean on the app's brand purple so the slot
+  // never looks broken.
+  const firstColor = log.colors?.[0] ?? null;
+  const photoGradient: string = (() => {
+    const swatches = (log.colors ?? []).slice(0, 2).map(getSwatchColor);
+    if (swatches.length === 2) {
+      return `linear-gradient(150deg, ${swatches[0]}, ${swatches[1]})`;
+    }
+    if (swatches.length === 1) {
+      return `linear-gradient(150deg, ${swatches[0]}, rgba(45,10,78,0.6))`;
+    }
+    return "linear-gradient(150deg, rgba(45,10,78,0.6), rgba(45,10,78,0.3))";
+  })();
+
   return (
     <>
-      {/* ── Card ──
-          [Change 2] onClick only wired when not a wishlist card. */}
+      {/* Whole card tap opens SlimeDetailCard (unchanged behavior).
+          Wishlist cards stay non-tappable. */}
       <article
-        className="relative w-full max-w-lg mx-auto rounded-2xl overflow-hidden flex flex-col"
+        className="relative w-full max-w-lg mx-auto rounded-3xl overflow-hidden flex flex-col"
         style={{
-          minHeight: "auto",
-          background: "rgba(45,10,78,0.25)",
+          background: "rgba(45,10,78,0.3)",
           border: "1px solid rgba(45,10,78,0.7)",
+          boxShadow: "inset 0 0 24px rgba(45,10,78,0.12)",
           cursor: isWishlist ? "default" : "pointer",
         }}
         onClick={isWishlist ? undefined : openDetail}
       >
-        {/* ── Avatar + username + timestamp row ── */}
+        {/* Author row */}
         <div
           className="flex items-center justify-between gap-2 shrink-0"
-          style={{ padding: "10px 14px 0" }}
+          style={{ padding: "12px 13px 10px" }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             {log.username ? (
               <Link
                 href={`/users/${log.username}`}
@@ -388,34 +406,50 @@ export default function FeedCard({
             ) : (
               <Avatar username={log.username} avatar_url={log.avatar_url} />
             )}
-            {log.username ? (
-              <Link
-                href={`/users/${log.username}`}
-                className="text-sm font-semibold hover:text-slime-accent transition-colors"
-                style={{ color: isWishlist ? "#CC44FF" : "#FF00E5" }}
+            <div className="min-w-0">
+              {log.username ? (
+                <Link
+                  href={`/users/${log.username}`}
+                  className="block text-[13px] font-bold leading-tight truncate hover:text-slime-accent transition-colors"
+                  style={{ color: "#ffffff" }}
+                >
+                  @{log.username}
+                </Link>
+              ) : (
+                <span
+                  className="block text-[13px] font-bold leading-tight truncate"
+                  style={{ color: "#ffffff" }}
+                >
+                  @anonymous
+                </span>
+              )}
+              <time
+                className="block text-[11px] leading-tight mt-0.5"
+                dateTime={log.created_at}
+                style={{ color: "rgba(255,255,255,0.4)" }}
               >
-                @{log.username}
-              </Link>
-            ) : (
-              <span
-                className="text-sm font-semibold"
-                style={{ color: isWishlist ? "#CC44FF" : "#FF00E5" }}
-              >
-                @anonymous
-              </span>
-            )}
+                logged · {timeAgo}
+              </time>
+            </div>
           </div>
-          <time
-            className="text-[11px] text-white/60 font-medium"
-            dateTime={log.created_at}
+          <span
+            aria-hidden="true"
+            style={{ color: "rgba(255,255,255,0.35)", padding: 4 }}
           >
-            {timeAgo}
-          </time>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+              <circle cx="5" cy="12" r="1.6" />
+              <circle cx="12" cy="12" r="1.6" />
+              <circle cx="19" cy="12" r="1.6" />
+            </svg>
+          </span>
         </div>
 
-        {/* ── Image area ── */}
-        {log.image_url && (
-          <div className="relative shrink-0 mt-2" style={{ height: "220px" }}>
+        {/* Photo (4:5 aspect). Gradient fallback when no image. */}
+        <div
+          className="relative shrink-0"
+          style={{ aspectRatio: "4/5", overflow: "hidden" }}
+        >
+          {log.image_url ? (
             <Image
               src={log.image_url}
               alt={slimeName}
@@ -423,155 +457,207 @@ export default function FeedCard({
               className="object-cover"
               sizes="(max-width: 512px) 100vw, 512px"
             />
+          ) : (
             <div
-              className="absolute inset-0 pointer-events-none"
-              style={{
-                background:
-                  "linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0) 40%, rgba(10,0,20,0.55) 100%)",
-              }}
+              aria-hidden="true"
+              className="absolute inset-0"
+              style={{ background: photoGradient }}
             />
-          </div>
-        )}
+          )}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(10,0,20,0.15) 0%, transparent 22% 60%, rgba(10,0,20,0.55) 100%)",
+            }}
+          />
 
-        {/* ── Card body ── */}
-        <div className="px-4 pt-3 pb-2 flex flex-col gap-2.5 shrink-0">
+          {/* Overlay badges: base type + first color name. */}
+          <div className="absolute top-3 left-3 flex gap-1.5 z-[3]">
+            <span
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold"
+              style={{
+                background: "rgba(255,255,255,0.85)",
+                color: "#0a0014",
+                backdropFilter: "blur(4px)",
+                WebkitBackdropFilter: "blur(4px)",
+              }}
+            >
+              {typeStyle.label}
+            </span>
+            {firstColor && (
+              <span
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold"
+                style={{
+                  background: "rgba(255,255,255,0.85)",
+                  color: "#0a0014",
+                  backdropFilter: "blur(4px)",
+                  WebkitBackdropFilter: "blur(4px)",
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  className="inline-block w-2.5 h-2.5 rounded-full border border-black/25"
+                  style={{ background: getSwatchColor(firstColor) }}
+                />
+                {firstColor}
+              </span>
+            )}
+          </div>
+
+          {/* Floating rating chip (or wishlist chip if wishlist card).
+              Non-wishlist cards with no rating render nothing here. */}
+          {isWishlist ? (
+            <div
+              className="absolute right-3 bottom-3 z-[3] flex items-center gap-1 px-3 py-1.5 rounded-2xl text-[11px] font-black uppercase tracking-widest"
+              style={{
+                background: "rgba(10,0,20,0.6)",
+                border: "1px solid rgba(255,0,229,0.55)",
+                color: "#FF00E5",
+                boxShadow: "0 0 12px rgba(255,0,229,0.35)",
+                backdropFilter: "blur(8px)",
+                WebkitBackdropFilter: "blur(8px)",
+              }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="12"
+                height="12"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M12 21s-7.5-4.6-10-9.2C.3 8.4 1.8 5 5 5c2 0 3.2 1.2 4 2.3C9.8 6.2 11 5 13 5c3.2 0 4.7 3.4 3 6.8C19.5 16.4 12 21 12 21Z" />
+              </svg>
+              Wishlist
+            </div>
+          ) : (
+            typeof log.rating_overall === "number" && (
+              <div
+                className="absolute right-3 bottom-3 z-[3] flex items-baseline gap-1 px-3 py-2 rounded-2xl"
+                style={{
+                  background: "rgba(10,0,20,0.6)",
+                  border: "1px solid rgba(57,255,20,0.4)",
+                  boxShadow: "0 0 12px rgba(57,255,20,0.4)",
+                  backdropFilter: "blur(8px)",
+                  WebkitBackdropFilter: "blur(8px)",
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    color: "#39FF14",
+                    fontSize: 14,
+                    lineHeight: 1,
+                    marginRight: 2,
+                  }}
+                >
+                  ★
+                </span>
+                <span
+                  style={{
+                    background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                    WebkitBackgroundClip: "text",
+                    backgroundClip: "text",
+                    color: "transparent",
+                    fontFamily: "Montserrat, sans-serif",
+                    fontWeight: 900,
+                    fontSize: 22,
+                    letterSpacing: "-0.02em",
+                    lineHeight: 1,
+                  }}
+                >
+                  {log.rating_overall.toFixed(1)}
+                </span>
+                <span
+                  className="text-[11px] font-bold"
+                  style={{ color: "rgba(255,255,255,0.4)" }}
+                >
+                  /5
+                </span>
+              </div>
+            )
+          )}
+        </div>
+
+        {/* Body: slime name + brand */}
+        <div className="px-4 pt-3 pb-2 flex flex-col gap-0.5 shrink-0">
           <h2
-            className="text-lg font-extrabold text-white leading-tight"
-            style={{ fontFamily: "Montserrat, Inter, sans-serif" }}
+            className="text-[19px] font-black text-white leading-tight"
+            style={{
+              fontFamily: "Montserrat, Inter, sans-serif",
+              letterSpacing: "-0.01em",
+            }}
           >
             {slimeName}
           </h2>
-
           {brandName && (
-            <div className="flex items-center justify-between gap-2">
+            <div
+              className="text-[12.5px] font-semibold"
+              style={{ color: "#00F0FF" }}
+            >
               {brandSlug ? (
-                <>
-                  <Link
-                    href={`/brands/${brandSlug}`}
-                    className="text-sm font-medium hover:text-slime-accent transition-colors"
-                    style={{ color: isWishlist ? "#CC44FF" : "#00F0FF" }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {brandName}
-                  </Link>
-                  <Link
-                    href={`/brands/${brandSlug}`}
-                    aria-label={`Visit ${brandName}`}
-                    onClick={(e) => e.stopPropagation()}
-                    className="text-slime-muted hover:text-slime-cyan transition-colors"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <circle cx="12" cy="12" r="1" />
-                      <circle cx="19" cy="12" r="1" />
-                      <circle cx="5" cy="12" r="1" />
-                    </svg>
-                  </Link>
-                </>
-              ) : (
-                <span
-                  className="text-sm font-medium"
-                  style={{
-                    color: isWishlist ? "#CC44FF" : "rgba(255,255,255,0.4)",
-                  }}
+                <Link
+                  href={`/brands/${brandSlug}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="hover:text-slime-accent transition-colors"
                 >
                   {brandName}
-                </span>
+                </Link>
+              ) : (
+                <span>{brandName}</span>
               )}
-            </div>
-          )}
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <span
-              className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${typeStyle.bg} ${typeStyle.text}`}
-            >
-              {typeStyle.label}
-              {log.subtype_name ? ` \u00b7 ${log.subtype_name}` : null}
-            </span>
-            {log.colors &&
-              log.colors.length > 0 &&
-              log.colors
-                .slice(0, 5)
-                .map((c, i) => (
-                  <div
-                    key={i}
-                    className="w-4 h-4 rounded-full border border-white/15 shrink-0"
-                    style={{ background: getSwatchColor(c) }}
-                    title={c}
-                    aria-label={c}
-                  />
-                ))}
-          </div>
-
-          {/* [Change 2] Wishlist cards show "Added to Wishlist" label instead of star rating */}
-          {isWishlist ? (
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#CC44FF" }}>
-              Added to Wishlist
-            </span>
-          ) : (
-            <Stars rating={log.rating_overall} />
-          )}
-
-          <div className="flex items-center gap-4">
-            <div onClick={(e) => e.stopPropagation()}>
-              <LikeButton
-                logId={log.id}
-                initialCount={log.like_count}
-                initialLiked={log.is_liked_by_current_user}
-                currentUserId={currentUserId}
-              />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="rgba(255,255,255,0.35)"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+              <span
+                className="ml-1 font-medium"
+                style={{ color: "rgba(255,255,255,0.4)" }}
               >
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-              <span className="text-xs text-slime-muted">
-                {log.comment_count}
+                · {typeStyle.label}
               </span>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* ── Card footer ──
-            [Change 2] Wishlist cards: no "View Full Review" button. */}
-        <div className="px-4 pb-4 pt-1 shrink-0">
-          {isWishlist ? (
-            <p className="text-center text-xs text-slime-muted py-2">
-              No review yet
-            </p>
-          ) : (
-            <Link
-              href={`/slimes/${log.id}`}
-              onClick={(e) => e.stopPropagation()}
-              className="block w-full text-center py-2.5 rounded-xl text-sm font-bold text-slime-bg transition-opacity hover:opacity-90"
-              style={{
-                background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-              }}
+        {/* Footer: likes + comments + "Open review →" hint */}
+        <div
+          className="flex items-center gap-4 mx-4 mb-4 pt-3"
+          style={{ borderTop: "1px solid rgba(120,60,180,0.2)" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <LikeButton
+            logId={log.id}
+            initialCount={log.like_count}
+            initialLiked={log.is_liked_by_current_user}
+            currentUserId={currentUserId}
+          />
+          <div
+            className="flex items-center gap-1.5 text-[13px] font-bold"
+            style={{ color: "rgba(255,255,255,0.55)" }}
+          >
+            <svg
+              width="17"
+              height="17"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
             >
-              View Full Review
-            </Link>
+              <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4L4 21l1.1-3.9A8.4 8.4 0 1 1 21 11.5Z" />
+            </svg>
+            {log.comment_count}
+          </div>
+          {!isWishlist && (
+            <span
+              className="ml-auto text-[11.5px] font-bold flex items-center gap-1"
+              style={{ color: "#00F0FF" }}
+            >
+              Open review →
+            </span>
           )}
         </div>
       </article>
+
 
       {/* ── Level 2: Full-screen detail overlay ──
           [Change 2] Only mounted for non-wishlist cards */}

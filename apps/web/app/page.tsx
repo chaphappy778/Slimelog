@@ -74,6 +74,136 @@ function normaliseProfile(
   return raw;
 }
 
+// ─── Day-bucket dividers (feed rework batch 2, 2026-07-11) ────────────────────
+//
+// Group logs into three buckets and interleave the divider labels:
+//   Today       — created_at within the current UTC day
+//   This week   — within the last 7 UTC days, but not today
+//   Earlier     — everything else
+//
+// UTC-based on purpose: server render + client hydration match without a
+// reshuffle flash. Users far from UTC will see "Today" read off by a few
+// hours; that's acceptable at current scale per the T105 discussion. If
+// it becomes an issue we can revisit with a client-side reshuffle.
+
+type BucketKey = "today" | "week" | "earlier";
+const BUCKET_LABELS: Record<BucketKey, string> = {
+  today: "Today",
+  week: "This week",
+  earlier: "Earlier",
+};
+
+function bucketLogsByDay(logs: FeedCardLog[]): Array<{
+  key: BucketKey;
+  logs: FeedCardLog[];
+}> {
+  const now = new Date();
+  const todayStart = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      0,
+      0,
+      0,
+      0,
+    ),
+  );
+  const sevenDaysAgo = new Date(
+    todayStart.getTime() - 7 * 24 * 60 * 60 * 1000,
+  );
+
+  const buckets: Record<BucketKey, FeedCardLog[]> = {
+    today: [],
+    week: [],
+    earlier: [],
+  };
+  for (const log of logs) {
+    const t = new Date(log.created_at).getTime();
+    if (t >= todayStart.getTime()) buckets.today.push(log);
+    else if (t >= sevenDaysAgo.getTime()) buckets.week.push(log);
+    else buckets.earlier.push(log);
+  }
+
+  // Preserve the incoming order within each bucket, and only emit buckets
+  // that actually have content.
+  const result: Array<{ key: BucketKey; logs: FeedCardLog[] }> = [];
+  (["today", "week", "earlier"] as BucketKey[]).forEach((key) => {
+    if (buckets[key].length > 0) result.push({ key, logs: buckets[key] });
+  });
+  return result;
+}
+
+function DayDivider({
+  label,
+  count,
+  emphasized,
+}: {
+  label: string;
+  count: number;
+  emphasized?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-3 mt-6 mb-3">
+      <span
+        className="text-[13px] font-black uppercase tracking-wider"
+        style={{
+          fontFamily: "Montserrat, sans-serif",
+          color: emphasized ? "#39FF14" : "#ffffff",
+        }}
+      >
+        {label}
+      </span>
+      <span
+        className="flex-1 h-px"
+        style={{
+          background:
+            "linear-gradient(90deg, rgba(120,60,180,0.55), transparent)",
+        }}
+      />
+      <span
+        className="text-[11px] font-semibold"
+        style={{ color: "rgba(255,255,255,0.4)" }}
+      >
+        {count} log{count === 1 ? "" : "s"}
+      </span>
+    </div>
+  );
+}
+
+function FeedListWithDividers({
+  logs,
+  brandSlugMap,
+  currentUserId,
+}: {
+  logs: FeedCardLog[];
+  brandSlugMap: Record<string, string>;
+  currentUserId: string | null;
+}) {
+  const buckets = bucketLogsByDay(logs);
+  return (
+    <div className="flex flex-col gap-3">
+      {buckets.map(({ key, logs: bucketLogs }, i) => (
+        <div key={key} className="flex flex-col gap-3">
+          <DayDivider
+            label={BUCKET_LABELS[key]}
+            count={bucketLogs.length}
+            emphasized={key === "today" && i === 0}
+          />
+          {bucketLogs.map((log) => (
+            <FeedCard
+              key={log.id}
+              log={log}
+              brandSlugMap={brandSlugMap}
+              currentUserId={currentUserId}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Empty states ──────────────────────────────────────────────────────────────
 
 function EmptyFeed() {
@@ -118,31 +248,105 @@ function EmptyFeed() {
 }
 
 function EmptyFollowingFeed() {
+  // Feed rework batch 2 (2026-07-11): geometric-only empty state.
+  // Blob + concentric dashed rings + line sparkles, all built inline
+  // with SVG (no AI art). Copy locked with user 2026-07-11.
   return (
-    <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
-      <div
-        className="w-20 h-20 rounded-full flex items-center justify-center bg-slime-surface border border-slime-border"
-        aria-hidden="true"
-      >
+    <div className="flex flex-col items-center justify-center pt-14 pb-10 gap-3 text-center">
+      <div className="relative w-40 h-40 flex items-center justify-center">
+        {/* Dashed ring — outer */}
+        <div
+          aria-hidden="true"
+          className="absolute rounded-full"
+          style={{
+            width: 160,
+            height: 160,
+            border: "1px dashed rgba(0,240,255,0.25)",
+          }}
+        />
+        {/* Dashed ring — inner */}
+        <div
+          aria-hidden="true"
+          className="absolute rounded-full"
+          style={{
+            width: 112,
+            height: 112,
+            border: "1px dashed rgba(0,240,255,0.35)",
+          }}
+        />
+        {/* Blob */}
         <svg
-          width="32"
-          height="32"
+          width="96"
+          height="96"
+          viewBox="0 0 150 150"
+          fill="none"
+          aria-hidden="true"
+          style={{ filter: "drop-shadow(0 0 20px rgba(204,68,255,0.4))" }}
+        >
+          <defs>
+            <linearGradient id="emptyBlob" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#CC44FF" />
+              <stop offset="1" stopColor="#00F0FF" />
+            </linearGradient>
+          </defs>
+          <path
+            fill="url(#emptyBlob)"
+            d="M62 20 C94 10 134 26 138 62 C142 96 118 130 82 133 C46 136 16 116 15 80 C14 50 32 28 62 20 Z"
+          />
+        </svg>
+        {/* Line sparkles */}
+        <svg
+          width="20"
+          height="20"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="rgba(255,255,255,0.25)"
-          strokeWidth="1.5"
+          stroke="#00F0FF"
+          strokeWidth="2"
           strokeLinecap="round"
-          strokeLinejoin="round"
           aria-hidden="true"
+          className="absolute"
+          style={{ left: 18, top: 22 }}
         >
-          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-          <circle cx="12" cy="12" r="3" />
+          <path d="M12 3v18M3 12h18" />
+        </svg>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#39FF14"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          aria-hidden="true"
+          className="absolute"
+          style={{ right: 20, bottom: 26 }}
+        >
+          <path d="M12 4v16M4 12h16" />
         </svg>
       </div>
-      <p className="text-slime-text font-semibold">Nothing here yet</p>
-      <p className="text-sm text-slime-muted max-w-xs">
-        Follow some slimers to see their logs here.
+      <h3
+        className="text-[22px] font-black tracking-tight text-white mt-3"
+        style={{
+          fontFamily: "Montserrat, sans-serif",
+          letterSpacing: "-0.01em",
+        }}
+      >
+        Nobody&apos;s logging yet
+      </h3>
+      <p className="text-sm text-slime-muted max-w-[280px] leading-snug">
+        When people you follow log a slime, it shows up here.
       </p>
+      <Link
+        href="/discover"
+        className="mt-4 inline-flex items-center gap-1 px-6 py-3 rounded-2xl text-sm font-black"
+        style={{
+          background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+          color: "#0A0A0A",
+          fontFamily: "Montserrat, sans-serif",
+        }}
+      >
+        Find slimers to follow
+      </Link>
     </div>
   );
 }
@@ -539,24 +743,16 @@ export default async function HomePage({
                   <EmptyFeed />
                 )
               ) : (
-                <>
-                  <p className="text-xs text-slime-muted mb-4 font-medium uppercase tracking-wider">
-                    {activeTab === "following"
-                      ? "From people you follow"
-                      : "Recent logs"}{" "}
-                    · {displayLogs.length} shown
-                  </p>
-                  <div className="flex flex-col gap-3">
-                    {displayLogs.map((log) => (
-                      <FeedCard
-                        key={log.id}
-                        log={log}
-                        brandSlugMap={brandSlugMap}
-                        currentUserId={user?.id ?? null}
-                      />
-                    ))}
-                  </div>
-                </>
+                // Feed rework batch 2 (2026-07-11): group logs by day
+                // bucket (Today / This week / Earlier) and interleave
+                // divider labels. Bucketing uses UTC ISO strings so
+                // there's no server/client mismatch — see note at
+                // bucketLogsByDay() call site.
+                <FeedListWithDividers
+                  logs={displayLogs}
+                  brandSlugMap={brandSlugMap}
+                  currentUserId={user?.id ?? null}
+                />
               )}
             </>
           )}
