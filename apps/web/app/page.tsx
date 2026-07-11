@@ -8,6 +8,10 @@ import FeedCard, { type FeedCardLog } from "@/components/FeedCard";
 import PageHeader from "@/components/PageHeader";
 import PageWrapper from "@/components/PageWrapper";
 import OnboardingGate from "@/components/onboarding/OnboardingGate";
+// Feed rework batch 1 (2026-07-11): community stats hero.
+import CommunityStatsHero, {
+  type CommunityStats,
+} from "@/components/feed/CommunityStatsHero";
 
 // ─── Internal query row types ──────────────────────────────────────────────────
 // [Change 1 — #35] These types now describe the profiles_public projection
@@ -452,6 +456,48 @@ export default async function HomePage({
     }
   }
 
+  // ─── Community stats (feed rework batch 1) ────────────────────────────────
+  //
+  // Four counts feed the top-of-feed hero. All four fire in parallel with
+  // { count: "exact", head: true } so we get row counts without pulling
+  // any actual rows. is_public filter on collection_logs matches what the
+  // feed shows publicly. sevenDaysAgo is UTC ISO — matches how
+  // created_at is stored.
+  const sevenDaysAgoIso = new Date(
+    Date.now() - 7 * 24 * 60 * 60 * 1000,
+  ).toISOString();
+
+  const [
+    slimersAllTimeRes,
+    slimersThisWeekRes,
+    slimesAllTimeRes,
+    slimesThisWeekRes,
+  ] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true }),
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", sevenDaysAgoIso),
+    supabase
+      .from("collection_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("is_public", true),
+    supabase
+      .from("collection_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("is_public", true)
+      .gte("created_at", sevenDaysAgoIso),
+  ]);
+
+  const stats: CommunityStats = {
+    slimersAllTime: slimersAllTimeRes.count ?? 0,
+    slimersThisWeek: slimersThisWeekRes.count ?? 0,
+    slimesAllTime: slimesAllTimeRes.count ?? 0,
+    slimesThisWeek: slimesThisWeekRes.count ?? 0,
+  };
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -463,8 +509,15 @@ export default async function HomePage({
       <OnboardingGate />
 
       <div className="pt-14">
-        {/* Feed header */}
+        {/* Feed rework batch 1: community stats hero. Sits above the
+            feed header + tabs. The existing "Community Feed / What the
+            community is logging" label block stays for now — batch 2
+            reworks the header text alongside the FeedCard swap. */}
         <div className="px-4 pt-6 pb-2">
+          <CommunityStatsHero stats={stats} />
+        </div>
+
+        <div className="px-4 pt-4 pb-2">
           <p className="section-label">Community Feed</p>
           <p className="text-sm text-slime-muted mt-1">
             What the community is logging
