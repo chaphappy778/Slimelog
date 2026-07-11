@@ -170,24 +170,25 @@ export default function SettingsPage() {
   async function handleSignOut() {
     if (signOutLoading) return;
     setSignOutLoading(true);
-    // 2026-07-11: the previous flow was
-    //   await signOut() → router.push("/") → router.refresh()
-    // and would frequently freeze after signOut because:
-    //   (a) the useEffect above sees user=null and races to redirect to /login,
-    //   (b) router.push("/") also fires, so two competing navigations queue up,
-    //   (c) router.refresh() re-invalidates while the tree is unmounting.
+    // 2026-07-11 v2: even the previous "await signOut → hard-navigate"
+    // still froze because `supabase.auth.signOut()` (default scope:
+    // "global") makes a network call to Supabase's logout endpoint,
+    // which can hang, and the await block-holds the whole handler.
     //
-    // Now: sign out and hard-navigate with window.location. That
-    // detonates the React tree cleanly and starts a fresh page load with
-    // no residual state or race.
+    // Two changes:
+    //   (a) scope: "local" — clears the local session synchronously
+    //       (cookies + localStorage) without the network round-trip.
+    //       The server-side session eventually times out on its own.
+    //   (b) Promise.race with a 1.5s guard — if for any reason the
+    //       local clear still hangs, we hard-navigate anyway.
     try {
-      await supabase.auth.signOut();
+      await Promise.race([
+        supabase.auth.signOut({ scope: "local" }),
+        new Promise((resolve) => setTimeout(resolve, 1500)),
+      ]);
     } catch (err) {
       console.error("[settings] signOut failed:", err);
-      // Continue to redirect anyway — the local session is stale enough
-      // that reloading /login is better than leaving the user stuck.
     }
-    // Full navigation bypasses React state entirely.
     window.location.href = "/";
   }
 
