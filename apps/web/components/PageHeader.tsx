@@ -91,11 +91,23 @@ export default function PageHeader() {
     <header
       className="fixed top-0 left-0 right-0 z-30 h-14 flex items-center justify-between px-4"
       style={{
-        background: "rgba(10, 10, 10, 0.92)",
-        borderBottom: "1px solid transparent",
-        backgroundClip: "padding-box",
+        // 2026-07-11 (T105 Option A restyle): swapped the solid-black
+        // #0A0A0A background for a translucent purple gradient with
+        // backdrop-blur, so the neon-purple content underneath bleeds
+        // through the bar instead of being cut off by an opaque strip.
+        // The old bar felt like a utility toolbar glued on top of the
+        // app; the new one reads as part of the app's atmosphere.
+        //
+        // Gradient runs from a slightly heavier top (for legibility of
+        // the wordmark against light images / white photos) to a
+        // softer bottom that fades into the page content.
+        background:
+          "linear-gradient(180deg, rgba(15,0,24,0.85) 0%, rgba(15,0,24,0.55) 100%)",
+        backdropFilter: "blur(14px) saturate(140%)",
+        WebkitBackdropFilter: "blur(14px) saturate(140%)",
+        borderBottom: "1px solid rgba(45,10,78,0.55)",
         boxShadow:
-          "0 1px 0 0 rgba(0,240,255,0.15), 0 2px 0 0 rgba(57,255,20,0.08), 0 1px 16px 0 rgba(45,10,78,0.3)",
+          "0 1px 0 0 rgba(0,240,255,0.12), 0 8px 20px 0 rgba(0,0,0,0.35)",
       }}
     >
       {/* [Change 7 — T31] Wrap back button + wordmark in a left-side flex
