@@ -1,4 +1,5 @@
 // apps/web/app/slimes/[id]/page.tsx
+import { cache } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -49,7 +50,13 @@ async function getSupabase() {
 }
 
 // [Change 2 — scent_notes] select("*") already includes scent_notes — no query change needed
-async function fetchLog(id: string): Promise<SlimeLogRecord | null> {
+//
+// T101 (2026-07-10): wrapped in React `cache()` so generateMetadata and
+// the page body share a single query result within one render pass.
+// Without cache(), Supabase client calls aren't deduped by React
+// automatically (only `fetch()` is), so the same log was being pulled
+// twice on every /slimes/[id] load.
+const fetchLog = cache(async (id: string): Promise<SlimeLogRecord | null> => {
   const supabase = await getSupabase();
   const { data } = await supabase
     .from("collection_logs")
@@ -58,7 +65,7 @@ async function fetchLog(id: string): Promise<SlimeLogRecord | null> {
     .eq("is_public", true)
     .maybeSingle();
   return (data as SlimeLogRecord | null) ?? null;
-}
+});
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
 
@@ -139,29 +146,38 @@ export default async function SlimePage({
 
   const supabase = await getSupabase();
 
+  // T101 (2026-07-10): parallelize the fan-out queries. Previously these
+  // ran serially (getUser → owner → brand → likes → log_tags) even though
+  // only the "user like" query actually depends on the current user, and
+  // the rest depend only on log.id / log.user_id / log.brand_name_raw
+  // which we already have from fetchLog.
+  //
+  // getUser stays outside the batch because the user-like query is
+  // conditional on it, but everything else fires concurrently.
   const {
     data: { user },
   } = await supabase.auth.getUser();
   const currentUserId = user?.id ?? null;
 
-  const { data: ownerData } = await supabase
-    .from("profiles_public")
-    .select("username, display_name, avatar_url")
-    .eq("id", log.user_id)
-    .maybeSingle();
-  const owner = ownerData as OwnerProfile | null;
-
-  let brandSlug: string | null = null;
-  if (log.brand_name_raw) {
-    const { data: brandRow } = await supabase
-      .from("brands")
-      .select("slug")
-      .eq("name", log.brand_name_raw)
-      .maybeSingle();
-    brandSlug = (brandRow?.slug as string | undefined) ?? null;
-  }
-
-  const [{ count: likeCount }, { data: userLikeRow }] = await Promise.all([
+  const [
+    ownerRes,
+    brandRes,
+    likeCountRes,
+    userLikeRes,
+    logTagsRes,
+  ] = await Promise.all([
+    supabase
+      .from("profiles_public")
+      .select("username, display_name, avatar_url")
+      .eq("id", log.user_id)
+      .maybeSingle(),
+    log.brand_name_raw
+      ? supabase
+          .from("brands")
+          .select("slug")
+          .eq("name", log.brand_name_raw)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
     supabase
       .from("likes")
       .select("user_id", { count: "exact", head: true })
@@ -174,13 +190,17 @@ export default async function SlimePage({
           .eq("user_id", currentUserId)
           .maybeSingle()
       : Promise.resolve({ data: null }),
+    supabase.from("log_tags").select("tag_id, tags(name)").eq("log_id", log.id),
   ]);
 
-  // [T72+T73] Fetch keywords for this log
-  const { data: logTagsData } = await supabase
-    .from("log_tags")
-    .select("tag_id, tags(name)")
-    .eq("log_id", log.id);
+  const owner = (ownerRes.data as OwnerProfile | null) ?? null;
+  const brandSlug =
+    ((brandRes as { data: { slug?: string } | null }).data?.slug as
+      | string
+      | undefined) ?? null;
+  const { count: likeCount } = likeCountRes;
+  const { data: userLikeRow } = userLikeRes;
+  const { data: logTagsData } = logTagsRes;
 
   const keywords = (logTagsData ?? [])
     .map((lt: any) => (lt.tags as { name: string } | null)?.name)

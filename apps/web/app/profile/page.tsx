@@ -7,6 +7,7 @@ import PageHeader from "@/components/PageHeader";
 import PageWrapper from "@/components/PageWrapper";
 import FloatingPills from "@/components/FloatingPills";
 import ProfileFeaturedSection from "@/components/profile/ProfileFeaturedSection";
+import ShareButton from "@/components/ShareButton";
 import { SLIME_BASE_TYPE_LABELS, type SlimeBaseType } from "@/lib/types";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -398,6 +399,12 @@ export default async function ProfilePage() {
                       </svg>
                       View public profile
                     </Link>
+                    <ShareButton
+                      path={`/users/${rawUsername}`}
+                      title={`@${rawUsername} on SlimeLog`}
+                      text={`My slime collection on SlimeLog — come rate slimes with me.`}
+                      label="Share profile"
+                    />
                   </div>
                 )}
               </div>
