@@ -483,7 +483,12 @@ export default function CollectionPage() {
     <PageWrapper dots glow="cyan">
       <PageHeader />
 
-      <div className="pt-14 px-4 py-6">
+      {/* 2026-07-11: pt bumped from pt-14 (bare header height) to pt-20
+          so the shelf hero has real breathing room under the fixed
+          header. The old `py-6` was overriding pt-14 in Tailwind
+          precedence, leaving effectively 24px of top padding — the
+          "MY SHELF" eyebrow was sitting right on top of the header. */}
+      <div className="pt-20 px-4 pb-6">
         <div className="max-w-md mx-auto">
           {/* Shelf hero (batch A). The old header block — "My Slimes"
               gradient title + counts + wishlist route-away button —
