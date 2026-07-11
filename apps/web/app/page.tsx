@@ -509,19 +509,13 @@ export default async function HomePage({
       <OnboardingGate />
 
       <div className="pt-14">
-        {/* Feed rework batch 1: community stats hero. Sits above the
-            feed header + tabs. The existing "Community Feed / What the
-            community is logging" label block stays for now — batch 2
-            reworks the header text alongside the FeedCard swap. */}
-        <div className="px-4 pt-6 pb-2">
+        {/* Feed rework batch 1 (2026-07-11): community stats hero sits
+            above the feed tabs. The previous "Community Feed / What the
+            community is logging" section-label block was removed since
+            the hero + the renamed "For you"/"Following" tabs carry the
+            page framing on their own. */}
+        <div className="px-4 pt-6 pb-4">
           <CommunityStatsHero stats={stats} />
-        </div>
-
-        <div className="px-4 pt-4 pb-2">
-          <p className="section-label">Community Feed</p>
-          <p className="text-sm text-slime-muted mt-1">
-            What the community is logging
-          </p>
         </div>
 
         <div className="px-4 pb-4">

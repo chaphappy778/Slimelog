@@ -30,7 +30,10 @@ export default function FeedTabs({ activeTab, isLoggedIn }: FeedTabsProps) {
       role="tablist"
       aria-label="Feed tabs"
     >
-      {/* Community — active: green */}
+      {/* For you — active: green.
+          Renamed from "Community" 2026-07-11 as part of the feed rework.
+          Route param stays `?tab=community` (implicit on /) so bookmarks
+          and shared links keep working; only the display label changed. */}
       <button
         role="tab"
         aria-selected={activeTab === "community"}
@@ -44,7 +47,7 @@ export default function FeedTabs({ activeTab, isLoggedIn }: FeedTabsProps) {
         ].join(" ")}
       >
         <Globe className="w-4 h-4" />
-        Community
+        For you
       </button>
 
       {/* Following (logged in) — active: magenta */}

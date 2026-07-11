@@ -13,7 +13,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Users } from "lucide-react";
+import { Users, Droplet } from "lucide-react";
 
 export type CommunityStats = {
   slimersAllTime: number;
@@ -26,29 +26,6 @@ type Range = "all" | "week";
 
 const EASE_OUT_CUBIC = (t: number) => 1 - Math.pow(1 - t, 3);
 const ANIMATION_MS = 1100;
-
-// Small inline slime blob mark — matches the four-ellipse motif used
-// elsewhere in the app. Line-only, no fill, so the color inherits from
-// currentColor and reads as an icon rather than a mascot.
-function SlimeBlobIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      {/* Four overlapping ellipses forming a rough blob */}
-      <ellipse cx="12" cy="10" rx="6.5" ry="6" />
-      <ellipse cx="8" cy="15" rx="4" ry="4" />
-      <ellipse cx="16" cy="15" rx="4" ry="4" />
-    </svg>
-  );
-}
 
 export default function CommunityStatsHero({
   stats,
@@ -104,17 +81,21 @@ export default function CommunityStatsHero({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetSlimers, targetSlimes, animate]);
 
-  // ── Ribbon copy — three states, driven by the ALL-TIME numbers so it
-  //    doesn't feel bland when the user is looking at "this week".
-  const totalSlimers = stats.slimersAllTime;
-  const weeklySlimers = stats.slimersThisWeek;
+  // ── Ribbon copy — first-500-users era stays hard-wired as long as the
+  //    community is under that count (pre-launch). Once we cross 500 the
+  //    banner needs to be flipped to check a per-user is_founder flag on
+  //    the profile (not yet added — the badge/tracking work happens as a
+  //    follow-up before we hit 500). For now, everyone signed in during
+  //    this phase IS in the first 500, so the copy stays true.
+  const totalUsers = stats.slimersAllTime;
+  const weeklyUsers = stats.slimersThisWeek;
   let ribbonText: string;
-  if (totalSlimers > 0 && totalSlimers < 500) {
-    ribbonText = `You're one of the first 500 slimers ✦`;
-  } else if (weeklySlimers > 0) {
-    ribbonText = `${weeklySlimers.toLocaleString()} slimer${weeklySlimers === 1 ? "" : "s"} joined this week ✦`;
+  if (totalUsers < 500) {
+    ribbonText = `You're one of the first 500 users ✦`;
+  } else if (weeklyUsers > 0) {
+    ribbonText = `${weeklyUsers.toLocaleString()} user${weeklyUsers === 1 ? "" : "s"} joined this week ✦`;
   } else {
-    ribbonText = `${totalSlimers.toLocaleString()} slimer${totalSlimers === 1 ? "" : "s"} strong ✦`;
+    ribbonText = `${totalUsers.toLocaleString()} user${totalUsers === 1 ? "" : "s"} strong ✦`;
   }
 
   const rangeButtonClass = (r: Range) =>
@@ -191,15 +172,17 @@ export default function CommunityStatsHero({
       <div className="grid grid-cols-2 gap-3">
         <StatCard
           value={displayedSlimers}
-          label="slimers"
-          icon={<Users className="w-6 h-6" strokeWidth={2} />}
+          label="users"
+          icon={<Users className="w-7 h-7" strokeWidth={2} />}
+          iconColor="#39FF14"
           gradient="linear-gradient(135deg, #39FF14, #00F0FF)"
           glowColor="rgba(57,255,20,0.35)"
         />
         <StatCard
           value={displayedSlimes}
           label="slimes logged"
-          icon={<SlimeBlobIcon className="w-6 h-6" />}
+          icon={<Droplet className="w-7 h-7" strokeWidth={2} />}
+          iconColor="#00F0FF"
           gradient="linear-gradient(135deg, #00F0FF, #FF00E5)"
           glowColor="rgba(0,240,255,0.35)"
         />
@@ -247,12 +230,14 @@ function StatCard({
   value,
   label,
   icon,
+  iconColor,
   gradient,
   glowColor,
 }: {
   value: number;
   label: string;
   icon: React.ReactNode;
+  iconColor: string;
   gradient: string;
   glowColor: string;
 }) {
@@ -278,20 +263,16 @@ function StatCard({
           opacity: 0.7,
         }}
       />
+      {/* Icon — solid stroke color with a matching glow drop-shadow so
+          it reads as a lit neon glyph rather than as a flat outline. */}
       <div
-        className="relative flex items-center gap-2"
-        style={{ color: "rgba(255,255,255,0.85)" }}
+        className="relative"
+        style={{
+          color: iconColor,
+          filter: `drop-shadow(0 0 8px ${iconColor}80)`,
+        }}
       >
-        <span
-          style={{
-            background: gradient,
-            WebkitBackgroundClip: "text",
-            backgroundClip: "text",
-            color: "transparent",
-          }}
-        >
-          {icon}
-        </span>
+        {icon}
       </div>
       <div
         className="relative mt-3 text-4xl font-black leading-none"
