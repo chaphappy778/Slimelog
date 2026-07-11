@@ -63,11 +63,12 @@ Strategic and planning documents that inform work below. Refresh from these befo
 | 34 | Profile completeness nudge | MEDIUM | READY | Prompt to add avatar, bio. |
 | 44 | Brand dashboard subscription card | MEDIUM | READY | Show current tier + upgrade CTA. |
 | 45 | Public profile Brands tried tile | MEDIUM | READY | Scroll-through list of brands in collection. |
+| 47 | User-submitted brand additions | MEDIUM | READY | 2026-07-10. Users need a way to submit a slime brand that doesn't exist in the catalog. Likely a "Suggest a brand" button/CTA on /brands (the discovery list) that opens a small form: brand name, website/socials, why it should be added. Submissions go to a pending queue for admin review before appearing publicly (avoids spam / duplicate brand pollution). Ties into brand claims flow — once approved, the original brand submitter could be tagged as the discovery source. |
 | T35 | Slime of the Week/Month/Year | MEDIUM | DEFERRED | Major engagement feature. Defer post-launch but design data structures now. |
-| T36 | Wizard step-1 escape behavior | MEDIUM | READY | Chat 8. Back button on /log step 0 only. Out of scope for T31. |
+| T36 | Wizard step-1 escape behavior | MEDIUM | WON'T DO | 2026-07-11: decided against adding a back button on /log step 0. Users navigate away via the nav menu. |
 | T47 | Email editing during claim flow step 1 | MEDIUM | READY | Chat 9. PATCH existing pending claim instead of forcing restart on typo. |
 | T51 | Standardized rejection reason dropdown | MEDIUM | READY | Chat 9. 5 standardized reasons + Other (please specify) for admin reject UX. |
-| T52 | Hide consumer bottom nav on admin pages | MEDIUM | READY | Chat 9. BottomNavWrapper should detect /admin/* and return null. |
+| T52 | Hide consumer bottom nav on admin pages | MEDIUM | DONE | Verified 2026-07-11: BottomNavWrapper already short-circuits for `/admin` and `/admin/*` (line 35). Was implemented in bundle C. |
 | T99 | Signup page copy polish | MEDIUM | READY | 2026-07-10. "few slime names + n46 others" microcopy needs upgrade. Feels placeholder-y. Rework during launch-prep polish sprint. |
 | T100 | SlimesSplitPanel full-screen edit form | MEDIUM | READY | 2026-07-09. Currently centered modal (Option B); Option C = full-screen edit page on mobile. Post-audit polish. |
 | T101 | Slime detail card load perf | MEDIUM | DONE (server-side) | 2026-07-10: (a) wrapped fetchLog in React `cache()` so generateMetadata + page body share one query result instead of two. (b) Parallelized the follow-up fan-out (owner + brand + likes count + user-like + log_tags) into a single Promise.all instead of a 5-step serial waterfall. DevTools also revealed client-side duplication (see T104). |
@@ -96,7 +97,7 @@ Strategic and planning documents that inform work below. Refresh from these befo
 
 | # | Issue | Priority | Status | Notes |
 | --- | --- | --- | --- | --- |
-| T2 | Discover page threshold | TECH DEBT | READY | Raise total_ratings >= 1 to >= 3 before launch. |
+| T2 | Discover page threshold | TECH DEBT | DONE | Verified 2026-07-11: /discover top-rated slimes query already uses `.gte("total_ratings", 3)` (page.tsx line 41). No other discover subpage filters by rating count. |
 | T3 | Brand association for legacy logs | TECH DEBT | DEFERRED | No brand_id FK on pre-BrandSearchInput logs. |
 | T4 | Recharts width/height warnings | TECH DEBT | DEFERRED | width(-1)/height(-1) in dev console. |
 | T7 | Admin reports RLS | TECH DEBT | READY | Allows all auth users to read reports. |
