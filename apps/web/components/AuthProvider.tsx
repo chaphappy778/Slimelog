@@ -82,32 +82,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<AuthProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const bootstrap = useMemo(
-    () =>
-      async function () {
-        const { data } = await supabase.auth.getUser();
-        setUser(data.user);
-        if (data.user) {
-          const p = await loadProfile(data.user.id);
-          setProfile(p);
-        } else {
-          setProfile(null);
-        }
-        setLoading(false);
-      },
-    [],
-  );
-
+  // 2026-07-11: bootstrap now uses getSession() (reads from cookies, no
+  // network round-trip) rather than getUser() (which validates the token
+  // against Supabase's auth server and can hang on slow networks or
+  // just-completed OAuth handoffs, leaving PageHeader + SlimeMenu +
+  // BottomNavWrapper stuck showing "nothing on the right" because
+  // loading never flips to false). onAuthStateChange still fires
+  // INITIAL_SESSION so freshness is preserved across the app.
+  //
+  // Also guarded by a 6-second safety timeout: if neither the initial
+  // getSession nor onAuthStateChange has resolved by then, force
+  // loading=false and let the tree render with whatever we've got
+  // (worst case: user renders as null and hits the "Log In" state, which
+  // is recoverable via refresh — infinitely better than a frozen page).
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      await bootstrap();
+      const { data } = await supabase.auth.getSession();
       if (cancelled) return;
+      const sessionUser = data.session?.user ?? null;
+      setUser(sessionUser);
+      if (sessionUser) {
+        const p = await loadProfile(sessionUser.id);
+        if (!cancelled) setProfile(p);
+      }
+      if (!cancelled) setLoading(false);
     })();
 
-    // Stay in sync with sign-in / sign-out from other tabs, from the
-    // PASSWORD_RECOVERY flow, or from the settings page's Sign Out button.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -120,24 +122,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setProfile(null);
       }
+      if (!cancelled) setLoading(false);
     });
+
+    const failSafeTimer = setTimeout(() => {
+      if (!cancelled) setLoading(false);
+    }, 6000);
 
     return () => {
       cancelled = true;
       subscription.unsubscribe();
+      clearTimeout(failSafeTimer);
     };
-  }, [bootstrap]);
+  }, []);
+
+  const refresh = useMemo(
+    () =>
+      async function () {
+        const { data } = await supabase.auth.getSession();
+        const sessionUser = data.session?.user ?? null;
+        setUser(sessionUser);
+        setProfile(sessionUser ? await loadProfile(sessionUser.id) : null);
+      },
+    [],
+  );
 
   const value = useMemo<AuthContextValue>(
-    () => ({
-      user,
-      profile,
-      loading,
-      refresh: async () => {
-        await bootstrap();
-      },
-    }),
-    [user, profile, loading, bootstrap],
+    () => ({ user, profile, loading, refresh }),
+    [user, profile, loading, refresh],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
