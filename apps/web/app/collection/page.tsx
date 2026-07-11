@@ -21,6 +21,9 @@ import CollectionFilterPills, {
   type FilterKey,
   type SortKey,
 } from "@/components/collection/CollectionFilterPills";
+// Collection rework batch B (2026-07-11):
+import TasteInsights from "@/components/collection/TasteInsights";
+import CollectionCard from "@/components/collection/CollectionCard";
 
 type View = "cards" | "spiral" | "galaxy";
 
@@ -29,6 +32,10 @@ export type LikeDataMap = Record<
   { likeCount: number; commentCount: number; isLiked: boolean }
 >;
 
+// 2026-07-11: formatDate + RatingDots + inline SlimeCard were all
+// consumed only by the tall SlimeCard treatment that batch B replaced
+// with <CollectionCard>. Left in place to keep this diff surgical —
+// they'll get pruned in a follow-up cleanup pass.
 function formatDate(iso: string) {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -503,6 +510,18 @@ export default function CollectionPage() {
             <ViewToggle active={view} onChange={setView} />
           )}
 
+          {/* Taste insights card (batch B): 6-axis radar + base-type
+              bars, Cards view only, only shown once the user has at
+              least one rated owned log so we're not rendering an empty
+              radar. */}
+          {!loading &&
+            !error &&
+            view === "cards" &&
+            logs.some(
+              (l) =>
+                !l.in_wishlist && typeof l.rating_overall === "number",
+            ) && <TasteInsights logs={logs} />}
+
           {/* Feed-style filter pills + inline sort — Cards view only. */}
           {!loading && !error && logs.length > 0 && view === "cards" && (
             <CollectionFilterPills
@@ -541,9 +560,14 @@ export default function CollectionPage() {
           {!loading && !error && logs.length > 0 && (
             <>
               {view === "cards" && sorted.length > 0 && (
-                <div className="flex flex-col gap-4 mt-2">
+                // Batch B: compact CollectionCard replaces the tall
+                // inline SlimeCard treatment. Tighter list (~5 per
+                // screen) suited for scanning a large personal shelf;
+                // the full ratings grid + notes body live on
+                // /slimes/[id] behind the row tap.
+                <div className="flex flex-col gap-2 mt-2">
                   {sorted.map((log) => (
-                    <SlimeCard key={log.id} log={log} />
+                    <CollectionCard key={log.id} log={log} />
                   ))}
                 </div>
               )}
