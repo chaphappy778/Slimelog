@@ -152,7 +152,9 @@ function ResetPasswordPageInner() {
         return;
       }
 
-      router.push("/login?reset=success");
+      // 2026-07-11: hard-navigate to avoid the router.push race with
+      // AuthProvider re-renders after updateUser triggers a session update.
+      window.location.href = "/login?reset=success";
     });
   }
 

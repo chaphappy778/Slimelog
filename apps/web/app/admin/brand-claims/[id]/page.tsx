@@ -287,34 +287,10 @@ export default async function AdminBrandClaimReviewPage({
       <PageHeader />
 
       <main className="pt-20 pb-24 px-4 max-w-4xl mx-auto">
-        {/* Back + breadcrumb */}
+        {/* 2026-07-11: inline back button removed — PageHeader now renders
+            it via BACK_BUTTON_ROUTES (falls back to /admin/brand-claims
+            via the nav-history stack). Was showing two back buttons. */}
         <div className="flex items-center gap-3 mb-6">
-          <Link
-            href="/admin/brand-claims"
-            aria-label="Back to brand claims"
-            className="flex items-center justify-center transition-colors"
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 10,
-              background: "rgba(10,0,20,0.55)",
-              border: "1px solid rgba(255,255,255,0.12)",
-              color: "#FFFFFF",
-            }}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="w-5 h-5"
-            >
-              <path d="M19 12H5" />
-              <path d="M12 19l-7-7 7-7" />
-            </svg>
-          </Link>
           <div className="min-w-0">
             <h1
               className="text-2xl font-black tracking-tight"

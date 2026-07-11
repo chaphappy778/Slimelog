@@ -3,13 +3,12 @@
 
 import { useState, useTransition, Suspense } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import FloatingPills from "@/components/FloatingPills";
 import { safeRedirect } from "@/lib/safe-redirect"; // [Change 1 — #35]
 
 function LoginPageInner() {
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   // [Change 2 — #35] Validate the `next` param against open-redirect
@@ -36,9 +35,13 @@ function LoginPageInner() {
         setError(error.message);
         return;
       }
-      // [Change 3 — #35] Push validated `next` instead of raw param.
-      router.push(next);
-      router.refresh();
+      // 2026-07-11: hard-navigate rather than router.push + router.refresh.
+      // The router.push/refresh combo raced with AuthProvider's
+      // onAuthStateChange (SIGNED_IN) re-render cascade + the middleware
+      // proxy redirecting authed users off /login → /, and left the
+      // login form spinning indefinitely. Full navigation forces a clean
+      // React tree on the destination.
+      window.location.href = next;
     });
   }
 

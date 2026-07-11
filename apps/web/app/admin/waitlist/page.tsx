@@ -4,6 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isAdminUser } from "@/lib/is-admin-check";
 import PageWrapper from "@/components/PageWrapper";
+// 2026-07-11: PageHeader added so the shared back-button route (via
+// BACK_BUTTON_ROUTES → /^\/admin\/waitlist$/ in PageHeader.tsx) actually
+// renders. Was missing before; page had no way to navigate back to /admin.
+import PageHeader from "@/components/PageHeader";
 import ExportCSV from "./ExportCSV";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -148,7 +152,8 @@ export default async function WaitlistAdminPage() {
 
   return (
     <PageWrapper glow="magenta">
-      <div className="px-4 py-8 max-w-5xl mx-auto">
+      <PageHeader />
+      <div className="pt-20 px-4 py-8 max-w-5xl mx-auto">
         {/* ── Header row ── */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-baseline gap-3">
