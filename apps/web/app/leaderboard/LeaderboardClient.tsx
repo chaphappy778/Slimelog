@@ -12,10 +12,20 @@ import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
 import type { SlimeBaseType } from "@/lib/types";
 import BrandSelector from "@/components/leaderboard/BrandSelector";
 import BrandTile from "@/components/leaderboard/BrandTile";
+import type { LeaderboardWindow } from "@/components/leaderboard/BrandTile";
 import RankedList from "@/components/leaderboard/RankedList";
 import LoadingSkeleton from "@/components/leaderboard/LoadingSkeleton";
 import EmptyState from "@/components/leaderboard/EmptyState";
 import YourRankCard from "@/components/leaderboard/YourRankCard";
+
+// Beginning of the current calendar month in the viewer's local tz.
+// Used to scope "This month" queries. Recomputed once per mount — good
+// enough; nobody's page will be open across month boundaries where a
+// stale value matters.
+function startOfThisMonthISO(): string {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+}
 
 // ─── Shared types (re-exported from page.tsx) ─────────────────────────
 
@@ -87,25 +97,39 @@ export default function LeaderboardClient({
   // Track whether we've mounted so we don't refire the fetch for the
   // initial signature brand (which already has server-rendered data).
   const [hasMounted, setHasMounted] = useState<boolean>(false);
+  // 2026-07-11: time window toggle. Server-hydrated data is always
+  // all-time, so switching to this_month triggers a refetch even for
+  // the signature brand.
+  const [activeWindow, setActiveWindow] =
+    useState<LeaderboardWindow>("all_time");
 
   useEffect(() => {
     setHasMounted(true);
   }, []);
 
   const fetchBrandData = useCallback(
-    async (brand: LeaderboardBrand) => {
+    async (brand: LeaderboardBrand, window: LeaderboardWindow) => {
       const supabase = createClient();
 
-      const { data: rawRows, error } = await supabase
+      // Base query — all public logs for this brand. When the window
+      // is "this_month" we add a created_at >= startOfMonth filter so
+      // the counts scope down. See docs/cost-tracker.md for scaling
+      // notes on this query shape.
+      let query = supabase
         .from("collection_logs")
         .select("user_id, base_type")
         .eq("is_public", true)
         .ilike("brand_name_raw", brand.name_raw);
+      if (window === "this_month") {
+        query = query.gte("created_at", startOfThisMonthISO());
+      }
+      const { data: rawRows, error } = await query;
 
       if (error) {
         console.warn(
           "[leaderboard] failed to refetch brand rankings",
           brand.name_raw,
+          window,
           error,
         );
         return;
@@ -232,13 +256,14 @@ export default function LeaderboardClient({
     [currentUserId],
   );
 
-  // Refetch when the user picks a new brand. Skip the initial mount
-  // since the server component already hydrated the signature brand.
+  // Refetch when the user picks a new brand OR switches window.
+  // Skip the initial mount for the initial brand + "all_time" window
+  // since the server component already hydrated that combination.
   useEffect(() => {
     if (!hasMounted) return;
     let cancelled = false;
     setLoading(true);
-    fetchBrandData(selectedBrand)
+    fetchBrandData(selectedBrand, activeWindow)
       .catch((err) => {
         console.warn("[leaderboard] refetch threw", err);
       })
@@ -249,7 +274,7 @@ export default function LeaderboardClient({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBrand.key]);
+  }, [selectedBrand.key, activeWindow]);
 
   const handleSelect = (brand: LeaderboardBrand) => {
     if (brand.key === selectedBrand.key) return;
@@ -287,10 +312,10 @@ export default function LeaderboardClient({
             brand={selectedBrand}
             communityTotal={communityTotal}
             leader={top20[0] ?? null}
+            window={activeWindow}
+            onWindowChange={setActiveWindow}
           />
         </div>
-
-        {/* TODO(v1.5): time window toggle — see T107 */}
 
         <div className="mt-6">
           {loading ? (

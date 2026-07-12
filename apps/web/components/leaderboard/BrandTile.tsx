@@ -1,19 +1,28 @@
 // apps/web/components/leaderboard/BrandTile.tsx
-// T107 (2026-07-11): Community header for the selected brand on the
-// leaderboard page. Mini galaxy viz + brand name + logger count +
-// giant gradient community total, plus a Champion strip for rank 1.
+// T107 (2026-07-11 v2): Community header for the selected brand on the
+// leaderboard page. Reworked to match the mockup:
 //
-// 2026-07-11 refinement:
-//   - Top block (identity row + community total) is a Link to
-//     /brands/[slug] when the brand is catalogued.
-//   - Bottom "Champion" strip is a sibling Link to /users/[username]
-//     when a leader exists (nested anchors are avoided by keeping the
-//     two Links as siblings inside the shared card shell).
-//   - Base type fragment is dropped from the subline — the tile
-//     aggregates every log for the brand regardless of base type.
-//   - The old flat 56x56 logo tile is replaced with an 84x84 SVG
-//     "mini galaxy": brand-coloured dashed orbits with deterministic
-//     satellite dots orbiting around a static hub (logo or letter).
+//   ┌───────────────────────────┐
+//   │      hero galaxy          │  ← animated satellites, brand-tinted
+//   │   ✦ orbiting  hub  ✦      │
+//   │                           │
+//   │  [🏆 SLIMEQUEEN'S GALAXY] │  ← rainbow pill overlaying the viz
+//   │                           │
+//   │ [logo] Cloud Nine  ▾      │  ← identity row → /brands/[slug]
+//   │        Butter base · N loggers
+//   │                           │
+//   │ 18,420 logs by the community 💧
+//   │                           │
+//   │ [All time]  [This month]  │  ← time window toggle
+//   └───────────────────────────┘
+//
+// The tile now does two jobs at once:
+//   1. Show the brand's community totals (all time / this month)
+//   2. Call out the top logger, whose "galaxy" the hero visual IS
+//
+// Under the hood: same anti-AI-art geometry (SVG orbits + satellite
+// dots, no character art), density scales with the champion's log
+// count so a heavy hitter's galaxy looks bigger.
 
 "use client";
 
@@ -24,214 +33,226 @@ import type {
   LeaderboardEntry,
 } from "@/app/leaderboard/LeaderboardClient";
 
+export type LeaderboardWindow = "all_time" | "this_month";
+
 interface Props {
   brand: LeaderboardBrand;
   communityTotal: number;
   leader: LeaderboardEntry | null;
+  window: LeaderboardWindow;
+  onWindowChange: (w: LeaderboardWindow) => void;
 }
-
-const GOLD = "#FFD24A";
 
 function formatNumber(n: number): string {
   return new Intl.NumberFormat("en-US").format(n);
 }
 
-export default function BrandTile({ brand, communityTotal, leader }: Props) {
-  const logger_word = brand.logger_count === 1 ? "logger" : "loggers";
-
-  const topBlock = (
-    <>
-      <div className="flex items-center gap-3">
-        <MiniGalaxy brand={brand} size={84} />
-        <div className="min-w-0 flex-1">
-          <h2
-            className="text-white truncate"
-            style={{
-              fontFamily: "Montserrat, sans-serif",
-              fontWeight: 900,
-              fontSize: 22,
-              letterSpacing: "-0.01em",
-              lineHeight: 1.15,
-            }}
-          >
-            {brand.name}
-          </h2>
-          <p
-            className="text-xs truncate"
-            style={{ color: "rgba(255,255,255,0.55)" }}
-          >
-            {formatNumber(brand.logger_count)} {logger_word}
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-4">
-        <div
-          style={{
-            fontFamily: "Montserrat, sans-serif",
-            fontWeight: 900,
-            fontSize: 44,
-            letterSpacing: "-0.02em",
-            lineHeight: 1,
-            background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text",
-          }}
-        >
-          {formatNumber(communityTotal)}
-        </div>
-        <p
-          className="text-sm mt-1"
-          style={{ color: "rgba(245,245,245,0.7)" }}
-        >
-          logs by the community <span aria-hidden="true">{"\u{1F4A7}"}</span>
-        </p>
-        <p
-          className="text-[11px] mt-1"
-          style={{
-            color: "rgba(245,245,245,0.4)",
-            fontWeight: 700,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-          }}
-        >
-          All time
-        </p>
-      </div>
-    </>
-  );
-
-  const topWrapped = brand.slug ? (
-    <Link
-      href={`/brands/${brand.slug}`}
-      className="block active:scale-[0.99] transition-transform"
-    >
-      {topBlock}
-    </Link>
-  ) : (
-    <div>{topBlock}</div>
-  );
+export default function BrandTile({
+  brand,
+  communityTotal,
+  leader,
+  window,
+  onWindowChange,
+}: Props) {
+  const loggerWord = brand.logger_count === 1 ? "logger" : "loggers";
+  const basePrefix = brand.base_type_label
+    ? `${brand.base_type_label} base · `
+    : "";
 
   return (
     <div
-      className="rounded-3xl p-4"
+      className="rounded-3xl overflow-hidden"
       style={{
-        background: "rgba(45,10,78,0.3)",
+        background:
+          "radial-gradient(120% 100% at 50% 0%, rgba(120,40,180,0.28), rgba(45,10,78,0.3) 62%)",
         border: "1px solid rgba(45,10,78,0.7)",
       }}
     >
-      {topWrapped}
+      {/* ── Hero galaxy + champion pill overlay ───────────────────── */}
+      <div
+        style={{
+          position: "relative",
+          padding: "26px 16px 18px",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <HeroGalaxy brand={brand} leaderCount={leader?.count ?? 0} />
+        {leader && <ChampionPill username={leader.username} />}
+      </div>
 
-      {leader && (
-        <>
-          <div
-            className="mt-4"
+      {/* ── Brand identity row → /brands/[slug] ───────────────────── */}
+      <BrandIdentityRow
+        brand={brand}
+        subline={`${basePrefix}${formatNumber(brand.logger_count)} ${loggerWord}`}
+      />
+
+      {/* ── Community total ───────────────────────────────────────── */}
+      <div style={{ padding: "12px 16px 6px" }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+          <span
             style={{
-              height: 1,
-              background: "rgba(45,10,78,0.7)",
-              width: "100%",
+              fontFamily: "Montserrat, sans-serif",
+              fontWeight: 900,
+              fontSize: 40,
+              letterSpacing: "-0.02em",
+              lineHeight: 1,
+              background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
             }}
-          />
-          <ChampionStrip brand={brand} leader={leader} />
-        </>
-      )}
+          >
+            {formatNumber(communityTotal)}
+          </span>
+          <span
+            style={{
+              color: "rgba(245,245,245,0.75)",
+              fontSize: 13,
+              lineHeight: 1.25,
+              fontWeight: 600,
+            }}
+          >
+            logs by the
+            <br />
+            community{" "}
+            <span aria-hidden="true">{"\u{1F4A7}"}</span>
+          </span>
+        </div>
+      </div>
+
+      {/* ── Time window toggle ────────────────────────────────────── */}
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          padding: "10px 16px 18px",
+        }}
+      >
+        <TimeButton
+          active={window === "all_time"}
+          onClick={() => onWindowChange("all_time")}
+        >
+          All time
+        </TimeButton>
+        <TimeButton
+          active={window === "this_month"}
+          onClick={() => onWindowChange("this_month")}
+        >
+          This month
+        </TimeButton>
+      </div>
     </div>
   );
 }
 
-// ─── Champion strip ───────────────────────────────────────────────────
+// ─── Brand identity row ─────────────────────────────────────────────
 
-function ChampionStrip({
+function BrandIdentityRow({
   brand,
-  leader,
+  subline,
 }: {
   brand: LeaderboardBrand;
-  leader: LeaderboardEntry;
+  subline: string;
 }) {
-  return (
-    <Link
-      href={`/users/${leader.username}`}
-      className="block mt-3 active:scale-[0.99] transition-transform"
+  const inner = (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "4px 16px 0",
+      }}
     >
-      <div
-        style={{
-          fontSize: 10,
-          fontWeight: 800,
-          letterSpacing: "0.14em",
-          textTransform: "uppercase",
-          color: GOLD,
-          marginBottom: 6,
-        }}
-      >
-        The {brand.name} Champion
-      </div>
-      <div className="flex items-center gap-3">
-        <CrownIcon />
-        <LeaderAvatar entry={leader} />
-        <div className="min-w-0 flex-1">
-          <div
-            className="text-sm truncate text-white"
+      <BrandLogoTile brand={brand} size={56} />
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <h2
+            className="truncate"
             style={{
+              margin: 0,
               fontFamily: "Montserrat, sans-serif",
-              fontWeight: 600,
+              fontWeight: 900,
+              fontSize: 24,
+              color: "#FFFFFF",
+              letterSpacing: "-0.02em",
+              lineHeight: 1.1,
             }}
           >
-            @{leader.username}
-          </div>
+            {brand.name}
+          </h2>
+          {brand.slug && (
+            <svg
+              width={18}
+              height={18}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="rgba(255,255,255,0.45)"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              style={{ flexShrink: 0 }}
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          )}
         </div>
-        <div
+        <p
+          className="truncate"
           style={{
-            fontFamily: "Montserrat, sans-serif",
-            fontWeight: 900,
-            fontSize: 15,
-            color: GOLD,
-            flexShrink: 0,
+            margin: 0,
+            marginTop: 2,
+            color: "rgba(245,245,245,0.6)",
+            fontSize: 12.5,
           }}
         >
-          {formatNumber(leader.count)} logs
-        </div>
+          {subline}
+        </p>
       </div>
-    </Link>
+    </div>
   );
+
+  if (brand.slug) {
+    return (
+      <Link
+        href={`/brands/${brand.slug}`}
+        className="block active:scale-[0.99] transition-transform"
+      >
+        {inner}
+      </Link>
+    );
+  }
+  return <div>{inner}</div>;
 }
 
-function CrownIcon() {
-  return (
-    <svg
-      width={22}
-      height={22}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke={GOLD}
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      style={{ flexShrink: 0 }}
-    >
-      <path d="M2 4l3 12h14l3-12-6 7-4-9-4 9-6-7z" />
-    </svg>
-  );
-}
-
-function LeaderAvatar({ entry }: { entry: LeaderboardEntry }) {
-  const size = 32;
-  if (entry.avatar_url) {
+function BrandLogoTile({
+  brand,
+  size,
+}: {
+  brand: LeaderboardBrand;
+  size: number;
+}) {
+  const color = brandColor(brand.name_raw);
+  const letter = (brand.name || brand.name_raw).trim().charAt(0).toUpperCase();
+  if (brand.logo_url) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={entry.avatar_url}
+        src={brand.logo_url}
         alt=""
         width={size}
         height={size}
         style={{
           width: size,
           height: size,
-          borderRadius: "50%",
+          borderRadius: 14,
           objectFit: "cover",
           flexShrink: 0,
-          background: "rgba(0,0,0,0.4)",
+          background: "rgba(0,0,0,0.3)",
+          border: `1px solid ${color}`,
+          boxShadow: `0 0 14px ${hexToRgba(color, 0.35)}`,
         }}
       />
     );
@@ -242,18 +263,143 @@ function LeaderAvatar({ entry }: { entry: LeaderboardEntry }) {
       style={{
         width: size,
         height: size,
-        borderRadius: "50%",
-        background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+        borderRadius: 14,
+        background: color,
+        color: "#04110A",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
         flexShrink: 0,
+        fontFamily: "Montserrat, sans-serif",
+        fontWeight: 900,
+        fontSize: 26,
+        border: "1px solid rgba(255,255,255,0.15)",
+        boxShadow: `0 0 14px ${hexToRgba(color, 0.35)}`,
       }}
-    />
+    >
+      {letter || "?"}
+    </div>
   );
 }
 
-// ─── Mini galaxy viz ──────────────────────────────────────────────────
-// Pure SVG geometry (per anti-AI-art rule) — no character illustrations.
-// Central hub (brand logo or letter fallback) stays put; orbit rings and
-// satellite dots rotate together in a slow drift on non-reduced-motion.
+// ─── Champion pill ──────────────────────────────────────────────────
+// Sits at the bottom of the hero galaxy, calling out whose collection
+// the visual represents. Rainbow gradient reads celebratory without
+// stealing focus from the giant number below.
+
+function ChampionPill({ username }: { username: string }) {
+  return (
+    <Link
+      href={`/users/${username}`}
+      style={{
+        position: "absolute",
+        left: "50%",
+        bottom: 6,
+        transform: "translateX(-50%)",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "8px 16px",
+        borderRadius: 999,
+        background:
+          "linear-gradient(90deg, #39FF14 0%, #00F0FF 32%, #FF00E5 62%, #FFAE3B 100%)",
+        color: "#0B0114",
+        fontFamily: "Montserrat, sans-serif",
+        fontWeight: 900,
+        fontSize: 13,
+        letterSpacing: "0.05em",
+        textTransform: "uppercase",
+        textDecoration: "none",
+        whiteSpace: "nowrap",
+        boxShadow:
+          "0 0 22px rgba(255,0,229,0.35), 0 8px 22px rgba(0,0,0,0.35)",
+        maxWidth: "90%",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+      }}
+    >
+      <TrophyIcon />
+      <span
+        style={{
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {username}&apos;s galaxy
+      </span>
+    </Link>
+  );
+}
+
+function TrophyIcon() {
+  return (
+    <svg
+      width={14}
+      height={14}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#0B0114"
+      strokeWidth={2.2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{ flexShrink: 0 }}
+    >
+      <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+      <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+      <path d="M4 22h16" />
+      <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+      <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+      <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+    </svg>
+  );
+}
+
+// ─── Time window toggle ────────────────────────────────────────────
+
+function TimeButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="transition-colors"
+      style={{
+        padding: "8px 16px",
+        borderRadius: 999,
+        fontSize: 13,
+        fontWeight: 800,
+        letterSpacing: "-0.005em",
+        fontFamily: "Montserrat, sans-serif",
+        cursor: "pointer",
+        color: active ? "#04110A" : "rgba(245,245,245,0.85)",
+        background: active
+          ? "linear-gradient(135deg, #39FF14, #00F0FF)"
+          : "rgba(45,10,78,0.5)",
+        border: active
+          ? "1px solid transparent"
+          : "1px solid rgba(255,255,255,0.15)",
+        boxShadow: active ? "0 0 14px rgba(57,255,20,0.35)" : "none",
+      }}
+      aria-pressed={active}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ─── Hero galaxy viz ────────────────────────────────────────────────
+// Bigger sibling of MiniGalaxy. Central hub (brand logo/letter) is
+// static; orbit rings and satellite dots rotate slowly. Density scales
+// with the champion's log count so a deep-collector's galaxy visibly
+// out-shines a casual one.
 
 interface Satellite {
   x: number;
@@ -262,12 +408,18 @@ interface Satellite {
   opacity: number;
 }
 
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 function seededSatellites(
   seed: string,
   radii: readonly number[],
   count: number,
 ): Satellite[] {
-  // Deterministic PRNG (mulberry32 with a djb2-ish int hash seed).
   let h = 0;
   for (let i = 0; i < seed.length; i++) {
     h = (h * 31 + seed.charCodeAt(i)) | 0;
@@ -285,37 +437,49 @@ function seededSatellites(
   for (let i = 0; i < count; i++) {
     const ringIdx = i % radii.length;
     const orbitR = radii[ringIdx];
-    // Evenly-ish spaced base angle + jitter so brands still feel distinct.
     const baseAngle = (i / count) * Math.PI * 2;
-    const jitter = (rand() - 0.5) * 1.0;
+    const jitter = (rand() - 0.5) * 0.8;
     const angle = baseAngle + jitter;
+    // Small radial wobble so satellites don't sit perfectly on the ring
+    const radialWobble = (rand() - 0.5) * 4;
+    const r = orbitR + radialWobble;
     results.push({
-      x: Math.cos(angle) * orbitR,
-      y: Math.sin(angle) * orbitR,
-      r: 1.6 + rand() * 1.6,
-      opacity: 0.55 + rand() * 0.35,
+      x: Math.cos(angle) * r,
+      y: Math.sin(angle) * r,
+      r: 1.8 + rand() * 2.4,
+      opacity: 0.55 + rand() * 0.4,
     });
   }
   return results;
 }
 
-function MiniGalaxy({
+function HeroGalaxy({
   brand,
-  size,
+  leaderCount,
 }: {
   brand: LeaderboardBrand;
-  size: number;
+  leaderCount: number;
 }) {
   const color = brandColor(brand.name_raw);
+  const size = 240;
   const center = size / 2;
-  const hubDiameter = Math.round(size * 0.4); // ~34 for size 84
-  const innerR = Math.round(size * 0.34); // ~29
-  const outerR = Math.round(size * 0.46); // ~39
+  const hubDiameter = 76;
+
+  // Three orbit rings + one wide sparse outer edge.
+  const ringR1 = 60;
+  const ringR2 = 82;
+  const ringR3 = 104;
+
+  // Satellite count scales with leader depth: 18 baseline for a low-log
+  // champion, up to ~48 for a heavy hitter (30+ logs). Caps so we don't
+  // over-crowd the viz on very active brands.
+  const satCount = Math.min(48, 18 + Math.round(leaderCount * 0.6));
   const satellites = seededSatellites(
-    brand.name_raw || brand.name,
-    [innerR, outerR, innerR, outerR, innerR, outerR],
-    6,
+    (brand.name_raw || brand.name) + "|hero",
+    [ringR1, ringR2, ringR3, ringR2, ringR1, ringR3],
+    satCount,
   );
+
   const letter = (brand.name || brand.name_raw).trim().charAt(0).toUpperCase();
 
   return (
@@ -328,6 +492,17 @@ function MiniGalaxy({
         flexShrink: 0,
       }}
     >
+      {/* Ambient halo behind the whole thing */}
+      <div
+        style={{
+          position: "absolute",
+          inset: -20,
+          borderRadius: "50%",
+          background: `radial-gradient(circle at 50% 50%, ${hexToRgba(color, 0.18)} 0%, ${hexToRgba(color, 0.04)} 55%, transparent 78%)`,
+          pointerEvents: "none",
+        }}
+      />
+
       <svg
         width={size}
         height={size}
@@ -341,28 +516,55 @@ function MiniGalaxy({
         }}
       >
         <g className="slime-orbit-rotate">
-          {/* Outer orbit */}
+          {/* Outer orbit — most decorative */}
           <circle
             cx={center}
             cy={center}
-            r={outerR}
+            r={ringR3}
             stroke={color}
-            strokeOpacity={0.35}
+            strokeOpacity={0.28}
             strokeWidth={1}
-            strokeDasharray="3 4"
+            strokeDasharray="3 5"
             fill="none"
           />
-          {/* Inner orbit */}
+          {/* Middle orbit */}
           <circle
             cx={center}
             cy={center}
-            r={innerR}
+            r={ringR2}
+            stroke={color}
+            strokeOpacity={0.38}
+            strokeWidth={1}
+            strokeDasharray="2 4"
+            fill="none"
+          />
+          {/* Inner orbit — hugs the hub */}
+          <circle
+            cx={center}
+            cy={center}
+            r={ringR1}
             stroke={color}
             strokeOpacity={0.5}
             strokeWidth={1}
             strokeDasharray="2 3"
             fill="none"
           />
+
+          {/* Faint connection lines from hub to inner satellites */}
+          {satellites.slice(0, 8).map((sat, i) => (
+            <line
+              key={`ln-${i}`}
+              x1={center}
+              y1={center}
+              x2={center + sat.x}
+              y2={center + sat.y}
+              stroke={color}
+              strokeOpacity={0.12}
+              strokeWidth={0.75}
+            />
+          ))}
+
+          {/* Satellite dots */}
           {satellites.map((sat, i) => (
             <circle
               key={i}
@@ -376,7 +578,7 @@ function MiniGalaxy({
         </g>
       </svg>
 
-      {/* Static hub — sits on top of the SVG, does not rotate. */}
+      {/* Static hub — logo or letter, sits on top of the SVG */}
       <div
         style={{
           position: "absolute",
@@ -399,8 +601,9 @@ function MiniGalaxy({
               height: "100%",
               borderRadius: "50%",
               objectFit: "cover",
-              background: "rgba(0,0,0,0.3)",
+              background: "rgba(0,0,0,0.35)",
               border: `1px solid ${color}`,
+              boxShadow: `0 0 18px ${hexToRgba(color, 0.6)}, inset 0 0 22px ${hexToRgba(color, 0.35)}`,
             }}
           />
         ) : (
@@ -409,15 +612,16 @@ function MiniGalaxy({
               width: "100%",
               height: "100%",
               borderRadius: "50%",
-              background: color,
+              background: `radial-gradient(circle at 35% 30%, ${hexToRgba(color, 0.9)}, ${color} 60%, rgba(0,0,0,0.6) 100%)`,
               color: "#04110A",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               fontFamily: "Montserrat, sans-serif",
               fontWeight: 900,
-              fontSize: Math.round(hubDiameter * 0.5),
-              border: "1px solid rgba(255,255,255,0.15)",
+              fontSize: 34,
+              border: `1px solid ${color}`,
+              boxShadow: `0 0 18px ${hexToRgba(color, 0.6)}`,
             }}
           >
             {letter || "?"}
