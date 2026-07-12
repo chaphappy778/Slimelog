@@ -86,32 +86,32 @@ export default function BrandTile({
 
       {/* ── Community total ───────────────────────────────────────── */}
       <div style={{ padding: "14px 16px 6px" }}>
-        <div
-          style={{
-            fontFamily: "Montserrat, sans-serif",
-            fontWeight: 900,
-            fontSize: 44,
-            letterSpacing: "-0.02em",
-            lineHeight: 1,
-            background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text",
-          }}
-        >
-          {formatNumber(communityTotal)}
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+          <span
+            style={{
+              fontFamily: "Montserrat, sans-serif",
+              fontWeight: 900,
+              fontSize: 44,
+              letterSpacing: "-0.02em",
+              lineHeight: 1,
+              background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+            }}
+          >
+            {formatNumber(communityTotal)}
+          </span>
+          <span
+            style={{
+              color: "rgba(245,245,245,0.7)",
+              fontSize: 13,
+              fontWeight: 600,
+            }}
+          >
+            slimes logged
+          </span>
         </div>
-        <p
-          style={{
-            margin: 0,
-            marginTop: 4,
-            color: "rgba(245,245,245,0.7)",
-            fontSize: 13,
-            fontWeight: 600,
-          }}
-        >
-          slimes logged
-        </p>
       </div>
 
       {/* ── Time window toggle ────────────────────────────────────── */}
@@ -478,12 +478,9 @@ function HeroGalaxy({
       </svg>
 
       {/* Static hub — brand-tinted gradient orb, never the real brand
-          logo. User feedback: the orb reads as "brand universe" and
-          keeping it uniform across brands means every galaxy has the
-          same signature dark-heart look. Two stacked radial gradients:
-          the base one paints a bright brand-color rim fading into an
-          almost-black core; the second adds a subtle top-left specular
-          highlight so the orb reads as spherical rather than flat. */}
+          logo. Single-color gradient going dim → bright in the brand's
+          own palette hue. No purple middle, no near-black core; the
+          eye reads it as a glowing spherical anchor for the galaxy. */}
       <div
         style={{
           position: "absolute",
@@ -494,13 +491,13 @@ function HeroGalaxy({
           height: hubDiameter,
           borderRadius: "50%",
           background: [
-            // Specular highlight
-            `radial-gradient(circle at 34% 28%, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 22%)`,
-            // Main body: near-black core, brand-color rim
-            `radial-gradient(circle at 50% 55%, #030006 8%, #0B0018 30%, ${hexToRgba(color, 0.6)} 88%, ${color} 100%)`,
+            // Subtle specular highlight for spherical read
+            `radial-gradient(circle at 34% 28%, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 26%)`,
+            // Main body: dim brand color at center → bright brand color at rim
+            `radial-gradient(circle at 50% 55%, ${hexToRgba(color, 0.28)} 5%, ${hexToRgba(color, 0.55)} 45%, ${color} 100%)`,
           ].join(", "),
-          border: `1px solid ${hexToRgba(color, 0.7)}`,
-          boxShadow: `0 0 22px ${hexToRgba(color, 0.55)}, inset 0 -4px 14px rgba(0,0,0,0.55)`,
+          border: `1px solid ${hexToRgba(color, 0.75)}`,
+          boxShadow: `0 0 24px ${hexToRgba(color, 0.55)}`,
         }}
       />
     </div>
