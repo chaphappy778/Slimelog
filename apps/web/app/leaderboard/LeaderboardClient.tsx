@@ -311,7 +311,7 @@ export default function LeaderboardClient({
           <BrandTile
             brand={selectedBrand}
             communityTotal={communityTotal}
-            leader={top20[0] ?? null}
+            leaderCount={top20[0]?.count ?? 0}
             window={activeWindow}
             onWindowChange={setActiveWindow}
           />
