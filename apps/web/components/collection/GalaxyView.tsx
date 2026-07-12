@@ -9,6 +9,9 @@ import type { LikeDataMap } from "@/app/collection/page";
 // its real brand image instead of a solid color puck. Falls back to
 // the hash-color hub when a brand hasn't uploaded a logo yet.
 import { createClient } from "@/lib/supabase/client";
+// T107 (2026-07-11): brandColor lives in a shared util now so the
+// leaderboard components can reuse the same deterministic palette.
+import { brandColor } from "@/lib/brand-color";
 
 // [Change 1] Added likeData and currentUserId to Props.
 interface Props {
@@ -16,24 +19,6 @@ interface Props {
   likeData: LikeDataMap;
   currentUserId: string | null;
 }
-
-const DEFAULT_PALETTE = [
-  "#39FF14",
-  "#FF6B9D",
-  "#00F0FF",
-  "#FF00E5",
-  "#FFB347",
-  "#9B59B6",
-  "#4ECDC4",
-  "#FFE66D",
-  "#E74C3C",
-  "#3498DB",
-  "#2ECC71",
-  "#F39C12",
-  "#E91E8C",
-  "#00BCD4",
-  "#8BC34A",
-];
 
 const CANVAS_SIZE = 600;
 
@@ -44,17 +29,10 @@ const CANVAS_SIZE = 600;
 // This unlocks the possibility of a shared color-language across the
 // app — e.g. brand pill colors could match galaxy hub colors — without
 // requiring us to persist anything.
-function hashString(str: string): number {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) {
-    h = (h * 31 + str.charCodeAt(i)) | 0;
-  }
-  return Math.abs(h);
-}
-
-function brandColor(brand: string): string {
-  return DEFAULT_PALETTE[hashString(brand) % DEFAULT_PALETTE.length];
-}
+//
+// T107 (2026-07-11): brandColor + palette live in `lib/brand-color.ts`
+// now so the leaderboard components can reuse the same swatches. The
+// import at the top of this file wires that back in.
 
 // Legacy no-op wrappers kept so the historical call sites in this file
 // still compile without a shape change. Removed in a follow-up cleanup.
@@ -163,11 +141,15 @@ export default function GalaxyView({ logs, likeData, currentUserId }: Props) {
   }, [logs]);
 
   // T108 (2026-07-11): fetch brand logos and progressively load images.
-  // - Query `brands` by name_raw for the brands in the user's shelf
+  // - Query `brands` by name for the brands in the user's shelf
   // - For each brand with a logo_url, kick off image load
   // - As each image finishes, add it to state so draw() picks it up
   // Case-insensitive match; a brand missing from the table or lacking a
   // logo just falls through to the color hub.
+  //
+  // 2026-07-11 hotfix: was querying `.select("name_raw", ...)` which is
+  // the collection_logs free-text column, not a column on brands. The
+  // brands table's column is just `name`. Was 400ing on every load.
   useEffect(() => {
     const brandNames = Array.from(
       new Set(logs.map((l) => l.brand_name_raw).filter(Boolean)),
@@ -178,14 +160,15 @@ export default function GalaxyView({ logs, likeData, currentUserId }: Props) {
     const supabase = createClient();
 
     (async () => {
-      // Use per-name ilike so we survive case differences in brand_name_raw
-      // versus the canonical brands.name_raw. Batched via Promise.all.
+      // Use per-name ilike so we survive case differences between
+      // collection_logs.brand_name_raw and brands.name. Batched via
+      // Promise.all.
       const results = await Promise.all(
         brandNames.map((name) =>
           supabase
             .from("brands")
-            .select("name_raw, logo_url")
-            .ilike("name_raw", name)
+            .select("name, logo_url")
+            .ilike("name", name)
             .maybeSingle(),
         ),
       );

@@ -31,6 +31,31 @@ Template for new entries:
 
 ## Known potential issues (not-yet-hit, worth watching)
 
+### 2026-07-11 — Wrong column on brands query (`name_raw` vs `name`) (DB)
+
+**Symptom:** every brand logo request from `/collection` (GalaxyView) and every catalog lookup on `/leaderboard` returned 400 Bad Request. Console flooded with:
+
+```
+GET .../rest/v1/brands?select=name_raw,logo_url&name_raw=ilike.Piggy%20Slimes 400
+```
+
+**Root cause:** the `brands` catalog table only has `name` and `slug`. The `name_raw` column lives on `collection_logs` (free-text fallback when a user logs a slime whose brand isn't in the catalog). The query was targeting `brands.name_raw`, which doesn't exist — PostgREST 400s any query referencing an unknown column.
+
+**Fix:** replaced `name_raw` with `name` in three places:
+
+- `apps/web/components/collection/GalaxyView.tsx` (T108 brand logo fetch)
+- `apps/web/app/leaderboard/page.tsx` — `BrandCatalogRow` interface + both `.select()` / `.ilike()` sites (T107 V1)
+
+**Regression check:** open DevTools → Network on `/collection` and `/leaderboard`. Brand-catalog requests should be 200, no 400s.
+
+**Why this recurred:** we have TWO similarly-named columns across two tables — `collection_logs.brand_name_raw` (the user's free-text brand string) and `brands.name` (the canonical brand name). Easy to mistype "name_raw" when the write-up mentioned both.
+
+**Prevention:** when adding a query against `brands`, cross-check the initial schema migration (`20260324000001_slimelog_initial_schema.sql`) — canonical column is `name`, always.
+
+**Related:** T108 (brand logos in GalaxyView), T107 V1 (leaderboard)
+
+---
+
 ### 2026-07-11 — Brand logo CORS on GalaxyView hubs (CORS / External)
 
 **Symptom (if it hits):** brand logo images fail to render in `/collection`
