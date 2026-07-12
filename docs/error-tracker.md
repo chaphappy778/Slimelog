@@ -31,6 +31,22 @@ Template for new entries:
 
 ## Known potential issues (not-yet-hit, worth watching)
 
+### 2026-07-12 — Server action throws show generic Next error, not the friendly copy (UI)
+
+**Symptom:** trying to log a slime with a profane name showed the user Next.js's stock server error page ("An error occurred in the Server Components render. The specific message is omitted in production builds..."), not the moderation copy "That word doesn't fit the vibe here."
+
+**Root cause:** `logSlime()` and `updateSlimeLog()` in `apps/web/lib/slime-actions.ts` threw a plain `Error` on moderation failures. Next.js server-action error handling strips Error messages in production for security. The client's try/catch received an Error with a generic message and digest.
+
+**Fix:** `logSlime` and `updateSlimeLog` now return a result union — `{ ok: true, ... } | { ok: false, error: string }` — for validation-class failures. A `ModerationValidationError` sentinel is caught at the top-level wrapper and folded into the result. Runtime errors (DB fail, auth) still throw as before. The client checks `result.ok` and surfaces `result.error` inline.
+
+**Regression check:** try to log a slime with `slime_name: "cock"` in production. The inline error should read "That word doesn't fit the vibe here. Try another." — never the generic Next.js error page.
+
+**Prevention pattern:** for user-facing validation, ALWAYS return a result object from server actions. Reserve `throw` for unexpected runtime failures the user shouldn't see verbatim anyway.
+
+**Related:** T111, `apps/web/lib/slime-actions.ts`, `apps/web/app/log/page.tsx`.
+
+---
+
 ### 2026-07-12 — Auth-gated loading skeleton stuck app-wide (UI + Perf)
 
 **Symptom:** across `/settings`, `/settings/profile`, `/collection`, and other client pages, the pulsing loading skeleton stayed in front of the actual content indefinitely. No console errors, no failed network requests — just a hang. Fresh page load, DevTools showed ~40 `_rsc` prefetches pending.

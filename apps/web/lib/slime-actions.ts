@@ -77,10 +77,22 @@ async function requireAuthUserId(): Promise<string> {
 
 // ─── Moderation helpers (T111) ────────────────────────────────────────────────
 //
-// Small wrappers around lib/moderation.ts that fit the shape server
-// actions want: throw on failure, return the cleaned string on success.
-// Moderation failures are user-facing copy — the wizard renders the
-// thrown Error message directly, so the copy stays honest.
+// 2026-07-12: switched from throw-on-fail to a sentinel-based pattern.
+// Next.js server actions strip Error messages in production ("An error
+// occurred in the Server Components render. The specific message is
+// omitted..."), so throwing our friendly copy from moderateOrThrow
+// showed up as an ugly generic error to the user. We now collect
+// moderation failures on the caller side and return them as a
+// {ok:false, error} result the client can surface directly.
+
+class ModerationValidationError extends Error {
+  readonly userMessage: string;
+  constructor(userMessage: string) {
+    super(userMessage);
+    this.name = "ModerationValidationError";
+    this.userMessage = userMessage;
+  }
+}
 
 function moderateOrThrow(
   raw: string | null | undefined,
@@ -88,7 +100,7 @@ function moderateOrThrow(
 ): string {
   const result: ModerationResult = moderateText(raw, field);
   if (!result.ok) {
-    throw new Error(result.message);
+    throw new ModerationValidationError(result.message);
   }
   return result.cleaned;
 }
@@ -103,7 +115,9 @@ function moderateKeywords(raw: string[] | undefined): string[] {
     const check = moderateText(trimmed, "keyword");
     if (!check.ok) {
       // Surface the offending keyword so the user knows which one to fix.
-      throw new Error(`Keyword "${trimmed}": ${check.message}`);
+      throw new ModerationValidationError(
+        `Keyword "${trimmed}": ${check.message}`,
+      );
     }
     out.push(check.cleaned.toLowerCase());
   }
@@ -113,7 +127,28 @@ function moderateKeywords(raw: string[] | undefined): string[] {
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
-export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
+// 2026-07-12: return a result union so moderation failures don't get
+// stripped by Next.js server-action error handling ("The specific message
+// is omitted in production builds..."). The wizard uses .ok to branch
+// between success + redirect and inline error.
+export type LogSlimeResult =
+  | { ok: true; id: string }
+  | { ok: false; error: string };
+
+export async function logSlime(
+  input: LogSlimeInput,
+): Promise<LogSlimeResult> {
+  try {
+    return await logSlimeInner(input);
+  } catch (err) {
+    if (err instanceof ModerationValidationError) {
+      return { ok: false, error: err.userMessage };
+    }
+    throw err;
+  }
+}
+
+async function logSlimeInner(input: LogSlimeInput): Promise<LogSlimeResult> {
   const userId = await requireAuthUserId();
   const supabase = await createClient();
 
@@ -224,10 +259,31 @@ export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
   revalidatePath("/collection");
   revalidatePath("/");
 
-  return { id: data.id };
+  return { ok: true, id: data.id };
 }
 
+// Same result-wrap treatment for edit so the edit wizard can surface
+// moderation copy inline instead of getting the generic Next.js error.
+export type UpdateSlimeLogResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
 export async function updateSlimeLog(
+  logId: string,
+  input: Partial<LogSlimeInput>,
+): Promise<UpdateSlimeLogResult> {
+  try {
+    await updateSlimeLogInner(logId, input);
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof ModerationValidationError) {
+      return { ok: false, error: err.userMessage };
+    }
+    throw err;
+  }
+}
+
+async function updateSlimeLogInner(
   logId: string,
   input: Partial<LogSlimeInput>,
 ): Promise<void> {

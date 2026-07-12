@@ -372,7 +372,14 @@ function LogPageInner() {
         scent_notes: form.scent_notes.trim() || undefined,
         is_public: !isPrivate,
       };
-      await logSlime(input);
+      // 2026-07-12: logSlime now returns a result union so moderation
+      // failures surface as friendly copy instead of Next.js's generic
+      // "specific message is omitted in production builds" error.
+      const result = await logSlime(input);
+      if (!result.ok) {
+        setSaveError(result.error);
+        return;
+      }
       router.push("/collection");
     } catch (err) {
       setSaveError(
