@@ -31,6 +31,27 @@ Template for new entries:
 
 ## Known potential issues (not-yet-hit, worth watching)
 
+### 2026-07-12 — Auth-gated loading skeleton stuck app-wide (UI + Perf)
+
+**Symptom:** across `/settings`, `/settings/profile`, `/collection`, and other client pages, the pulsing loading skeleton stayed in front of the actual content indefinitely. No console errors, no failed network requests — just a hang. Fresh page load, DevTools showed ~40 `_rsc` prefetches pending.
+
+**Root cause:** `AuthProvider` kept `loading = true` until BOTH `getSession()` AND `loadProfile()` had resolved. Every client page that gated its content on `useAuth().loading` sat on its skeleton until both finished. When the profile query hit backpressure (many concurrent `_rsc` prefetches saturating the network, or a slow Supabase response), the whole app appeared frozen even though the user was signed in and the session was live.
+
+**Fix:** in `apps/web/components/AuthProvider.tsx`, decoupled the two:
+
+- `setUser(...)` + `setLoading(false)` fires the moment `getSession()` returns (cookie read, effectively instant).
+- `loadProfile()` runs fire-and-forget as a `hydrateProfile()` helper; when it lands, it just sets `profile`.
+- `onAuthStateChange` follows the same rule: user first, unblock UI, profile in the background.
+- 6-second failsafe stays as a hard backstop.
+
+**Regression check:** after the fix, `useAuth().loading` should flip to false within ~100ms of page load. Pages gated on it render immediately. `profile` fields (username, avatar_url, subscription_tier, etc.) may briefly show as null until `loadProfile` returns; consumers should tolerate null gracefully.
+
+**Prevention pattern:** any global provider that gates the app on multiple concerns should release the UI on the FASTEST necessary check and hydrate the rest in the background. Never make the whole tree wait on the slowest thing.
+
+**Related:** T29, T104 (auth provider consolidation), T111.
+
+---
+
 ### 2026-07-12 — Obscenity false positives on legitimate words (UI)
 
 **Symptom:** a user tries to save a legitimate slime name, brand suggestion, comment, or username and hits "That word doesn't fit the vibe here. Try another." on text that reads clean.

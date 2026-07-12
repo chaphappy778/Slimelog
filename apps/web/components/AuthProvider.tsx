@@ -82,49 +82,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<AuthProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // 2026-07-11: bootstrap now uses getSession() (reads from cookies, no
-  // network round-trip) rather than getUser() (which validates the token
-  // against Supabase's auth server and can hang on slow networks or
-  // just-completed OAuth handoffs, leaving PageHeader + SlimeMenu +
-  // BottomNavWrapper stuck showing "nothing on the right" because
-  // loading never flips to false). onAuthStateChange still fires
-  // INITIAL_SESSION so freshness is preserved across the app.
+  // 2026-07-12: split "know who the user is" from "have their profile
+  // hydrated." Previously `loading` stayed true until BOTH the session
+  // check AND `loadProfile()` had resolved — which meant a slow /
+  // stuck profile query left the whole app sitting on the auth-gated
+  // skeleton (settings page, collection, etc). Now we flip
+  // `loading=false` the moment `getSession()` returns, so pages that
+  // only need `user` render immediately. The profile fetch continues
+  // in the background and populates `profile` when it lands.
   //
-  // Also guarded by a 6-second safety timeout: if neither the initial
-  // getSession nor onAuthStateChange has resolved by then, force
-  // loading=false and let the tree render with whatever we've got
-  // (worst case: user renders as null and hits the "Log In" state, which
-  // is recoverable via refresh — infinitely better than a frozen page).
+  // getSession() reads from cookies with no network round-trip, so this
+  // path is fast. The 6-second failsafe stays as a hard backstop.
   useEffect(() => {
     let cancelled = false;
 
+    const hydrateProfile = (uid: string) => {
+      // Fire-and-forget — do NOT block loading on this.
+      loadProfile(uid)
+        .then((p) => {
+          if (!cancelled) setProfile(p);
+        })
+        .catch((err) => {
+          console.warn("[AuthProvider] profile hydrate failed:", err);
+        });
+    };
+
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (cancelled) return;
-      const sessionUser = data.session?.user ?? null;
-      setUser(sessionUser);
-      if (sessionUser) {
-        const p = await loadProfile(sessionUser.id);
-        if (!cancelled) setProfile(p);
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (cancelled) return;
+        const sessionUser = data.session?.user ?? null;
+        setUser(sessionUser);
+        // Release the app immediately; profile fills in behind the scenes.
+        setLoading(false);
+        if (sessionUser) hydrateProfile(sessionUser.id);
+      } catch (err) {
+        console.warn("[AuthProvider] getSession threw:", err);
+        if (!cancelled) setLoading(false);
       }
-      if (!cancelled) setLoading(false);
     })();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       if (cancelled) return;
       const nextUser = session?.user ?? null;
       setUser(nextUser);
+      // Same rule on session change: unblock UI first, refresh profile
+      // in the background.
+      setLoading(false);
       if (nextUser) {
-        const p = await loadProfile(nextUser.id);
-        if (!cancelled) setProfile(p);
+        hydrateProfile(nextUser.id);
       } else {
         setProfile(null);
       }
-      if (!cancelled) setLoading(false);
     });
 
+    // Absolute backstop.
     const failSafeTimer = setTimeout(() => {
       if (!cancelled) setLoading(false);
     }, 6000);
