@@ -113,22 +113,31 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // profiles.approved_brand_suggestions_count) are trusted to submit up
   // to 5 per 24h. First-time and never-approved scouts stay at 1 per
   // 24h to keep spammers boxed in.
+  //
+  // 2026-07-12 hardening: fall back to approvedCount=0 (the safe/strict
+  // cap) if the profile lookup errors OR if the column doesn't exist
+  // yet on this environment. Previously we 500'd the whole submission
+  // when this query hiccupped, which broke first-time submitters who'd
+  // never triggered it before. See docs/error-tracker.md for context.
   const { data: profileRow, error: profileErr } = await admin
     .from("profiles")
     .select("approved_brand_suggestions_count")
     .eq("id", user.id)
     .maybeSingle();
 
+  let approvedCount = 0;
   if (profileErr) {
-    console.error("[brand-suggestions] profile lookup failed:", profileErr);
-    return NextResponse.json(
-      { error: "Could not verify rate limit. Try again shortly." },
-      { status: 500 },
+    // Don't 500 — log and default to the strict cap. Common cause:
+    // migration 66 hasn't been applied to this env, so the column is
+    // missing. Keeps submissions working while ops catches up.
+    console.warn(
+      "[brand-suggestions] profile lookup failed; defaulting approvedCount=0:",
+      profileErr.message,
     );
+  } else {
+    approvedCount =
+      (profileRow?.approved_brand_suggestions_count as number | null) ?? 0;
   }
-
-  const approvedCount: number =
-    (profileRow?.approved_brand_suggestions_count as number | null) ?? 0;
   const maxPerDay: number = approvedCount >= 1 ? 5 : 1;
 
   const rateWindowStart = new Date(
