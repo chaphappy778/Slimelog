@@ -592,29 +592,10 @@ export default function CollectionPage() {
             <ShelfHero stats={stats} />
           )}
 
-          {/* T107 (2026-07-11): entry pill to the community leaderboard.
-              Only shows once the shelf has at least one log — no point
-              in inviting a fresh user to ranking pages before they've
-              even seen theirs populate. Magenta accent to separate it
-              visually from the surrounding shelf-hero (green/cyan) and
-              filter pills (cyan). */}
-          {!loading && !error && logs.length > 0 && (
-            <div className="flex justify-center mt-3 mb-1">
-              <Link
-                href="/leaderboard"
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors"
-                style={{
-                  background: "rgba(255,0,229,0.08)",
-                  border: "1px solid rgba(255,0,229,0.45)",
-                  color: "#FF00E5",
-                }}
-              >
-                <span aria-hidden="true">{"\u{1F3C6}"}</span>
-                <span>Biggest galaxies leaderboard</span>
-                <span aria-hidden="true">→</span>
-              </Link>
-            </div>
-          )}
+          {/* T107 (2026-07-11): leaderboard entry pill relocated up
+              into ShelfHero's top-right slot next to the "MY SHELF"
+              eyebrow. Killed the middle-of-page magenta trophy that
+              felt squished between hero and view toggle. */}
 
           {/* View toggle — segmented pill (batch A). */}
           {!loading && !error && logs.length > 0 && (

@@ -37,55 +37,9 @@ export default function BrandSelector({
 
   return (
     <div className="flex flex-col gap-2">
-      <div
-        className="flex items-center gap-2 overflow-x-auto"
-        style={
-          {
-            msOverflowStyle: "none",
-            scrollbarWidth: "none",
-            WebkitOverflowScrolling: "touch",
-          } as React.CSSProperties
-        }
-      >
-        {filtered.map((brand) => {
-          const isSelected = brand.key === selectedKey;
-          return (
-            <button
-              type="button"
-              key={brand.key}
-              onClick={() => onSelect(brand)}
-              className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors"
-              style={{
-                background: isSelected
-                  ? "rgba(0,240,255,0.14)"
-                  : "rgba(45,10,78,0.35)",
-                border: isSelected
-                  ? `1px solid ${CYAN}`
-                  : "1px solid rgba(45,10,78,0.7)",
-                boxShadow: isSelected
-                  ? "0 0 12px rgba(0,240,255,0.4)"
-                  : "none",
-                color: isSelected ? "#FFFFFF" : "rgba(245,245,245,0.75)",
-                fontSize: 13,
-                fontWeight: isSelected ? 700 : 500,
-                whiteSpace: "nowrap",
-                cursor: "pointer",
-              }}
-              aria-pressed={isSelected}
-            >
-              <BrandChipLogo brand={brand} />
-              <span>{brand.name}</span>
-            </button>
-          );
-        })}
-
-        {filtered.length === 0 && (
-          <span className="text-xs text-slime-muted px-2 py-1">
-            No brands match.
-          </span>
-        )}
-
-        {/* Search icon — pinned right (visually) via margin-left auto */}
+      <div className="flex items-center gap-2">
+        {/* Search icon — header-level control on the LEFT so it's
+            reachable without scrolling past every pill. */}
         <button
           type="button"
           onClick={() => {
@@ -96,7 +50,6 @@ export default function BrandSelector({
           }}
           className="shrink-0 flex items-center justify-center rounded-full transition-colors"
           style={{
-            marginLeft: "auto",
             width: 32,
             height: 32,
             background: searchOpen
@@ -125,6 +78,55 @@ export default function BrandSelector({
             <path d="m21 21-4.35-4.35" />
           </svg>
         </button>
+
+        <div
+          className="flex items-center gap-2 overflow-x-auto flex-1"
+          style={
+            {
+              msOverflowStyle: "none",
+              scrollbarWidth: "none",
+              WebkitOverflowScrolling: "touch",
+            } as React.CSSProperties
+          }
+        >
+          {filtered.map((brand) => {
+            const isSelected = brand.key === selectedKey;
+            return (
+              <button
+                type="button"
+                key={brand.key}
+                onClick={() => onSelect(brand)}
+                className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors"
+                style={{
+                  background: isSelected
+                    ? "rgba(0,240,255,0.14)"
+                    : "rgba(45,10,78,0.35)",
+                  border: isSelected
+                    ? `1px solid ${CYAN}`
+                    : "1px solid rgba(45,10,78,0.7)",
+                  boxShadow: isSelected
+                    ? "0 0 12px rgba(0,240,255,0.4)"
+                    : "none",
+                  color: isSelected ? "#FFFFFF" : "rgba(245,245,245,0.75)",
+                  fontSize: 13,
+                  fontWeight: isSelected ? 700 : 500,
+                  whiteSpace: "nowrap",
+                  cursor: "pointer",
+                }}
+                aria-pressed={isSelected}
+              >
+                <BrandChipLogo brand={brand} />
+                <span>{brand.name}</span>
+              </button>
+            );
+          })}
+
+          {filtered.length === 0 && (
+            <span className="text-xs text-slime-muted px-2 py-1">
+              No brands match.
+            </span>
+          )}
+        </div>
       </div>
 
       {searchOpen && (

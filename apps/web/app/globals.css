@@ -193,3 +193,26 @@ h6 {
 .page-enter {
   min-height: 100vh;
 }
+
+/* ── Leaderboard MiniGalaxy orbit rotation ──────────────── */
+/* Slow drift on the orbit/satellite <g> in BrandTile's mini
+   galaxy viz. Reduced-motion opts out. Hub stays static —
+   only the wrapping <g> gets this class. */
+@keyframes slime-orbit-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.slime-orbit-rotate {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: slime-orbit-rotate 40s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .slime-orbit-rotate {
+    animation: none;
+  }
+}

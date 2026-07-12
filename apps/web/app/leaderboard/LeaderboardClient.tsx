@@ -283,7 +283,11 @@ export default function LeaderboardClient({
         />
 
         <div className="mt-4">
-          <BrandTile brand={selectedBrand} communityTotal={communityTotal} />
+          <BrandTile
+            brand={selectedBrand}
+            communityTotal={communityTotal}
+            leader={top20[0] ?? null}
+          />
         </div>
 
         {/* TODO(v1.5): time window toggle — see T107 */}

@@ -16,6 +16,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 export type ShelfStats = {
   ownedCount: number;
@@ -67,13 +68,52 @@ export default function ShelfHero({ stats }: { stats: ShelfStats }) {
 
   return (
     <div className="mb-4">
-      {/* Eyebrow + giant count */}
-      <p
-        className="text-[11px] font-bold uppercase tracking-widest mb-1"
-        style={{ color: "rgba(255,255,255,0.4)" }}
-      >
-        My shelf
-      </p>
+      {/* Eyebrow + leaderboard button — 2026-07-11: the leaderboard
+          entry pill moved here from a squished slot between the shelf
+          hero and view toggle. Sits in the previously-empty top-right
+          space next to the "MY SHELF" eyebrow and uses a proper crown
+          line-icon (matches the app's icon language — no emoji) with
+          the magenta accent that separates it from the surrounding
+          green/cyan shelf visuals. */}
+      <div className="flex items-start justify-between mb-1">
+        <p
+          className="text-[11px] font-bold uppercase tracking-widest"
+          style={{ color: "rgba(255,255,255,0.4)" }}
+        >
+          My shelf
+        </p>
+        <Link
+          href="/leaderboard"
+          aria-label="Biggest galaxies leaderboard"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors"
+          style={{
+            background: "rgba(255,0,229,0.10)",
+            border: "1px solid rgba(255,0,229,0.45)",
+            color: "#FF00E5",
+          }}
+        >
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            {/* Crown line icon — no character art, matches the app's
+                2px-stroke icon language. Same shape used on the
+                leaderboard champion strip so the visual language
+                stays consistent. */}
+            <path d="M2 8l4 10h12l4-10-6 4-4-8-4 8-6-4z" />
+            <path d="M6 22h12" />
+          </svg>
+          <span>Leaderboard</span>
+        </Link>
+      </div>
+
       <div className="flex items-end gap-3">
         <span
           className="text-6xl font-black leading-none"
