@@ -11,6 +11,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { SlimeBaseType, ScentStrength } from "@/lib/types";
+import {
+  moderateText,
+  type ModerationField,
+  type ModerationResult,
+} from "@/lib/moderation";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -70,6 +75,42 @@ async function requireAuthUserId(): Promise<string> {
   return user.id;
 }
 
+// ─── Moderation helpers (T111) ────────────────────────────────────────────────
+//
+// Small wrappers around lib/moderation.ts that fit the shape server
+// actions want: throw on failure, return the cleaned string on success.
+// Moderation failures are user-facing copy — the wizard renders the
+// thrown Error message directly, so the copy stays honest.
+
+function moderateOrThrow(
+  raw: string | null | undefined,
+  field: ModerationField,
+): string {
+  const result: ModerationResult = moderateText(raw, field);
+  if (!result.ok) {
+    throw new Error(result.message);
+  }
+  return result.cleaned;
+}
+
+/** Moderate every keyword and return the cleaned list, capped at 10. */
+function moderateKeywords(raw: string[] | undefined): string[] {
+  if (!raw || raw.length === 0) return [];
+  const out: string[] = [];
+  for (const k of raw) {
+    const trimmed = (k ?? "").trim();
+    if (!trimmed) continue;
+    const check = moderateText(trimmed, "keyword");
+    if (!check.ok) {
+      // Surface the offending keyword so the user knows which one to fix.
+      throw new Error(`Keyword "${trimmed}": ${check.message}`);
+    }
+    out.push(check.cleaned.toLowerCase());
+  }
+  // Match prior behavior — cap at 10 keywords per log.
+  return out.slice(0, 10);
+}
+
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
 export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
@@ -96,15 +137,38 @@ export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
     }
   }
 
+  // T111 (2026-07-12): moderation gate for every user-authored text field.
+  // Cleaned values replace the raw input on the way into the INSERT. Empty
+  // strings are treated as "not provided" and stored as null — the log
+  // wizard can save a catalog-linked slime with only slime_id + brand_id
+  // and no free-form names.
+  const cleanedSlimeName =
+    input.slime_name && input.slime_name.trim() !== ""
+      ? moderateOrThrow(input.slime_name, "slime_name")
+      : null;
+  const cleanedBrandNameRaw =
+    input.brand_name_raw && input.brand_name_raw.trim() !== ""
+      ? moderateOrThrow(input.brand_name_raw, "brand_name")
+      : null;
+  const cleanedCollectionName =
+    input.collection_name && input.collection_name.trim() !== ""
+      ? moderateOrThrow(input.collection_name, "collection_name")
+      : null;
+  const cleanedNotes =
+    input.notes && input.notes.trim() !== ""
+      ? moderateOrThrow(input.notes, "slime_notes")
+      : null;
+  const cleanedKeywords = moderateKeywords(input.keywords);
+
   const { data, error } = await supabase
     .from("collection_logs")
     .insert({
       user_id: userId,
       slime_id: input.slime_id ?? null,
       brand_id: input.brand_id ?? null,
-      slime_name: input.slime_name ?? null,
-      brand_name_raw: input.brand_name_raw ?? null,
-      collection_name: input.collection_name ?? null,
+      slime_name: cleanedSlimeName,
+      brand_name_raw: cleanedBrandNameRaw,
+      collection_name: cleanedCollectionName,
       base_type: input.base_type,
       subtype_id: input.subtype_id ?? null,
       in_collection: input.in_collection ?? true,
@@ -121,7 +185,7 @@ export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
       scent_notes: input.scent_notes ?? null,
       colors: input.colors ?? null,
       image_url: input.image_url ?? null,
-      notes: input.notes ?? null,
+      notes: cleanedNotes,
       purchase_price: input.purchase_price ?? null,
     })
     .select("id")
@@ -133,11 +197,8 @@ export async function logSlime(input: LogSlimeInput): Promise<{ id: string }> {
   }
 
   // Wire keywords — upsert tags, insert log_tags
-  if (input.keywords && input.keywords.length > 0) {
-    const normalized = input.keywords
-      .map((k) => k.toLowerCase().trim())
-      .filter(Boolean)
-      .slice(0, 10);
+  if (cleanedKeywords.length > 0) {
+    const normalized = cleanedKeywords;
 
     const { data: tagRows, error: tagError } = await supabase
       .from("tags")
@@ -173,6 +234,44 @@ export async function updateSlimeLog(
   const userId = await requireAuthUserId();
   const supabase = await createClient();
 
+  // T111 (2026-07-12): moderate every user-authored text field before
+  // it lands in the update payload. Only fields the caller actually
+  // touched (input.X !== undefined) go through the gate, so partial
+  // updates stay partial. An empty-string edit (user clearing the
+  // field) is written as null — even for the "required" slime_name /
+  // brand_name paths, since the UI's own required-checks are the
+  // source of truth for what an "empty" state means at the row level.
+  let cleanedSlimeName: string | null | undefined;
+  if (input.slime_name !== undefined) {
+    cleanedSlimeName =
+      input.slime_name && input.slime_name.trim() !== ""
+        ? moderateOrThrow(input.slime_name, "slime_name")
+        : null;
+  }
+  let cleanedBrandNameRaw: string | null | undefined;
+  if (input.brand_name_raw !== undefined) {
+    cleanedBrandNameRaw =
+      input.brand_name_raw && input.brand_name_raw.trim() !== ""
+        ? moderateOrThrow(input.brand_name_raw, "brand_name")
+        : null;
+  }
+  let cleanedCollectionName: string | null | undefined;
+  if (input.collection_name !== undefined) {
+    cleanedCollectionName =
+      input.collection_name && input.collection_name.trim() !== ""
+        ? moderateOrThrow(input.collection_name, "collection_name")
+        : null;
+  }
+  let cleanedNotes: string | null | undefined;
+  if (input.notes !== undefined) {
+    cleanedNotes =
+      input.notes && input.notes.trim() !== ""
+        ? moderateOrThrow(input.notes, "slime_notes")
+        : null;
+  }
+  const cleanedKeywords =
+    input.keywords !== undefined ? moderateKeywords(input.keywords) : undefined;
+
   // Audit hp-19 (2026-07-07): add `.select("id")` and throw when the
   // returned array is empty. Previously .update().eq(...).eq(...)
   // returned `{success:true}` even when zero rows matched — so a bad
@@ -185,12 +284,12 @@ export async function updateSlimeLog(
     .update({
       ...(input.slime_id !== undefined && { slime_id: input.slime_id }),
       ...(input.brand_id !== undefined && { brand_id: input.brand_id }),
-      ...(input.slime_name !== undefined && { slime_name: input.slime_name }),
+      ...(input.slime_name !== undefined && { slime_name: cleanedSlimeName }),
       ...(input.brand_name_raw !== undefined && {
-        brand_name_raw: input.brand_name_raw,
+        brand_name_raw: cleanedBrandNameRaw,
       }),
       ...(input.collection_name !== undefined && {
-        collection_name: input.collection_name,
+        collection_name: cleanedCollectionName,
       }),
       ...(input.base_type !== undefined && { base_type: input.base_type }),
       ...(input.subtype_id !== undefined && { subtype_id: input.subtype_id }),
@@ -226,7 +325,7 @@ export async function updateSlimeLog(
       ...(input.scent_notes !== undefined && {
         scent_notes: input.scent_notes,
       }),
-      ...(input.notes !== undefined && { notes: input.notes }),
+      ...(input.notes !== undefined && { notes: cleanedNotes }),
       ...(input.purchase_price !== undefined && {
         purchase_price: input.purchase_price,
       }),
@@ -251,15 +350,13 @@ export async function updateSlimeLog(
     throw new Error("Log not found or you do not have permission to edit it.");
   }
 
-  // Keywords: full replace strategy
-  if (input.keywords !== undefined) {
+  // Keywords: full replace strategy. cleanedKeywords was moderated + capped
+  // at 10 above.
+  if (cleanedKeywords !== undefined) {
     await supabase.from("log_tags").delete().eq("log_id", logId);
 
-    if (input.keywords.length > 0) {
-      const normalized = input.keywords
-        .map((k) => k.toLowerCase().trim())
-        .filter(Boolean)
-        .slice(0, 10);
+    if (cleanedKeywords.length > 0) {
+      const normalized = cleanedKeywords;
 
       const { data: tagRows } = await supabase
         .from("tags")

@@ -31,6 +31,22 @@ Template for new entries:
 
 ## Known potential issues (not-yet-hit, worth watching)
 
+### 2026-07-12 — Obscenity false positives on legitimate words (UI)
+
+**Symptom:** a user tries to save a legitimate slime name, brand suggestion, comment, or username and hits "That word doesn't fit the vibe here. Try another." on text that reads clean.
+
+**Root cause:** `obscenity` (the profanity library behind `lib/moderation.ts`) uses fuzzy matching with transformers (leet, spacing, mixed case) against the English dataset. It has a known non-zero false-positive rate — words like "scunthorpe" or substrings inside otherwise-clean text can trigger a hit.
+
+**Fix:** add the offending phrase to `PROFANITY_WHITELIST` in `apps/web/lib/moderation.ts`. The list feeds `englishDataset.removePhrasesIf(...)` at module load, so the matcher rebuilds without that phrase. Entries are lowercase and must match `phrase.metadata.originalWord` exactly.
+
+**Regression check:** the user's original input now saves without triggering the profanity branch. Other flagged words still get blocked.
+
+**Prevention pattern:** favor allowlisting individual false-positives over disabling the matcher wholesale. If false positives pile up (say 5+ legit words hitting per week), escalate to swapping the English dataset for a hand-curated slime-focused list.
+
+**Related:** T111 (content moderation).
+
+---
+
 ### 2026-07-12 — Brand-suggestion "could not verify rate limit" 500s (DB)
 
 **Symptom:** users trying to submit a brand via `/submit-brand` or the log-wizard fallback got a 500 with body `"Could not verify rate limit. Try again shortly."` — even first-time submitters who had never triggered any rate limit before.

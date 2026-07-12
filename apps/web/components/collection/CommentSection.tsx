@@ -169,15 +169,47 @@ export default function CommentSection({
 
     setSubmitting(true);
 
-    const { data, error } = await supabase
-      .from("comments")
-      .insert({ log_id: logId, user_id: currentUserId, body: trimmed })
-      .select("id, user_id, body, created_at")
-      .single();
+    // T111 (2026-07-12): comments now write through /api/comments so the
+    // server-side moderation gate runs before the row hits Postgres.
+    // The route returns the inserted row shape we used to get straight
+    // from PostgREST, so the optimistic prepend logic below is unchanged.
+    let insertedRow: {
+      id: string;
+      user_id: string;
+      body: string;
+      created_at: string;
+    } | null = null;
+    let insertErrorMessage: string | null = null;
+
+    try {
+      const res = await fetch("/api/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ log_id: logId, body: trimmed }),
+      });
+      const payload = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        comment?: {
+          id: string;
+          user_id: string;
+          body: string;
+          created_at: string;
+        };
+        error?: string;
+      };
+      if (!res.ok || !payload.ok || !payload.comment) {
+        insertErrorMessage = payload.error ?? "Could not post comment";
+      } else {
+        insertedRow = payload.comment;
+      }
+    } catch (err) {
+      console.error("[CommentSection] POST /api/comments failed:", err);
+      insertErrorMessage = "Could not post comment";
+    }
 
     setSubmitting(false);
 
-    if (!error && data) {
+    if (insertedRow) {
       // [Change 3 — #35] After insert, look up the new comment's author
       // username via profiles_public so the optimistic prepend renders
       // correctly. This is a single-row lookup, fast.
@@ -188,10 +220,10 @@ export default function CommentSection({
         .maybeSingle();
 
       const newComment: Comment = {
-        id: (data as { id: string }).id,
-        user_id: (data as { user_id: string }).user_id,
-        body: (data as { body: string }).body,
-        created_at: (data as { created_at: string }).created_at,
+        id: insertedRow.id,
+        user_id: insertedRow.user_id,
+        body: insertedRow.body,
+        created_at: insertedRow.created_at,
         username:
           (profileRow as { username: string | null } | null)?.username ?? null,
       };
@@ -207,7 +239,7 @@ export default function CommentSection({
       // next back-navigation. Without this, feed cards stayed stale.
       router.refresh();
     } else {
-      showToast("Could not post comment", "error");
+      showToast(insertErrorMessage ?? "Could not post comment", "error");
     }
   }
 

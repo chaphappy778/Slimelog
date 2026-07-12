@@ -33,6 +33,7 @@ import {
   requireString,
   ValidationError,
 } from "@/lib/api-validation";
+import { moderateText } from "@/lib/moderation";
 
 interface SubmitBody {
   name?: unknown;
@@ -85,6 +86,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   let tiktokHandleRaw: string | null;
   let note: string | null;
   try {
+    // Baseline shape/length via api-validation; content moderation follows.
     name = requireString(body.name, "name", { minLength: 2, maxLength: 60 });
     websiteUrl = optionalHttpUrl(body.website_url, "website_url", {
       maxLength: 500,
@@ -102,6 +104,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
     return NextResponse.json({ error: "Invalid input" }, { status: 400 });
   }
+
+  // T111 (2026-07-12): moderation gate for user-authored brand text.
+  const nameCheck = moderateText(name, "brand_name");
+  if (!nameCheck.ok) {
+    return NextResponse.json(
+      { error: nameCheck.message, field: "name" },
+      { status: 400 },
+    );
+  }
+  name = nameCheck.cleaned;
+
+  const noteCheck = moderateText(note, "brand_note");
+  if (!noteCheck.ok) {
+    return NextResponse.json(
+      { error: noteCheck.message, field: "note" },
+      { status: 400 },
+    );
+  }
+  note = noteCheck.cleaned === "" ? null : noteCheck.cleaned;
 
   const instagramHandle = normalizeHandle(instagramHandleRaw);
   const tiktokHandle = normalizeHandle(tiktokHandleRaw);

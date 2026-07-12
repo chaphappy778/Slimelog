@@ -8,6 +8,7 @@ import {
   optionalHttpUrl,
   optionalSupabaseUrl,
 } from "@/lib/api-validation";
+import { moderateText } from "@/lib/moderation";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,7 +50,8 @@ async function getSupabaseServerClient() {
   );
 }
 
-const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
+// USERNAME_RE removed 2026-07-12 (T111): username format + reserved +
+// profanity now flow through lib/moderation.ts.
 const INSTAGRAM_RE = /^[a-zA-Z0-9._]{1,30}$/;
 const TIKTOK_RE = /^[a-zA-Z0-9._]{1,24}$/;
 const SHOP_URL_RE = /^https?:\/\/.+/;
@@ -63,15 +65,32 @@ export async function updateProfile(
   input: UpdateProfileInput,
 ): Promise<UpdateProfileResult> {
   // ── 1. Validate input server-side ──
-  if (!USERNAME_RE.test(input.username)) {
-    return {
-      success: false,
-      error:
-        "Invalid username: 3–20 characters, letters, numbers, and underscores only.",
-    };
+  // T111 (2026-07-12): username / bio / location now flow through the
+  // shared moderation gate. Format, length, reserved-name, and
+  // profanity are all enforced centrally.
+  const usernameCheck = moderateText(input.username, "username");
+  if (!usernameCheck.ok) {
+    return { success: false, error: usernameCheck.message };
   }
-  if (input.bio && input.bio.length > 150) {
-    return { success: false, error: "Bio must be 150 characters or fewer." };
+  const cleanedUsername = usernameCheck.cleaned;
+
+  let cleanedBio: string | null | undefined;
+  if (input.bio !== undefined) {
+    const bioCheck = moderateText(input.bio, "profile_bio");
+    if (!bioCheck.ok) {
+      return { success: false, error: bioCheck.message };
+    }
+    cleanedBio = bioCheck.cleaned === "" ? null : bioCheck.cleaned;
+  }
+
+  let cleanedLocation: string | null | undefined;
+  if (input.location !== undefined) {
+    const locationCheck = moderateText(input.location, "profile_location");
+    if (!locationCheck.ok) {
+      return { success: false, error: locationCheck.message };
+    }
+    cleanedLocation =
+      locationCheck.cleaned === "" ? null : locationCheck.cleaned;
   }
 
   let instagramHandle: string | undefined = input.instagram_handle;
@@ -143,7 +162,7 @@ export async function updateProfile(
   const { data: existing, error: lookupError } = await supabase
     .from("profiles")
     .select("id")
-    .eq("username", input.username)
+    .eq("username", cleanedUsername)
     .neq("id", user.id)
     .maybeSingle();
 
@@ -159,7 +178,7 @@ export async function updateProfile(
 
   // ── 4. Build update payload ──
   const payload: Record<string, unknown> = {
-    username: input.username,
+    username: cleanedUsername,
     updated_at: new Date().toISOString(),
   };
 
@@ -170,7 +189,7 @@ export async function updateProfile(
   // response instead of getting written and rendered on public pages.
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   try {
-    if (input.bio !== undefined) payload.bio = input.bio || null;
+    if (input.bio !== undefined) payload.bio = cleanedBio ?? null;
     if (input.avatar_url !== undefined) {
       payload.avatar_url = optionalSupabaseUrl(
         input.avatar_url,
@@ -179,7 +198,7 @@ export async function updateProfile(
       );
     }
     if (input.location !== undefined)
-      payload.location = input.location || null;
+      payload.location = cleanedLocation ?? null;
     if (input.website_url !== undefined) {
       payload.website_url = optionalHttpUrl(input.website_url, "website_url");
     }
@@ -304,13 +323,17 @@ export async function updateMarketingConsent(
 export async function checkUsernameAvailable(
   username: string,
 ): Promise<boolean> {
-  if (!USERNAME_RE.test(username)) return false;
+  // T111 (2026-07-12): reuse the shared moderation gate so reserved
+  // and profane names show as unavailable in the live check, not just
+  // at submission time.
+  const check = moderateText(username, "username");
+  if (!check.ok) return false;
 
   const supabase = await getSupabaseServerClient();
   const { data, error } = await supabase
     .from("profiles")
     .select("id")
-    .eq("username", username)
+    .eq("username", check.cleaned)
     .maybeSingle();
 
   if (error) {
@@ -336,13 +359,12 @@ type OnboardingProfileInput = {
 export async function updateOnboardingProfile(
   input: OnboardingProfileInput,
 ): Promise<UpdateProfileResult> {
-  if (!USERNAME_RE.test(input.username)) {
-    return {
-      success: false,
-      error:
-        "Invalid username: 3–20 characters, letters, numbers, and underscores only.",
-    };
+  // T111 (2026-07-12): route username through the shared moderation gate.
+  const usernameCheck = moderateText(input.username, "username");
+  if (!usernameCheck.ok) {
+    return { success: false, error: usernameCheck.message };
   }
+  const cleanedUsername = usernameCheck.cleaned;
 
   const supabase = await getSupabaseServerClient();
   const {
@@ -357,7 +379,7 @@ export async function updateOnboardingProfile(
   const { data: existing } = await supabase
     .from("profiles")
     .select("id")
-    .eq("username", input.username)
+    .eq("username", cleanedUsername)
     .neq("id", user.id)
     .maybeSingle();
 
@@ -366,7 +388,7 @@ export async function updateOnboardingProfile(
   }
 
   const payload: Record<string, unknown> = {
-    username: input.username,
+    username: cleanedUsername,
     updated_at: new Date().toISOString(),
   };
   if (input.avatar_url) payload.avatar_url = input.avatar_url;

@@ -10,6 +10,7 @@ import {
   requireString,
   requireUuid,
 } from "@/lib/api-validation";
+import { moderateText } from "@/lib/moderation";
 
 // Audit hp-15 (2026-07-07): allowed content_type values, promoted
 // from the previous inline .includes check into a typed enum so
@@ -97,6 +98,18 @@ export async function POST(req: NextRequest) {
     }
     throw err;
   }
+
+  // T111 (2026-07-12): moderation gate for the free-text reason.
+  // Admin-visible only, but the value gets echoed into the Resend
+  // alert email — no reason to let profanity through.
+  const reasonCheck = moderateText(reason, "report_reason");
+  if (!reasonCheck.ok) {
+    return NextResponse.json(
+      { error: reasonCheck.message, field: "reason" },
+      { status: 400 },
+    );
+  }
+  reason = reasonCheck.cleaned;
 
   // Audit hp-14 (2026-07-06): hard-truncate the details field.
   // Attacker-supplied text lands in the Resend email body below.
