@@ -5,6 +5,11 @@ import Link from "next/link";
 // [Change 4 — T31] Add useRouter alongside the existing usePathname import.
 import { usePathname, useRouter } from "next/navigation";
 import SlimeMenu from "@/components/SlimeMenu";
+// T29 (2026-07-12): notification bell renders between the profile
+// avatar and the hamburger. It short-circuits itself when signed out
+// or when the user is already on /notifications, so it's safe to
+// mount unconditionally here.
+import NotificationBell from "@/components/notifications/NotificationBell";
 // T104 follow-up (2026-07-11): use shared AuthProvider so PageHeader's
 // isLoggedIn stays in lockstep with the rest of the tree (previously it
 // held its own getSession() result which could drift on partial sign-out
@@ -203,6 +208,10 @@ export default function PageHeader() {
                 <path d="M4 21v-1a8 8 0 0116 0v1" />
               </svg>
             </Link>
+            {/* T29 (2026-07-12): notification bell sits to the left of
+                the hamburger. Hides itself on /notifications so we
+                don't dead-end the user. */}
+            <NotificationBell />
             <SlimeMenu />
           </>
         )}

@@ -495,3 +495,51 @@ export type BrandSuggestionPotentialDuplicate = {
   slug: string;
   name: string;
 };
+
+// ─── Notifications (T29 2026-07-12) ───────────────────────────────────────────
+//
+// Shape returned by GET /api/notifications for a single row. All four
+// polymorphic joins are nullable because (a) the corresponding foreign
+// key is nullable on the notifications row, and (b) the target may have
+// been deleted after the notification landed (brand deleted, log
+// deleted, actor deleted, etc.). Renderers must handle every
+// combination gracefully — see NotificationRow.
+
+export interface NotificationActor {
+  username: string;
+  avatar_url: string | null;
+}
+
+export interface NotificationBrand {
+  slug: string;
+  name: string;
+  logo_url: string | null;
+}
+
+export interface NotificationDrop {
+  id: string;
+  name: string;
+  cover_image_url: string | null;
+}
+
+export interface NotificationLog {
+  id: string;
+  slime_name: string | null;
+  image_url: string | null;
+}
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  created_at: string;
+  is_read: boolean;
+  actor: NotificationActor | null;
+  brand: NotificationBrand | null;
+  drop: NotificationDrop | null;
+  log: NotificationLog | null;
+}
+
+export interface NotificationsResponse {
+  notifications: Notification[];
+  unread_count: number;
+}

@@ -25,6 +25,10 @@ import type { TopCollector } from "@/components/brand/TopCollectorsStrip";
 import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
 import type { Brand, SlimeBaseType, BrandClaimStatus } from "@/lib/types";
 import { validateBusinessEmail } from "@/lib/brand-claims";
+// T29 (2026-07-12): formatRelativeTime moved to a shared lib so the
+// notification feed can share it. Same behavior — see the `{ long: true }`
+// call sites below.
+import { formatRelativeTime as sharedFormatRelativeTime } from "@/lib/format-time";
 
 // ─── Local interfaces ─────────────────────────────────────────────────────────
 
@@ -101,17 +105,9 @@ function normaliseProfile(
 }
 
 function formatRelativeTime(isoString: string): string {
-  const diffMs = Date.now() - new Date(isoString).getTime();
-  const diffMins = Math.floor(diffMs / 1000 / 60);
-  if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 30) return `${diffDays}d ago`;
-  const diffMonths = Math.floor(diffDays / 30);
-  if (diffMonths < 12) return `${diffMonths}mo ago`;
-  return `${Math.floor(diffMonths / 12)}y ago`;
+  // T29 (2026-07-12): delegate to the shared helper. Keeps the local
+  // name so all downstream call sites in this file don't have to change.
+  return sharedFormatRelativeTime(isoString, { long: true });
 }
 
 // ─── Social icon link — no event handlers, Tailwind hover only ────────────────
