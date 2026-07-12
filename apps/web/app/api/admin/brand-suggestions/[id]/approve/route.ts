@@ -5,9 +5,14 @@
 // Sequence
 // --------
 //   1. Load the suggestion; must exist and be status='pending'.
-//   2. Slug uniqueness check on the admin-supplied slug (defense in
-//      depth — brands.slug has a UNIQUE constraint too, but a friendly
-//      409 beats a 500 with a Postgres error).
+//   2a. Safety net (mig 66 follow-up): exact case-insensitive name
+//       collision against brands.name. If a match exists, auto-reject
+//       the suggestion, fire a rejection notification linked to the
+//       existing brand, and 409 back with code='exact_duplicate' so
+//       the admin queue can render a friendly toast.
+//   2b. Slug uniqueness check on the admin-supplied slug (defense in
+//       depth — brands.slug has a UNIQUE constraint too, but a friendly
+//       409 beats a 500 with a Postgres error).
 //   3. INSERT into brands with:
 //        name              — from the suggestion
 //        slug              — from the admin body
@@ -125,7 +130,95 @@ export async function POST(
     );
   }
 
-  // 2. Slug uniqueness pre-check.
+  // 2a. Safety net — exact case-insensitive name collision. Catches the
+  // case where the suggestion name matches an existing brand exactly
+  // and the admin missed the potential-duplicates hint. We auto-reject
+  // the suggestion, notify the submitter with a link to the existing
+  // brand, and 409 back to the admin queue so it can show a friendly
+  // toast instead of pretending the request errored.
+  const suggestionName = suggestion.name as string;
+  const { data: existingByName, error: existingByNameErr } = await admin
+    .from("brands")
+    .select("id, slug, name")
+    .ilike("name", suggestionName)
+    .limit(1)
+    .maybeSingle();
+
+  if (existingByNameErr) {
+    console.error(
+      "[brand-suggestions/approve] exact-name lookup failed:",
+      existingByNameErr,
+    );
+    return NextResponse.json(
+      { error: "Could not verify brand uniqueness" },
+      { status: 500 },
+    );
+  }
+
+  if (existingByName) {
+    const existingName = existingByName.name as string;
+    const existingSlug = existingByName.slug as string;
+    const existingId = existingByName.id as string;
+    const autoNotePrefix = `Auto-rejected: matches existing brand "${existingName}"`;
+    const combinedNotes: string = notes
+      ? `${autoNotePrefix}. Admin notes: ${notes}`
+      : autoNotePrefix;
+
+    const nowIso = new Date().toISOString();
+
+    const { error: suggestionAutoRejectErr } = await admin
+      .from("brand_suggestions")
+      .update({
+        status: "rejected",
+        resolved_by: adminUser.id,
+        resolved_at: nowIso,
+        admin_notes: combinedNotes,
+      })
+      .eq("id", suggestion.id);
+
+    if (suggestionAutoRejectErr) {
+      console.error(
+        "[brand-suggestions/approve] auto-reject update failed:",
+        suggestionAutoRejectErr,
+      );
+      return NextResponse.json(
+        { error: "Could not auto-reject the duplicate suggestion" },
+        { status: 500 },
+      );
+    }
+
+    if (suggestion.submitter_id) {
+      const { error: notificationErr } = await admin
+        .from("notifications")
+        .insert({
+          recipient_id: suggestion.submitter_id,
+          notification_type: "brand_suggestion_rejected",
+          actor_id: adminUser.id,
+          brand_id: existingId,
+        });
+      if (notificationErr) {
+        console.error(
+          "[brand-suggestions/approve] auto-reject notification failed:",
+          notificationErr,
+        );
+      }
+    }
+
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "exact_duplicate",
+        existing_brand: {
+          id: existingId,
+          slug: existingSlug,
+          name: existingName,
+        },
+      },
+      { status: 409 },
+    );
+  }
+
+  // 2b. Slug uniqueness pre-check.
   const { data: slugCollision, error: slugCheckErr } = await admin
     .from("brands")
     .select("id, name")

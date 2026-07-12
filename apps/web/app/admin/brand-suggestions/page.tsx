@@ -16,6 +16,7 @@ import { isAdminUser } from "@/lib/is-admin-check";
 import PageWrapper from "@/components/PageWrapper";
 import PageHeader from "@/components/PageHeader";
 import BrandSuggestionRow from "./BrandSuggestionRow";
+import type { BrandSuggestionPotentialDuplicate } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -221,6 +222,41 @@ export default async function AdminBrandSuggestionsPage({
     }
   }
 
+  // Assisted duplicate review (mig 66): for each pending suggestion,
+  // fetch up to 5 catalog brands whose name overlaps in either
+  // direction. Batched into one Promise.all — a queue with N pending
+  // rows fires N RPCs in parallel rather than serially. Rows in the
+  // Approved / Rejected / Duplicate tabs skip this entirely.
+  const dupesById: Map<string, BrandSuggestionPotentialDuplicate[]> = new Map();
+  if (statusFilter === "pending" && suggestions.length > 0) {
+    const dupeResults = await Promise.all(
+      suggestions.map(async (row) => {
+        const { data, error } = await admin.rpc(
+          "find_potential_brand_duplicates",
+          { p_name: row.name },
+        );
+        if (error) {
+          console.error(
+            "[admin/brand-suggestions] potential duplicates lookup failed:",
+            error,
+            { suggestion_id: row.id },
+          );
+          return {
+            id: row.id,
+            dupes: [] as BrandSuggestionPotentialDuplicate[],
+          };
+        }
+        return {
+          id: row.id,
+          dupes: (data ?? []) as BrandSuggestionPotentialDuplicate[],
+        };
+      }),
+    );
+    for (const { id, dupes } of dupeResults) {
+      dupesById.set(id, dupes);
+    }
+  }
+
   return (
     <PageWrapper dots>
       <PageHeader />
@@ -306,6 +342,7 @@ export default async function AdminBrandSuggestionsPage({
                   }}
                   submitter={submitter}
                   defaultSlug={suggestSlug(row.name)}
+                  potentialDuplicates={dupesById.get(row.id) ?? []}
                 />
               );
             })}

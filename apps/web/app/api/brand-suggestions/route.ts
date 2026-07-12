@@ -108,8 +108,29 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const admin = createAdminClient();
 
-  // 3. Rate limit — one submission per 24h per submitter, regardless of
-  // outcome (pending / rejected / duplicate all count).
+  // 3. Rate limit — dynamic cap based on the submitter's scout history.
+  // Users with at least one approved suggestion (see mig 66,
+  // profiles.approved_brand_suggestions_count) are trusted to submit up
+  // to 5 per 24h. First-time and never-approved scouts stay at 1 per
+  // 24h to keep spammers boxed in.
+  const { data: profileRow, error: profileErr } = await admin
+    .from("profiles")
+    .select("approved_brand_suggestions_count")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profileErr) {
+    console.error("[brand-suggestions] profile lookup failed:", profileErr);
+    return NextResponse.json(
+      { error: "Could not verify rate limit. Try again shortly." },
+      { status: 500 },
+    );
+  }
+
+  const approvedCount: number =
+    (profileRow?.approved_brand_suggestions_count as number | null) ?? 0;
+  const maxPerDay: number = approvedCount >= 1 ? 5 : 1;
+
   const rateWindowStart = new Date(
     Date.now() - RATE_LIMIT_WINDOW_HOURS * 3600 * 1000,
   ).toISOString();
@@ -127,14 +148,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  if ((recentCount ?? 0) >= 1) {
-    return NextResponse.json(
-      {
-        error:
-          "You've already suggested a brand today. Come back tomorrow to submit another.",
-      },
-      { status: 429 },
-    );
+  if ((recentCount ?? 0) >= maxPerDay) {
+    const message =
+      approvedCount >= 1
+        ? `You've submitted ${maxPerDay} today. The cap resets in a few hours. Thanks for scouting!`
+        : "You've already submitted one today. Check back tomorrow.";
+    return NextResponse.json({ error: message }, { status: 429 });
   }
 
   // 4. Duplicate check against the catalog. Case-insensitive on both

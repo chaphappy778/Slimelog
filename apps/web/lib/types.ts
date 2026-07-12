@@ -484,3 +484,14 @@ export const STANDARDIZED_REJECTION_CODES: ReadonlyArray<RejectionReasonCode> =
     "suspected_fraud",
     "different_owner_indicated",
   ];
+
+// ─── Brand suggestions (T110 mig 66 follow-up) ────────────────────────────────
+
+// Row shape returned by the find_potential_brand_duplicates RPC. Used
+// by the admin queue to show reviewers a "did you mean" list before
+// they approve a suggestion.
+export type BrandSuggestionPotentialDuplicate = {
+  id: string;
+  slug: string;
+  name: string;
+};

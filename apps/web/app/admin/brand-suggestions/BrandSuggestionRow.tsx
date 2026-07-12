@@ -16,6 +16,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import type { BrandSuggestionPotentialDuplicate } from "@/lib/types";
 
 type BrandSuggestionStatus = "pending" | "approved" | "rejected" | "duplicate";
 
@@ -44,6 +45,9 @@ interface Props {
   suggestion: Suggestion;
   submitter: Submitter | null;
   defaultSlug: string;
+  // Populated by the server component for pending rows only. Empty
+  // array for non-pending statuses.
+  potentialDuplicates: BrandSuggestionPotentialDuplicate[];
 }
 
 type Mode =
@@ -105,11 +109,13 @@ export default function BrandSuggestionRow({
   suggestion,
   submitter,
   defaultSlug,
+  potentialDuplicates,
 }: Props) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>({ kind: "idle" });
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const isPending = suggestion.status === "pending";
 
@@ -119,6 +125,7 @@ export default function BrandSuggestionRow({
   ): Promise<void> {
     setSubmitting(true);
     setError(null);
+    setNotice(null);
     let res: Response;
     try {
       res = await fetch(
@@ -138,9 +145,33 @@ export default function BrandSuggestionRow({
     const json: unknown = await res.json().catch(() => ({}));
 
     if (!res.ok) {
+      // Safety-net auto-reject on approve (mig 66): the endpoint found
+      // an existing brand with an exact case-insensitive name match,
+      // auto-rejected the suggestion, and notified the submitter.
+      // Show that as a friendly note (not a red error banner) and
+      // refresh the queue — the row will drop out of Pending on its
+      // own.
+      const payload = json as {
+        error?: string;
+        code?: string;
+        existing_brand?: { id: string; slug: string; name: string };
+      };
+      if (
+        res.status === 409 &&
+        payload.code === "exact_duplicate" &&
+        payload.existing_brand
+      ) {
+        const b = payload.existing_brand;
+        setNotice(
+          `Auto-rejected: "${b.name}" is already in the catalog at /brands/${b.slug}. The submitter was notified.`,
+        );
+        router.refresh();
+        setSubmitting(false);
+        setMode({ kind: "idle" });
+        return;
+      }
       const message =
-        (json as { error?: string }).error ??
-        "Action failed. Check server logs.";
+        payload.error ?? "Action failed. Check server logs.";
       setError(message);
       setSubmitting(false);
       return;
@@ -248,6 +279,87 @@ export default function BrandSuggestionRow({
           <p className="text-slime-text whitespace-pre-wrap">
             {suggestion.admin_notes}
           </p>
+        </div>
+      )}
+
+      {/* Potential-duplicate hints — pending rows only. Assisted-review
+          from mig 66. If any brand names overlap in either direction,
+          show them as amber chips plus a Quick action to pre-fill the
+          Mark-duplicate form. If none, show the green all-clear line so
+          the admin can approve with confidence. */}
+      {isPending && (
+        <div className="mt-3 mb-2">
+          {potentialDuplicates.length > 0 ? (
+            <div>
+              <p
+                className="text-[11px] font-semibold mb-1.5"
+                style={{ color: "#FFAE3B" }}
+              >
+                {"⚠"} Potential duplicates:
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {potentialDuplicates.map((dupe) => (
+                  <div
+                    key={dupe.id}
+                    className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[11px]"
+                    style={{
+                      background: "rgba(255,174,59,0.10)",
+                      border: "1px solid rgba(255,174,59,0.45)",
+                    }}
+                  >
+                    <a
+                      href={`/brands/${dupe.slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline"
+                      style={{ color: "#FFAE3B", fontWeight: 600 }}
+                    >
+                      {dupe.name}
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setMode({
+                          kind: "duplicate",
+                          resolvedBrandId: dupe.id,
+                          notes: `Duplicate of "${dupe.name}"`,
+                        })
+                      }
+                      disabled={submitting}
+                      className="rounded-full px-2 py-0.5 text-[10px] font-bold disabled:opacity-60"
+                      style={{
+                        background: "rgba(255,174,59,0.25)",
+                        color: "#FFAE3B",
+                        border: "1px solid rgba(255,174,59,0.55)",
+                        fontFamily: "Montserrat, sans-serif",
+                      }}
+                      title="Pre-fill the mark-duplicate form with this brand"
+                    >
+                      Mark as duplicate
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-[11px]" style={{ color: "#39FF14" }}>
+              No potential duplicates found {"✓"}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Notice banner — used for the safety-net auto-reject on approve. */}
+      {notice && (
+        <div
+          className="rounded-lg px-3 py-2 mt-2 mb-2 text-xs"
+          style={{
+            background: "rgba(255,184,0,0.10)",
+            border: "1px solid rgba(255,184,0,0.45)",
+            color: "#FFD98A",
+          }}
+        >
+          {notice}
         </div>
       )}
 
