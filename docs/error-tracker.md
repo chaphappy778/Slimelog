@@ -31,6 +31,37 @@ Template for new entries:
 
 ## Known potential issues (not-yet-hit, worth watching)
 
+### 2026-07-11 — Log wizard brand auto-fill intermittent (UI + DB)
+
+**Symptom:** Jennifer reported that in the log-slime wizard, the brand auto-fill dropdown "sometimes" didn't populate.
+
+**Root causes (three bugs, one component):**
+
+1. **Silent error swallowing.** `BrandSearchInput.fetchBrands` destructured `const { data } = await supabase...` and ignored `error`. Any failed query (network hiccup, PostgREST 400, expired session) presented as "no matches." Same class as the `name_raw` bug we just fixed — it went undetected until Jennifer spotted the 400s in her devtools.
+2. **Race condition on rapid typing.** No stale-response guard. Typing "P → Pi → Pig" could fire three requests; if the "P" response arrived after "Pig", the older broader results overwrote the fresher narrow ones.
+3. **URL prefill never linked `brand_id`.** Landing on `/log?brand=Cloud%20Nine` filled the text field but never looked up the catalog, so submissions saved with `brand_id=null` even when the brand existed. Anywhere that keys off `brand_id` (rollups, brand pages) missed the log.
+
+**Fix:** all three in `apps/web/components/BrandSearchInput.tsx`.
+
+- Added `requestIdRef` counter; only apply a response if its id still matches the latest request.
+- Added `errored` state; failed queries surface a "brand search failed — keep typing and we'll retry" pill instead of empty silence. Console warns.
+- Added one-shot prefill lookup via ref-gated useEffect: on mount, if `value` is populated and no catalog id is known, ILIKE the brand name once and emit the catalog id upstream.
+
+**Regression check:**
+- Type quickly in the brand field — no flicker of stale broader results.
+- Deliberately break a query (mistype a column in devtools) — user sees the error pill, console logs a warning.
+- Visit `/log?brand=Cloud%20Nine` — after page settles, submitting saves a log with `brand_id` populated (verify via `select brand_id from collection_logs order by created_at desc limit 1`).
+
+**Prevention pattern (apply to future Supabase queries in components):**
+
+- Always destructure both `{ data, error }`.
+- On error: log with `console.warn` and either surface UI or fall back gracefully — never silently render empty.
+- If the fetch depends on user input, add a request-id stale-check.
+
+**Related:** log wizard, `/log?brand=` prefill from feed/leaderboard CTAs (T107 V1 uses this pattern).
+
+---
+
 ### 2026-07-11 — Wrong column on brands query (`name_raw` vs `name`) (DB)
 
 **Symptom:** every brand logo request from `/collection` (GalaxyView) and every catalog lookup on `/leaderboard` returned 400 Bad Request. Console flooded with:

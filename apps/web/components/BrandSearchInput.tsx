@@ -1,5 +1,22 @@
 "use client";
 // apps/web/components/BrandSearchInput.tsx
+//
+// 2026-07-11 (log wizard audit): hardened after Jennifer reported that
+// the auto-brand-fill "sometimes" didn't populate. Three fixes:
+//
+//   1. Errors are no longer swallowed — a failed query now logs a
+//      warning AND keeps the dropdown open with a "search failed"
+//      message so we notice next time. Same class as the recent
+//      brands.name_raw 400s that ran silent for hours.
+//   2. Race protection: rapid typing (P → Pi → Pig) can fire multiple
+//      requests. If the "P" response arrives after "Pig", it used to
+//      overwrite the fresher results. Now we tag each request with an
+//      incrementing id and drop responses from stale requests.
+//   3. Component now returns the catalog brand_id even when the parent
+//      passes in a prefilled `value` (e.g. from `?brand=Cloud%20Nine`).
+//      See the new "prefill lookup" effect. Previously the field
+//      showed the name but brand_id stayed null, so the log saved
+//      without a catalog link.
 
 import { useState, useEffect, useRef, useCallback } from "react";
 // Audit hp-24 (2026-07-09): use the shared browser singleton.
@@ -32,8 +49,15 @@ export default function BrandSearchInput({
   const [results, setResults] = useState<BrandResult[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errored, setErrored] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Race protection: increment on every new request; only apply a
+  // response if its id still matches the latest request.
+  const requestIdRef = useRef(0);
+  // Prefill lookup happens exactly once — otherwise every keystroke
+  // that clears brand_id would retrigger it.
+  const prefillLookedUpRef = useRef(false);
 
   // ── Fetch matching brands ─────────────────────────────────────────────────
 
@@ -43,16 +67,66 @@ export default function BrandSearchInput({
       setOpen(false);
       return;
     }
+    const myRequestId = ++requestIdRef.current;
     setLoading(true);
-    const { data } = await supabase
+    setErrored(false);
+    const { data, error } = await supabase
       .from("brands")
       .select("id, name, slug, verification_tier")
       .ilike("name", `%${query}%`)
       .order("name")
       .limit(10);
-    setResults(data ?? []);
-    setOpen(true);
+
+    // Stale-response guard — a newer keystroke has already fired.
+    if (myRequestId !== requestIdRef.current) return;
+
+    if (error) {
+      // Do NOT silently return empty results; log and surface it.
+      // Prior behavior swallowed 400s (e.g. our recent brands.name_raw
+      // typo) and just looked like "no matches" to the user.
+      console.warn("[BrandSearchInput] brand search failed:", error.message);
+      setResults([]);
+      setErrored(true);
+      setOpen(true);
+    } else {
+      setResults(data ?? []);
+      setErrored(false);
+      setOpen(true);
+    }
     setLoading(false);
+  }, []);
+
+  // ── One-shot prefill lookup ───────────────────────────────────────────────
+  // When the parent hands us a `value` on mount (e.g. from `?brand=X`)
+  // but no brand_id has been linked yet, look up the catalog once and
+  // emit the id upstream if we find a match. Avoids the "field shows
+  // the brand name but the log saves with brand_id=null" bug.
+  useEffect(() => {
+    if (prefillLookedUpRef.current) return;
+    if (!value.trim()) return;
+    prefillLookedUpRef.current = true;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from("brands")
+        .select("id, name")
+        .ilike("name", value.trim())
+        .maybeSingle();
+      if (error) {
+        console.warn(
+          "[BrandSearchInput] prefill lookup failed:",
+          error.message,
+        );
+        return;
+      }
+      if (data) {
+        // Use the canonical catalog name so casing matches the DB row.
+        onChange(data.name, data.id);
+      }
+    })();
+    // We deliberately only run this once, controlled by the ref. Adding
+    // `value` to deps would re-trigger on user typing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Debounce input ────────────────────────────────────────────────────────
@@ -210,6 +284,29 @@ export default function BrandSearchInput({
           }}
         >
           Searching...
+        </div>
+      )}
+
+      {/* Error state — was silently empty before, which hid real
+          failures like the brands.name_raw 400s. Now the user sees
+          "search failed" so we notice too. */}
+      {open && !loading && errored && (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 4px)",
+            left: 0,
+            right: 0,
+            background: "rgba(15,0,24,0.97)",
+            border: "1px solid rgba(255,120,120,0.5)",
+            borderRadius: 8,
+            zIndex: 50,
+            padding: "10px 12px",
+            fontSize: 13,
+            color: "rgba(255,180,180,0.85)",
+          }}
+        >
+          Brand search failed — keep typing and we&apos;ll retry.
         </div>
       )}
     </div>
