@@ -142,7 +142,17 @@ function rankingsForBrand(
 
 // ─── Page ─────────────────────────────────────────────────────────────
 
-export default async function LeaderboardPage() {
+export default async function LeaderboardPage({
+  searchParams,
+}: {
+  // T107 part (b) 2026-07-11: `?brand={slug}` deep-links from
+  // /brands/[slug] "See full leaderboard" strip. When present and
+  // resolvable, overrides the user's signature brand.
+  searchParams?: Promise<{ brand?: string }>;
+}) {
+  const rawSearchParams = searchParams ? await searchParams : undefined;
+  const requestedBrandSlug = rawSearchParams?.brand?.trim() ?? null;
+
   const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -358,6 +368,48 @@ export default async function LeaderboardPage() {
             name: catalogRow?.name ?? bucket.displayName,
             slug: catalogRow?.slug ?? null,
             logo_url: catalogRow?.logo_url ?? null,
+            total_logs: bucket.total,
+            logger_count: bucket.loggerIds.size,
+            base_type: baseType,
+            base_type_label: baseType ? SLIME_BASE_TYPE_LABELS[baseType] : null,
+          };
+        }
+      }
+    }
+  }
+
+  // ── URL-requested brand override (T107 part b) ──────────────────────
+  // When the page is opened as `/leaderboard?brand=cloud-nine` (from a
+  // brand page's Top Collectors strip), preselect that brand instead of
+  // the user's signature. Resolves against the aggregated top-brands
+  // first; if the requested brand isn't in the top 30, fall back to a
+  // brands-table lookup + aggregate hydration.
+  if (requestedBrandSlug) {
+    const inTop = topBrands.find((b) => b.slug === requestedBrandSlug);
+    if (inTop) {
+      signatureBrand = inTop;
+    } else {
+      // Slug lookup + hydrate from bucketed rows if the brand had any
+      // logs at all. If it's a brand with zero logs, we just leave the
+      // signature brand alone — the leaderboard doesn't render empty
+      // brands as first-class entries.
+      const { data: catalog } = await supabase
+        .from("brands")
+        .select("name, slug, logo_url")
+        .eq("slug", requestedBrandSlug)
+        .maybeSingle();
+      const catalogRow = (catalog as BrandCatalogRow | null) ?? null;
+      if (catalogRow?.name) {
+        const requestedKey = catalogRow.name.trim().toLowerCase();
+        const bucket = brandMap.get(requestedKey);
+        if (bucket) {
+          const baseType = modeBaseType(bucket.baseTypeCounts);
+          signatureBrand = {
+            key: bucket.key,
+            name_raw: bucket.displayName,
+            name: catalogRow.name,
+            slug: catalogRow.slug,
+            logo_url: catalogRow.logo_url,
             total_logs: bucket.total,
             logger_count: bucket.loggerIds.size,
             base_type: baseType,

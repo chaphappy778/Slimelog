@@ -18,6 +18,10 @@ import ShareButton from "@/components/ShareButton";
 import ClaimBrandButton from "@/components/brand/ClaimBrandButton";
 import BannerLightbox from "./components/BannerLightbox";
 import DropCard from "./components/DropCard";
+// T107 part (b) 2026-07-11: top collectors strip closes the discovery
+// loop — brand page → leaderboard → back. See docs/SlimeLog_Tracker.md.
+import TopCollectorsStrip from "@/components/brand/TopCollectorsStrip";
+import type { TopCollector } from "@/components/brand/TopCollectorsStrip";
 import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
 import type { Brand, SlimeBaseType, BrandClaimStatus } from "@/lib/types";
 import { validateBusinessEmail } from "@/lib/brand-claims";
@@ -268,6 +272,75 @@ export default async function BrandPage({
     .limit(12);
 
   const communityLogs = (communityRows ?? []) as unknown as BrandSlimeRow[];
+
+  // ─── Top collectors (T107 part b) ──────────────────────────────────────────
+  // Pulls every public log for this brand (name ILIKE so we catch logs
+  // where brand_id was never linked), aggregates by user_id, takes the
+  // top 5, then joins to profiles_public for username + avatar. Cheap
+  // at our scale; see docs/cost-tracker.md for scaling notes.
+  const topCollectors: TopCollector[] = await (async () => {
+    const { data: logRows, error } = await supabase
+      .from("collection_logs")
+      .select("user_id")
+      .eq("is_public", true)
+      .ilike("brand_name_raw", brand.name);
+    if (error) {
+      console.warn(
+        "[brand top-collectors] fetch failed",
+        brand.name,
+        error.message,
+      );
+      return [];
+    }
+    const counts = new Map<string, number>();
+    for (const row of (logRows ?? []) as Array<{ user_id: string | null }>) {
+      if (!row.user_id) continue;
+      counts.set(row.user_id, (counts.get(row.user_id) ?? 0) + 1);
+    }
+    const ranked = Array.from(counts.entries())
+      .map(([user_id, count]) => ({ user_id, count }))
+      .sort((a, b) =>
+        b.count !== a.count
+          ? b.count - a.count
+          : a.user_id.localeCompare(b.user_id),
+      )
+      .slice(0, 5);
+    if (ranked.length === 0) return [];
+
+    const { data: profileRows } = await supabase
+      .from("profiles_public")
+      .select("id, username, avatar_url")
+      .in(
+        "id",
+        ranked.map((r) => r.user_id),
+      );
+    const profiles = new Map<
+      string,
+      { username: string | null; avatar_url: string | null }
+    >();
+    for (const p of (profileRows ?? []) as Array<{
+      id: string;
+      username: string | null;
+      avatar_url: string | null;
+    }>) {
+      profiles.set(p.id, {
+        username: p.username,
+        avatar_url: p.avatar_url,
+      });
+    }
+    return ranked
+      .map((r, i): TopCollector | null => {
+        const p = profiles.get(r.user_id);
+        if (!p?.username) return null;
+        return {
+          rank: i + 1,
+          username: p.username,
+          avatar_url: p.avatar_url,
+          count: r.count,
+        };
+      })
+      .filter((r): r is TopCollector => r !== null);
+  })();
 
   const { data: dropRows } = await supabase
     .from("drops")
@@ -730,6 +803,16 @@ export default async function BrandPage({
               ))}
             </div>
           </section>
+        )}
+
+        {/* Top collectors — T107 part (b). Only shows when there are
+            at least 2 collectors so we don't run a one-person race. */}
+        {topCollectors.length >= 2 && (
+          <TopCollectorsStrip
+            brandName={brand.name}
+            brandSlug={brand.slug}
+            collectors={topCollectors}
+          />
         )}
 
         {/* Community logs */}
