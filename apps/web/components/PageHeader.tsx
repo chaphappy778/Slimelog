@@ -57,7 +57,6 @@ function shouldShowBackButton(pathname: string | null): boolean {
 
 export default function PageHeader() {
   const pathname = usePathname();
-  const profileActive = pathname === "/profile";
 
   // [Change 6 — T31] Router + back-button visibility.
   // [Change 9 — T31 v2] handleBack now pops the in-app nav stack and
@@ -188,29 +187,11 @@ export default function PageHeader() {
       <div className="flex items-center gap-2">
         {isLoggedIn === true && (
           <>
-            <Link
-              href="/profile"
-              aria-label="Profile"
-              className={`rounded-full border p-2 transition-all duration-150 ${
-                profileActive
-                  ? "text-slime-accent border-slime-accent shadow-glow-green"
-                  : "text-slime-muted border-slime-border hover:text-slime-accent hover:border-slime-accent/50"
-              }`}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                className="w-5 h-5"
-              >
-                <circle cx="12" cy="7" r="4" />
-                <path d="M4 21v-1a8 8 0 0116 0v1" />
-              </svg>
-            </Link>
-            {/* T29 (2026-07-12): notification bell sits to the left of
-                the hamburger. Hides itself on /notifications so we
-                don't dead-end the user. */}
+            {/* T29 2026-07-12: removed the standalone profile icon. It
+                sat in muted grey next to a bright-white bell and
+                hamburger, reading as "disabled" instead of a nav point.
+                The hamburger menu already links to /profile, so this
+                was a redundant tap target. */}
             <NotificationBell />
             <SlimeMenu />
           </>

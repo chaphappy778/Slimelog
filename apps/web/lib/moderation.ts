@@ -91,9 +91,31 @@ const profanityMatcher = new RegExpMatcher({
   ...englishRecommendedTransformers,
 });
 
+// Supplementary patterns for words the `obscenity` English dataset
+// intentionally omits because of ambiguous stems (e.g. `cock` collides
+// with cockpit, peacock, rooster). We block the common compound forms
+// explicitly rather than adding the standalone word and dealing with
+// legit-word false positives everywhere. Add more here as they surface
+// in smoke testing.
+const CUSTOM_PROFANITY_PATTERNS: readonly RegExp[] = [
+  /horsecock/i,
+  /dogcock/i,
+  /bigcock/i,
+  /monstercock/i,
+  /suckcock|cocksuck/i,
+  /cockhead/i,
+  // Standalone `cock` / `cocks` only when NOT preceded by common legit
+  // stems (peacock, cockpit, cocktail, hancock, shuttlecock).
+  /(?<!pea|hancock|shuttle)(?<!cockpi|cocktai)\bcocks?\b/i,
+];
+
 function containsProfanity(text: string): boolean {
   if (!text) return false;
-  return profanityMatcher.hasMatch(text);
+  if (profanityMatcher.hasMatch(text)) return true;
+  for (const pattern of CUSTOM_PROFANITY_PATTERNS) {
+    if (pattern.test(text)) return true;
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -316,7 +338,17 @@ export function moderateText(
         message: rule.formatHint ?? "Invalid format.",
       };
     }
-    if (RESERVED_USERNAMES.has(lowered)) {
+    // T111 2026-07-12 hotfix: reserved-name bypass with numeric suffix.
+    // `admin1`, `admin_2`, `admin123` all read as impersonation attempts
+    // and used to slip through the exact-match Set.has() check. Strip
+    // trailing digits and underscores before comparing, so the "root"
+    // gets caught. `admin_slime` still passes because slime is not
+    // digits/underscores.
+    const usernameRoot = lowered.replace(/[_\d]+$/, "");
+    if (
+      RESERVED_USERNAMES.has(lowered) ||
+      (usernameRoot.length > 0 && RESERVED_USERNAMES.has(usernameRoot))
+    ) {
       return { ok: false, reason: "reserved", message: COPY.reserved };
     }
     if (containsProfanity(lowered)) {
