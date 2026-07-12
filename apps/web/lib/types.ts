@@ -25,7 +25,10 @@ export type NotificationType =
   | "friend_log"
   | "friend_rating"
   | "comment_on_log"
-  | "like_on_log";
+  | "like_on_log"
+  // T110 (2026-07-11): brand suggestion outcomes.
+  | "brand_suggestion_approved"
+  | "brand_suggestion_rejected";
 
 export type DropStatus =
   | "announced"

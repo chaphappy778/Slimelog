@@ -17,8 +17,14 @@
 //      See the new "prefill lookup" effect. Previously the field
 //      showed the name but brand_id stayed null, so the log saved
 //      without a catalog link.
+//
+// T110 (2026-07-11): when the current query is >= 2 chars and returns
+// no results (and isn't an errored request), render a "Not seeing your
+// brand? Submit it →" link in the dropdown so users can escape into
+// /submit-brand without abandoning the log flow. Prefills the name.
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import Link from "next/link";
 // Audit hp-24 (2026-07-09): use the shared browser singleton.
 import { createClient } from "@/lib/supabase/client";
 
@@ -208,64 +214,114 @@ export default function BrandSearchInput({
         }}
       />
 
-      {open && results.length > 0 && (
-        <div
-          style={{
-            position: "absolute",
-            top: "calc(100% + 4px)",
-            left: 0,
-            right: 0,
-            background: "rgba(15,0,24,0.97)",
-            border: "1px solid rgba(45,10,78,0.8)",
-            borderRadius: 8,
-            zIndex: 50,
-            overflow: "hidden",
-          }}
-        >
-          {results.map((brand) => (
-            <button
-              key={brand.id}
-              type="button"
-              onClick={() => handleSelect(brand)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                width: "100%",
-                padding: "10px 12px",
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                textAlign: "left",
-                color: "white",
-                fontSize: 14,
-                transition: "background 0.1s",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background =
-                  "rgba(45,10,78,0.4)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background =
-                  "transparent";
-              }}
-            >
-              <span style={{ flex: 1 }}>{brand.name}</span>
-              {brand.verification_tier === "verified" && (
-                <span
-                  style={{
-                    width: 7,
-                    height: 7,
-                    borderRadius: "50%",
-                    background: "#00F0FF",
-                    flexShrink: 0,
-                  }}
-                />
-              )}
-            </button>
-          ))}
-        </div>
-      )}
+      {open &&
+        (results.length > 0 ||
+          (!loading && !errored && value.trim().length >= 2)) && (
+          <div
+            style={{
+              position: "absolute",
+              top: "calc(100% + 4px)",
+              left: 0,
+              right: 0,
+              background: "rgba(15,0,24,0.97)",
+              border: "1px solid rgba(45,10,78,0.8)",
+              borderRadius: 8,
+              zIndex: 50,
+              overflow: "hidden",
+            }}
+          >
+            {results.map((brand) => (
+              <button
+                key={brand.id}
+                type="button"
+                onClick={() => handleSelect(brand)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  width: "100%",
+                  padding: "10px 12px",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  color: "white",
+                  fontSize: 14,
+                  transition: "background 0.1s",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background =
+                    "rgba(45,10,78,0.4)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background =
+                    "transparent";
+                }}
+              >
+                <span style={{ flex: 1 }}>{brand.name}</span>
+                {brand.verification_tier === "verified" && (
+                  <span
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: "50%",
+                      background: "#00F0FF",
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
+              </button>
+            ))}
+
+            {/* T110: fallback CTA — shows when the query has >= 2 chars
+                and the query is stable (not loading, not errored). Sits
+                below any results as an escape hatch, or acts as the sole
+                item when there are no matches at all. */}
+            {!loading && !errored && value.trim().length >= 2 && (
+              <Link
+                href={`/submit-brand?name=${encodeURIComponent(value.trim())}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  width: "100%",
+                  padding: "10px 12px",
+                  textAlign: "left",
+                  color: "#FF00E5",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  borderTop:
+                    results.length > 0
+                      ? "1px solid rgba(45,10,78,0.6)"
+                      : "none",
+                  textDecoration: "none",
+                }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                  style={{ flexShrink: 0 }}
+                >
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                <span style={{ flex: 1 }}>
+                  {results.length === 0
+                    ? `Not seeing "${value.trim()}"? Submit it`
+                    : "Not seeing your brand? Submit it"}
+                </span>
+                <span style={{ opacity: 0.6 }}>&rarr;</span>
+              </Link>
+            )}
+          </div>
+        )}
 
       {open && loading && results.length === 0 && (
         <div

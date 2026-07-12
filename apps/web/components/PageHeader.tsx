@@ -42,6 +42,7 @@ const BACK_BUTTON_ROUTES = [
   /^\/admin\/subscriptions$/,
   /^\/admin\/waitlist$/,
   /^\/admin\/brand-claims(\/.+)?$/,
+  /^\/admin\/brand-suggestions(\/.+)?$/,
 ];
 
 function shouldShowBackButton(pathname: string | null): boolean {
