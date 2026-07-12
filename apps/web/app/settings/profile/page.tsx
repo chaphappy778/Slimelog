@@ -360,16 +360,40 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── profile fetch ──────────────────────────────────────────────────────────
+  //
+  // 2026-07-12 hardening: previously an unhandled promise rejection
+  // (network hiccup, aborted request, etc.) left `profileLoading = true`
+  // forever, and the skeleton pulsed in front of the content
+  // indefinitely. Every branch now guarantees `setProfileLoading(false)`
+  // via .finally() + a 10s safety timer so at worst the user sees an
+  // empty form instead of an eternal loading state.
   useEffect(() => {
-    supabase
-      .from("profiles")
-      .select(
-        "username, bio, location, website_url, avatar_url, instagram_handle, tiktok_handle, shop_url, youtube_handle, pinterest_handle, twitter_handle, background_url, favorite_brand_id",
-      )
-      .eq("id", userId)
-      .maybeSingle()
-      .then(async ({ data }) => {
-        if (data) {
+    let cancelled = false;
+    // Safety timer: if neither .finally nor onError has fired in 10s,
+    // force the loading state to clear. Aggressive but recoverable —
+    // the user will see empty fields and can retry / refresh.
+    const failSafe = setTimeout(() => {
+      if (cancelled) return;
+      console.warn(
+        "[settings/profile] profile fetch failsafe fired at 10s — clearing loading state",
+      );
+      setProfileLoading(false);
+      setLinksLoading(false);
+    }, 10_000);
+
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select(
+            "username, bio, location, website_url, avatar_url, instagram_handle, tiktok_handle, shop_url, youtube_handle, pinterest_handle, twitter_handle, background_url, favorite_brand_id",
+          )
+          .eq("id", userId)
+          .maybeSingle();
+        if (cancelled) return;
+        if (error) {
+          console.warn("[settings/profile] profile fetch failed:", error.message);
+        } else if (data) {
           let favName = "";
           if (data.favorite_brand_id) {
             const { data: brandRow } = await supabase
@@ -377,6 +401,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
               .select("name")
               .eq("id", data.favorite_brand_id)
               .maybeSingle();
+            if (cancelled) return;
             favName = brandRow?.name ?? "";
           }
           const loaded: FormState = {
@@ -398,18 +423,40 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
           setOriginalForm(loaded);
           setForm(loaded);
         }
-        setProfileLoading(false);
-      });
+      } catch (err) {
+        console.warn("[settings/profile] profile fetch threw:", err);
+      } finally {
+        if (!cancelled) setProfileLoading(false);
+      }
+    })();
 
-    supabase
-      .from("profile_links")
-      .select("id, label, url, sort_order")
-      .eq("user_id", userId)
-      .order("sort_order", { ascending: true })
-      .then(({ data }) => {
-        setLinks((data ?? []) as ProfileLink[]);
-        setLinksLoading(false);
-      });
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("profile_links")
+          .select("id, label, url, sort_order")
+          .eq("user_id", userId)
+          .order("sort_order", { ascending: true });
+        if (cancelled) return;
+        if (error) {
+          console.warn(
+            "[settings/profile] profile_links fetch failed:",
+            error.message,
+          );
+        } else {
+          setLinks((data ?? []) as ProfileLink[]);
+        }
+      } catch (err) {
+        console.warn("[settings/profile] profile_links fetch threw:", err);
+      } finally {
+        if (!cancelled) setLinksLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(failSafe);
+    };
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── username handlers ──────────────────────────────────────────────────────
