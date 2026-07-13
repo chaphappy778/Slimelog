@@ -115,6 +115,11 @@ export default function GuideNav({ parts }: GuideNavProps) {
           backdropFilter: "blur(12px)",
           WebkitBackdropFilter: "blur(12px)",
           borderBottom: "1px solid rgba(45,10,78,0.55)",
+          // 2026-07-13: paints a compositor layer so the sticky doesn't
+          // repaint the whole viewport on every scroll frame, and helps
+          // some browsers keep sticky attached under overflow-x-hidden
+          // ancestors (PageWrapper).
+          willChange: "transform",
         }}
       >
         <div className="flex items-center gap-2 px-3 py-2.5">
@@ -137,15 +142,17 @@ export default function GuideNav({ parts }: GuideNavProps) {
                   className="flex-none rounded-full text-[12.5px] font-semibold whitespace-nowrap transition-all"
                   style={{
                     padding: "6px 12px",
+                    // 2026-07-13 refinement: active pill goes solid cyan
+                    // with black text and a subtle glow, so the current
+                    // section reads at a glance without needing to
+                    // parse the outline treatment.
                     border: isActive
-                      ? "1px solid rgba(0,240,255,0.5)"
+                      ? "1px solid #00F0FF"
                       : "1px solid rgba(45,10,78,0.7)",
-                    background: isActive
-                      ? "rgba(0,240,255,0.14)"
-                      : "rgba(45,10,78,0.3)",
-                    color: isActive ? "#7BF5FF" : "rgba(245,245,245,0.7)",
+                    background: isActive ? "#00F0FF" : "rgba(45,10,78,0.3)",
+                    color: isActive ? "#0A0A0A" : "rgba(245,245,245,0.7)",
                     boxShadow: isActive
-                      ? "0 0 16px rgba(0,240,255,0.24)"
+                      ? "0 0 18px rgba(0,240,255,0.55), 0 0 6px rgba(0,240,255,0.35)"
                       : undefined,
                     fontFamily: "system-ui, sans-serif",
                   }}
@@ -155,7 +162,7 @@ export default function GuideNav({ parts }: GuideNavProps) {
                     style={{
                       fontFamily: "Montserrat, sans-serif",
                       opacity: isActive ? 1 : 0.6,
-                      color: isActive ? "#00F0FF" : "rgba(245,245,245,0.6)",
+                      color: isActive ? "#0A0A0A" : "rgba(245,245,245,0.6)",
                     }}
                   >
                     {p.n.toString().padStart(2, "0")}
