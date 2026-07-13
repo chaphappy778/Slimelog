@@ -1,6 +1,11 @@
 // apps/web/app/discover/page.tsx
 // [T74-A] Discover page redesign — type carousel, popular users, featured drops
-// [T74-A polish] Keywords merged into Slime Types section, carousel sizes increased, scrollbars removed
+// [T74-A polish] Keywords merged into Slime Types section, carousel sizes removed
+// [T32f 2026-07-13] `?sort=<axis>` deep-links from /how-to-rate. Each axis
+//   footer on how-to-rate links to /discover?sort=<axis-slug>. This page
+//   maps the slug to the underlying avg column, changes the ORDER BY,
+//   and passes the axis down to the client so the rating-bar readout and
+//   sort math both use that axis instead of avg_overall.
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
@@ -11,7 +16,31 @@ import TypeCarousel from "@/components/discover/TypeCarousel";
 import PopularUsersCarousel from "@/components/discover/PopularUsersCarousel";
 import FeaturedDropsCarousel from "@/components/discover/FeaturedDropsCarousel";
 import DiscoverSlimesClient from "@/components/discover/DiscoverSlimesClient";
-import type { TopRatedSlime } from "@/components/discover/DiscoverSlimesClient";
+import type {
+  TopRatedSlime,
+  SortAxis,
+} from "@/components/discover/DiscoverSlimesClient";
+
+// ─── Axis slug → DB column mapping ──────────────────────────────────────
+// Public slugs match /how-to-rate ids. DB columns predate the six-axis
+// vocabulary (drizzle == aesthetic, sensory_fit == quality) — keep the
+// slugs canonical and translate at the query boundary.
+const AXIS_TO_COLUMN = {
+  texture: { column: "avg_texture", label: "Texture" },
+  sound: { column: "avg_sound", label: "Sound" },
+  aesthetic: { column: "avg_drizzle", label: "Aesthetic" },
+  creativity: { column: "avg_creativity", label: "Creativity" },
+  quality: { column: "avg_sensory_fit", label: "Quality" },
+  overall: { column: "avg_overall", label: "Overall" },
+} as const;
+
+type AxisSlug = keyof typeof AXIS_TO_COLUMN;
+
+function normalizeAxisSlug(raw: string | undefined): AxisSlug {
+  if (!raw) return "overall";
+  const lower = raw.toLowerCase();
+  return (lower in AXIS_TO_COLUMN ? lower : "overall") as AxisSlug;
+}
 
 type PopularUser = {
   id: string;
@@ -22,7 +51,16 @@ type PopularUser = {
   follower_count: number;
 };
 
-export default async function DiscoverPage() {
+export default async function DiscoverPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sort?: string }>;
+}) {
+  const params = await searchParams;
+  const axisSlug = normalizeAxisSlug(params.sort);
+  const { column: sortColumn, label: sortLabel } = AXIS_TO_COLUMN[axisSlug];
+  const isCustomAxis = axisSlug !== "overall";
+
   const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -37,9 +75,9 @@ export default async function DiscoverPage() {
         .select(
           "id, name, base_type, subtype_id, image_url, avg_overall, avg_texture, avg_scent, avg_sound, avg_drizzle, avg_creativity, avg_sensory_fit, total_ratings, brand_id, brands(name, slug), subtypes(name)",
         )
-        .not("avg_overall", "is", null)
+        .not(sortColumn, "is", null)
         .gte("total_ratings", 3)
-        .order("avg_overall", { ascending: false })
+        .order(sortColumn, { ascending: false })
         .order("total_ratings", { ascending: false })
         .limit(20),
 
@@ -276,10 +314,15 @@ export default async function DiscoverPage() {
           </section>
         )}
 
-        {/* Section: Top Rated Slimes */}
+        {/* Section: Top Rated Slimes.
+            [T32f 2026-07-13] When ?sort=<axis> is set, the label becomes
+            "Top Rated by <Axis>" and the axis is passed to the client so
+            it can display the axis-specific rating value + sort. */}
         <section className="mb-6 px-4">
           <div className="flex items-center justify-between mb-3">
-            <p className="section-label">Top Rated Slimes</p>
+            <p className="section-label">
+              {isCustomAxis ? `Top Rated by ${sortLabel}` : "Top Rated Slimes"}
+            </p>
             <span
               className="text-xs"
               style={{ color: "rgba(245,245,245,0.35)" }}
@@ -287,7 +330,11 @@ export default async function DiscoverPage() {
               Community ratings
             </span>
           </div>
-          <DiscoverSlimesClient initialSlimes={topSlimes} trendingTags={[]} />
+          <DiscoverSlimesClient
+            initialSlimes={topSlimes}
+            trendingTags={[]}
+            sortAxis={isCustomAxis ? (axisSlug as SortAxis) : null}
+          />
         </section>
 
         {/* Section: Featured Drops */}

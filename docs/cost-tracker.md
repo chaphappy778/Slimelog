@@ -59,6 +59,24 @@ implemented mitigation and the concern is gone.
 
 ---
 
+### 2026-07-13 — Discover axis-sort query (DB Query)
+
+**Query:** `SELECT ... FROM slimes WHERE avg_<axis> IS NOT NULL AND total_ratings >= 3 ORDER BY avg_<axis> DESC, total_ratings DESC LIMIT 20`. Runs on every GET to `/discover?sort=<axis>` where axis is texture/sound/aesthetic/creativity/quality/overall.
+
+**Current cost:** trivial pre-launch. `slimes` currently has hundreds of rows; even a full sequential scan is sub-millisecond. Six possible sort columns means six possible query plans.
+
+**What makes it grow:** table size × sort-column selectivity. When `slimes` gets into the tens of thousands with real rating volume, an unindexed `ORDER BY avg_<axis> DESC LIMIT 20` will need to scan and heap-sort. The `avg_overall` path was the only one covered by prior planning; the five new axis columns (texture/sound/drizzle/creativity/sensory_fit) are unindexed.
+
+**Mitigation path (order of preference):**
+
+1. **Add btree indexes on `(avg_texture, total_ratings DESC)` and equivalents for the other four axes**, all `WHERE avg_<axis> IS NOT NULL` to keep them narrow. Five small indexes. Cheap.
+2. **Cache the top-20-by-axis result** at the route-handler layer with a 60s TTL, keyed on `axis`. Leaderboard-shaped data changes at human speed.
+3. **Materialized view `top_slimes_by_axis(axis, rank, slime_id, avg)`** refreshed hourly. Overkill until table size makes option 1 insufficient.
+
+**Related:** T32f (how-to-rate deep-link wiring). Related doc: `docs/error-tracker.md` for the migration-lag pattern if we add indexes without shipping migration first.
+
+---
+
 ## Retired / resolved
 
 *(none yet)*

@@ -4,11 +4,45 @@
 // [Change 2] — Subtype join support, drill-down filter row, type="button" sweep
 // [T72] — trendingTags prop + keyword pill row above Slime Type filter
 // [T74-A polish] — Condensed filter bar: single row with sort + filter dropdown
+// [T32f 2026-07-13] — Optional `sortAxis` prop. When set (from
+//   /discover?sort=<axis>), the client sorts + reads the rating bar off
+//   that axis's column instead of avg_overall, and a "Sorted by <axis>"
+//   chip appears above the filter bar with a Clear link that drops the
+//   URL param.
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import Link from "next/link";
 import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
 import type { SlimeBaseType } from "@/lib/types";
+
+// ─── Axis sort types ──────────────────────────────────────────────────
+// Public slugs match the /how-to-rate section ids. When any of these is
+// active, sort and the rating-bar value use the mapped avg column.
+export type SortAxis =
+  | "texture"
+  | "sound"
+  | "aesthetic"
+  | "creativity"
+  | "quality";
+
+const AXIS_COLUMN: Record<
+  SortAxis,
+  "avg_texture" | "avg_sound" | "avg_drizzle" | "avg_creativity" | "avg_sensory_fit"
+> = {
+  texture: "avg_texture",
+  sound: "avg_sound",
+  aesthetic: "avg_drizzle",
+  creativity: "avg_creativity",
+  quality: "avg_sensory_fit",
+};
+
+const AXIS_LABEL: Record<SortAxis, string> = {
+  texture: "Texture",
+  sound: "Sound",
+  aesthetic: "Aesthetic",
+  creativity: "Creativity",
+  quality: "Quality",
+};
 
 export type TopRatedSlime = {
   id: string;
@@ -96,7 +130,20 @@ function RankBadge({ rank }: { rank: number }) {
   );
 }
 
-function TopRatedCard({ slime, rank }: { slime: TopRatedSlime; rank: number }) {
+function TopRatedCard({
+  slime,
+  rank,
+  ratingValue,
+}: {
+  slime: TopRatedSlime;
+  rank: number;
+  /**
+   * The number shown in the RatingBar and readout. Defaults to
+   * avg_overall; overridden with an axis-specific column when the page
+   * is deep-linked from /how-to-rate?sort=<axis>.
+   */
+  ratingValue: number | null;
+}) {
   const brandSlug = slime.brands?.slug ?? null;
   const cardContent = (
     <article
@@ -125,7 +172,7 @@ function TopRatedCard({ slime, rank }: { slime: TopRatedSlime; rank: number }) {
             {slime.subtypes?.name ? ` \u00b7 ${slime.subtypes.name}` : null}
           </p>
         )}
-        <RatingBar avg={slime.avg_overall} />
+        <RatingBar avg={ratingValue} />
       </div>
       <div className="text-right shrink-0">
         <p className="text-xs text-slime-muted">{slime.total_ratings ?? 0}</p>
@@ -401,14 +448,28 @@ function FilterBar({
 export default function DiscoverSlimesClient({
   initialSlimes,
   trendingTags = [],
+  sortAxis = null,
 }: {
   initialSlimes: TopRatedSlime[];
   trendingTags?: { id: string; name: string }[];
+  /** When set, sort + rating-bar readout switch to this axis's column. */
+  sortAxis?: SortAxis | null;
 }) {
   const [activeType, setActiveType] = useState<string>("all");
   const [minRating, setMinRating] = useState<number | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("top_rated");
   const [activeSubtype, setActiveSubtype] = useState<string | null>(null);
+
+  // Column the "top rated" mode + min-rating filter + rating bar look at.
+  // When an axis is set from ?sort=<axis>, everything downstream reads
+  // from that axis instead of avg_overall.
+  const ratingColumn: keyof TopRatedSlime = sortAxis
+    ? AXIS_COLUMN[sortAxis]
+    : "avg_overall";
+  const readRating = (s: TopRatedSlime): number | null => {
+    const v = s[ratingColumn];
+    return typeof v === "number" ? v : null;
+  };
 
   const availableTypes = useMemo(() => {
     const seen = new Set<string>();
@@ -441,22 +502,63 @@ export default function DiscoverSlimesClient({
     }
 
     if (minRating !== null) {
-      result = result.filter(
-        (s) => s.avg_overall !== null && s.avg_overall >= minRating,
-      );
+      result = result.filter((s) => {
+        const v = readRating(s);
+        return v !== null && v >= minRating;
+      });
     }
 
     if (sortMode === "top_rated") {
-      result.sort((a, b) => (b.avg_overall ?? 0) - (a.avg_overall ?? 0));
+      result.sort((a, b) => (readRating(b) ?? 0) - (readRating(a) ?? 0));
     } else {
       result.sort((a, b) => (b.total_ratings ?? 0) - (a.total_ratings ?? 0));
     }
 
     return result;
-  }, [initialSlimes, activeType, activeSubtype, minRating, sortMode]);
+    // readRating captures ratingColumn — safe to depend on ratingColumn only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    initialSlimes,
+    activeType,
+    activeSubtype,
+    minRating,
+    sortMode,
+    ratingColumn,
+  ]);
 
   return (
     <>
+      {/* [T32f 2026-07-13] Axis-sort chip. Only appears when the page was
+          deep-linked from /how-to-rate?sort=<axis>. Cyan chip identifies
+          which axis is active; magenta Clear link drops the URL param. */}
+      {sortAxis && (
+        <div className="mb-3 flex items-center gap-2">
+          <span
+            className="text-xs"
+            style={{ color: "rgba(245,245,245,0.55)" }}
+          >
+            Sorted by
+          </span>
+          <span
+            className="px-2.5 py-1 rounded-full text-xs font-semibold"
+            style={{
+              background: "rgba(0,240,255,0.12)",
+              border: "1px solid rgba(0,240,255,0.35)",
+              color: "#00F0FF",
+            }}
+          >
+            {AXIS_LABEL[sortAxis]}
+          </span>
+          <Link
+            href="/discover"
+            className="text-xs font-semibold"
+            style={{ color: "#FF7BEB" }}
+          >
+            Clear
+          </Link>
+        </div>
+      )}
+
       {/* Compact filter bar */}
       <FilterBar
         sortMode={sortMode}
@@ -526,7 +628,12 @@ export default function DiscoverSlimesClient({
       ) : (
         <div className="flex flex-col gap-3">
           {filtered.map((slime, i) => (
-            <TopRatedCard key={slime.id} slime={slime} rank={i + 1} />
+            <TopRatedCard
+              key={slime.id}
+              slime={slime}
+              rank={i + 1}
+              ratingValue={readRating(slime)}
+            />
           ))}
         </div>
       )}
