@@ -90,23 +90,29 @@ export default async function DiscoverPage({
     pulseLogsResult,
     typeCountsResult,
   ] = await Promise.all([
+    // [Discover V1 bug-fix 2026-07-13] Top-rated is now computed from
+    // `collection_logs` directly, not the `slimes` catalog. Root cause:
+    // the log wizard inserts into `collection_logs` with an optional
+    // `slime_id`, but users typing free-text brand/name land with
+    // `slime_id = null`. The trigger that updates
+    // `slimes.avg_overall + slimes.total_ratings` only fires when a
+    // catalog slime is referenced, so free-text logs never
+    // contributed to the top-rated leaderboard. Aggregating logs
+    // directly means every rated log counts, regardless of whether
+    // the catalog knew about it. Grouped in JS below by slime_id
+    // when present, else by (slime_name, brand_name_raw). Fetches
+    // all six rating axes + image + brand_id so the client can render
+    // per-axis sorting without an extra round-trip.
     supabase
-      .from("slimes")
+      .from("collection_logs")
       .select(
-        "id, name, base_type, subtype_id, image_url, avg_overall, avg_texture, avg_scent, avg_sound, avg_drizzle, avg_creativity, avg_sensory_fit, total_ratings, brand_id, brands(name, slug), subtypes(name)",
+        "id, slime_id, slime_name, brand_id, brand_name_raw, base_type, subtype_id, image_url, rating_overall, rating_texture, rating_sound, rating_drizzle, rating_creativity, rating_sensory_fit, subtypes(name)",
       )
-      .not(sortColumn, "is", null)
-      // 2026-07-13: dropped from >= 3 to >= 1 while we're pre-launch.
-      // The 3-rating gate is a good idea for a mature leaderboard (kills
-      // one-fan-rated flukes) but pre-launch it wipes the section
-      // clean — a butter with 5 logs but only 2 rated ends up
-      // hidden. Nudge this back to 3 once we have real rating volume,
-      // and consider making it a tunable env / route param so we can
-      // adjust without a redeploy.
-      .gte("total_ratings", 1)
-      .order(sortColumn, { ascending: false })
-      .order("total_ratings", { ascending: false })
-      .limit(20),
+      .eq("is_public", true),
+    // NOTE 2026-07-13: intentionally NOT filtering `.not("rating_overall", "is", null)`
+    // here — the axis-specific filter happens in the JS aggregate below so a
+    // user who rated Texture but skipped Overall still shows up when the
+    // client is sorting by Texture.
 
     supabase
       .from("upcoming_drops")
@@ -158,13 +164,212 @@ export default async function DiscoverPage({
       .eq("is_public", true),
   ]);
 
-  // ─── Top-rated slimes normalization ───────────────────────────────────
-  const rawSlimes = topRatedResult.error ? [] : (topRatedResult.data ?? []);
-  const topSlimes: TopRatedSlime[] = rawSlimes.map((s) => ({
-    ...s,
-    brands: Array.isArray(s.brands) ? (s.brands[0] ?? null) : s.brands,
-    subtypes: Array.isArray(s.subtypes) ? (s.subtypes[0] ?? null) : s.subtypes,
-  }));
+  // ─── Top-rated slimes — aggregate from collection_logs ───────────────
+  // Group rated logs by slime identity, compute per-axis averages, and
+  // rank. See the query comment above for the "why not `slimes` table"
+  // rationale. Group key: `slime_id` when present, else a synthetic
+  // key from lowercased slime_name + brand_name_raw so free-text logs
+  // still consolidate across users.
+  if (topRatedResult.error) {
+    console.warn(
+      "[discover] top-rated collection_logs query failed:",
+      topRatedResult.error,
+    );
+  }
+  const ratedRows = topRatedResult.error ? [] : (topRatedResult.data ?? []);
+
+  interface RatingBucket {
+    slime_id: string | null;
+    brand_id: string | null;
+    name: string | null;
+    base_type: string | null;
+    subtype_id: string | null;
+    subtypes: { name: string } | null;
+    brand_name_raw: string | null;
+    image_url: string | null;
+    // Sums + counts per axis so we can compute averages later.
+    ratingSums: { [K in keyof RatingAxisMap]: number };
+    ratingCounts: { [K in keyof RatingAxisMap]: number };
+    // Total number of logs in this group with a non-null overall
+    // (matches how the old `slimes.total_ratings` was computed).
+    total_ratings: number;
+    // Stable id for React keys + linking (falls back to synthetic).
+    keyId: string;
+  }
+
+  // Small type helper so the loop below stays clean.
+  type RatingAxisMap = {
+    avg_overall: number;
+    avg_texture: number;
+    avg_sound: number;
+    avg_drizzle: number;
+    avg_creativity: number;
+    avg_sensory_fit: number;
+  };
+  const AXIS_KEYS: (keyof RatingAxisMap)[] = [
+    "avg_overall",
+    "avg_texture",
+    "avg_sound",
+    "avg_drizzle",
+    "avg_creativity",
+    "avg_sensory_fit",
+  ];
+  const LOG_COLUMN_FOR_AXIS: Record<keyof RatingAxisMap, string> = {
+    avg_overall: "rating_overall",
+    avg_texture: "rating_texture",
+    avg_sound: "rating_sound",
+    avg_drizzle: "rating_drizzle",
+    avg_creativity: "rating_creativity",
+    avg_sensory_fit: "rating_sensory_fit",
+  };
+
+  function normalizeKey(s: string | null): string {
+    return (s ?? "").trim().toLowerCase();
+  }
+
+  const buckets = new Map<string, RatingBucket>();
+  for (const row of ratedRows) {
+    const key = row.slime_id
+      ? `slime:${row.slime_id}`
+      : `text:${normalizeKey(row.slime_name)}:${normalizeKey(row.brand_name_raw)}`;
+
+    let bucket = buckets.get(key);
+    if (!bucket) {
+      const rawSubtype = row.subtypes;
+      const subtypesJoin = Array.isArray(rawSubtype)
+        ? (rawSubtype[0] ?? null)
+        : rawSubtype;
+      bucket = {
+        slime_id: row.slime_id ?? null,
+        brand_id: row.brand_id ?? null,
+        name:
+          row.slime_name && row.slime_name.trim() !== ""
+            ? row.slime_name
+            : null,
+        base_type: row.base_type ?? null,
+        subtype_id: row.subtype_id ?? null,
+        subtypes: subtypesJoin,
+        brand_name_raw: row.brand_name_raw ?? null,
+        image_url: row.image_url ?? null,
+        ratingSums: {
+          avg_overall: 0,
+          avg_texture: 0,
+          avg_sound: 0,
+          avg_drizzle: 0,
+          avg_creativity: 0,
+          avg_sensory_fit: 0,
+        },
+        ratingCounts: {
+          avg_overall: 0,
+          avg_texture: 0,
+          avg_sound: 0,
+          avg_drizzle: 0,
+          avg_creativity: 0,
+          avg_sensory_fit: 0,
+        },
+        total_ratings: 0,
+        keyId: row.slime_id ?? key,
+      };
+      buckets.set(key, bucket);
+    }
+
+    // Prefer the first non-null image / name / brand_id we see for
+    // the bucket. Later rows keep the earlier bucket's display values.
+    if (!bucket.image_url && row.image_url) bucket.image_url = row.image_url;
+    if (!bucket.brand_id && row.brand_id) bucket.brand_id = row.brand_id;
+    if (!bucket.brand_name_raw && row.brand_name_raw)
+      bucket.brand_name_raw = row.brand_name_raw;
+
+    // Every axis with a non-null value on this log gets folded in.
+    for (const axis of AXIS_KEYS) {
+      const col = LOG_COLUMN_FOR_AXIS[axis] as keyof typeof row;
+      const v = row[col];
+      if (typeof v === "number") {
+        bucket.ratingSums[axis] += v;
+        bucket.ratingCounts[axis] += 1;
+      }
+    }
+    // Only rows that have rating_overall count toward total_ratings —
+    // matches the historical `slimes.total_ratings` semantics.
+    if (typeof row.rating_overall === "number") {
+      bucket.total_ratings += 1;
+    }
+  }
+
+  // Now resolve brands for buckets with a brand_id. Single IN() call.
+  const brandIds = Array.from(
+    new Set(
+      Array.from(buckets.values())
+        .map((b) => b.brand_id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0),
+    ),
+  );
+  const brandMap = new Map<string, { name: string; slug: string }>();
+  if (brandIds.length > 0) {
+    const { data: brandRows, error: brandsErr } = await supabase
+      .from("brands")
+      .select("id, name, slug")
+      .in("id", brandIds);
+    if (brandsErr) {
+      console.warn("[discover] brands lookup failed:", brandsErr);
+    } else {
+      for (const b of brandRows ?? []) {
+        if (b.id) brandMap.set(b.id, { name: b.name, slug: b.slug });
+      }
+    }
+  }
+
+  // Materialize buckets into TopRatedSlime rows. Apply the ≥1 rating
+  // gate + non-null sort-axis filter server-side so the client-side
+  // sort / filter dropdown never sees under-rated garbage rows.
+  const topSlimesAll: TopRatedSlime[] = [];
+  for (const bucket of buckets.values()) {
+    // Compute averages per axis; null when no rows contributed.
+    const avgFor = (axis: keyof RatingAxisMap): number | null => {
+      const c = bucket.ratingCounts[axis];
+      return c > 0 ? bucket.ratingSums[axis] / c : null;
+    };
+    const row: TopRatedSlime = {
+      id: bucket.keyId,
+      name: bucket.name,
+      base_type: bucket.base_type,
+      subtype_id: bucket.subtype_id,
+      image_url: bucket.image_url,
+      avg_overall: avgFor("avg_overall"),
+      avg_texture: avgFor("avg_texture"),
+      avg_scent: null, // legacy column, no longer captured in the wizard
+      avg_sound: avgFor("avg_sound"),
+      avg_drizzle: avgFor("avg_drizzle"),
+      avg_creativity: avgFor("avg_creativity"),
+      avg_sensory_fit: avgFor("avg_sensory_fit"),
+      total_ratings: bucket.total_ratings,
+      brand_id: bucket.brand_id,
+      brands: bucket.brand_id
+        ? (brandMap.get(bucket.brand_id) ?? null)
+        : bucket.brand_name_raw
+          ? { name: bucket.brand_name_raw, slug: "" }
+          : null,
+      subtypes: bucket.subtypes,
+    };
+    topSlimesAll.push(row);
+  }
+
+  // Filter to only rows with a non-null value on the active sort
+  // axis, then sort desc. Same intent as the old `.not(sortColumn,
+  // "is", null).order(sortColumn, desc)` on the slimes query.
+  const sortAxisKey = sortColumn as keyof RatingAxisMap;
+  const topSlimes: TopRatedSlime[] = topSlimesAll
+    .filter((s) => {
+      const v = s[sortAxisKey];
+      return typeof v === "number" && (s.total_ratings ?? 0) >= 1;
+    })
+    .sort((a, b) => {
+      const av = (a[sortAxisKey] as number | null) ?? 0;
+      const bv = (b[sortAxisKey] as number | null) ?? 0;
+      if (bv !== av) return bv - av;
+      return (b.total_ratings ?? 0) - (a.total_ratings ?? 0);
+    })
+    .slice(0, 20);
 
   const drops = dropsResult.error ? [] : (dropsResult.data ?? []);
 
