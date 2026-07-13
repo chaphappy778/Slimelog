@@ -119,17 +119,29 @@ export default function GuideNav({ parts }: GuideNavProps) {
 
   // Hash-on-load: /guide#part-6 scrolls to Part Six on first paint.
   //
-  // 2026-07-13: if there's no hash, force scroll to top on mount. The
-  // browser's automatic scroll-restoration was landing users on Part 2
-  // (or wherever they last scrolled) when re-entering /guide from the
-  // hamburger, since Next.js soft nav preserves scroll history. The
-  // setTimeout(0) yields to the browser's own restore attempt so our
-  // override wins.
+  // 2026-07-13: forcing top scroll is tricky because the browser's
+  // scroll-restoration and Next.js's own restore can fire AFTER our
+  // useEffect. Fix (v2): opt out of browser auto-restoration first,
+  // then fire scrollTo(0) at multiple ticks — sync + rAF + late timer.
+  // Any one being enough to beat the restore.
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    // Take manual control of scroll restoration for subsequent navs.
+    // Only affects future history entries — but for THIS mount we also
+    // fire scrollTo below to override the current entry's restore.
+    if ("scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+
     const hash = window.location.hash?.replace(/^#/, "");
     if (!hash) {
-      window.setTimeout(() => window.scrollTo({ top: 0 }), 0);
+      // Fire at three points to beat whichever restore mechanism is
+      // running: immediate, next paint, and 100ms after mount. The 0,0
+      // overload is always instant (no smooth-scroll interference).
+      window.scrollTo(0, 0);
+      requestAnimationFrame(() => window.scrollTo(0, 0));
+      window.setTimeout(() => window.scrollTo(0, 0), 100);
       return;
     }
     if (hash.startsWith("part-")) {
