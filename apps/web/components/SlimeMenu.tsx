@@ -347,10 +347,13 @@ export default function SlimeMenu() {
             <Divider />
 
             <NavSection title="Learn">
+              {/* T32 (2026-07-13): /slime-types superseded by the full
+                  12-part SlimeLog Guide at /guide. /slime-types still
+                  redirects for old bookmarks. */}
               <NavItem
-                href="/slime-types"
+                href="/guide"
                 icon={<BookOpen className="w-5 h-5" />}
-                label="Slime Type Guide"
+                label="The SlimeLog Guide"
                 onClose={handleClose}
               />
               {/* [Change 1 — T31] How to Rate a Slime now points at the
