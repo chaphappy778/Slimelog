@@ -18,7 +18,12 @@ import Link from "next/link";
 // Below this total-logs-in-last-7-days count, we drop the pulse and
 // render the "seed the community" empty state instead. Keeps the
 // widget from looking sad pre-launch.
-export const EARLY_DAYS_THRESHOLD = 20;
+//
+// 2026-07-13: lowered from 20 → 5 while we're in internal testing so
+// the pulse actually renders against real (thin) data. Nudge back up
+// to 20 or higher before public launch — a 5-log pulse feels sparse
+// once we have a real user base.
+export const EARLY_DAYS_THRESHOLD = 5;
 
 export interface MomentumRow {
   /** Icon / rank marker on the left. "up" renders a small arrow. */
