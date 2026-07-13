@@ -502,8 +502,13 @@ function LogPageInner() {
                 </select>
               </Field>
 
-              {/* [G2] Subtype autocomplete (optional) */}
-              <Field label="Subtype" optional>
+              {/* [G2] Variant autocomplete (optional). 2026-07-12:
+                  user-facing label renamed from "Subtype" to "Variant"
+                  to match the community's own vocabulary (see guide
+                  Part One "Variants & Related"). Column stays
+                  subtype_id — the DB rename would be all cost, no
+                  benefit. */}
+              <Field label="Variant" optional>
                 <SubtypeAutocomplete
                   baseType={form.base_type}
                   value={form.subtype_name}
@@ -517,7 +522,7 @@ function LogPageInner() {
                   }}
                   placeholder={
                     form.base_type
-                      ? "Search subtypes (optional)"
+                      ? "Search variants (optional)"
                       : "Pick a base type first"
                   }
                 />
@@ -605,23 +610,10 @@ function LogPageInner() {
                 </div>
               </Field>
 
-              {/* [Change 3 — scent_notes] Scent Description textarea below Scent Strength */}
-              <Field label="Scent Description" optional>
-                <textarea
-                  className={`${inputCls} resize-none h-20`}
-                  placeholder="e.g. warm vanilla with a hint of brown sugar"
-                  maxLength={100}
-                  value={form.scent_notes}
-                  onChange={(e) => set("scent_notes", e.target.value)}
-                />
-                <p className="text-right text-[11px] text-slime-muted">
-                  {form.scent_notes.length}/100
-                </p>
-              </Field>
-
-              {/* 2026-07-12: Condition pill picker. Optional. Matches
-                  the scent strength pattern above. Also drives the
-                  future marketplace listing form. */}
+              {/* 2026-07-12: Condition pill picker sits right below
+                  Scent Strength — pill pickers grouped visually.
+                  Optional. Also drives the future marketplace listing
+                  form. */}
               <Field label="Condition" optional>
                 <div className="flex flex-wrap gap-2">
                   {(
@@ -662,6 +654,20 @@ function LogPageInner() {
                     {SLIME_CONDITION_DESCRIPTIONS[form.condition]}
                   </p>
                 )}
+              </Field>
+
+              {/* [Change 3 — scent_notes] Scent Description textarea below Scent Strength */}
+              <Field label="Scent Description" optional>
+                <textarea
+                  className={`${inputCls} resize-none h-20`}
+                  placeholder="e.g. warm vanilla with a hint of brown sugar"
+                  maxLength={100}
+                  value={form.scent_notes}
+                  onChange={(e) => set("scent_notes", e.target.value)}
+                />
+                <p className="text-right text-[11px] text-slime-muted">
+                  {form.scent_notes.length}/100
+                </p>
               </Field>
 
               <Field label="Purchase Price ($)" optional>

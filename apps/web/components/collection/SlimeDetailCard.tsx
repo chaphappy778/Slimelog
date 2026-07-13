@@ -11,8 +11,14 @@ import {
   SLIME_BASE_TYPE_COLORS,
   SLIME_BASE_TYPE_LABELS,
   SCENT_STRENGTH_LABELS,
+  SLIME_CONDITION_LABELS,
 } from "@/lib/types";
-import type { CollectionLog, SlimeBaseType, ScentStrength } from "@/lib/types";
+import type {
+  CollectionLog,
+  SlimeBaseType,
+  ScentStrength,
+  SlimeCondition,
+} from "@/lib/types";
 import LikeButton from "@/components/collection/LikeButton";
 import CommentSection from "@/components/collection/CommentSection";
 import BrandMiniSheet from "@/components/BrandMiniSheet";
@@ -286,6 +292,8 @@ export default function SlimeDetailCard({
   const scentStrength =
     (log as CollectionLog & { scent_strength?: ScentStrength | null })
       .scent_strength ?? null;
+  // 2026-07-12: condition chip renders next to scent strength when set.
+  const condition = log.condition ?? null;
   const logTags =
     (
       log as CollectionLog & {
@@ -790,8 +798,8 @@ export default function SlimeDetailCard({
               ))}
           </div>
 
-          {/* Scent strength + keyword pills */}
-          {(scentStrength || keywords.length > 0) && (
+          {/* Scent strength + condition + keyword pills */}
+          {(scentStrength || condition || keywords.length > 0) && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {scentStrength && (
                 <span
@@ -806,6 +814,21 @@ export default function SlimeDetailCard({
                   }}
                 >
                   {SCENT_STRENGTH_LABELS[scentStrength as ScentStrength]}
+                </span>
+              )}
+              {condition && (
+                <span
+                  style={{
+                    padding: "3px 11px",
+                    borderRadius: 20,
+                    fontSize: 12,
+                    background: "rgba(0,240,255,0.1)",
+                    color: "#00F0FF",
+                    border: "1px solid rgba(0,240,255,0.3)",
+                    fontWeight: 600,
+                  }}
+                >
+                  {SLIME_CONDITION_LABELS[condition as SlimeCondition]}
                 </span>
               )}
               {keywords.map((kw) => (

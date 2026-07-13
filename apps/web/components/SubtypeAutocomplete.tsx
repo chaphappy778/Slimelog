@@ -43,7 +43,7 @@ export default function SubtypeAutocomplete({
   const isDisabled = baseType === "";
   const resolvedPlaceholder =
     placeholder ??
-    (isDisabled ? "Pick a base type first" : "Search subtypes (optional)");
+    (isDisabled ? "Pick a base type first" : "Search variants (optional)");
 
   // ── Fetch matching subtypes ───────────────────────────────────────────────
 

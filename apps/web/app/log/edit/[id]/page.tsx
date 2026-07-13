@@ -11,8 +11,17 @@ import { useRouter, useParams } from "next/navigation";
 // Audit hp-24 (2026-07-09): use the shared browser singleton.
 import { createClient } from "@/lib/supabase/client";
 import type { LogSlimeInput } from "@/lib/slime-actions";
-import { SLIME_BASE_TYPE_LABELS, SCENT_STRENGTH_LABELS } from "@/lib/types";
-import type { SlimeBaseType, ScentStrength } from "@/lib/types";
+import {
+  SLIME_BASE_TYPE_LABELS,
+  SCENT_STRENGTH_LABELS,
+  SLIME_CONDITION_LABELS,
+  SLIME_CONDITION_DESCRIPTIONS,
+} from "@/lib/types";
+import type {
+  SlimeBaseType,
+  ScentStrength,
+  SlimeCondition,
+} from "@/lib/types";
 import { ImageUpload } from "@/components/ImageUpload";
 import PageWrapper from "@/components/PageWrapper";
 import FloatingPills from "@/components/FloatingPills";
@@ -82,6 +91,8 @@ interface FormState {
   subtype_name: string;
   scent_strength: ScentStrength | null;
   scent_notes: string;
+  // 2026-07-12: condition (personal + future marketplace).
+  condition: SlimeCondition | null;
   keywords: string[];
   purchase_price: string;
   selected_color_values: string[];
@@ -295,6 +306,7 @@ function EditLogPageInner() {
     subtype_name: "",
     scent_strength: null,
     scent_notes: "",
+    condition: null,
     keywords: [],
     purchase_price: "",
     selected_color_values: [],
@@ -355,6 +367,8 @@ function EditLogPageInner() {
         scent_strength: (data.scent_strength as ScentStrength) ?? null,
         // [Change 4 — scent_notes] Hydrate from DB
         scent_notes: data.scent_notes ?? "",
+        // 2026-07-12: hydrate condition from DB when present.
+        condition: (data.condition as SlimeCondition) ?? null,
         keywords: [],
         // [Change 1 — T64] Fix: use purchase_price not cost_paid
         purchase_price:
@@ -446,6 +460,8 @@ function EditLogPageInner() {
         rating_overall: form.rating_overall ?? undefined,
         notes: form.notes.trim() || undefined,
         scent_notes: form.scent_notes.trim() || undefined,
+        // 2026-07-12: null when cleared so users can un-tag.
+        condition: form.condition,
         is_public: !isPrivate,
       };
 
@@ -618,8 +634,10 @@ function EditLogPageInner() {
                 </select>
               </Field>
 
-              {/* [G2] Subtype autocomplete (optional) */}
-              <Field label="Subtype" optional>
+              {/* [G2] Variant autocomplete (optional). 2026-07-12:
+                  renamed user-facing "Subtype" → "Variant". Column
+                  stays subtype_id — see log/page.tsx for context. */}
+              <Field label="Variant" optional>
                 <SubtypeAutocomplete
                   baseType={form.base_type}
                   value={form.subtype_name}
@@ -633,7 +651,7 @@ function EditLogPageInner() {
                   }}
                   placeholder={
                     form.base_type
-                      ? "Search subtypes (optional)"
+                      ? "Search variants (optional)"
                       : "Pick a base type first"
                   }
                 />
@@ -717,6 +735,51 @@ function EditLogPageInner() {
                     );
                   })}
                 </div>
+              </Field>
+
+              {/* 2026-07-12: Condition pill picker sits right below
+                  Scent Strength. Optional. Also drives the future
+                  marketplace listing form. */}
+              <Field label="Condition" optional>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    Object.entries(SLIME_CONDITION_LABELS) as [
+                      SlimeCondition,
+                      string,
+                    ][]
+                  ).map(([level, label]) => {
+                    const active = form.condition === level;
+                    return (
+                      <button
+                        key={level}
+                        type="button"
+                        onClick={() =>
+                          set("condition", active ? null : level)
+                        }
+                        title={SLIME_CONDITION_DESCRIPTIONS[level]}
+                        className="px-3.5 py-2 rounded-full text-sm font-semibold transition-all"
+                        style={{
+                          background: active
+                            ? "rgba(0,240,255,0.14)"
+                            : "rgba(45,10,78,0.3)",
+                          border: active
+                            ? "1px solid rgba(0,240,255,0.5)"
+                            : "1px solid rgba(45,10,78,0.5)",
+                          color: active
+                            ? "#00F0FF"
+                            : "rgba(245,245,245,0.5)",
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {form.condition && (
+                  <p className="text-[11px] text-slime-muted mt-1.5">
+                    {SLIME_CONDITION_DESCRIPTIONS[form.condition]}
+                  </p>
+                )}
               </Field>
 
               {/* [Change 5 — scent_notes] Scent Description textarea below Scent Strength */}
