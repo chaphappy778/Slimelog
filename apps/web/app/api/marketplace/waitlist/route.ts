@@ -54,9 +54,15 @@ const SELL_VOLUMES: readonly WaitlistSellVolume[] = [
 // 12 brands, so 30 is a comfortable ceiling.
 const MAX_BRAND_IDS = 30;
 
+// 2026-07-12: freeform "Other" brand entries — same volume cap, plus a
+// per-entry length cap so noise doesn't sneak in.
+const MAX_BRAND_NAMES_OTHER = 10;
+const MAX_BRAND_NAME_OTHER_LENGTH = 60;
+
 interface SubmitBody {
   intent?: unknown;
   brand_ids?: unknown;
+  brand_names_other?: unknown;
   spend_band?: unknown;
   sell_volume?: unknown;
   trust_need?: unknown;
@@ -135,6 +141,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   let sellVolume: WaitlistSellVolume | null;
   let trustNeedRaw: string | null;
   let brandIds: string[] | null;
+  let brandNamesOther: string[] | null;
 
   try {
     intent = requireEnum(body.intent, "intent", INTENTS);
@@ -163,6 +170,31 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       // De-dup — clients occasionally send the same id twice on rapid
       // toggle. Cheaper here than a DB-level constraint.
       brandIds = Array.from(new Set(brandIds));
+    }
+
+    // 2026-07-12: brand_names_other — freeform text[] from the "Other"
+    // chip. Trim, drop empties, dedupe (case-insensitive), cap length
+    // and count. Silently coerces bad input rather than 400ing since
+    // this field is entirely optional research signal.
+    if (body.brand_names_other === undefined || body.brand_names_other === null) {
+      brandNamesOther = null;
+    } else if (!Array.isArray(body.brand_names_other)) {
+      throw new ValidationError("brand_names_other", "must be an array");
+    } else {
+      const seen = new Set<string>();
+      const cleaned: string[] = [];
+      for (const raw of body.brand_names_other) {
+        if (typeof raw !== "string") continue;
+        const trimmed = raw.trim();
+        if (trimmed.length === 0) continue;
+        if (trimmed.length > MAX_BRAND_NAME_OTHER_LENGTH) continue;
+        const key = trimmed.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        cleaned.push(trimmed);
+        if (cleaned.length >= MAX_BRAND_NAMES_OTHER) break;
+      }
+      brandNamesOther = cleaned.length > 0 ? cleaned : null;
     }
   } catch (err) {
     if (err instanceof ValidationError) {
@@ -218,13 +250,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         user_id: user.id,
         intent,
         brand_ids: brandIds,
+        brand_names_other: brandNamesOther,
         spend_band: spendBand,
         sell_volume: sellVolume,
         trust_need: trustNeed,
       },
       { onConflict: "user_id" },
     )
-    .select("id, user_id, intent, brand_ids, spend_band, sell_volume, trust_need, created_at, updated_at")
+    .select("id, user_id, intent, brand_ids, brand_names_other, spend_band, sell_volume, trust_need, created_at, updated_at")
     .single();
 
   if (upsertErr || !upserted) {

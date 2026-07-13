@@ -39,7 +39,7 @@ export async function GET(): Promise<NextResponse> {
   const { data: entry, error: entryErr } = await supabase
     .from("marketplace_waitlist")
     .select(
-      "id, user_id, intent, brand_ids, spend_band, sell_volume, trust_need, created_at, updated_at",
+      "id, user_id, intent, brand_ids, brand_names_other, spend_band, sell_volume, trust_need, created_at, updated_at",
     )
     .eq("user_id", user.id)
     .maybeSingle();

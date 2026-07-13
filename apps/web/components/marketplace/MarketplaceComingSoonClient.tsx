@@ -240,6 +240,10 @@ export default function MarketplaceComingSoonClient({
   // Form state
   const [intent, setIntent] = useState<WaitlistIntent | null>(null);
   const [brandIds, setBrandIds] = useState<Set<string>>(new Set());
+  // 2026-07-12: freeform "Other" brand names entered via the extra chip.
+  const [brandNamesOther, setBrandNamesOther] = useState<string[]>([]);
+  const [otherInputOpen, setOtherInputOpen] = useState<boolean>(false);
+  const [otherInput, setOtherInput] = useState<string>("");
   const [spendBand, setSpendBand] = useState<WaitlistSpendBand | null>(null);
   const [sellVolume, setSellVolume] = useState<WaitlistSellVolume | null>(null);
   const [trustNeed, setTrustNeed] = useState<string>("");
@@ -284,6 +288,7 @@ export default function MarketplaceComingSoonClient({
           const e = json.entry;
           setIntent(e.intent);
           setBrandIds(new Set(e.brand_ids ?? []));
+          setBrandNamesOther(e.brand_names_other ?? []);
           setSpendBand(e.spend_band);
           setSellVolume(e.sell_volume);
           setTrustNeed(e.trust_need ?? "");
@@ -310,6 +315,7 @@ export default function MarketplaceComingSoonClient({
     async (payload: {
       intent: WaitlistIntent;
       brand_ids: string[] | null;
+      brand_names_other: string[] | null;
       spend_band: WaitlistSpendBand | null;
       sell_volume: WaitlistSellVolume | null;
       trust_need: string | null;
@@ -346,6 +352,7 @@ export default function MarketplaceComingSoonClient({
     const json = await submit({
       intent,
       brand_ids: brandIds.size > 0 ? Array.from(brandIds) : null,
+      brand_names_other: brandNamesOther.length > 0 ? brandNamesOther : null,
       spend_band: spendBand,
       sell_volume: sellVolume,
       trust_need: trustNeed.trim().length > 0 ? trustNeed.trim() : null,
@@ -354,12 +361,13 @@ export default function MarketplaceComingSoonClient({
       setPosition(json.position);
       setMode("success");
     }
-  }, [intent, brandIds, spendBand, sellVolume, trustNeed, submit]);
+  }, [intent, brandIds, brandNamesOther, spendBand, sellVolume, trustNeed, submit]);
 
   // ─── Autosave (success state, research answers) ───────────────────
   const scheduleAutosave = useCallback(
     (next: {
       brandIds?: Set<string>;
+      brandNamesOther?: string[];
       spendBand?: WaitlistSpendBand | null;
       sellVolume?: WaitlistSellVolume | null;
       trustNeed?: string;
@@ -368,6 +376,7 @@ export default function MarketplaceComingSoonClient({
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
       autosaveTimer.current = setTimeout(async () => {
         const nextBrandIds = next.brandIds ?? brandIds;
+        const nextBrandNamesOther = next.brandNamesOther ?? brandNamesOther;
         const nextSpend = next.spendBand !== undefined ? next.spendBand : spendBand;
         const nextVolume =
           next.sellVolume !== undefined ? next.sellVolume : sellVolume;
@@ -376,6 +385,8 @@ export default function MarketplaceComingSoonClient({
         const json = await submit({
           intent,
           brand_ids: nextBrandIds.size > 0 ? Array.from(nextBrandIds) : null,
+          brand_names_other:
+            nextBrandNamesOther.length > 0 ? nextBrandNamesOther : null,
           spend_band: nextSpend,
           sell_volume: nextVolume,
           trust_need: trimmedTrust.length > 0 ? trimmedTrust : null,
@@ -387,7 +398,16 @@ export default function MarketplaceComingSoonClient({
         }
       }, AUTOSAVE_DEBOUNCE_MS);
     },
-    [mode, intent, brandIds, spendBand, sellVolume, trustNeed, submit],
+    [
+      mode,
+      intent,
+      brandIds,
+      brandNamesOther,
+      spendBand,
+      sellVolume,
+      trustNeed,
+      submit,
+    ],
   );
 
   // ─── Handlers ─────────────────────────────────────────────────────
@@ -402,6 +422,48 @@ export default function MarketplaceComingSoonClient({
       });
     },
     [scheduleAutosave],
+  );
+
+  // 2026-07-12: "Other" freeform brand chip handlers.
+  const addOtherBrand = useCallback(() => {
+    const trimmed = otherInput.trim().slice(0, 60);
+    if (!trimmed) return;
+    setBrandNamesOther((prev) => {
+      // Dedupe case-insensitively.
+      const key = trimmed.toLowerCase();
+      if (prev.some((n) => n.toLowerCase() === key)) {
+        setOtherInput("");
+        return prev;
+      }
+      const next = [...prev, trimmed].slice(0, 10);
+      scheduleAutosave({ brandNamesOther: next });
+      return next;
+    });
+    setOtherInput("");
+  }, [otherInput, scheduleAutosave]);
+
+  const removeOtherBrand = useCallback(
+    (name: string) => {
+      setBrandNamesOther((prev) => {
+        const next = prev.filter((n) => n !== name);
+        scheduleAutosave({ brandNamesOther: next });
+        return next;
+      });
+    },
+    [scheduleAutosave],
+  );
+
+  const onOtherInputKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        addOtherBrand();
+      } else if (e.key === "Escape") {
+        setOtherInputOpen(false);
+        setOtherInput("");
+      }
+    },
+    [addOtherBrand],
   );
 
   const pickSpendBand = useCallback(
@@ -511,6 +573,14 @@ export default function MarketplaceComingSoonClient({
             initialTopBrands={initialTopBrands}
             brandIds={brandIds}
             toggleBrand={toggleBrand}
+            brandNamesOther={brandNamesOther}
+            otherInputOpen={otherInputOpen}
+            setOtherInputOpen={setOtherInputOpen}
+            otherInput={otherInput}
+            setOtherInput={setOtherInput}
+            addOtherBrand={addOtherBrand}
+            removeOtherBrand={removeOtherBrand}
+            onOtherInputKeyDown={onOtherInputKeyDown}
             showSpend={showSpend}
             showVolume={showVolume}
             spendBand={spendBand}
@@ -785,6 +855,15 @@ interface SuccessStateProps {
   initialTopBrands: MarketplaceTopBrand[];
   brandIds: Set<string>;
   toggleBrand: (id: string) => void;
+  // 2026-07-12: freeform brand entries via the "Other" chip.
+  brandNamesOther: string[];
+  otherInputOpen: boolean;
+  setOtherInputOpen: (v: boolean) => void;
+  otherInput: string;
+  setOtherInput: (v: string) => void;
+  addOtherBrand: () => void;
+  removeOtherBrand: (name: string) => void;
+  onOtherInputKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   showSpend: boolean;
   showVolume: boolean;
   spendBand: WaitlistSpendBand | null;
@@ -806,6 +885,14 @@ function SuccessState({
   initialTopBrands,
   brandIds,
   toggleBrand,
+  brandNamesOther,
+  otherInputOpen,
+  setOtherInputOpen,
+  otherInput,
+  setOtherInput,
+  addOtherBrand,
+  removeOtherBrand,
+  onOtherInputKeyDown,
   showSpend,
   showVolume,
   spendBand,
@@ -836,7 +923,7 @@ function SuccessState({
           className="text-[11px] font-bold uppercase tracking-[0.14em]"
           style={{ color: "#6DFF4D" }}
         >
-          You&apos;re on the list 💧
+          You&apos;re on the list
         </span>
         <div
           className="text-[76px] leading-[0.95] font-black"
@@ -976,6 +1063,62 @@ function SuccessState({
                       </button>
                     );
                   })}
+
+                  {/* 2026-07-12: freeform "Other" brands added via inline
+                      input. Each entry shows as a magenta chip with an
+                      inline remove button. */}
+                  {brandNamesOther.map((name) => (
+                    <span
+                      key={`other-${name}`}
+                      className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold"
+                      style={{
+                        background: "rgba(255,0,229,0.14)",
+                        border: "1px solid rgba(255,0,229,0.45)",
+                        color: "#FF9BEB",
+                      }}
+                    >
+                      {name}
+                      <button
+                        type="button"
+                        aria-label={`Remove ${name}`}
+                        onClick={() => removeOtherBrand(name)}
+                        className="ml-1 inline-flex items-center justify-center rounded-full active:scale-[0.9] transition"
+                        style={{
+                          width: 16,
+                          height: 16,
+                          color: "#FF9BEB",
+                          fontSize: 14,
+                          lineHeight: 1,
+                        }}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+
+                  {/* + Other chip toggles the inline input. Hidden once
+                      we hit the 10-item cap so we don't invite more. */}
+                  {brandNamesOther.length < 10 && (
+                    <button
+                      type="button"
+                      onClick={() => setOtherInputOpen(!otherInputOpen)}
+                      className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold transition-all active:scale-[0.97]"
+                      style={{
+                        background: otherInputOpen
+                          ? "rgba(255,0,229,0.14)"
+                          : "rgba(45,10,78,0.35)",
+                        border: otherInputOpen
+                          ? "1px solid rgba(255,0,229,0.45)"
+                          : "1px dashed rgba(255,255,255,0.30)",
+                        color: otherInputOpen
+                          ? "#FF9BEB"
+                          : "rgba(255,255,255,0.75)",
+                      }}
+                      aria-expanded={otherInputOpen}
+                    >
+                      + Other
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div
@@ -983,6 +1126,41 @@ function SuccessState({
                   style={{ color: "rgba(255,255,255,0.45)" }}
                 >
                   Brand list will appear once the catalog has more logs.
+                </div>
+              )}
+
+              {/* Inline input reveals when "Other" is tapped. Enter adds,
+                  Escape closes, cap of 10 entries. */}
+              {otherInputOpen && (
+                <div className="mt-3 flex gap-2">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={otherInput}
+                    onChange={(e) => setOtherInput(e.target.value.slice(0, 60))}
+                    onKeyDown={onOtherInputKeyDown}
+                    placeholder="Type a brand name and press Enter"
+                    maxLength={60}
+                    className="flex-1 rounded-xl px-3 py-2 text-sm outline-none"
+                    style={{
+                      background: "rgba(45,10,78,0.30)",
+                      border: "1px solid rgba(255,0,229,0.30)",
+                      color: "white",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={addOtherBrand}
+                    disabled={!otherInput.trim()}
+                    className="rounded-xl px-3 py-2 text-xs font-bold disabled:opacity-40 transition-opacity"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, #FF00E5, #D976FF)",
+                      color: "#0B0114",
+                    }}
+                  >
+                    Add
+                  </button>
                 </div>
               )}
             </div>
@@ -1099,6 +1277,26 @@ function SuccessState({
               </a>{" "}
               on Instagram.
             </div>
+
+            {/* 2026-07-12: Finish button lets users cleanly exit the
+                research panel into the rest of the app. All answers are
+                already auto-saved so this is purely navigation. Routes
+                to /discover — feels like a natural "keep exploring"
+                landing after committing to the waitlist. */}
+            <Link
+              href="/discover"
+              className="inline-flex items-center justify-center gap-2 w-full rounded-2xl px-5 py-3.5 text-sm font-black tracking-[0.02em] transition-all active:scale-[0.98]"
+              style={{
+                background:
+                  "linear-gradient(135deg, rgba(0,240,255,0.14), rgba(57,255,20,0.10))",
+                border: "1px solid rgba(0,240,255,0.35)",
+                color: "#B8FBFF",
+                fontFamily: "Montserrat, sans-serif",
+              }}
+            >
+              Finish, take me back to the app
+              <span aria-hidden="true">→</span>
+            </Link>
           </div>
         )}
       </div>

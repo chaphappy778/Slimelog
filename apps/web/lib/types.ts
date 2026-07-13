@@ -594,6 +594,8 @@ export interface MarketplaceWaitlistEntry {
   user_id: string;
   intent: WaitlistIntent;
   brand_ids: string[] | null;
+  // 2026-07-12: freeform brand names entered via the "Other" chip.
+  brand_names_other: string[] | null;
   spend_band: WaitlistSpendBand | null;
   sell_volume: WaitlistSellVolume | null;
   trust_need: string | null;
