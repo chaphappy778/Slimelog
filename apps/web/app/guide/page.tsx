@@ -217,12 +217,10 @@ export default async function GuidePage() {
   return (
     <PageWrapper dots glow="cyan">
       <PageHeader />
-      <GuideNav parts={PARTS} />
 
       <main
         className="pb-24"
         style={{
-          // Space above so the hero clears the sticky header + pill nav.
           paddingTop: 6,
         }}
       >
@@ -272,12 +270,16 @@ export default async function GuidePage() {
             Your field guide to the language of the shelf. Twelve parts,
             community-authored, updated as the craft moves.
           </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Chip>12 parts</Chip>
-            <Chip>{TEXTURES.length} base textures</Chip>
-            <Chip tone="green">community-authored</Chip>
-          </div>
+          {/* 2026-07-13: metadata chips ("12 parts", "20 base textures",
+              "community-authored") removed per user feedback — hero paragraph
+              already communicates all three of those. */}
         </section>
+
+        {/* 2026-07-13: sticky pill nav lives BELOW the hero (matches
+            the /how-to-rate treatment). On scroll it pins under the
+            header and travels with the page, active pill glowing solid
+            cyan. */}
+        <GuideNav parts={PARTS} />
 
         {/* Part 1: Base Textures */}
         <PartSection n={1} title="Base Textures" tagline={PARTS[0].tagline}>
