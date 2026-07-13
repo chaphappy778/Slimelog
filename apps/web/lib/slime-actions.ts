@@ -488,7 +488,7 @@ export async function getUserCollectionLogs() {
       in_collection, in_wishlist,
       rating_overall, rating_texture,
       rating_sound, rating_drizzle, rating_creativity, rating_sensory_fit,
-      scent_strength, scent_notes,
+      scent_strength, scent_notes, condition,
       notes, purchase_price,
       colors, image_url,
       created_at, updated_at,

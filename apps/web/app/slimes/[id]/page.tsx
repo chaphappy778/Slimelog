@@ -18,8 +18,14 @@ import {
   SLIME_BASE_TYPE_COLORS,
   SLIME_BASE_TYPE_LABELS,
   SCENT_STRENGTH_LABELS,
+  SLIME_CONDITION_LABELS,
 } from "@/lib/types";
-import type { CollectionLog, SlimeBaseType, ScentStrength } from "@/lib/types";
+import type {
+  CollectionLog,
+  SlimeBaseType,
+  ScentStrength,
+  SlimeCondition,
+} from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -30,6 +36,7 @@ interface OwnerProfile {
 }
 
 // [Change 1 — scent_notes] Added scent_notes to SlimeLogRecord
+// 2026-07-12: condition inherited from CollectionLog base type.
 type SlimeLogRecord = CollectionLog & {
   image_url: string | null;
   subtype: { name: string } | null;
@@ -508,7 +515,9 @@ export default async function SlimePage({
           </div>
 
           {/* [Change 4 — T98b + scent_notes] Dimension grid — fill bars + toFixed(1) */}
-          {(activeDimensions.length > 0 || log.scent_strength) && (
+          {(activeDimensions.length > 0 ||
+            log.scent_strength ||
+            log.condition) && (
             <div
               className="grid grid-cols-2 gap-x-4 gap-y-2.5 p-4 rounded-xl border"
               style={{
@@ -564,6 +573,23 @@ export default async function SlimePage({
                     style={{ color: "#39FF14" }}
                   >
                     {SCENT_STRENGTH_LABELS[log.scent_strength as ScentStrength]}
+                  </span>
+                </div>
+              )}
+              {log.condition && (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wider text-slime-muted font-semibold">
+                    Condition
+                  </span>
+                  <span
+                    className="text-xs font-bold"
+                    style={{ color: "#00F0FF" }}
+                  >
+                    {
+                      SLIME_CONDITION_LABELS[
+                        log.condition as SlimeCondition
+                      ]
+                    }
                   </span>
                 </div>
               )}
