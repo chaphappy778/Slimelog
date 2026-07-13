@@ -95,6 +95,24 @@ implemented mitigation and the concern is gone.
 
 ---
 
+### 2026-07-13 — Discover V1 per-type slime counts (DB Query)
+
+**Query:** `SELECT base_type FROM slimes WHERE base_type IS NOT NULL`. Runs on every mount of `/discover`. Aggregated JS-side into a `Record<baseType, count>` for the `TypeCarousel` cards.
+
+**Current cost:** trivial. `slimes` is small pre-launch (hundreds of rows); the query returns only the `base_type` column.
+
+**What makes it grow:** unbounded row count. At 100k slimes we're pulling 100k tiny rows every mount. Not slow, but wasteful.
+
+**Mitigation path (order of preference):**
+
+1. **Materialized view `slimes_by_base_type(base_type, slime_count)`** refreshed on `slimes` insert/update via trigger. Reads become O(20) rows. Cheapest long-term win — sits right next to the axis-index materialized view we'd add for T32f.
+2. **Cache the counts at the route-handler layer** with a 5-minute TTL. Counts don't change every second.
+3. **RPC `get_slime_counts_by_base_type()`** that returns pre-aggregated pairs. Server-side aggregation drops payload size 100×.
+
+**Related:** T33 (Discover V1 gap-fill, TypeCarousel).
+
+---
+
 ### 2026-07-13 — Discover V1 collector enrichment (DB Query)
 
 **Query:** `SELECT user_id, rating_overall, slimes(base_type) FROM collection_logs WHERE user_id = ANY(:popularUserIds)`. Runs on every mount of `/discover` (when there are popular users).

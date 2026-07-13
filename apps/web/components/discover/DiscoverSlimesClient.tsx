@@ -63,25 +63,10 @@ export type TopRatedSlime = {
   subtypes: { name: string } | null;
 };
 
-function RatingBar({ avg }: { avg: number | null }) {
-  const pct = avg ? ((avg - 1) / 4) * 100 : 0;
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 rounded-full bg-slime-border overflow-hidden">
-        <div
-          className="h-full rounded-full"
-          style={{
-            width: `${pct}%`,
-            background: "linear-gradient(90deg, #39FF14, #00F0FF)",
-          }}
-        />
-      </div>
-      <span className="text-xs font-semibold text-slime-accent tabular-nums w-7 text-right">
-        {avg ? avg.toFixed(1) : "\u2014"}
-      </span>
-    </div>
-  );
-}
+// [Discover V1 gap-fill 2026-07-13] Retired the RatingBar (gradient
+// progress meter) in favor of a big Montserrat score on the right of
+// the card \u2014 matches Design's dense leaderboard treatment. The
+// component itself is inlined below in `TopRatedCard`.
 
 // [Discover V1 — 2026-07-13] Medal tiles for top 3. Rank 1 gets the
 // signature green→cyan gradient (matches the primary CTA), rank 2 a
@@ -157,9 +142,21 @@ function TopRatedCard({
   ratingValue: number | null;
 }) {
   const brandSlug = slime.brands?.slug ?? null;
+  // Big-score treatment tints from green (great) \u2192 cyan (solid) \u2192 white
+  // (unrated). Matches the how-to-rate scale color language at the top
+  // of the ladder without going full rainbow.
+  const scoreColor =
+    ratingValue == null
+      ? "rgba(245,245,245,0.4)"
+      : ratingValue >= 4.5
+        ? "#7BFF7B"
+        : ratingValue >= 3.5
+          ? "#00F0FF"
+          : "rgba(245,245,245,0.75)";
+
   const cardContent = (
     <article
-      className="rounded-2xl p-4 flex items-center gap-3 transition-all duration-150 hover:scale-[1.01] active:scale-[0.98]"
+      className="rounded-2xl px-3.5 py-3 flex items-center gap-3 transition-all duration-150 hover:scale-[1.01] active:scale-[0.98]"
       style={{
         background: "rgba(45,10,78,0.25)",
         border: "1px solid rgba(45,10,78,0.7)",
@@ -168,27 +165,57 @@ function TopRatedCard({
     >
       <RankBadge rank={rank} />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-slime-text truncate leading-tight">
+        <p
+          className="truncate leading-tight"
+          style={{
+            fontFamily: "Montserrat, sans-serif",
+            fontWeight: 800,
+            fontSize: 14,
+            color: "#FFFFFF",
+            letterSpacing: "-0.01em",
+          }}
+        >
           {slime.name ?? "Unnamed slime"}
         </p>
-        <p className="text-xs text-slime-magenta truncate">
+        <p
+          className="text-[11.5px] truncate mt-0.5"
+          style={{ color: "#FF7BEB", fontWeight: 600 }}
+        >
           {slime.brands?.name ?? "Unknown brand"}
         </p>
         {slime.base_type && (
           <p
-            className="text-[10px] font-semibold mt-0.5"
-            style={{ color: "rgba(0,240,255,0.7)" }}
+            className="text-[10px] font-semibold mt-0.5 truncate"
+            style={{ color: "rgba(0,240,255,0.75)" }}
           >
             {SLIME_BASE_TYPE_LABELS[slime.base_type as SlimeBaseType] ??
               slime.base_type}
             {slime.subtypes?.name ? ` \u00b7 ${slime.subtypes.name}` : null}
           </p>
         )}
-        <RatingBar avg={ratingValue} />
       </div>
-      <div className="text-right shrink-0">
-        <p className="text-xs text-slime-muted">{slime.total_ratings ?? 0}</p>
-        <p className="text-[10px] text-slime-muted/60">ratings</p>
+      <div className="text-right shrink-0" style={{ minWidth: 48 }}>
+        <div
+          className="tabular-nums leading-none"
+          style={{
+            fontFamily: "Montserrat, sans-serif",
+            fontWeight: 900,
+            fontSize: 22,
+            letterSpacing: "-0.02em",
+            color: scoreColor,
+          }}
+        >
+          {ratingValue != null ? ratingValue.toFixed(1) : "\u2014"}
+        </div>
+        <div
+          className="text-[9.5px] mt-1"
+          style={{
+            color: "rgba(245,245,245,0.4)",
+            letterSpacing: "0.02em",
+          }}
+        >
+          {slime.total_ratings ?? 0} ratings
+        </div>
       </div>
     </article>
   );

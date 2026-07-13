@@ -183,8 +183,11 @@ export default function FeaturedDropsCarousel({
                 <article
                   className="rounded-2xl overflow-hidden relative transition-all duration-150 active:scale-95 hover:scale-[1.02]"
                   style={{
-                    width: "calc(62vw - 16px)",
-                    maxWidth: 260,
+                    // [Discover V1 gap-fill 2026-07-13] tightened from
+                    // ~62vw / max 260 → fixed 200 to match Design's
+                    // "two cards visible per viewport" mockup. Feels
+                    // less like a hero card, more like calendar entries.
+                    width: 200,
                     background: "rgba(45,10,78,0.3)",
                     border: "1px solid rgba(45,10,78,0.7)",
                   }}

@@ -88,6 +88,7 @@ export default async function DiscoverPage({
     tagsResult,
     followCountResult,
     pulseLogsResult,
+    typeCountsResult,
   ] = await Promise.all([
     supabase
       .from("slimes")
@@ -121,14 +122,26 @@ export default async function DiscoverPage({
       .order("follower_count", { ascending: false })
       .limit(12),
 
-    // [Discover V1] Pulse feed. We only need created_at + slime_id to
-    // hydrate today's count, the 7-day sparkline, and the top climbing
-    // base types (joined via slimes.base_type). No user_id / rating
-    // fields needed here — collector enrichment fires as its own query.
+    // [Discover V1] Pulse feed. Fetches recent logs (last 8 days)
+    // joined to slime name / base_type / brand so we can derive:
+    //   - logs today
+    //   - 7-day sparkline
+    //   - top climbing base type (arrow marker)
+    //   - top climbing specific slime (arrow marker + link)
+    // Tag momentum uses the separate `tagsResult` since we don't need
+    // to join collection_logs to tag activity for a "hot" signal.
     supabase
       .from("collection_logs")
-      .select("created_at, slimes(base_type)")
+      .select(
+        "created_at, slime_id, slimes(id, name, base_type, brands(name, slug))",
+      )
       .gte("created_at", eightDaysAgo.toISOString()),
+
+    // [Discover V1 gap-fill] Per-base-type slime counts for the
+    // TypeCarousel cards. Single scan of the base_type column, JS
+    // aggregation. Small pre-launch; add a cost-tracker entry if we
+    // start seeing this render slowly.
+    supabase.from("slimes").select("base_type").not("base_type", "is", null),
   ]);
 
   // ─── Top-rated slimes normalization ───────────────────────────────────
@@ -143,7 +156,25 @@ export default async function DiscoverPage({
 
   const trendingTags = tagsResult.error
     ? []
-    : (tagsResult.data ?? []).map(({ id, name }) => ({ id, name }));
+    : (tagsResult.data ?? []).map(({ id, name, use_count }) => ({
+        id,
+        name,
+        use_count: Number(use_count ?? 0),
+      }));
+
+  // ─── Per-type slime counts ────────────────────────────────────────────
+  // Aggregate the base_type-only scan into a `Record<baseType, number>`
+  // for the TypeCarousel. Missing types just render "be the first."
+  const typeCountsRows = typeCountsResult.error
+    ? []
+    : (typeCountsResult.data ?? []);
+  const typeCounts: Partial<Record<SlimeBaseType, number>> = {};
+  for (const row of typeCountsRows) {
+    const bt = row.base_type;
+    if (!bt) continue;
+    typeCounts[bt as SlimeBaseType] =
+      (typeCounts[bt as SlimeBaseType] ?? 0) + 1;
+  }
 
   // ─── Trending pulse aggregation ───────────────────────────────────────
   // Compute logsToday, sparkline (7 days ending today), and up to 3
@@ -162,6 +193,10 @@ export default async function DiscoverPage({
   const startOfToday_ms = startOfToday.getTime();
 
   const baseTypeCountsLast7: Record<string, number> = {};
+  const slimeCountsLast7: Record<
+    string,
+    { name: string; brand: string | null; brandSlug: string | null; count: number }
+  > = {};
   let logsToday = 0;
 
   for (const row of pulseLogs) {
@@ -177,32 +212,91 @@ export default async function DiscoverPage({
       dayBuckets[6 - daysAgo] += 1;
     }
 
-    // Base-type climbing counts, only for last-7-day rows.
+    // Both climbing feeds only care about last-7-day rows.
     if (daysAgo < 7) {
       const rawSlime = row.slimes;
       const s = Array.isArray(rawSlime) ? rawSlime[0] : rawSlime;
+
       const base_type = s?.base_type ?? null;
       if (base_type) {
         baseTypeCountsLast7[base_type] =
           (baseTypeCountsLast7[base_type] ?? 0) + 1;
+      }
+
+      const slimeId = row.slime_id ?? s?.id ?? null;
+      const slimeName = s?.name ?? null;
+      if (slimeId && slimeName) {
+        const rawBrand = s?.brands;
+        const brandObj = Array.isArray(rawBrand) ? rawBrand[0] : rawBrand;
+        const brandName = brandObj?.name ?? null;
+        const brandSlug = brandObj?.slug ?? null;
+        if (!slimeCountsLast7[slimeId]) {
+          slimeCountsLast7[slimeId] = {
+            name: slimeName,
+            brand: brandName,
+            brandSlug,
+            count: 0,
+          };
+        }
+        slimeCountsLast7[slimeId].count += 1;
       }
     }
   }
 
   const logsLast7Days = dayBuckets.reduce((a, b) => a + b, 0);
 
-  // Top 3 climbing base types (descending count).
-  const momentum: MomentumRow[] = Object.entries(baseTypeCountsLast7)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([base_type, count]) => ({
-      marker: "up" as const,
+  // ─── Build a mixed momentum feed ──────────────────────────────────────
+  // Design's mockup shows three different KINDS of rows so the pulse
+  // reads varied at scan. We slot in:
+  //   Row 1: top climbing base type (arrow marker)
+  //   Row 2: top climbing specific slime (arrow marker + link)
+  //   Row 3: top trending tag (flame marker)
+  // Any row we can't fill (empty data) drops out silently.
+  const momentum: MomentumRow[] = [];
+
+  const topBaseType = Object.entries(baseTypeCountsLast7).sort(
+    (a, b) => b[1] - a[1],
+  )[0];
+  if (topBaseType) {
+    const [bt, count] = topBaseType;
+    momentum.push({
+      marker: "up",
       label:
-        SLIME_BASE_TYPE_LABELS[base_type as SlimeBaseType] ??
-        base_type.replace(/_/g, " "),
-      sub: "climbing this week",
+        SLIME_BASE_TYPE_LABELS[bt as SlimeBaseType] ??
+        bt.replace(/_/g, " "),
+      sub: "is heating up",
       delta: `+${count} logs`,
-    }));
+      href: `/discover/type/${bt}`,
+    });
+  }
+
+  const topSlime = Object.entries(slimeCountsLast7).sort(
+    (a, b) => b[1].count - a[1].count,
+  )[0];
+  if (topSlime) {
+    const [slimeId, s] = topSlime;
+    momentum.push({
+      marker: "up",
+      label: s.name,
+      sub: s.brand ? `· ${s.brand}` : null,
+      delta: s.count >= 3 ? `+${s.count} logs` : "climbing",
+      href: `/slimes/${slimeId}`,
+    });
+  }
+
+  // Top trending tag as the flame row. Uses use_count as the raw
+  // signal (we don't track week-over-week deltas yet). Design's spec
+  // showed "+61 posts" which is delta but a raw count still reads.
+  if (trendingTags.length > 0) {
+    const t = trendingTags[0];
+    momentum.push({
+      marker: "hot",
+      label: `#${t.name}`,
+      sub: "tag spiking",
+      delta: t.use_count >= 3 ? `${t.use_count} posts` : "trending",
+      href: `/discover/keyword/${encodeURIComponent(t.name)}`,
+    });
+  }
 
   // ─── Popular users + collector enrichment ─────────────────────────────
   const followData = followCountResult.error
@@ -334,7 +428,7 @@ export default async function DiscoverPage({
               What are these? ›
             </Link>
           </div>
-          <TypeCarousel />
+          <TypeCarousel counts={typeCounts} />
         </section>
 
         {/* ── Suggest a brand card ───────────────────────────────────
@@ -448,15 +542,32 @@ export default async function DiscoverPage({
                 <Link
                   key={tag.id}
                   href={`/discover/keyword/${encodeURIComponent(tag.name)}`}
-                  className="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
+                  className="shrink-0 inline-flex items-center gap-1.5 rounded-full transition-colors"
                   style={{
+                    padding: "7px 12px",
                     background: "rgba(45,10,78,0.3)",
-                    color: "rgba(245,245,245,0.7)",
                     border: "1px solid rgba(45,10,78,0.5)",
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {tag.name}
+                  <span
+                    className="text-xs"
+                    style={{
+                      color: "#FFFFFF",
+                      fontFamily: "Montserrat, sans-serif",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {tag.name}
+                  </span>
+                  {tag.use_count > 0 && (
+                    <span
+                      className="text-[10.5px] tabular-nums font-bold"
+                      style={{ color: "#7BFF7B" }}
+                    >
+                      {tag.use_count}
+                    </span>
+                  )}
                 </Link>
               ))}
             </div>

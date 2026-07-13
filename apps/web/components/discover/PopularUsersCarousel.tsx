@@ -44,6 +44,19 @@ function formatBaseType(base_type: string): string {
   );
 }
 
+// [Discover V1 gap-fill 2026-07-13] Rotating avatar gradient palette
+// so a row of collectors reads varied at scan instead of every avatar
+// being the same green→cyan. Deterministic on the user's index in the
+// list so re-renders don't shuffle colors. Design's mockup used
+// (green→cyan), (magenta→pink), (cyan→green) as the primary trio;
+// we add a warm variant so a longer row keeps varying.
+const AVATAR_GRADIENTS: string[] = [
+  "linear-gradient(135deg, #39FF14, #00F0FF)",
+  "linear-gradient(135deg, #CC44FF, #FF3D6E)",
+  "linear-gradient(135deg, #00F0FF, #39FF14)",
+  "linear-gradient(135deg, #FFAE3B, #FF3D6E)",
+];
+
 export default function PopularUsersCarousel({
   users,
 }: PopularUsersCarouselProps) {
@@ -58,10 +71,11 @@ export default function PopularUsersCarousel({
         } as React.CSSProperties
       }
     >
-      {users.map((user) => {
+      {users.map((user, i) => {
         const initial = (user.username[0] ?? "?").toUpperCase();
         const displayName = user.display_name?.trim() || user.username;
         const specialtyLine = buildSpecialtyLine(user);
+        const avatarGradient = AVATAR_GRADIENTS[i % AVATAR_GRADIENTS.length];
 
         return (
           <Link
@@ -100,7 +114,7 @@ export default function PopularUsersCarousel({
                   <div
                     className="w-full h-full flex items-center justify-center text-xl font-black"
                     style={{
-                      background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                      background: avatarGradient,
                       color: "#04110A",
                       fontFamily: "Montserrat, sans-serif",
                     }}

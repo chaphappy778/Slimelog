@@ -53,6 +53,11 @@ export default function SearchHero() {
     router.push(`/search?q=${encodeURIComponent(trimmed)}`);
   }
 
+  const [focused, setFocused] = useState(false);
+  // When collapsed (unfocused and empty) show the two-line prompt.
+  // When expanded (focused or typing) show only the input field.
+  const collapsed = !focused && !value;
+
   return (
     <form
       onSubmit={submit}
@@ -61,13 +66,15 @@ export default function SearchHero() {
       aria-label="Search SlimeLog"
     >
       <label
-        className="flex items-center gap-3 rounded-2xl px-4"
+        className="flex items-center gap-3 rounded-2xl transition-all"
         style={{
-          height: 54,
-          background: "rgba(0,240,255,0.06)",
-          border: "1px solid rgba(0,240,255,0.42)",
+          minHeight: 66,
+          padding: "12px 16px",
+          background: "rgba(0,240,255,0.07)",
+          border: "1px solid rgba(0,240,255,0.44)",
           boxShadow:
-            "inset 0 0 22px rgba(0,240,255,0.08), 0 0 22px rgba(0,240,255,0.10)",
+            "inset 0 0 24px rgba(0,240,255,0.10), 0 0 24px rgba(0,240,255,0.12)",
+          cursor: "text",
         }}
       >
         <svg
@@ -85,24 +92,68 @@ export default function SearchHero() {
           <circle cx="11" cy="11" r="7" />
           <path d="m21 21-4.35-4.35" />
         </svg>
-        <input
-          ref={inputRef}
-          type="search"
-          inputMode="search"
-          enterKeyHint="search"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder={
-            value ? undefined : PLACEHOLDER_ROTATION[placeholderIdx]
-          }
-          className="flex-1 bg-transparent outline-none text-[15px]"
-          style={{
-            fontFamily: "Montserrat, sans-serif",
-            fontWeight: 700,
-            color: "#FFFFFF",
-          }}
-          aria-label="Search slimes, brands, and collectors"
-        />
+
+        {/* Two-line prompt when collapsed. Focus / typing switches to
+            the raw input treatment so the field still feels like a
+            search box, not a static banner. */}
+        <div className="flex-1 min-w-0">
+          {collapsed && (
+            <div
+              className="pointer-events-none"
+              aria-hidden="true"
+            >
+              <div
+                style={{
+                  fontFamily: "Montserrat, sans-serif",
+                  fontWeight: 800,
+                  fontSize: 15,
+                  color: "#FFFFFF",
+                  letterSpacing: "-0.01em",
+                  lineHeight: 1.15,
+                }}
+              >
+                What slime are you looking for?
+              </div>
+              <div
+                className="mt-0.5 text-[11.5px]"
+                style={{
+                  color: "rgba(0,240,255,0.75)",
+                  fontStyle: "italic",
+                }}
+              >
+                {PLACEHOLDER_ROTATION[placeholderIdx]}
+              </div>
+            </div>
+          )}
+          <input
+            ref={inputRef}
+            type="search"
+            inputMode="search"
+            enterKeyHint="search"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            placeholder={
+              collapsed ? undefined : "Search slimes, brands, or collectors"
+            }
+            className="bg-transparent outline-none text-[15px]"
+            style={{
+              fontFamily: "Montserrat, sans-serif",
+              fontWeight: 700,
+              color: "#FFFFFF",
+              width: collapsed ? 1 : "100%",
+              height: collapsed ? 1 : "auto",
+              opacity: collapsed ? 0 : 1,
+              // Keep it in the DOM so submit still works via Enter, but
+              // shrink to invisible when collapsed so the two-line
+              // prompt owns the visual real estate.
+              position: collapsed ? "absolute" : "static",
+            }}
+            aria-label="Search slimes, brands, and collectors"
+          />
+        </div>
+
         {value && (
           <button
             type="button"

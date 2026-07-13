@@ -26,14 +26,21 @@ import Link from "next/link";
 export const EARLY_DAYS_THRESHOLD = 5;
 
 export interface MomentumRow {
-  /** Icon / rank marker on the left. "up" renders a small arrow. */
+  /**
+   * Row type. `up` = arrow marker (base type or specific slime),
+   * `hot` = flame marker (tag spiking). The visual delta between
+   * these is what gives the pulse variety at scan — three ↑ rows
+   * in a row read as one type of thing.
+   */
   marker: "up" | "hot";
   /** Bold label for the row, e.g. "Butter" or "#galaxy". */
   label: string;
-  /** Muted sub-label, e.g. "is heating up". */
+  /** Muted sub-label, e.g. "is heating up" or brand name. */
   sub: string | null;
-  /** Delta line on the right, e.g. "+240 logs". */
+  /** Delta line on the right, e.g. "+240 logs" or "climbing". */
   delta: string;
+  /** Optional deep-link the whole row navigates to on tap. */
+  href?: string;
 }
 
 export interface TrendingPulseProps {
@@ -164,78 +171,117 @@ export default function TrendingPulse({
           </div>
         </div>
 
-        {/* Momentum rows. Empty is fine, gracefully hidden. */}
+        {/* Momentum rows. Empty is fine, gracefully hidden. Each row
+            can optionally deep-link on tap when `href` is set — used
+            for the specific-slime row so users can jump straight into
+            the top-climbing detail page. */}
         {momentum.length > 0 && (
           <div className="mt-3">
             {momentum.map((row, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-2.5 py-2"
-                style={{
-                  borderTop:
-                    i === 0
-                      ? undefined
-                      : "1px solid rgba(120,60,180,0.18)",
-                }}
-              >
-                <span
-                  className="tabular-nums shrink-0"
-                  style={{
-                    color: "rgba(245,245,245,0.5)",
-                    fontSize: 11,
-                    width: 22,
-                    textAlign: "center",
-                  }}
-                  aria-hidden="true"
-                >
-                  {row.marker === "up" ? "↑" : ""}
-                </span>
-                {row.marker === "hot" && (
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="#FF7A2E"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                    className="shrink-0 -ml-3"
-                  >
-                    <path d="M12 2c1.5 3 4 4.5 4 8a4 4 0 1 1-8 0c0-1.5.5-2.5 1-3.5 0 2 1 3 2 3 0-3-1-5 1-7.5Z" />
-                  </svg>
-                )}
-                <div className="flex-1 min-w-0 text-[13px] leading-tight">
-                  <span
-                    className="mr-1"
-                    style={{
-                      fontFamily: "Montserrat, sans-serif",
-                      fontWeight: 800,
-                      color: "#FFFFFF",
-                    }}
-                  >
-                    {row.label}
-                  </span>
-                  {row.sub && (
-                    <span style={{ color: "rgba(245,245,245,0.7)" }}>
-                      {row.sub}
-                    </span>
-                  )}
-                </div>
-                <span
-                  className="shrink-0 text-[11.5px] font-bold tabular-nums"
-                  style={{ color: "#7BFF7B" }}
-                >
-                  {row.delta}
-                </span>
-              </div>
+              <MomentumRowRender key={i} row={row} showTopBorder={i > 0} />
             ))}
           </div>
         )}
       </div>
     </div>
   );
+}
+
+// ─── Single momentum row ──────────────────────────────────────────────
+// Extracted so we can conditionally wrap in a Link when the row has an
+// href (specific-slime rows). Border, marker, label, sub, and delta
+// treatment all live here.
+
+function MomentumRowRender({
+  row,
+  showTopBorder,
+}: {
+  row: MomentumRow;
+  showTopBorder: boolean;
+}) {
+  const body = (
+    <div
+      className="flex items-center gap-2.5 py-2"
+      style={{
+        borderTop: showTopBorder
+          ? "1px solid rgba(120,60,180,0.18)"
+          : undefined,
+      }}
+    >
+      <span
+        className="shrink-0 grid place-items-center"
+        style={{ width: 22 }}
+        aria-hidden="true"
+      >
+        {row.marker === "up" ? (
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#7BFF7B"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M5 12h14M13 5l7 7-7 7" style={{ transform: "rotate(-45deg)", transformOrigin: "center" }} />
+          </svg>
+        ) : (
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#FF7A2E"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 2c1.5 3 4 4.5 4 8a4 4 0 1 1-8 0c0-1.5.5-2.5 1-3.5 0 2 1 3 2 3 0-3-1-5 1-7.5Z" />
+          </svg>
+        )}
+      </span>
+      <div className="flex-1 min-w-0 text-[13px] leading-tight">
+        <span
+          className="mr-1"
+          style={{
+            fontFamily: "Montserrat, sans-serif",
+            fontWeight: 800,
+            color: "#FFFFFF",
+          }}
+        >
+          {row.label}
+        </span>
+        {row.sub && (
+          <span
+            style={{
+              color: "rgba(245,245,245,0.65)",
+              fontSize: 12,
+            }}
+          >
+            {row.sub}
+          </span>
+        )}
+      </div>
+      <span
+        className="shrink-0 text-[11.5px] font-bold tabular-nums"
+        style={{
+          color: row.marker === "hot" ? "#FFB870" : "#7BFF7B",
+        }}
+      >
+        {row.delta}
+      </span>
+    </div>
+  );
+
+  if (row.href) {
+    return (
+      <Link href={row.href} className="block">
+        {body}
+      </Link>
+    );
+  }
+  return body;
 }
 
 // ─── Early-days empty state ────────────────────────────────────────────
