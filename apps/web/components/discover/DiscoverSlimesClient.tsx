@@ -234,7 +234,52 @@ function TopRatedCard({
   return cardContent;
 }
 
-type SortMode = "top_rated" | "most_reviewed";
+// [Discover polish 2026-07-13] Unified sort key. Retired the old
+// `sortMode` (Top Rated / Most Reviewed) + separate `axisState` combo —
+// they were scattered across three UI spots (segmented toggle, chip,
+// filter dropdown) and users had to guess which one to touch. Now:
+// one horizontal pill row with all sort options, mutually exclusive.
+export type SortKey =
+  | "overall"
+  | "texture"
+  | "sound"
+  | "aesthetic"
+  | "creativity"
+  | "quality"
+  | "most_reviewed";
+
+// Display palette per sort key. Axis colors match how-to-rate exactly;
+// Overall stays cyan (the default), Most Reviewed is white-ish so it
+// reads as its own category, not another axis.
+const SORT_COLOR: Record<SortKey, string> = {
+  overall: "#00F0FF",
+  texture: "#39FF14",
+  sound: "#00F0FF",
+  aesthetic: "#FF00E5",
+  creativity: "#FFD24A",
+  quality: "#8B5CF6",
+  most_reviewed: "#FFFFFF",
+};
+
+const SORT_LABEL: Record<SortKey, string> = {
+  overall: "Overall",
+  texture: "Texture",
+  sound: "Sound",
+  aesthetic: "Aesthetic",
+  creativity: "Creativity",
+  quality: "Quality",
+  most_reviewed: "Most Reviewed",
+};
+
+const SORT_KEYS: SortKey[] = [
+  "overall",
+  "texture",
+  "sound",
+  "aesthetic",
+  "creativity",
+  "quality",
+  "most_reviewed",
+];
 
 const MIN_RATING_OPTIONS: { label: string; value: number | null }[] = [
   { label: "Any rating", value: null },
@@ -243,28 +288,27 @@ const MIN_RATING_OPTIONS: { label: string; value: number | null }[] = [
   { label: "4.5+", value: 4.5 },
 ];
 
+// Show this many rows by default; user can expand to see up to 20.
+const DEFAULT_VISIBLE = 5;
+
 // ─── Compact filter bar ───────────────────────────────────────────────────────
 
 function FilterBar({
-  sortMode,
+  sortKey,
   onSortChange,
   minRating,
   onMinRatingChange,
   activeType,
   onTypeChange,
   availableTypes,
-  axis,
-  onAxisChange,
 }: {
-  sortMode: SortMode;
-  onSortChange: (v: SortMode) => void;
+  sortKey: SortKey;
+  onSortChange: (v: SortKey) => void;
   minRating: number | null;
   onMinRatingChange: (v: number | null) => void;
   activeType: string;
   onTypeChange: (v: string) => void;
   availableTypes: string[];
-  axis: SortAxis | null;
-  onAxisChange: (v: SortAxis | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -280,46 +324,54 @@ function FilterBar({
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  const hasActiveFilters =
-    minRating !== null || activeType !== "all" || axis !== null;
-  const minRatingLabel =
-    MIN_RATING_OPTIONS.find((o) => o.value === minRating)?.label ??
-    "Any rating";
-  const typeLabel =
-    activeType === "all"
-      ? "All types"
-      : (SLIME_BASE_TYPE_LABELS[activeType as SlimeBaseType] ?? activeType);
+  const hasActiveFilters = minRating !== null || activeType !== "all";
 
   return (
-    <div className="flex items-center gap-2 mb-4 relative" ref={ref}>
-      {/* Sort segmented control */}
+    <div className="mb-4 relative" ref={ref}>
+      {/* [Discover polish 2026-07-13] Unified sort pill row. All seven
+          options (6 axes + Most Reviewed) live in one horizontal
+          scroll strip so users see every choice at once instead of
+          hunting through a dropdown. Active pill glows in the axis's
+          signature color. */}
       <div
-        className="inline-flex rounded-xl overflow-hidden shrink-0"
-        style={{ border: "1px solid rgba(45,10,78,0.5)" }}
+        className="flex gap-2 overflow-x-auto scrollbar-none mb-3"
+        style={
+          {
+            msOverflowStyle: "none",
+            scrollbarWidth: "none",
+            WebkitOverflowScrolling: "touch",
+          } as React.CSSProperties
+        }
       >
-        {(["top_rated", "most_reviewed"] as SortMode[]).map((mode) => {
-          const active = sortMode === mode;
+        {SORT_KEYS.map((key) => {
+          const active = sortKey === key;
+          const tint = SORT_COLOR[key];
           return (
             <button
-              key={mode}
+              key={key}
               type="button"
-              onClick={() => onSortChange(mode)}
-              className="px-3 py-1.5 text-xs font-semibold transition-colors"
+              onClick={() => onSortChange(key)}
+              className="shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all"
               style={{
                 background: active
-                  ? "rgba(0,240,255,0.15)"
+                  ? `${tint}22`
                   : "rgba(45,10,78,0.3)",
-                color: active ? "#00F0FF" : "rgba(245,245,245,0.4)",
-                borderRight: "1px solid rgba(45,10,78,0.5)",
+                border: active
+                  ? `1px solid ${tint}88`
+                  : "1px solid rgba(45,10,78,0.55)",
+                color: active ? tint : "rgba(245,245,245,0.5)",
+                boxShadow: active ? `0 0 10px ${tint}55` : "none",
+                fontFamily: "Montserrat, sans-serif",
               }}
             >
-              {mode === "top_rated" ? "Top Rated" : "Most Reviewed"}
+              {SORT_LABEL[key]}
             </button>
           );
         })}
       </div>
 
       {/* Filter pill — opens dropdown */}
+      <div className="flex items-center gap-2 relative">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -370,50 +422,8 @@ function FilterBar({
             minWidth: 220,
           }}
         >
-          {/* Axis picker — lets the user re-sort by any of the six
-              rating dimensions without leaving the page. Default is
-              "Overall" (null axis). */}
-          <div>
-            <p
-              className="text-[10px] font-bold uppercase tracking-wider mb-2"
-              style={{ color: "rgba(245,245,245,0.35)" }}
-            >
-              Sort by axis
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {(
-                [
-                  { value: null, label: "Overall" },
-                  { value: "texture" as SortAxis, label: "Texture" },
-                  { value: "sound" as SortAxis, label: "Sound" },
-                  { value: "aesthetic" as SortAxis, label: "Aesthetic" },
-                  { value: "creativity" as SortAxis, label: "Creativity" },
-                  { value: "quality" as SortAxis, label: "Quality" },
-                ] as { value: SortAxis | null; label: string }[]
-              ).map((opt) => {
-                const active = axis === opt.value;
-                return (
-                  <button
-                    key={opt.label}
-                    type="button"
-                    onClick={() => onAxisChange(opt.value)}
-                    className="px-2.5 py-1 rounded-full text-xs font-semibold transition-colors"
-                    style={{
-                      background: active
-                        ? "rgba(0,240,255,0.15)"
-                        : "rgba(45,10,78,0.4)",
-                      color: active ? "#00F0FF" : "rgba(245,245,245,0.45)",
-                      border: active
-                        ? "1px solid rgba(0,240,255,0.4)"
-                        : "1px solid rgba(45,10,78,0.5)",
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          {/* Axis picker moved to top-level pill row above the filter
+              bar (2026-07-13). This dropdown is now filters-only. */}
 
           {/* Min rating */}
           <div>
@@ -516,7 +526,6 @@ function FilterBar({
               onClick={() => {
                 onMinRatingChange(null);
                 onTypeChange("all");
-                onAxisChange(null);
                 setOpen(false);
               }}
               className="text-xs font-semibold text-center py-1.5 rounded-lg transition-colors"
@@ -531,6 +540,7 @@ function FilterBar({
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -552,21 +562,24 @@ export default function DiscoverSlimesClient({
 }) {
   const [activeType, setActiveType] = useState<string>("all");
   const [minRating, setMinRating] = useState<number | null>(null);
-  const [sortMode, setSortMode] = useState<SortMode>("top_rated");
   const [activeSubtype, setActiveSubtype] = useState<string | null>(null);
-  // 2026-07-13: axis is now filterable via the dropdown. Initializes
-  // from the deep-link `sortAxis` prop (or `null` = Overall / default)
-  // and can be changed at will. Everything downstream reads
-  // `axisState`, so the "Sorted by X" chip and the section header on
-  // the parent page stay tied to the initial deep-link while the
-  // internal sort follows the user's choice.
-  const [axisState, setAxisState] = useState<SortAxis | null>(sortAxis);
+  // [Discover polish 2026-07-13] Unified sort key. Initializes from
+  // the deep-link `sortAxis` prop when it's an axis; otherwise
+  // defaults to "overall". "most_reviewed" is only reachable via the
+  // pill row (no URL shortcut yet).
+  const [sortKey, setSortKey] = useState<SortKey>(sortAxis ?? "overall");
+  // Expand/collapse for the top-rated rows — see DEFAULT_VISIBLE
+  // constant. Users see the top 5 initially and can expand to see
+  // the rest inline.
+  const [showAll, setShowAll] = useState(false);
 
-  // Column the "top rated" mode + min-rating filter + rating bar look at.
-  // Reads from `axisState` (user-controlled) rather than the prop.
-  const ratingColumn: keyof TopRatedSlime = axisState
-    ? AXIS_COLUMN[axisState]
-    : "avg_overall";
+  // Column the min-rating filter + rating bar look at. Derived from
+  // the unified sort key. Most Reviewed doesn't change the display
+  // column (still avg_overall) — it only reorders.
+  const ratingColumn: keyof TopRatedSlime =
+    sortKey === "most_reviewed" || sortKey === "overall"
+      ? "avg_overall"
+      : AXIS_COLUMN[sortKey as SortAxis];
   const readRating = (s: TopRatedSlime): number | null => {
     const v = s[ratingColumn];
     return typeof v === "number" ? v : null;
@@ -609,10 +622,10 @@ export default function DiscoverSlimesClient({
       });
     }
 
-    if (sortMode === "top_rated") {
-      result.sort((a, b) => (readRating(b) ?? 0) - (readRating(a) ?? 0));
-    } else {
+    if (sortKey === "most_reviewed") {
       result.sort((a, b) => (b.total_ratings ?? 0) - (a.total_ratings ?? 0));
+    } else {
+      result.sort((a, b) => (readRating(b) ?? 0) - (readRating(a) ?? 0));
     }
 
     return result;
@@ -623,49 +636,22 @@ export default function DiscoverSlimesClient({
     activeType,
     activeSubtype,
     minRating,
-    sortMode,
+    sortKey,
     ratingColumn,
   ]);
 
   return (
     <>
-      {/* [T32f 2026-07-13, expanded 2026-07-13] Axis-sort chip. Shows
-          whenever a non-Overall axis is active, whether from the
-          deep-link ?sort= or from the user's own dropdown pick.
-          Tapping "Clear" resets axis to Overall (URL is untouched). */}
-      {axisState && (
-        <div className="mb-3 flex items-center gap-2">
-          <span
-            className="text-xs"
-            style={{ color: "rgba(245,245,245,0.55)" }}
-          >
-            Sorted by
-          </span>
-          <span
-            className="px-2.5 py-1 rounded-full text-xs font-semibold"
-            style={{
-              background: "rgba(0,240,255,0.12)",
-              border: "1px solid rgba(0,240,255,0.35)",
-              color: "#00F0FF",
-            }}
-          >
-            {AXIS_LABEL[axisState]}
-          </span>
-          <button
-            type="button"
-            onClick={() => setAxisState(null)}
-            className="text-xs font-semibold"
-            style={{ color: "#FF7BEB" }}
-          >
-            Clear
-          </button>
-        </div>
-      )}
-
-      {/* Compact filter bar */}
+      {/* [Discover polish 2026-07-13] Sort + filter. Sort is a single
+          pill row across the top; filter opens a dropdown for
+          Min Rating + Slime Type. The old "Sorted by X" chip is gone
+          — the active pill IS the state. */}
       <FilterBar
-        sortMode={sortMode}
-        onSortChange={setSortMode}
+        sortKey={sortKey}
+        onSortChange={(k) => {
+          setSortKey(k);
+          setShowAll(false); // collapse to top-5 when the sort changes
+        }}
         minRating={minRating}
         onMinRatingChange={setMinRating}
         activeType={activeType}
@@ -674,8 +660,6 @@ export default function DiscoverSlimesClient({
           setActiveSubtype(null);
         }}
         availableTypes={availableTypes}
-        axis={axisState}
-        onAxisChange={setAxisState}
       />
 
       {/* Subtype drill-down — only when a type is selected and subtypes exist */}
@@ -725,22 +709,80 @@ export default function DiscoverSlimesClient({
         </div>
       )}
 
-      {/* Results */}
+      {/* Results — top DEFAULT_VISIBLE (5) rows visible, "Show more"
+          button below expands the remaining rows inline. Prevents
+          the section from taking over Discover once we have real
+          rating volume. */}
       {filtered.length === 0 ? (
         <div className="text-center py-10 text-slime-muted text-sm">
           No slimes match these filters.
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {filtered.map((slime, i) => (
-            <TopRatedCard
-              key={slime.id}
-              slime={slime}
-              rank={i + 1}
-              ratingValue={readRating(slime)}
-            />
-          ))}
-        </div>
+        <>
+          <div className="flex flex-col gap-3">
+            {(showAll
+              ? filtered
+              : filtered.slice(0, DEFAULT_VISIBLE)
+            ).map((slime, i) => (
+              <TopRatedCard
+                key={slime.id}
+                slime={slime}
+                rank={i + 1}
+                ratingValue={readRating(slime)}
+              />
+            ))}
+          </div>
+
+          {filtered.length > DEFAULT_VISIBLE && (
+            <button
+              type="button"
+              onClick={() => setShowAll((v) => !v)}
+              className="mt-4 w-full py-2.5 rounded-full text-xs font-bold uppercase transition-colors flex items-center justify-center gap-2"
+              style={{
+                background: "rgba(0,240,255,0.08)",
+                border: "1px solid rgba(0,240,255,0.32)",
+                color: "#00F0FF",
+                letterSpacing: "0.14em",
+                fontFamily: "Montserrat, sans-serif",
+              }}
+              aria-expanded={showAll}
+            >
+              {showAll ? (
+                <>
+                  Show top {DEFAULT_VISIBLE}
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M6 15l6-6 6 6" />
+                  </svg>
+                </>
+              ) : (
+                <>
+                  Show all {filtered.length}
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </>
+              )}
+            </button>
+          )}
+        </>
       )}
     </>
   );
