@@ -19,6 +19,11 @@ import GlossaryList from "@/components/guide/GlossaryList";
 import ProseSection from "@/components/guide/ProseSection";
 import BrandGlossary from "@/components/guide/BrandGlossary";
 import PricingBands from "@/components/guide/PricingBands";
+// [T32d 2026-07-13] Part 12 now indexes the six axes from /how-to-rate
+// instead of duplicating a competing legacy prose framework. Source of
+// truth for the axis names, colors, and taglines is the how-to-rate
+// content module. Any change there flows through automatically.
+import { RATING_AXES } from "@/app/how-to-rate/content";
 // T32b (2026-07-13): featured shops strip atop Part 5.
 import FeaturedShopsStrip, {
   type FeaturedShop,
@@ -38,7 +43,6 @@ import {
   PRICING_BANDS,
   PRICING_DRIVERS,
   PRICING_RESALE_NOTE,
-  RATING_FRAMEWORK,
   SAFETY,
   SCENTS,
   SHIPPING,
@@ -484,14 +488,26 @@ export default async function GuidePage() {
           <GlossaryList entries={SOUND_VOCAB} accent="green" />
         </PartSection>
 
-        {/* Part 12: Rating Framework */}
+        {/* Part 12: Rating Framework.
+            [T32d 2026-07-13] Retired the legacy 9-dimension / 10-point
+            prose block. Part 12 is now a lightweight index of the six
+            axes defined in /how-to-rate — each card carries its own
+            axis color and deep-links to that axis's section on the
+            how-to-rate page. Full breakdown stays on /how-to-rate so
+            the guide never falls out of sync with the rating model
+            the app actually uses. */}
         <PartSection
           n={12}
           title="The SlimeLog Rating Framework"
           tagline={PARTS[11].tagline}
         >
-          <ProseSection data={RATING_FRAMEWORK} />
-          <div className="mt-4">
+          <IntroLine>
+            Every log on SlimeLog is scored across six axes on a
+            five-star scale. Tap any axis for the full definition,
+            examples, and calibration on /how-to-rate.
+          </IntroLine>
+          <AxisIndex />
+          <div className="mt-6">
             <Link
               href="/how-to-rate"
               className="flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-[14px] font-bold"
@@ -507,7 +523,7 @@ export default async function GuidePage() {
                   "0 0 26px rgba(57,255,20,0.5), 0 8px 24px rgba(0,240,255,0.25), 0 0 6px rgba(57,255,20,0.45)",
               }}
             >
-              Full rating breakdown at /how-to-rate
+              Read the full rating guide
               <svg
                 width="16"
                 height="16"
@@ -738,6 +754,107 @@ function BulletList({
           <span>{item}</span>
         </li>
       ))}
+    </ul>
+  );
+}
+
+// ─── AxisIndex (Part 12) ──────────────────────────────────────────────
+// [T32d 2026-07-13] Six-card index of the rating axes defined on
+// /how-to-rate. Each card carries the axis's accent color and links to
+// that axis's anchor on the how-to-rate page. Order + names + colors
+// pull from `RATING_AXES` in `apps/web/app/how-to-rate/content.ts` so
+// the guide never drifts from the rating model the app enforces.
+function AxisIndex() {
+  return (
+    <ul className="list-none m-0 p-0 space-y-2.5">
+      {RATING_AXES.map((axis) => {
+        // Overall renders its name as gradient text; everything else
+        // uses the solid accent color. Border + hover glow always use
+        // the solid accentColor for consistency.
+        const nameStyle: React.CSSProperties = axis.accentGradient
+          ? {
+              background: axis.accentGradient,
+              WebkitBackgroundClip: "text",
+              backgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              color: "transparent",
+            }
+          : { color: axis.accentColor };
+
+        return (
+          <li key={axis.slug} className="m-0 p-0">
+            <Link
+              href={`/how-to-rate#${axis.slug}`}
+              className="flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-transform active:scale-[0.985]"
+              style={{
+                background: "rgba(45,10,78,0.28)",
+                border: `1px solid ${axis.accentBorder}`,
+                boxShadow: `inset 0 0 24px ${axis.accentGlow}`,
+                textDecoration: "none",
+              }}
+            >
+              {/* Two-digit number badge in the axis accent color. */}
+              <span
+                className="flex-none grid place-items-center rounded-xl font-black"
+                style={{
+                  width: 36,
+                  height: 36,
+                  fontFamily: "Montserrat, sans-serif",
+                  fontSize: 13,
+                  letterSpacing: "0.06em",
+                  color: axis.accentColor,
+                  border: `1px solid ${axis.accentColor}`,
+                  background: "rgba(10,0,20,0.35)",
+                }}
+              >
+                {axis.displayN}
+              </span>
+
+              {/* Name + tagline. */}
+              <div className="flex-1 min-w-0">
+                <div
+                  className="truncate"
+                  style={{
+                    fontFamily: "Montserrat, sans-serif",
+                    fontWeight: 900,
+                    fontSize: 16,
+                    letterSpacing: "-0.01em",
+                    lineHeight: 1.15,
+                    ...nameStyle,
+                  }}
+                >
+                  {axis.name}
+                </div>
+                <div
+                  className="mt-0.5 text-[12.5px] truncate"
+                  style={{
+                    color: "rgba(245,245,245,0.62)",
+                    lineHeight: 1.35,
+                  }}
+                >
+                  {axis.tagline}
+                </div>
+              </div>
+
+              {/* Chevron in the axis accent color. */}
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke={axis.accentColor}
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                className="flex-none"
+              >
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </Link>
+          </li>
+        );
+      })}
     </ul>
   );
 }

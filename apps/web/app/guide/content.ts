@@ -1443,57 +1443,11 @@ export const SHIPPING: ProseSection = {
   ],
 };
 
-/** Part Twelve: The SlimeLog Rating Framework. */
-export const RATING_FRAMEWORK: ProseSection = {
-  intro: [
-    "SlimeLog reviews evaluate slimes across several consistent dimensions, producing a structured rating that supports comparisons across products, shops, and texture categories. This section describes what is rated, how the score is expressed, and how reviews are written.",
-  ],
-  subsections: [
-    {
-      heading: "Rating Dimensions",
-      paragraphs: [
-        "Each review covers the following dimensions, with brief written commentary on each:",
-        "Texture. How well the slime expresses its claimed base. A butter slime should feel like butter; a cloud should drizzle. Off-base or hybrid textures are noted.",
-        "Stretch. How far the slime extends without breaking, and whether the stretch is smooth, sticky, or rubbery.",
-        "Hold. Whether the slime maintains its shape when scooped, sculpted, or set down. Sagging or melting is noted.",
-        "Drizzle. For drizzle-capable textures, the speed, ribbon shape, and consistency of the fall.",
-        "Sound. The dominant sound profile (sizzle, pop, crunch, squish) and its volume and clarity.",
-        "Scent. Strength, accuracy to the listed name, and overall pleasantness. Mismatched scents are noted.",
-        "Inclusions. Quality, quantity, and integration of charms, beads, sprinkles, or other add-ins.",
-        "Packaging. Container quality, lid seal, presentation, and branded inserts.",
-        "Value. Overall worth at the listed price point, factoring in size, ingredients, and inclusions.",
-      ],
-    },
-    {
-      heading: "Overall Score",
-      paragraphs: [
-        "SlimeLog uses a single overall score expressed as X out of 10, presented within flowing review prose rather than as separate dimension scores. The overall score represents a holistic judgment that incorporates all dimensions and is weighted by the slime's intended use and category.",
-      ],
-    },
-    {
-      heading: "Review Format",
-      paragraphs: [
-        "Reviews are written in flowing paragraph form with themed emoji separators, rather than bulleted breakdowns or scorecard tables. This style emphasizes the slime's experience as a complete product and supports the conversational tone SlimeLog is known for.",
-      ],
-    },
-    {
-      heading: "Calibration Notes",
-      paragraphs: [
-        "10 / 10. Excels at every relevant dimension for its category and is meaningfully better than peers.",
-        "7 to 8 / 10. A strong, recommended slime with minor flaws or limitations.",
-        "5 to 6 / 10. A competent slime that meets expectations without standing out.",
-        "Below 5 / 10. Significant problems with texture, value, condition, or expectation-match.",
-        "Scores are calibrated within categories. A budget slime is judged against budget peers, and a boutique slime is judged against boutique peers.",
-      ],
-    },
-    {
-      heading: "Review Independence",
-      paragraphs: [
-        "SlimeLog reviews are based on retail purchases unless otherwise noted. PR and gifted slimes are reviewed only with explicit disclosure and may not be eligible for top-tier scoring depending on context.",
-      ],
-    },
-  ],
-};
+// [T32d 2026-07-13] `RATING_FRAMEWORK` retired. Part 12 of the guide now
+// indexes the six axes defined in `apps/web/app/how-to-rate/content.ts`
+// instead of duplicating a competing 9-dimension / 10-point prose block.
+// The full rating breakdown lives on /how-to-rate — the guide points to
+// it so there's a single source of truth for the rating model.
 
 // ─── Part 8: Pricing, Sizing & Value ───────────────────────────────────
 
