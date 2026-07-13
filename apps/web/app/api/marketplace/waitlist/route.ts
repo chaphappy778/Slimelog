@@ -243,35 +243,63 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // 5. Upsert. Anon-key client so RLS runs — INSERT policy requires
   // user_id = auth.uid(), UPDATE policy requires the same on both
   // sides of the check.
-  const { data: upserted, error: upsertErr } = await supabase
+  // 2026-07-13 hardening: mirror the SELECT-fallback pattern from the
+  // position endpoint. If the column set on the newer schema fails
+  // (e.g. migration 0069 hasn't been applied yet), retry the upsert
+  // without `brand_names_other`. Users can still save their intent +
+  // catalog brand picks; only the freeform "Other" chips are lost until
+  // the migration lands. Better than a 500 on every submission.
+  const FULL_COLUMNS =
+    "id, user_id, intent, brand_ids, brand_names_other, spend_band, sell_volume, trust_need, created_at, updated_at";
+  const LEGACY_COLUMNS =
+    "id, user_id, intent, brand_ids, spend_band, sell_volume, trust_need, created_at, updated_at";
+
+  const basePayload = {
+    user_id: user.id,
+    intent,
+    brand_ids: brandIds,
+    spend_band: spendBand,
+    sell_volume: sellVolume,
+    trust_need: trustNeed,
+  };
+
+  let entry: MarketplaceWaitlistEntry;
+  const firstAttempt = await supabase
     .from("marketplace_waitlist")
     .upsert(
-      {
-        user_id: user.id,
-        intent,
-        brand_ids: brandIds,
-        brand_names_other: brandNamesOther,
-        spend_band: spendBand,
-        sell_volume: sellVolume,
-        trust_need: trustNeed,
-      },
+      { ...basePayload, brand_names_other: brandNamesOther },
       { onConflict: "user_id" },
     )
-    .select("id, user_id, intent, brand_ids, brand_names_other, spend_band, sell_volume, trust_need, created_at, updated_at")
+    .select(FULL_COLUMNS)
     .single();
 
-  if (upsertErr || !upserted) {
-    console.error(
-      "[marketplace/waitlist] upsert failed:",
-      upsertErr?.message ?? "no row returned",
+  if (firstAttempt.error || !firstAttempt.data) {
+    console.warn(
+      "[marketplace/waitlist] full-column upsert failed, retrying legacy:",
+      firstAttempt.error?.message ?? "no row returned",
     );
-    return NextResponse.json(
-      { error: "Could not save your spot. Try again shortly." },
-      { status: 500 },
-    );
+    const fallback = await supabase
+      .from("marketplace_waitlist")
+      .upsert(basePayload, { onConflict: "user_id" })
+      .select(LEGACY_COLUMNS)
+      .single();
+    if (fallback.error || !fallback.data) {
+      console.error(
+        "[marketplace/waitlist] legacy upsert also failed:",
+        fallback.error?.message ?? "no row returned",
+      );
+      return NextResponse.json(
+        { error: "Could not save your spot. Try again shortly." },
+        { status: 500 },
+      );
+    }
+    entry = {
+      ...(fallback.data as MarketplaceWaitlistEntry),
+      brand_names_other: null,
+    };
+  } else {
+    entry = firstAttempt.data as MarketplaceWaitlistEntry;
   }
-
-  const entry = upserted as MarketplaceWaitlistEntry;
 
   // 6. Position + total. Both counts pass through the admin client
   // because the anon-key client would see only the caller's own row

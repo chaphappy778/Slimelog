@@ -31,6 +31,25 @@ Template for new entries:
 
 ## Known potential issues (not-yet-hit, worth watching)
 
+### 2026-07-13 — Marketplace waitlist hydrate silent-fail when migration lags code (DB + UI)
+
+**Symptom:** Jennifer reopened `/marketplace` after already claiming waitlist position #1 the night before. Instead of landing on the success state, the page showed the join form as if she'd never signed up.
+
+**Root cause:** morning push included code that referenced `brand_names_other` (added in migration 0069) but the migration wasn't applied to the same environment. `SELECT ... brand_names_other ...` returned a PostgREST error, the position endpoint 500'd, and the client's hydrate useEffect silently fell back to form mode instead of surfacing the error. Same class of bug as the earlier brand-suggestions rate-limit 500 (fresh column referenced before migration applied).
+
+**Fix:** both `GET /api/marketplace/waitlist/position` and `POST /api/marketplace/waitlist` now retry the SELECT/UPSERT with a legacy column set if the full-column variant errors. Users lose only the freeform "Other" chips until migration lands; everything else still hydrates. Warns to console on fallback so we notice.
+
+**Regression check:** submit and hydrate should work with `brand_names_other` missing from the schema. Once migration 0069 is applied, full column set works and no warning fires.
+
+**Prevention pattern:** when adding a column referenced from an already-live endpoint, prefer additive-safe SQL patterns:
+
+1. **Best:** ship migration first, wait for it to apply everywhere, then push code that references the column. Boring but works.
+2. **When #1 isn't possible:** add a fallback path in the code that tolerates the missing column. Cost is a warn log and a one-time slower request during the migration-lag window. Log the fallback loud enough that ops notices.
+
+**Related:** T113 (Marketplace Coming Soon page), migration `20260712000069_marketplace_waitlist_other_brands.sql`. Similar to the earlier `brand-suggestions` fallback (see below).
+
+---
+
 ### 2026-07-12 — Server action throws show generic Next error, not the friendly copy (UI)
 
 **Symptom:** trying to log a slime with a profane name showed the user Next.js's stock server error page ("An error occurred in the Server Components render. The specific message is omitted in production builds..."), not the moderation copy "That word doesn't fit the vibe here."

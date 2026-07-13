@@ -36,23 +36,50 @@ export async function GET(): Promise<NextResponse> {
 
   // 2. Look up the user's row. Anon client is fine — RLS lets them
   // read their own.
-  const { data: entry, error: entryErr } = await supabase
+  //
+  // 2026-07-13 hardening: if the SELECT errors on the newer column set,
+  // retry without `brand_names_other`. This lets the endpoint keep
+  // working when migration 0069 hasn't been applied to this env — the
+  // client sees a hydrated entry (minus the freeform "Other" chips)
+  // and lands in the success state, rather than silently falling back
+  // to the form as if the user had never signed up.
+  const FULL_COLUMNS =
+    "id, user_id, intent, brand_ids, brand_names_other, spend_band, sell_volume, trust_need, created_at, updated_at";
+  const LEGACY_COLUMNS =
+    "id, user_id, intent, brand_ids, spend_band, sell_volume, trust_need, created_at, updated_at";
+
+  let entry: unknown = null;
+  const first = await supabase
     .from("marketplace_waitlist")
-    .select(
-      "id, user_id, intent, brand_ids, brand_names_other, spend_band, sell_volume, trust_need, created_at, updated_at",
-    )
+    .select(FULL_COLUMNS)
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (entryErr) {
-    console.error(
-      "[marketplace/waitlist/position] entry lookup failed:",
-      entryErr.message,
+  if (first.error) {
+    console.warn(
+      "[marketplace/waitlist/position] full-column lookup failed, retrying legacy:",
+      first.error.message,
     );
-    return NextResponse.json(
-      { error: "Could not read waitlist status." },
-      { status: 500 },
-    );
+    const fallback = await supabase
+      .from("marketplace_waitlist")
+      .select(LEGACY_COLUMNS)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (fallback.error) {
+      console.error(
+        "[marketplace/waitlist/position] legacy lookup also failed:",
+        fallback.error.message,
+      );
+      return NextResponse.json(
+        { error: "Could not read waitlist status." },
+        { status: 500 },
+      );
+    }
+    entry = fallback.data
+      ? { ...fallback.data, brand_names_other: null }
+      : null;
+  } else {
+    entry = first.data;
   }
 
   // 3. Total is always sourced from the admin client — RLS would
