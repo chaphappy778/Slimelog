@@ -354,69 +354,41 @@ function SearchPageInner() {
 
         {/* Results */}
         <div className="px-4">
+          {/* Empty query — illustrated prompt */}
           {!trimmed && (
-            <p
-              className="text-sm text-center py-6"
-              style={{ color: "rgba(245,245,245,0.45)" }}
-            >
-              Type a slime name, brand, base type, or keyword.
-            </p>
+            <SearchEmptyPrompt />
           )}
 
           {trimmed && (
             <>
-              {searching && (
-                <p
-                  className="text-sm text-center py-4"
-                  style={{ color: "rgba(245,245,245,0.45)" }}
-                >
-                  Searching...
-                </p>
-              )}
+              {searching && <SearchSkeleton />}
 
               {!searching && !hasResults && (
-                <div className="text-center py-6">
-                  <p
-                    className="text-sm"
-                    style={{ color: "rgba(245,245,245,0.55)" }}
-                  >
-                    No results for &ldquo;{trimmed}&rdquo;
-                  </p>
-                  <p
-                    className="text-xs mt-1.5"
-                    style={{ color: "rgba(245,245,245,0.35)" }}
-                  >
-                    Try a broader term, or browse by base type on{" "}
-                    <Link
-                      href="/discover"
-                      style={{ color: "#00F0FF", textDecoration: "underline" }}
-                    >
-                      Discover
-                    </Link>
-                    .
-                  </p>
-                </div>
+                <SearchNoResults query={trimmed} />
               )}
 
-              {!searching && (
+              {/* [T33a 2026-07-13] Section order per Design's spec:
+                  Slimes → Types → Keywords. Impact first, less-common
+                  matches after. */}
+              {!searching && hasResults && (
                 <div className="flex flex-col gap-8">
-                  {typeResults.length > 0 && (
-                    <section>
-                      <p className="section-label mb-3">Slime Types</p>
-                      <div className="flex flex-col gap-2">
-                        {typeResults.map((t) => (
-                          <TypeRow key={t.key} result={t} />
-                        ))}
-                      </div>
-                    </section>
-                  )}
-
                   {slimeResults.length > 0 && (
                     <section>
                       <p className="section-label mb-3">Slimes</p>
                       <div className="flex flex-col gap-2">
                         {slimeResults.map((s) => (
                           <SlimeRow key={s.id} slime={s} />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {typeResults.length > 0 && (
+                    <section>
+                      <p className="section-label mb-3">Slime Types</p>
+                      <div className="flex flex-col gap-2">
+                        {typeResults.map((t) => (
+                          <TypeRow key={t.key} result={t} />
                         ))}
                       </div>
                     </section>
@@ -439,6 +411,162 @@ function SearchPageInner() {
         </div>
       </main>
     </PageWrapper>
+  );
+}
+
+// ─── Illustrated states ────────────────────────────────────────────────
+// [T33a 2026-07-13] Line-SVG ooze blob illustrations for empty query
+// and no-results. Line SVG only, no illustration (anti-AI-art rule).
+
+function OozeBlob({ variant }: { variant: "search" | "x" }) {
+  return (
+    <svg
+      viewBox="0 0 104 104"
+      width="104"
+      height="104"
+      className="mx-auto"
+      fill="none"
+      aria-hidden="true"
+      style={{ filter: "drop-shadow(0 0 10px rgba(0,240,255,0.35))" }}
+    >
+      <path
+        d="M32 18h40a12 12 0 0 1 12 12v22c0 18-14 32-32 32S20 70 20 52V30a12 12 0 0 1 12-12z"
+        stroke="#00F0FF"
+        strokeWidth="2.5"
+        fill="rgba(0,240,255,0.05)"
+      />
+      <circle cx="36" cy="90" r="4" fill="#FF00E5" />
+      <circle cx="64" cy="94" r="3" fill="#FF00E5" />
+      {variant === "search" ? (
+        <>
+          <circle
+            cx="47"
+            cy="45"
+            r="12"
+            fill="none"
+            stroke="#00F0FF"
+            strokeWidth="3"
+          />
+          <path
+            d="M56 54l9 9"
+            stroke="#00F0FF"
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
+        </>
+      ) : (
+        <path
+          d="M40 40l24 24M64 40 40 64"
+          stroke="#00F0FF"
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
+      )}
+    </svg>
+  );
+}
+
+function SearchEmptyPrompt() {
+  return (
+    <div className="text-center pt-14 pb-6">
+      <OozeBlob variant="search" />
+      <h3
+        className="mt-5"
+        style={{
+          fontFamily: "Montserrat, sans-serif",
+          fontWeight: 800,
+          fontSize: 22,
+          color: "#FFFFFF",
+          letterSpacing: "-0.01em",
+        }}
+      >
+        Search the ooze
+      </h3>
+      <p
+        className="mx-auto mt-2"
+        style={{
+          maxWidth: 280,
+          fontSize: 15,
+          lineHeight: 1.5,
+          color: "rgba(245,245,245,0.55)",
+        }}
+      >
+        Find slimes, base types, brands, and keywords across the whole
+        community.
+      </p>
+    </div>
+  );
+}
+
+function SearchNoResults({ query }: { query: string }) {
+  return (
+    <div className="text-center pt-10 pb-6">
+      <OozeBlob variant="x" />
+      <h3
+        className="mt-5"
+        style={{
+          fontFamily: "Montserrat, sans-serif",
+          fontWeight: 800,
+          fontSize: 22,
+          color: "#FFFFFF",
+          letterSpacing: "-0.01em",
+        }}
+      >
+        No results for &ldquo;{query}&rdquo;
+      </h3>
+      <p
+        className="mx-auto mt-2 mb-5"
+        style={{
+          maxWidth: 280,
+          fontSize: 15,
+          lineHeight: 1.5,
+          color: "rgba(245,245,245,0.55)",
+        }}
+      >
+        We could not find any slimes, types, or keywords. Try a different
+        spelling or browse Discover.
+      </p>
+      <Link
+        href="/discover"
+        className="inline-flex items-center gap-2 rounded-2xl transition-colors"
+        style={{
+          padding: "12px 22px",
+          fontFamily: "Montserrat, sans-serif",
+          fontWeight: 700,
+          fontSize: 15,
+          background: "rgba(0,240,255,0.06)",
+          border: "1px solid rgba(0,240,255,0.4)",
+          color: "#00F0FF",
+          textDecoration: "none",
+        }}
+      >
+        Back to Discover
+      </Link>
+    </div>
+  );
+}
+
+// Skeleton row — matches the SlimeRow silhouette (44px thumb + 2 text
+// lines). Three of them stack to fake the "results loading" state.
+function SearchSkeleton() {
+  return (
+    <div className="flex flex-col gap-2 pt-2">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div
+          key={i}
+          className="rounded-xl"
+          style={{
+            height: 68,
+            background:
+              "linear-gradient(100deg, rgba(45,10,78,0.28) 30%, rgba(120,60,180,0.28) 50%, rgba(45,10,78,0.28) 70%)",
+            backgroundSize: "220% 100%",
+            animation: "shimmer 1.2s linear infinite",
+            border: "1px solid rgba(45,10,78,0.55)",
+          }}
+          aria-hidden="true"
+        />
+      ))}
+    </div>
   );
 }
 

@@ -1,18 +1,27 @@
 // apps/web/app/discover/type/[base_type]/page.tsx
 // [T74-B] Type detail page — public logs filtered by slime base type
+// [T33a 2026-07-13] Redesigned per Design's Discover results pack.
+// Hero card uses the real base-type photo from
+// `apps/web/public/guide/textures/` with a bottom gradient wash for
+// text legibility (matches TypeCarousel on /discover). Type name in
+// Montserrat black 42px, signature color, "N logs in the community"
+// sub. Below: `TypeLogsClient` renders the subtype chip row + sort
+// tabs + log cards + empty CTA.
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import PageWrapper from "@/components/PageWrapper";
 import TypeLogsClient from "@/components/discover/TypeLogsClient";
+import { SLIME_BASE_TYPE_LABELS, type SlimeBaseType } from "@/lib/types";
 import {
-  SLIME_BASE_TYPE_LABELS,
-  SLIME_BASE_TYPE_COLORS,
-  type SlimeBaseType,
-} from "@/lib/types";
+  BASE_TYPE_HERO_PHOTO,
+  BASE_TYPE_HERO_TINT,
+  DEFAULT_HERO_TINT,
+} from "@/lib/base-type-hero";
 
 export type DiscoverLog = {
   id: string;
@@ -35,7 +44,6 @@ interface PageProps {
 export default async function TypeDetailPage({ params }: PageProps) {
   const { base_type } = await params;
 
-  // Validate base_type is a known SlimeBaseType
   const validTypes = Object.keys(SLIME_BASE_TYPE_LABELS) as SlimeBaseType[];
   if (!validTypes.includes(base_type as SlimeBaseType)) {
     notFound();
@@ -43,7 +51,8 @@ export default async function TypeDetailPage({ params }: PageProps) {
 
   const validBaseType = base_type as SlimeBaseType;
   const typeLabel = SLIME_BASE_TYPE_LABELS[validBaseType];
-  const typeColor = SLIME_BASE_TYPE_COLORS[validBaseType].text;
+  const typeTint = BASE_TYPE_HERO_TINT[validBaseType] ?? DEFAULT_HERO_TINT;
+  const typePhoto = BASE_TYPE_HERO_PHOTO[validBaseType] ?? null;
 
   const cookieStore = await cookies();
   const supabase = createServerClient(
@@ -97,24 +106,26 @@ export default async function TypeDetailPage({ params }: PageProps) {
         )?.avatar_url ?? null),
   }));
 
+  const logCount = normalizedLogs.length;
+
   return (
-    <PageWrapper dots glow="cyan">
+    <PageWrapper dots glow="cyan" orbs>
       <PageHeader />
       <main className="pt-14 pb-24">
-        {/* Back button */}
-        <div className="px-4 pt-4 mb-2">
+        {/* Back link */}
+        <div className="px-4 pt-4 mb-3">
           <Link
             href="/discover"
-            className="inline-flex items-center gap-2 text-sm"
-            style={{ color: "rgba(245,245,245,0.45)" }}
+            className="inline-flex items-center gap-2 text-[15px]"
+            style={{ color: "rgba(245,245,245,0.55)" }}
           >
             <svg
-              width="14"
-              height="14"
+              width="16"
+              height="16"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth="2.5"
+              strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
               aria-hidden="true"
@@ -126,21 +137,99 @@ export default async function TypeDetailPage({ params }: PageProps) {
           </Link>
         </div>
 
-        {/* Header */}
-        <div className="px-4 mb-6">
-          <h1 className="text-2xl font-black" style={{ color: typeColor }}>
-            {typeLabel}
-          </h1>
-          <p
-            className="text-sm mt-1"
-            style={{ color: "rgba(245,245,245,0.45)" }}
+        {/* Hero card — real photo with gradient wash for legibility */}
+        <div className="px-4 mb-5">
+          <div
+            className="relative w-full rounded-3xl overflow-hidden"
+            style={{
+              height: 186,
+              border: `1px solid ${typeTint}55`,
+              boxShadow: `0 0 32px ${typeTint}22`,
+            }}
           >
-            {normalizedLogs.length} log
-            {normalizedLogs.length !== 1 ? "s" : ""} in the community
-          </p>
+            {typePhoto ? (
+              <Image
+                src={typePhoto}
+                alt=""
+                fill
+                priority
+                className="object-cover"
+                sizes="(max-width: 640px) 100vw, 400px"
+              />
+            ) : (
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: `radial-gradient(120% 120% at 40% 30%, ${typeTint}55, rgba(16,0,32,0.85))`,
+                }}
+                aria-hidden="true"
+              />
+            )}
+            {/* Bottom gradient wash so the type name reads over any
+                photo. Also a top halo bar so the color is visible even
+                when the photo dominates. */}
+            <div
+              className="absolute inset-x-0 bottom-0"
+              aria-hidden="true"
+              style={{
+                height: "70%",
+                background:
+                  "linear-gradient(0deg, rgba(10,4,18,0.94) 25%, rgba(10,4,18,0.65) 60%, transparent 100%)",
+              }}
+            />
+            <div
+              className="absolute inset-x-0 top-0 pointer-events-none"
+              aria-hidden="true"
+              style={{
+                height: 3,
+                background: `linear-gradient(90deg, transparent, ${typeTint}, transparent)`,
+                opacity: 0.8,
+              }}
+            />
+
+            {/* Text stack — bottom-left, over the wash */}
+            <div
+              className="absolute left-5 right-5 bottom-4"
+              style={{ zIndex: 2 }}
+            >
+              <h1
+                style={{
+                  fontFamily: "Montserrat, sans-serif",
+                  fontWeight: 900,
+                  fontSize: 42,
+                  color: typeTint,
+                  lineHeight: 0.95,
+                  letterSpacing: "-0.01em",
+                  margin: 0,
+                  textShadow: `0 0 20px ${typeTint}55`,
+                }}
+              >
+                {typeLabel}
+              </h1>
+              <p
+                className="mt-1.5 text-[15px] font-semibold"
+                style={{
+                  color:
+                    logCount > 0
+                      ? "rgba(255,255,255,0.72)"
+                      : "rgba(255,255,255,0.6)",
+                  margin: 0,
+                }}
+              >
+                {logCount > 0
+                  ? `${logCount} log${logCount !== 1 ? "s" : ""} in the community`
+                  : "Be the first to log one"}
+              </p>
+            </div>
+          </div>
         </div>
 
-        <TypeLogsClient logs={normalizedLogs} baseType={validBaseType} />
+        <TypeLogsClient
+          logs={normalizedLogs}
+          baseType={validBaseType}
+          emptyLabel={`${typeLabel} slime`}
+          emptyAccent={typeTint}
+        />
       </main>
     </PageWrapper>
   );

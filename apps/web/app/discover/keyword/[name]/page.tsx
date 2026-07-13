@@ -1,5 +1,11 @@
 // apps/web/app/discover/keyword/[name]/page.tsx
 // [T74-B] Keyword detail page — public logs tagged with a given keyword
+// [T33a 2026-07-13] Redesigned per Design's Discover results pack.
+// Cyan Montserrat 900 44px `#tag` hero title, "N logs tagged with
+// #tag in the community" sub, `TypeLogsClient` renders the sort tabs
+// + log cards + empty CTA. No subtype chip row here (base type is
+// unset for the keyword surface). Related-keywords row deferred to
+// T33e.
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
@@ -25,7 +31,6 @@ export default async function KeywordDetailPage({ params }: PageProps) {
     { cookies: { get: (n) => cookieStore.get(n)?.value } },
   );
 
-  // Fetch the tag
   const { data: tag } = await supabase
     .from("tags")
     .select("id, name, use_count")
@@ -34,7 +39,6 @@ export default async function KeywordDetailPage({ params }: PageProps) {
 
   if (!tag) notFound();
 
-  // Fetch logs with this tag
   const { data: logTagRows } = await supabase
     .from("log_tags")
     .select(
@@ -50,7 +54,6 @@ export default async function KeywordDetailPage({ params }: PageProps) {
     .eq("tag_id", tag.id)
     .limit(50);
 
-  // Filter to public logs and normalize to DiscoverLog[]
   const logs: DiscoverLog[] = (logTagRows ?? [])
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .map((row: any) => row.log)
@@ -77,24 +80,26 @@ export default async function KeywordDetailPage({ params }: PageProps) {
         : (l.user?.avatar_url ?? null),
     }));
 
+  const logCount = logs.length;
+
   return (
-    <PageWrapper dots glow="cyan">
+    <PageWrapper dots glow="cyan" orbs>
       <PageHeader />
       <main className="pt-14 pb-24">
-        {/* Back button */}
-        <div className="px-4 pt-4 mb-2">
+        {/* Back link */}
+        <div className="px-4 pt-4 mb-3">
           <Link
             href="/discover/keyword"
-            className="inline-flex items-center gap-2 text-sm"
-            style={{ color: "rgba(245,245,245,0.45)" }}
+            className="inline-flex items-center gap-2 text-[15px]"
+            style={{ color: "rgba(245,245,245,0.55)" }}
           >
             <svg
-              width="14"
-              height="14"
+              width="16"
+              height="16"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth="2.5"
+              strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
               aria-hidden="true"
@@ -102,25 +107,47 @@ export default async function KeywordDetailPage({ params }: PageProps) {
               <path d="M19 12H5" />
               <path d="m12 19-7-7 7-7" />
             </svg>
-            Back to Keywords
+            Back to keywords
           </Link>
         </div>
 
-        {/* Header */}
+        {/* Header — big cyan `#tag` title + count sub */}
         <div className="px-4 mb-6">
-          <h1 className="text-2xl font-black" style={{ color: "#00F0FF" }}>
+          <h1
+            style={{
+              fontFamily: "Montserrat, sans-serif",
+              fontWeight: 900,
+              fontSize: 44,
+              color: "#00F0FF",
+              lineHeight: 0.95,
+              letterSpacing: "-0.01em",
+              margin: 0,
+              textShadow: "0 0 22px rgba(0,240,255,0.4)",
+            }}
+          >
             #{tag.name}
           </h1>
           <p
-            className="text-sm mt-1"
-            style={{ color: "rgba(245,245,245,0.45)" }}
+            className="mt-2"
+            style={{
+              fontSize: 15,
+              color: "rgba(245,245,245,0.7)",
+              fontWeight: 600,
+              margin: 0,
+            }}
           >
-            {logs.length} log{logs.length !== 1 ? "s" : ""}
+            {logCount > 0
+              ? `${logCount} log${logCount !== 1 ? "s" : ""} tagged with #${tag.name} in the community`
+              : `0 logs tagged with #${tag.name} yet`}
           </p>
         </div>
 
-        {/* Reuse TypeLogsClient for display + sort */}
-        <TypeLogsClient logs={logs} baseType="" />
+        <TypeLogsClient
+          logs={logs}
+          baseType=""
+          emptyLabel={`#${tag.name}`}
+          emptyAccent="#00F0FF"
+        />
       </main>
     </PageWrapper>
   );

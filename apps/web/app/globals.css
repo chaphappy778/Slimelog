@@ -195,6 +195,15 @@ h6 {
   animation: pulse-live 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+/* ── Shimmer skeleton ──────────────────────────────────────
+   Used on search results and keyword tiles while data is
+   loading. 1.2s per cycle — matches Design's spec. */
+@keyframes shimmer {
+  to {
+    background-position: -220% 0;
+  }
+}
+
 /* ── CTA Button Base ────────────────────────────────────── */
 .btn-cta {
   background: var(--gradient-cta);

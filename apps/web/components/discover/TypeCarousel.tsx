@@ -16,64 +16,12 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
 import type { SlimeBaseType } from "@/lib/types";
+import {
+  BASE_TYPE_HERO_PHOTO,
+  BASE_TYPE_HERO_TINT,
+  DEFAULT_HERO_TINT,
+} from "@/lib/base-type-hero";
 
-// Hero photo for each base type. Paths are served from
-// `apps/web/public/guide/textures/`. When a base type is missing a
-// photo (edge case: a new base_type ships before we curate a hero),
-// we fall back to a gradient placeholder — Design's blob treatment
-// is intentionally NOT the fallback so a missing photo reads as
-// "coming soon" instead of "we forgot to update this."
-const HERO_PHOTO: Partial<Record<SlimeBaseType, string>> = {
-  avalanche: "/guide/textures/avalanche-bff.webp",
-  beaded: "/guide/textures/beaded-rodem.webp",
-  butter: "/guide/textures/butter-cats-craft.webp",
-  clay: "/guide/textures/clay-palmetto.webp",
-  clear: "/guide/textures/clear-slime-obsidian.png",
-  cloud: "/guide/textures/cloud-sandy-bros.png",
-  cloud_cream: "/guide/textures/cloud-cream-white-whale.webp",
-  floam: "/guide/textures/floam-dream-glow.webp",
-  fluffy: "/guide/textures/fluffy-ky.webp",
-  hybrid: "/guide/textures/hybrid-bingsu-jelly-clay-ky.webp",
-  icee: "/guide/textures/icee-pilot.webp",
-  jelly: "/guide/textures/jelly-og-slimes.webp",
-  magnetic: "/guide/textures/magnetic-crazy-aarons.webp",
-  sand: "/guide/textures/sand-momo.avif",
-  slay: "/guide/textures/slay-sally-sweet-pea.webp",
-  snow_fizz: "/guide/textures/snow-fizz-prismatic.webp",
-  sugar_scrub: "/guide/textures/sugar-scrub-macaroons.png",
-  thick_and_glossy:
-    "/guide/textures/thick-glossy-mythical-mushbunny.webp",
-  water: "/guide/textures/water-momo.webp",
-  wax_and_wax_cracking: "/guide/textures/wax-og-slimes.webp",
-};
-
-// Signature tint per type — used for the fallback gradient when we
-// don't have a photo, and for the card border glow. Same palette as
-// the previous blob-based version so nothing else needs to change.
-const HERO_TINTS: Partial<Record<SlimeBaseType, string>> = {
-  butter: "#FFAE3B",
-  cloud: "#7DF6FF",
-  cloud_cream: "#E9C6FF",
-  floam: "#FF00E5",
-  jelly: "#39FF14",
-  clear: "#00F0FF",
-  thick_and_glossy: "#C4B5FD",
-  icee: "#93C5FD",
-  clay: "#FDE68A",
-  hybrid: "#CC44FF",
-  slay: "#FF7BEB",
-  fluffy: "#F9A8D4",
-  beaded: "#FDA4AF",
-  snow_fizz: "#BAE6FD",
-  sugar_scrub: "#FED7AA",
-  water: "#7DD3FC",
-  avalanche: "#E2E8F0",
-  sand: "#D4A96A",
-  wax_and_wax_cracking: "#FCD34D",
-  magnetic: "#A0AEC0",
-};
-
-const DEFAULT_TINT = "#00F0FF";
 const SLIME_TYPES = Object.keys(SLIME_BASE_TYPE_LABELS) as SlimeBaseType[];
 
 interface TypeCarouselProps {
@@ -108,9 +56,9 @@ export default function TypeCarousel({ counts = {} }: TypeCarouselProps) {
     >
       {SLIME_TYPES.map((type) => {
         const label = SLIME_BASE_TYPE_LABELS[type];
-        const tint = HERO_TINTS[type] ?? DEFAULT_TINT;
+        const tint = BASE_TYPE_HERO_TINT[type] ?? DEFAULT_HERO_TINT;
         const count = counts[type] ?? 0;
-        const photo = HERO_PHOTO[type] ?? null;
+        const photo = BASE_TYPE_HERO_PHOTO[type] ?? null;
 
         return (
           <button
