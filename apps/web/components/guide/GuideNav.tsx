@@ -197,8 +197,11 @@ export default function GuideNav({ parts }: GuideNavProps) {
                       : "1px solid rgba(45,10,78,0.7)",
                     background: isActive ? "#00F0FF" : "rgba(45,10,78,0.3)",
                     color: isActive ? "#0A0A0A" : "rgba(245,245,245,0.7)",
+                    // 2026-07-13: bumped the active pill glow — three
+                    // stacked shadows for a richer halo so the current
+                    // section reads at a glance.
                     boxShadow: isActive
-                      ? "0 0 18px rgba(0,240,255,0.55), 0 0 6px rgba(0,240,255,0.35)"
+                      ? "0 0 36px rgba(0,240,255,0.85), 0 0 14px rgba(0,240,255,0.6), 0 0 4px rgba(0,240,255,0.45)"
                       : undefined,
                     fontFamily: "system-ui, sans-serif",
                   }}

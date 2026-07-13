@@ -58,8 +58,14 @@ export default function PageWrapper({
         />
       )}
 
-      {/* Page content */}
-      <div className="relative z-10">{children}</div>
+      {/* Page content.
+          2026-07-13: added `px-1.5` (6px each side) as a safe global
+          bump so pages that use `px-4` (16px) get an effective 22px
+          horizontal breathing room. Fixes the "sliders too close to
+          the edges" pain in the log wizard without touching every
+          page individually. Combined padding remains gentle enough
+          that no fixed-width component overflows. */}
+      <div className="relative z-10 px-1.5">{children}</div>
     </div>
   );
 }

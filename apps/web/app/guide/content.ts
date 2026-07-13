@@ -57,7 +57,7 @@ export const TEXTURES: GuideTexture[] = [
     example: {
       slimeName: "Ultraviolet",
       brandName: "Slime Obsidian",
-      brandSlug: "slime-obsidian",
+      brandSlug: "obsidian-slimes",
       imagePath: "/guide/textures/clear-slime-obsidian.png",
     },
     gradientFrom: "#0A0A0A",
@@ -93,7 +93,7 @@ export const TEXTURES: GuideTexture[] = [
     example: {
       slimeName: "Jellyfish Jelly",
       brandName: "Slime OG",
-      brandSlug: "slime-og",
+      brandSlug: "og-slimes",
       imagePath: "/guide/textures/jelly-og-slimes.webp",
     },
     gradientFrom: "#0d2b1a",
@@ -129,7 +129,7 @@ export const TEXTURES: GuideTexture[] = [
     example: {
       slimeName: "Laundry Day",
       brandName: "Mythical Mushbunny",
-      brandSlug: "mythical-mushbunny",
+      brandSlug: "mythical-mushbunny-slimes",
       imagePath: "/guide/textures/thick-glossy-mythical-mushbunny.webp",
     },
     gradientFrom: "#1a0a2e",
@@ -147,7 +147,7 @@ export const TEXTURES: GuideTexture[] = [
     example: {
       slimeName: "Whale Season",
       brandName: "Sally Sweet Pea",
-      brandSlug: "sally-sweet-pea",
+      brandSlug: "slime-sweet-pea",
       imagePath: "/guide/textures/slay-sally-sweet-pea.webp",
     },
     gradientFrom: "#2a1a0a",
@@ -201,7 +201,8 @@ export const TEXTURES: GuideTexture[] = [
     example: {
       slimeName: "White Whale",
       brandName: "White Whale",
-      brandSlug: "white-whale",
+      // 2026-07-13 slug audit: no catalog entry yet — plain text render.
+      brandSlug: null,
       imagePath: "/guide/textures/cloud-cream-white-whale.webp",
     },
     gradientFrom: "#0d1a2e",
@@ -219,7 +220,7 @@ export const TEXTURES: GuideTexture[] = [
     example: {
       slimeName: "KY Fluffy",
       brandName: "KY",
-      brandSlug: "ky-slime",
+      brandSlug: "ky-slimes",
       imagePath: "/guide/textures/fluffy-ky.webp",
     },
     gradientFrom: "#1a0a2e",
@@ -237,7 +238,7 @@ export const TEXTURES: GuideTexture[] = [
     example: {
       slimeName: "Party In The USA",
       brandName: "Dream Glow",
-      brandSlug: "dream-glow",
+      brandSlug: "dream-glow-slimes",
       imagePath: "/guide/textures/floam-dream-glow.webp",
     },
     gradientFrom: "#0d2e1a",
@@ -273,7 +274,7 @@ export const TEXTURES: GuideTexture[] = [
     example: {
       slimeName: "Crunch Bomb",
       brandName: "Rodem",
-      brandSlug: "rodem",
+      brandSlug: "rodem-slime-shop",
       imagePath: "/guide/textures/beaded-rodem.webp",
     },
     gradientFrom: "#1a0a0a",
@@ -317,6 +318,9 @@ export const TEXTURES: GuideTexture[] = [
     example: {
       slimeName: "BFF Avalanche",
       brandName: "BFF Slime Bakery",
+      // 2026-07-13: bff-slime-bakery approved via brand-suggestion flow;
+      // if the seed migration exists in this env, link renders. If not,
+      // fallback to plain text. Kept slug in case it's already live.
       brandSlug: "bff-slime-bakery",
       imagePath: "/guide/textures/avalanche-bff.webp",
     },
@@ -335,7 +339,8 @@ export const TEXTURES: GuideTexture[] = [
     example: {
       slimeName: "Thinking Putty",
       brandName: "Crazy Aaron's",
-      brandSlug: "crazy-aarons",
+      // 2026-07-13 slug audit: no catalog entry yet — plain text render.
+      brandSlug: null,
       imagePath: "/guide/textures/magnetic-crazy-aarons.webp",
     },
     gradientFrom: "#0a0a0a",
@@ -353,7 +358,7 @@ export const TEXTURES: GuideTexture[] = [
     example: {
       slimeName: "OG Wax",
       brandName: "OG Slimes",
-      brandSlug: "slime-og",
+      brandSlug: "og-slimes",
       imagePath: "/guide/textures/wax-og-slimes.webp",
     },
     gradientFrom: "#1a1500",
@@ -389,7 +394,8 @@ export const TEXTURES: GuideTexture[] = [
     example: {
       slimeName: "Macaroons",
       brandName: "Macaroons Slime",
-      brandSlug: "macaroons",
+      // 2026-07-13 slug audit: no catalog entry yet — plain text render.
+      brandSlug: null,
       imagePath: "/guide/textures/sugar-scrub-macaroons.png",
     },
     gradientFrom: "#2e0a1a",
@@ -407,7 +413,7 @@ export const TEXTURES: GuideTexture[] = [
     example: {
       slimeName: "Bingsu Jelly Clay",
       brandName: "KY",
-      brandSlug: "ky-slime",
+      brandSlug: "ky-slimes",
       imagePath: "/guide/textures/hybrid-bingsu-jelly-clay-ky.webp",
     },
     gradientFrom: "#1a0a2e",

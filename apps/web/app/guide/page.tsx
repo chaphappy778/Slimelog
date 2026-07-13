@@ -221,13 +221,15 @@ export default async function GuidePage() {
       <main
         className="pb-24"
         style={{
-          paddingTop: 6,
+          // 2026-07-13: bumped from 6 to 24 so the header clears the
+          // hero eyebrow with visible breathing room.
+          paddingTop: 24,
         }}
       >
         {/* Hero */}
-        <section className="px-4 pt-6 pb-3">
+        <section className="px-4 pt-4 pb-3">
           <div
-            className="text-[11px] font-bold uppercase mb-2"
+            className="text-[11px] font-bold uppercase mb-3"
             style={{
               color: "#00F0FF",
               letterSpacing: "0.18em",
@@ -241,7 +243,10 @@ export default async function GuidePage() {
             style={{
               fontFamily: "Montserrat, sans-serif",
               fontWeight: 900,
-              fontSize: 36,
+              // 2026-07-13: bumped from 36 to 44 so "Everything slime,"
+              // fills line 1 and the pink-gradient "decoded." lands
+              // naturally on line 2.
+              fontSize: 44,
               lineHeight: 1.02,
               letterSpacing: "-0.03em",
             }}

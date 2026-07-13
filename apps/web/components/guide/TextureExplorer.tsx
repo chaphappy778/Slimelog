@@ -23,6 +23,10 @@ export default function TextureExplorer({
 }: TextureExplorerProps) {
   const [selected, setSelected] = useState<GuideTexture | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
+  // 2026-07-13: full-screen image lightbox. When set, renders a
+  // dedicated fullscreen viewer over everything else.
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [lightboxAlt, setLightboxAlt] = useState<string>("");
 
   const openSheet = useCallback((texture: GuideTexture) => {
     setSelected(texture);
@@ -33,6 +37,15 @@ export default function TextureExplorer({
     setSheetVisible(false);
     // Delay clearing selected so the exit animation gets the content.
     window.setTimeout(() => setSelected(null), 260);
+  }, []);
+
+  const openLightbox = useCallback((src: string, alt: string) => {
+    setLightboxSrc(src);
+    setLightboxAlt(alt);
+  }, []);
+
+  const closeLightbox = useCallback(() => {
+    setLightboxSrc(null);
   }, []);
 
   // Hash-on-load: /guide#texture-butter scrolls to the butter card AND
@@ -84,9 +97,112 @@ export default function TextureExplorer({
           visible={sheetVisible}
           onClose={closeSheet}
           logCount={logCountsBySlug[selected.slug] ?? 0}
+          onOpenImage={openLightbox}
+        />
+      ) : null}
+
+      {/* 2026-07-13: full-screen image lightbox for the detail sheet's
+          example photo. Tap outside or the ✕ to dismiss. Escape also
+          closes. Sits above the sheet's z-index. */}
+      {lightboxSrc ? (
+        <ImageLightbox
+          src={lightboxSrc}
+          alt={lightboxAlt}
+          onClose={closeLightbox}
         />
       ) : null}
     </>
+  );
+}
+
+// ─── Image Lightbox ─────────────────────────────────────────────────────
+
+function ImageLightbox({
+  src,
+  alt,
+  onClose,
+}: {
+  src: string;
+  alt: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    // Lock scroll while open.
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={alt || "Full size image"}
+      onClick={onClose}
+      className="fixed inset-0 z-[70] flex items-center justify-center"
+      style={{
+        background: "rgba(0,0,0,0.94)",
+        padding: 16,
+      }}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close image"
+        className="absolute top-4 right-4 flex items-center justify-center rounded-full"
+        style={{
+          width: 40,
+          height: 40,
+          background: "rgba(255,255,255,0.12)",
+          border: "1px solid rgba(255,255,255,0.2)",
+          color: "#FFFFFF",
+          zIndex: 1,
+        }}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          className="w-5 h-5"
+          aria-hidden="true"
+        >
+          <path d="M18 6L6 18M6 6l12 12" />
+        </svg>
+      </button>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: "relative",
+          width: "100%",
+          maxWidth: "min(96vw, 900px)",
+          maxHeight: "min(88vh, 900px)",
+        }}
+      >
+        <Image
+          src={src}
+          alt={alt}
+          width={1200}
+          height={1200}
+          style={{
+            width: "100%",
+            height: "auto",
+            maxHeight: "88vh",
+            objectFit: "contain",
+            borderRadius: 12,
+          }}
+          priority
+        />
+      </div>
+    </div>
   );
 }
 
@@ -247,11 +363,13 @@ function TextureDetailSheet({
   visible,
   onClose,
   logCount,
+  onOpenImage,
 }: {
   texture: GuideTexture;
   visible: boolean;
   onClose: () => void;
   logCount: number;
+  onOpenImage: (src: string, alt: string) => void;
 }) {
   return (
     <>
@@ -299,6 +417,62 @@ function TextureDetailSheet({
           className="px-5 pt-4"
           style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 96px)" }}
         >
+          {/* 2026-07-13: hero image at the top of the detail sheet.
+              Tapping opens the full-screen lightbox. Aspect ~16:10.
+              Renders gradient-only fallback when we have no photo. */}
+          {texture.example.imagePath ? (
+            <button
+              type="button"
+              onClick={() =>
+                onOpenImage(
+                  texture.example.imagePath as string,
+                  `${texture.example.slimeName} by ${texture.example.brandName}`,
+                )
+              }
+              aria-label={`View full size photo of ${texture.example.slimeName}`}
+              className="relative rounded-2xl overflow-hidden block w-full active:scale-[0.99] transition-transform"
+              style={{
+                aspectRatio: "16 / 10",
+                background: `linear-gradient(135deg, ${texture.gradientFrom}, ${texture.gradientTo})`,
+                border: `1px solid ${texture.accentColor}55`,
+                padding: 0,
+                marginBottom: 16,
+              }}
+            >
+              <Image
+                src={texture.example.imagePath}
+                alt=""
+                fill
+                sizes="(max-width: 640px) 92vw, 480px"
+                style={{ objectFit: "cover" }}
+              />
+              {/* Zoom hint chip */}
+              <span
+                aria-hidden="true"
+                className="absolute bottom-2.5 right-2.5 flex items-center gap-1 rounded-full px-2.5 py-1 text-[10.5px] font-bold"
+                style={{
+                  background: "rgba(10,0,20,0.65)",
+                  color: "#FFFFFF",
+                  border: "1px solid rgba(255,255,255,0.18)",
+                  backdropFilter: "blur(6px)",
+                }}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  className="w-3 h-3"
+                  aria-hidden="true"
+                >
+                  <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                </svg>
+                Tap to view
+              </span>
+            </button>
+          ) : null}
+
           {/* Name — big magenta→accent gradient text */}
           <h2
             className="m-0"
@@ -403,12 +577,23 @@ function TextureDetailSheet({
               }}
             >
               {texture.example.imagePath ? (
-                <div
-                  className="relative rounded-xl overflow-hidden flex-shrink-0"
+                <button
+                  type="button"
+                  onClick={() =>
+                    onOpenImage(
+                      texture.example.imagePath as string,
+                      `${texture.example.slimeName} by ${texture.example.brandName}`,
+                    )
+                  }
+                  aria-label={`View full size photo of ${texture.example.slimeName}`}
+                  className="relative rounded-xl overflow-hidden flex-shrink-0 active:scale-[0.96] transition-transform"
                   style={{
                     width: 54,
                     height: 54,
                     background: `linear-gradient(135deg, ${texture.gradientFrom}, ${texture.gradientTo})`,
+                    padding: 0,
+                    border: 0,
+                    cursor: "pointer",
                   }}
                 >
                   <Image
@@ -418,7 +603,7 @@ function TextureDetailSheet({
                     sizes="54px"
                     style={{ objectFit: "cover" }}
                   />
-                </div>
+                </button>
               ) : (
                 <div
                   className="rounded-xl flex-shrink-0"
@@ -482,6 +667,11 @@ function TextureDetailSheet({
                 fontSize: 14,
                 textDecoration: "none",
                 fontFamily: "Montserrat, sans-serif",
+                // 2026-07-13: the community-logs CTA reads flat without
+                // a proper glow; adding a green-primary halo + cyan
+                // secondary so it lifts off the sheet.
+                boxShadow:
+                  "0 0 28px rgba(57,255,20,0.55), 0 8px 26px rgba(0,240,255,0.28), 0 0 6px rgba(57,255,20,0.5)",
               }}
             >
               {logCount > 0
