@@ -640,8 +640,11 @@ export default async function DiscoverPage({
             routes to /search?q=<text> on Enter. Typeahead is V2. */}
         <SearchHero />
 
-        {/* ── Trending pulse / early-days state ───────────────────── */}
-        <div className="mb-10">
+        {/* ── Trending pulse / early-days state ─────────────────────
+            2026-07-13: tightened bottom margin from mb-10 → mb-4 so
+            the pulse and Upcoming Drops feel like a paired "what's
+            happening now" band instead of two disconnected sections. */}
+        <div className="mb-4">
           {showPulse ? (
             <TrendingPulse
               logsToday={logsToday}
@@ -685,61 +688,9 @@ export default async function DiscoverPage({
           <TypeCarousel counts={typeCounts} />
         </section>
 
-        {/* ── Suggest a brand card ───────────────────────────────────
-            T110 CTA lives here in V1 — between Types and Keywords —
-            still surfaces mid-scroll before the leaderboard, without
-            competing with the hero pulse widget. */}
-        <div className="px-4 mb-10">
-          <Link
-            href="/submit-brand"
-            className="flex items-center justify-between gap-3 rounded-2xl px-4 py-3 transition-colors"
-            style={{
-              background: "rgba(45,10,78,0.25)",
-              border: "1px solid rgba(45,10,78,0.7)",
-            }}
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div
-                className="flex items-center justify-center rounded-xl shrink-0"
-                style={{
-                  width: 36,
-                  height: 36,
-                  background: "rgba(255,0,229,0.10)",
-                  border: "1px solid rgba(255,0,229,0.4)",
-                }}
-              >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#FF00E5"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-              </div>
-              <div className="min-w-0">
-                <p
-                  className="text-sm font-bold text-white truncate"
-                  style={{ fontFamily: "Montserrat, sans-serif" }}
-                >
-                  Know a slime shop we should track?
-                </p>
-                <p
-                  className="text-xs font-semibold mt-0.5"
-                  style={{ color: "#FF00E5" }}
-                >
-                  Suggest a brand &rarr;
-                </p>
-              </div>
-            </div>
-          </Link>
-        </div>
+        {/* 2026-07-13: "Suggest a brand" card relocated to /brands
+            (natural fit — the whole page is about brands). Card lives
+            in `apps/web/app/brands/page.tsx`. */}
 
         {/* ── Section: Trending Keywords ─────────────────────────────
             Split out from the type section per Design's V1 proposal.
