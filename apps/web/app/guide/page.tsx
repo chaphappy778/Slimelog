@@ -243,15 +243,15 @@ export default async function GuidePage() {
             style={{
               fontFamily: "Montserrat, sans-serif",
               fontWeight: 900,
-              // 2026-07-13: bumped from 36 to 44 so "Everything slime,"
-              // fills line 1 and the pink-gradient "decoded." lands
-              // naturally on line 2.
+              // 2026-07-13: forced line break — "Everything" on line 1,
+              // pink-gradient "slime, decoded." on line 2.
               fontSize: 44,
               lineHeight: 1.02,
               letterSpacing: "-0.03em",
             }}
           >
-            Everything slime,{" "}
+            Everything
+            <br />
             <span
               style={{
                 background:
@@ -261,7 +261,7 @@ export default async function GuidePage() {
                 backgroundClip: "text",
               }}
             >
-              decoded.
+              slime, decoded.
             </span>
           </h1>
           <p
@@ -491,12 +491,17 @@ export default async function GuidePage() {
           <div className="mt-4">
             <Link
               href="/how-to-rate"
-              className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-bold"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-[14px] font-bold"
               style={{
                 background: "linear-gradient(135deg, #39FF14, #00F0FF)",
                 color: "#0A0A0A",
                 fontFamily: "Montserrat, sans-serif",
                 textDecoration: "none",
+                // 2026-07-13: full-width CTA to match the section width
+                // and give it the same glow treatment as the texture
+                // detail sheet's community-logs CTA.
+                boxShadow:
+                  "0 0 26px rgba(57,255,20,0.5), 0 8px 24px rgba(0,240,255,0.25), 0 0 6px rgba(57,255,20,0.45)",
               }}
             >
               Full rating breakdown at /how-to-rate

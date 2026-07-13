@@ -168,13 +168,19 @@ export default function GuideNav({ parts }: GuideNavProps) {
           willChange: "transform",
         }}
       >
-        <div className="flex items-center gap-2 px-3 py-2.5">
+        <div className="flex items-center gap-2 px-3 py-2">
           <div
             ref={pillRowRef}
             className="flex-1 flex gap-2 overflow-x-auto"
             style={{
               scrollbarWidth: "none",
               msOverflowStyle: "none",
+              // 2026-07-13: internal vertical padding gives the active
+              // pill's glow room to bloom top and bottom without being
+              // clipped by the scroll container. The pills sit
+              // centered inside this padding zone.
+              paddingTop: 10,
+              paddingBottom: 10,
             }}
           >
             {parts.map((p) => {
@@ -197,11 +203,11 @@ export default function GuideNav({ parts }: GuideNavProps) {
                       : "1px solid rgba(45,10,78,0.7)",
                     background: isActive ? "#00F0FF" : "rgba(45,10,78,0.3)",
                     color: isActive ? "#0A0A0A" : "rgba(245,245,245,0.7)",
-                    // 2026-07-13: bumped the active pill glow — three
-                    // stacked shadows for a richer halo so the current
-                    // section reads at a glance.
+                    // 2026-07-13: modest two-stop glow, now that the
+                    // container has internal vertical padding to let
+                    // the halo bloom top and bottom.
                     boxShadow: isActive
-                      ? "0 0 36px rgba(0,240,255,0.85), 0 0 14px rgba(0,240,255,0.6), 0 0 4px rgba(0,240,255,0.45)"
+                      ? "0 0 18px rgba(0,240,255,0.7), 0 0 6px rgba(0,240,255,0.5)"
                       : undefined,
                     fontFamily: "system-ui, sans-serif",
                   }}

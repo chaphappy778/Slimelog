@@ -81,6 +81,7 @@ export default function ProseSection({ data }: { data: ProseSectionData }) {
             ))}
             {sub.callouts?.map((c, ci) => {
               const styles = CALLOUT_STYLES[c.tone];
+              const isWarn = c.tone === "warn";
               return (
                 <div
                   key={`sub-${si}-c-${ci}`}
@@ -91,14 +92,54 @@ export default function ProseSection({ data }: { data: ProseSectionData }) {
                   }}
                 >
                   <div
-                    className="text-[10.5px] font-bold uppercase mb-1.5"
-                    style={{
-                      color: styles.text,
-                      letterSpacing: "0.10em",
-                      fontFamily: "Montserrat, sans-serif",
-                    }}
+                    className="flex items-center gap-2 mb-1.5"
+                    style={{ color: styles.text }}
                   >
-                    {c.heading}
+                    {/* 2026-07-13: warn callouts get an inline caution
+                        icon before the heading and a small glowing dot
+                        after it, so kid-safety and other warnings read
+                        at a glance. */}
+                    {isWarn ? (
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                        style={{ width: 16, height: 16, flexShrink: 0 }}
+                      >
+                        <path d="M12 3L2 20h20L12 3z" />
+                        <path d="M12 10v4" />
+                        <path d="M12 17.5v.01" />
+                      </svg>
+                    ) : null}
+                    <span
+                      className="text-[11.5px] uppercase"
+                      style={{
+                        // Bold + tighter for warn so kid-safety pops.
+                        fontWeight: isWarn ? 900 : 700,
+                        letterSpacing: "0.08em",
+                        fontFamily: "Montserrat, sans-serif",
+                      }}
+                    >
+                      {c.heading}
+                    </span>
+                    {isWarn ? (
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          display: "inline-block",
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          background: styles.text,
+                          boxShadow: `0 0 10px ${styles.text}, 0 0 4px ${styles.text}`,
+                          flexShrink: 0,
+                        }}
+                      />
+                    ) : null}
                   </div>
                   <p
                     style={{

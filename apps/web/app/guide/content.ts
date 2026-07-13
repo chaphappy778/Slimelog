@@ -377,7 +377,8 @@ export const TEXTURES: GuideTexture[] = [
       slimeName: "Asteroid Dust",
       brandName: "Momo",
       brandSlug: "momo-slimes",
-      imagePath: null,
+      // 2026-07-13: sand slime photo added.
+      imagePath: "/guide/textures/sand-momo.avif",
     },
     gradientFrom: "#2e2200",
     gradientTo: "#4a3800",
