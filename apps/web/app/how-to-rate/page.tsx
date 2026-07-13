@@ -30,7 +30,7 @@ export const metadata: Metadata = {
 
 export default function HowToRatePage() {
   return (
-    <PageWrapper dots glow="cyan">
+    <PageWrapper dots glow="cyan" orbs>
       <PageHeader />
 
       <main

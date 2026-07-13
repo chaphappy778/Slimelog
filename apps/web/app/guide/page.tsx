@@ -215,7 +215,7 @@ export default async function GuidePage() {
   ]);
 
   return (
-    <PageWrapper dots glow="cyan">
+    <PageWrapper dots glow="cyan" orbs>
       <PageHeader />
 
       <main
