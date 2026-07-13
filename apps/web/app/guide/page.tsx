@@ -19,6 +19,12 @@ import GlossaryList from "@/components/guide/GlossaryList";
 import ProseSection from "@/components/guide/ProseSection";
 import BrandGlossary from "@/components/guide/BrandGlossary";
 import PricingBands from "@/components/guide/PricingBands";
+// T32b (2026-07-13): featured shops strip atop Part 5.
+import FeaturedShopsStrip, {
+  type FeaturedShop,
+} from "@/components/guide/FeaturedShopsStrip";
+// T32c (2026-07-13): compact chip strip for Part 3 sizes.
+import SizeChipStrip from "@/components/guide/SizeChipStrip";
 import type { SlimeBaseType } from "@/lib/types";
 import {
   ADD_INS,
@@ -101,10 +107,112 @@ async function fetchLogCountsBySlug(): Promise<Record<string, number>> {
   return counts;
 }
 
+// ─── Top brands (Featured Shops strip in Part 5) ────────────────────
+//
+// T32b (2026-07-13): mirrors the leaderboard's aggregate pattern —
+// aggregate `brand_name_raw` from public logs, take the top N, then
+// look up each in the brands catalog for slug + logo_url. Uses in-memory
+// aggregation for now (docs/cost-tracker.md pins the mitigation path if
+// this ever gets hot). Everything runs in parallel with the log-count
+// fetch above.
+const FEATURED_SHOPS_LIMIT = 10;
+
+interface RawBrandRow {
+  brand_name_raw: string | null;
+}
+
+async function fetchTopShops(): Promise<FeaturedShop[]> {
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll() {
+          /* read-only on server components */
+        },
+      },
+    },
+  );
+
+  const { data: logRows, error: logErr } = await supabase
+    .from("collection_logs")
+    .select("brand_name_raw")
+    .eq("is_public", true)
+    .not("brand_name_raw", "is", null)
+    .limit(20_000);
+
+  if (logErr) {
+    console.warn("[guide] top-shops log fetch failed", logErr);
+    return [];
+  }
+
+  // Aggregate case-insensitively so "Cloud Nine" and "cloud nine" merge.
+  // Track first-seen display casing so the tile label reads clean.
+  const buckets = new Map<
+    string,
+    { key: string; displayName: string; total: number }
+  >();
+  for (const raw of (logRows ?? []) as RawBrandRow[]) {
+    const trimmed = raw.brand_name_raw?.trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    const bucket = buckets.get(key);
+    if (bucket) {
+      bucket.total += 1;
+    } else {
+      buckets.set(key, { key, displayName: trimmed, total: 1 });
+    }
+  }
+
+  const topBuckets = Array.from(buckets.values())
+    .sort((a, b) => b.total - a.total)
+    .slice(0, FEATURED_SHOPS_LIMIT);
+  if (topBuckets.length === 0) return [];
+
+  // Per-brand ILIKE lookup against the catalog for slug + logo_url.
+  // Mirrors the leaderboard pattern; CLAUDE.md rule confirms brands.name
+  // is the correct column (not name_raw — that's on collection_logs).
+  const catalogResults = await Promise.all(
+    topBuckets.map((b) =>
+      supabase
+        .from("brands")
+        .select("name, slug, logo_url")
+        .ilike("name", b.displayName)
+        .maybeSingle(),
+    ),
+  );
+
+  return topBuckets.map((bucket, idx) => {
+    const catalog = catalogResults[idx];
+    const catalogRow =
+      catalog.error || !catalog.data
+        ? null
+        : (catalog.data as {
+            name: string | null;
+            slug: string | null;
+            logo_url: string | null;
+          });
+    return {
+      key: bucket.key,
+      name: catalogRow?.name ?? bucket.displayName,
+      slug: catalogRow?.slug ?? null,
+      logo_url: catalogRow?.logo_url ?? null,
+      totalLogs: bucket.total,
+    };
+  });
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────
 
 export default async function GuidePage() {
-  const logCountsBySlug = await fetchLogCountsBySlug();
+  const [logCountsBySlug, featuredShops] = await Promise.all([
+    fetchLogCountsBySlug(),
+    fetchTopShops(),
+  ]);
 
   return (
     <PageWrapper dots glow="cyan">
@@ -214,13 +322,11 @@ export default async function GuidePage() {
           />
 
           <SubHeading>Sizes</SubHeading>
-          <ContainerGrid
-            entries={CONTAINER_SIZES.map((c) => ({
-              term: c.name,
-              tag: "size",
-              definition: c.description,
-            }))}
-          />
+          {/* T32c (2026-07-13): five container sizes (4/6/8/16/32 oz)
+              read tighter as a horizontal chip strip than as a
+              two-column grid. Same content module, different layout
+              for a short numeric ladder. */}
+          <SizeChipStrip entries={CONTAINER_SIZES} />
 
           <SubHeading>Packaging Add-ons</SubHeading>
           <ContainerGrid
@@ -253,6 +359,12 @@ export default async function GuidePage() {
 
         {/* Part 5: Brand Glossary */}
         <PartSection n={5} title="Brand Glossary" tagline={PARTS[4].tagline}>
+          {/* T32b (2026-07-13): featured shops strip sits above Jenn's
+              V4.1 vocabulary glossary. Restores Design's original
+              brand-tile intent without dropping any of her copy. Tiles
+              link to /brands/[slug] when the brand has a catalog row;
+              free-text brands render as non-clickable name tiles. */}
+          <FeaturedShopsStrip shops={featuredShops} />
           <IntroLine>
             A reference for slime industry terminology, the vocabulary
             collectors, makers, and shops use to describe products,
