@@ -144,11 +144,18 @@ export default async function DiscoverPage({
       )
       .gte("created_at", eightDaysAgo.toISOString()),
 
-    // [Discover V1 gap-fill] Per-base-type slime counts for the
-    // TypeCarousel cards. Single scan of the base_type column, JS
-    // aggregation. Small pre-launch; add a cost-tracker entry if we
-    // start seeing this render slowly.
-    supabase.from("slimes").select("base_type").not("base_type", "is", null),
+    // [Discover V1 gap-fill] Per-base-type COMMUNITY LOG counts.
+    // 2026-07-13 bug-fix: was counting `slimes` table rows (catalog
+    // entries), but the /discover/type/[base_type] destination shows
+    // `collection_logs` grouped by base_type — so the two numbers
+    // disagreed (catalog says 5 butter, community actually has 0
+    // logged, and vice versa for avalanche). Switching to
+    // `collection_logs` here so tap-through never surprises.
+    supabase
+      .from("collection_logs")
+      .select("base_type")
+      .not("base_type", "is", null)
+      .eq("is_public", true),
   ]);
 
   // ─── Top-rated slimes normalization ───────────────────────────────────
@@ -318,16 +325,30 @@ export default async function DiscoverPage({
     // we can compute favorite base type, slime count, and average
     // rating given in one batch. This is O(sum of shelf sizes) — safe
     // pre-launch at 12 users × <100 shelves. Cost-tracker entry below.
+    // 2026-07-13 bug-fix: `profiles_public` (view since T88) no
+    // longer exposes `display_name` — the T88 migration explicitly
+    // dropped it. Selecting a non-existent column errors the whole
+    // query silently, which is why the popular collectors had null
+    // avatars (`profileData` was []). Fell back to `username` for
+    // display (already the fallback in PopularUsersCarousel) so
+    // nothing else has to change.
     const [profileResult, enrichmentResult] = await Promise.all([
       supabase
         .from("profiles_public")
-        .select("id, username, display_name, avatar_url, is_premium")
+        .select("id, username, avatar_url, is_premium")
         .in("id", userIds),
       supabase
         .from("collection_logs")
         .select("user_id, rating_overall, slimes(base_type)")
         .in("user_id", userIds),
     ]);
+
+    if (profileResult.error) {
+      console.warn(
+        "[discover] profiles_public query failed:",
+        profileResult.error,
+      );
+    }
 
     const profileData = profileResult.data ?? [];
     const enrichRows = enrichmentResult.error
@@ -386,7 +407,10 @@ export default async function DiscoverPage({
         return {
           id: f.id,
           username: f.username ?? "",
-          display_name: profile?.display_name ?? null,
+          // display_name intentionally omitted — profiles_public no
+          // longer exposes it (T88). PopularUsersCarousel falls back
+          // to username via `user.display_name?.trim() || user.username`.
+          display_name: null,
           avatar_url: profile?.avatar_url ?? null,
           is_premium: profile?.is_premium ?? false,
           follower_count: Number(f.follower_count ?? 0),
@@ -439,10 +463,12 @@ export default async function DiscoverPage({
           <FeaturedDropsCarousel drops={drops} />
         </section>
 
-        {/* ── Section: Slime Types ───────────────────────────────── */}
+        {/* ── Section: Browse by base type ────────────────────────
+            Renamed 2026-07-13 from "Slime Types" per Design's mockup —
+            reads as an action ("browse") not a taxonomy label. */}
         <section className="mb-10">
           <div className="flex items-center justify-between px-4 mb-3">
-            <p className="section-label">Slime Types</p>
+            <p className="section-label">Browse by base type</p>
             <Link
               href="/guide#part-1"
               className="text-[11.5px] font-semibold"

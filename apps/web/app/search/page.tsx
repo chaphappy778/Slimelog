@@ -1,15 +1,22 @@
 // apps/web/app/search/page.tsx
-// [Change 2] Global search page — routes to slime types, slime catalog, and keywords
+// [Global search page] — routes to slime types, slime catalog, and keywords.
+// [Discover V1 2026-07-13] Redesigned to visually match the Discover
+// SearchHero. Reads the `?q=` URL param on mount so users landing
+// from /discover?q=butter see their query in the field and the
+// results already computed. Types matched in memory; slimes + tags
+// fetched from Supabase.
 
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 // Audit hp-24 (2026-07-09): use the shared browser singleton.
 import { createClient } from "@/lib/supabase/client";
 import PageHeader from "@/components/PageHeader";
 import PageWrapper from "@/components/PageWrapper";
+import SearchHero from "@/components/discover/SearchHero";
 import {
   SLIME_BASE_TYPE_LABELS,
   SLIME_BASE_TYPE_COLORS,
@@ -18,9 +25,6 @@ import {
 
 // Module-level browser client — never inside component body
 const supabase = createClient();
-
-const inputCls =
-  "w-full rounded-xl bg-slime-surface border border-slime-border px-4 py-3 text-sm text-slime-text placeholder:text-slime-muted focus:outline-none focus:ring-1 focus:ring-slime-accent/40 focus:border-slime-accent/50 transition pl-10";
 
 type BrandJoin = { name: string; slug: string } | null;
 
@@ -51,23 +55,6 @@ function sanitizeForOrFilter(q: string): string {
   return q.replace(/[,()]/g, "").replace(/^\.+|\.+$/g, "");
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      style={{
-        fontSize: 11,
-        fontWeight: 700,
-        letterSpacing: "0.08em",
-        textTransform: "uppercase",
-        color: "rgba(245,245,245,0.45)",
-      }}
-      className="mb-2"
-    >
-      {children}
-    </p>
-  );
-}
-
 function TypeRow({ result }: { result: TypeResult }) {
   const accentColor = SLIME_BASE_TYPE_COLORS[result.key]?.text ?? "#00F0FF";
   return (
@@ -79,10 +66,16 @@ function TypeRow({ result }: { result: TypeResult }) {
         border: "1px solid rgba(45,10,78,0.6)",
       }}
     >
-      <span className="text-sm font-semibold" style={{ color: accentColor }}>
+      <span
+        style={{
+          color: accentColor,
+          fontFamily: "Montserrat, sans-serif",
+          fontWeight: 800,
+          fontSize: 14,
+        }}
+      >
         {result.label}
       </span>
-      {/* Right chevron */}
       <svg
         width="14"
         height="14"
@@ -111,7 +104,7 @@ function SlimeRow({ slime }: { slime: SlimeResult }) {
 
   let secondaryLine: string | null = null;
   if (brandName && collectionName) {
-    secondaryLine = `${brandName}  ${collectionName}`;
+    secondaryLine = `${brandName} · ${collectionName}`;
   } else if (brandName) {
     secondaryLine = brandName;
   } else if (collectionName) {
@@ -127,7 +120,6 @@ function SlimeRow({ slime }: { slime: SlimeResult }) {
         border: "1px solid rgba(45,10,78,0.6)",
       }}
     >
-      {/* Thumbnail */}
       <div
         className="shrink-0 rounded-lg overflow-hidden"
         style={{ width: 44, height: 44, background: "rgba(45,10,78,0.5)" }}
@@ -145,40 +137,47 @@ function SlimeRow({ slime }: { slime: SlimeResult }) {
         )}
       </div>
 
-      {/* Text */}
       <div className="flex-1 min-w-0">
         <p
-          className="text-sm font-semibold truncate"
-          style={{ color: "#F5F5F5" }}
+          className="truncate"
+          style={{
+            fontFamily: "Montserrat, sans-serif",
+            fontWeight: 700,
+            fontSize: 14,
+            color: "#F5F5F5",
+          }}
         >
           {slime.name}
         </p>
         {secondaryLine && (
           <p
             className="text-xs truncate mt-0.5"
-            style={{ color: "rgba(245,245,245,0.45)" }}
+            style={{ color: "#FF7BEB" }}
           >
             {secondaryLine}
           </p>
         )}
       </div>
 
-      {/* Rating */}
       {ratingDisplay != null && (
-        <div className="shrink-0 flex items-center gap-1">
-          {/* Small star dot */}
-          <svg
-            width="10"
-            height="10"
-            viewBox="0 0 24 24"
-            fill="#00F0FF"
-            aria-hidden="true"
+        <div className="shrink-0 text-right">
+          <div
+            className="tabular-nums leading-none"
+            style={{
+              fontFamily: "Montserrat, sans-serif",
+              fontWeight: 900,
+              fontSize: 18,
+              color: "#00F0FF",
+            }}
           >
-            <circle cx="12" cy="12" r="5" />
-          </svg>
-          <span className="text-xs font-semibold" style={{ color: "#00F0FF" }}>
             {ratingDisplay}
-          </span>
+          </div>
+          <div
+            className="text-[9.5px] mt-1"
+            style={{ color: "rgba(245,245,245,0.4)" }}
+          >
+            {slime.total_ratings} ratings
+          </div>
         </div>
       )}
     </Link>
@@ -210,11 +209,24 @@ function KeywordRow({ tag }: { tag: TagResult }) {
           <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
           <line x1="7" y1="7" x2="7.01" y2="7" />
         </svg>
-        <span className="text-sm font-semibold" style={{ color: "#F5F5F5" }}>
+        <span
+          style={{
+            fontFamily: "Montserrat, sans-serif",
+            fontWeight: 700,
+            fontSize: 14,
+            color: "#F5F5F5",
+          }}
+        >
           {tag.name}
         </span>
       </div>
-      <span className="text-xs" style={{ color: "rgba(245,245,245,0.45)" }}>
+      <span
+        className="tabular-nums font-bold"
+        style={{
+          color: "#7BFF7B",
+          fontSize: 12,
+        }}
+      >
         {tag.use_count} logs
       </span>
     </Link>
@@ -222,7 +234,10 @@ function KeywordRow({ tag }: { tag: TagResult }) {
 }
 
 function SearchPageInner() {
-  const [query, setQuery] = useState("");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const initialQ = searchParams.get("q") ?? "";
+  const [query, setQuery] = useState(initialQ);
   const [searching, setSearching] = useState(false);
   const [typeResults, setTypeResults] = useState<TypeResult[]>([]);
   const [slimeResults, setSlimeResults] = useState<SlimeResult[]>([]);
@@ -240,16 +255,13 @@ function SearchPageInner() {
     const timeout = setTimeout(async () => {
       setSearching(true);
 
-      // In-memory type matching
       const lower = trimmed.toLowerCase();
       const types: TypeResult[] = Object.entries(SLIME_BASE_TYPE_LABELS)
         .filter(([, label]) => label.toLowerCase().includes(lower))
         .map(([key, label]) => ({ key: key as SlimeBaseType, label }));
 
-      // Sanitize query for PostgREST .or() filter
       const safeQ = sanitizeForOrFilter(trimmed);
 
-      // Parallel DB queries
       const [slimesRes, tagsRes] = await Promise.all([
         supabase
           .from("slimes")
@@ -268,7 +280,6 @@ function SearchPageInner() {
           .limit(20),
       ]);
 
-      // Normalize brands join
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawSlimes: any[] = slimesRes.data ?? [];
       const normalizedSlimes: SlimeResult[] = rawSlimes.map((s) => ({
@@ -291,16 +302,25 @@ function SearchPageInner() {
     slimeResults.length > 0 ||
     keywordResults.length > 0;
 
+  // Update the URL as the user types so refresh / share works.
+  // `replace` (not `push`) so the back button skips the intermediate
+  // states.
+  useEffect(() => {
+    const t = query.trim();
+    const target = t ? `/search?q=${encodeURIComponent(t)}` : "/search";
+    router.replace(target, { scroll: false });
+  }, [query, router]);
+
   return (
     <PageWrapper dots glow="cyan">
       <PageHeader />
-      <main className="pt-14 pb-24 px-4">
+      <main className="pt-14 pb-24">
         {/* Back button */}
-        <div className="mb-5 mt-2">
+        <div className="px-4 mb-3 mt-2">
           <Link
             href="/discover"
             className="inline-flex items-center gap-1.5 text-sm"
-            style={{ color: "rgba(245,245,245,0.45)" }}
+            style={{ color: "rgba(245,245,245,0.55)" }}
           >
             <svg
               width="14"
@@ -320,110 +340,103 @@ function SearchPageInner() {
           </Link>
         </div>
 
-        {/* Page title */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-black" style={{ color: "#00F0FF" }}>
-            Search
-          </h1>
-          <p
-            className="text-sm mt-1"
-            style={{ color: "rgba(245,245,245,0.45)" }}
-          >
-            Find slimes, types, and keywords
-          </p>
-        </div>
-
-        {/* Search input */}
-        <div className="relative mb-6">
-          <span
-            className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-            aria-hidden="true"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="rgba(245,245,245,0.4)"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.35-4.35" />
-            </svg>
-          </span>
-          <input
-            className={inputCls}
-            placeholder="Search..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            autoFocus
-          />
-        </div>
+        {/* Search hero — same visual as Discover so the transition
+            reads as continuous. Autofocus so refining is a single
+            tap. Live-updates URL and results as the user types. */}
+        <SearchHero
+          initialValue={initialQ}
+          onValueChange={setQuery}
+          onSubmit={() => {
+            /* no-op — results update live via onValueChange */
+          }}
+          autoFocus
+        />
 
         {/* Results */}
-        {trimmed && (
-          <>
-            {searching && (
-              <p
-                className="text-sm text-center py-4"
-                style={{ color: "rgba(245,245,245,0.45)" }}
-              >
-                Searching...
-              </p>
-            )}
+        <div className="px-4">
+          {!trimmed && (
+            <p
+              className="text-sm text-center py-6"
+              style={{ color: "rgba(245,245,245,0.45)" }}
+            >
+              Type a slime name, brand, base type, or keyword.
+            </p>
+          )}
 
-            {!searching && !hasResults && (
-              <p
-                className="text-sm text-center py-4"
-                style={{ color: "rgba(245,245,245,0.45)" }}
-              >
-                No results found.
-              </p>
-            )}
+          {trimmed && (
+            <>
+              {searching && (
+                <p
+                  className="text-sm text-center py-4"
+                  style={{ color: "rgba(245,245,245,0.45)" }}
+                >
+                  Searching...
+                </p>
+              )}
 
-            {!searching && (
-              <div className="flex flex-col gap-6">
-                {/* Slime Types */}
-                {typeResults.length > 0 && (
-                  <section>
-                    <SectionLabel>Slime Types</SectionLabel>
-                    <div className="flex flex-col gap-2">
-                      {typeResults.map((t) => (
-                        <TypeRow key={t.key} result={t} />
-                      ))}
-                    </div>
-                  </section>
-                )}
+              {!searching && !hasResults && (
+                <div className="text-center py-6">
+                  <p
+                    className="text-sm"
+                    style={{ color: "rgba(245,245,245,0.55)" }}
+                  >
+                    No results for &ldquo;{trimmed}&rdquo;
+                  </p>
+                  <p
+                    className="text-xs mt-1.5"
+                    style={{ color: "rgba(245,245,245,0.35)" }}
+                  >
+                    Try a broader term, or browse by base type on{" "}
+                    <Link
+                      href="/discover"
+                      style={{ color: "#00F0FF", textDecoration: "underline" }}
+                    >
+                      Discover
+                    </Link>
+                    .
+                  </p>
+                </div>
+              )}
 
-                {/* Slimes */}
-                {slimeResults.length > 0 && (
-                  <section>
-                    <SectionLabel>Slimes</SectionLabel>
-                    <div className="flex flex-col gap-2">
-                      {slimeResults.map((s) => (
-                        <SlimeRow key={s.id} slime={s} />
-                      ))}
-                    </div>
-                  </section>
-                )}
+              {!searching && (
+                <div className="flex flex-col gap-8">
+                  {typeResults.length > 0 && (
+                    <section>
+                      <p className="section-label mb-3">Slime Types</p>
+                      <div className="flex flex-col gap-2">
+                        {typeResults.map((t) => (
+                          <TypeRow key={t.key} result={t} />
+                        ))}
+                      </div>
+                    </section>
+                  )}
 
-                {/* Keywords */}
-                {keywordResults.length > 0 && (
-                  <section>
-                    <SectionLabel>Keywords</SectionLabel>
-                    <div className="flex flex-col gap-2">
-                      {keywordResults.map((tag) => (
-                        <KeywordRow key={tag.id} tag={tag} />
-                      ))}
-                    </div>
-                  </section>
-                )}
-              </div>
-            )}
-          </>
-        )}
+                  {slimeResults.length > 0 && (
+                    <section>
+                      <p className="section-label mb-3">Slimes</p>
+                      <div className="flex flex-col gap-2">
+                        {slimeResults.map((s) => (
+                          <SlimeRow key={s.id} slime={s} />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {keywordResults.length > 0 && (
+                    <section>
+                      <p className="section-label mb-3">Keywords</p>
+                      <div className="flex flex-col gap-2">
+                        {keywordResults.map((tag) => (
+                          <KeywordRow key={tag.id} tag={tag} />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </main>
     </PageWrapper>
   );

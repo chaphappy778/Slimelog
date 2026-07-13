@@ -22,11 +22,59 @@ const PLACEHOLDER_ROTATION = [
   'try "Sky Butter"',
 ];
 
-export default function SearchHero() {
+interface SearchHeroProps {
+  /**
+   * Initial input value. On the Discover page this is empty; on the
+   * Search results page we hydrate it from the `?q=` URL param so
+   * users see their query in the field instead of a blank box.
+   */
+  initialValue?: string;
+  /**
+   * Fired on every keystroke. When set, the parent typically lifts
+   * `value` into its own state and drives result-fetching from it —
+   * used by the Search page for live-search-as-you-type.
+   */
+  onValueChange?: (v: string) => void;
+  /**
+   * Auto-focus the input on mount. Defaults false. Enable on the
+   * Search page so a user landing there via `?q=` can immediately
+   * refine their query without an extra tap.
+   */
+  autoFocus?: boolean;
+  /**
+   * Override the default submit behavior (navigate to `/search?q=X`).
+   * The Search page passes an explicit handler that updates the URL
+   * with `router.replace` instead of pushing a new history entry.
+   */
+  onSubmit?: (value: string) => void;
+}
+
+export default function SearchHero({
+  initialValue = "",
+  onValueChange,
+  autoFocus = false,
+  onSubmit,
+}: SearchHeroProps = {}) {
   const router = useRouter();
-  const [value, setValue] = useState("");
+  const [value, setValueLocal] = useState(initialValue);
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Wrapped setter so `onValueChange` fires from any code path that
+  // mutates the value (typing, clearing).
+  const setValue = (next: string) => {
+    setValueLocal(next);
+    onValueChange?.(next);
+  };
+
+  // Autofocus once on mount when requested. Selecting the current
+  // text makes it easy to refine an existing query.
+  useEffect(() => {
+    if (autoFocus && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [autoFocus]);
 
   // Rotate the placeholder every 3s so the field advertises real
   // search intents. Only rotates while the input is empty and
@@ -46,6 +94,12 @@ export default function SearchHero() {
   function submit(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = value.trim();
+    // Custom handler wins if provided (e.g. Search page keeps you
+    // on-page and just refreshes results).
+    if (onSubmit) {
+      onSubmit(trimmed);
+      return;
+    }
     if (!trimmed) {
       router.push("/search");
       return;
