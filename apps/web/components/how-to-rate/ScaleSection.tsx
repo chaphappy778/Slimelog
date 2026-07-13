@@ -56,16 +56,22 @@ export default function ScaleSection({ bands }: ScaleSectionProps) {
         </p>
       </div>
 
-      {/* ── Gradient scale bar ───────────────────────────────────── */}
+      {/* ── Gradient scale bar ─────────────────────────────────────
+          2026-07-13: recolored to red → orange → blue → blue-green →
+          green (five stops matching the five bands below). The bar
+          now maps 1:1 to the star bands so users can trace their
+          position from color to band without decoding. Same color
+          language will carry into the log wizard's rating slider
+          when we redesign that (T-slider follow-up). */}
       <div
         aria-hidden="true"
         style={{
           height: 12,
           borderRadius: 999,
           background:
-            "linear-gradient(90deg, #FF3D6E 0%, #FFAE3B 38%, #00F0FF 62%, #39FF14 100%)",
+            "linear-gradient(90deg, #FF3D6E 0%, #FF7A2E 26%, #00A6FF 52%, #00E28A 78%, #39FF14 100%)",
           margin: "20px 0 24px",
-          boxShadow: "0 0 24px rgba(57,255,20,0.18)",
+          boxShadow: "0 0 24px rgba(0,166,255,0.20)",
         }}
       />
 

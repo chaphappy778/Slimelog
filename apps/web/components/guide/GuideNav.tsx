@@ -25,7 +25,8 @@ const PINNED_TOP_PX = 56;
 
 export default function GuideNav({ parts }: GuideNavProps) {
   const [activeId, setActiveId] = useState<string>(parts[0]?.id ?? "part-1");
-  const [tocOpen, setTocOpen] = useState(false);
+  // 2026-07-13: tocOpen state retired with the hamburger removal —
+  // back-to-top button lives inline in the pill nav now.
   const [isPinned, setIsPinned] = useState(false);
   const [navHeight, setNavHeight] = useState<number>(52);
   const pillRowRef = useRef<HTMLDivElement | null>(null);
@@ -254,11 +255,18 @@ export default function GuideNav({ parts }: GuideNavProps) {
               );
             })}
           </div>
+          {/* 2026-07-13: replaced the hamburger TOC drawer with a
+              back-to-top arrow. The sticky pill row already handles
+              section navigation, so a duplicate hamburger with the same
+              12 sections was redundant. A back-to-top arrow is more
+              useful — one tap to jump back to the hero on a long page. */}
           <button
             type="button"
-            onClick={() => setTocOpen(true)}
-            aria-label="Open guide contents"
-            className="flex-none flex items-center justify-center transition-colors"
+            onClick={() => {
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            aria-label="Back to top"
+            className="flex-none flex items-center justify-center transition-colors active:scale-[0.94]"
             style={{
               width: 38,
               height: 38,
@@ -274,26 +282,16 @@ export default function GuideNav({ parts }: GuideNavProps) {
               stroke="currentColor"
               strokeWidth="2"
               strokeLinecap="round"
+              strokeLinejoin="round"
               className="w-5 h-5"
               aria-hidden="true"
             >
-              <path d="M3 12h18M3 6h18M3 18h18" />
+              <path d="M12 19V5" />
+              <path d="M5 12l7-7 7 7" />
             </svg>
           </button>
         </div>
       </div>
-
-      <GuideTOCDrawer
-        parts={parts}
-        activeId={activeId}
-        open={tocOpen}
-        onClose={() => setTocOpen(false)}
-        onJumpTo={(id) => {
-          setTocOpen(false);
-          // Small delay so the drawer close animation runs first.
-          window.setTimeout(() => jumpTo(id), 60);
-        }}
-      />
     </>
   );
 }

@@ -42,6 +42,19 @@ export interface RatingAxis {
   accentGlow: string;
   /** Pre-baked rgba() border color for the hero card. */
   accentBorder: string;
+  /**
+   * 2026-07-13: per-axis icon rendered top-right of the hero card.
+   * Each axis got its own icon per Design's mockup so users can
+   * visually distinguish sections at a glance instead of every card
+   * carrying the same wave motif.
+   */
+  iconSlug:
+    | "wave"      // Texture (three stacked S-curves)
+    | "bars"      // Sound (equalizer bars)
+    | "teardrop"  // Aesthetic (teardrop with inner circle)
+    | "sparkle"   // Creativity (starburst)
+    | "shield"    // Quality (shield with check)
+    | "star";     // Overall (five-point star)
 }
 
 export const RATING_AXES: RatingAxis[] = [
@@ -68,6 +81,7 @@ export const RATING_AXES: RatingAxis[] = [
     accentColor: "#39FF14",
     accentGlow: "rgba(57,255,20,0.34)",
     accentBorder: "rgba(57,255,20,0.35)",
+    iconSlug: "wave",
   },
   {
     slug: "sound",
@@ -92,6 +106,7 @@ export const RATING_AXES: RatingAxis[] = [
     accentColor: "#00F0FF",
     accentGlow: "rgba(0,240,255,0.34)",
     accentBorder: "rgba(0,240,255,0.35)",
+    iconSlug: "bars",
   },
   {
     slug: "aesthetic",
@@ -116,6 +131,7 @@ export const RATING_AXES: RatingAxis[] = [
     accentColor: "#FF00E5",
     accentGlow: "rgba(255,0,229,0.34)",
     accentBorder: "rgba(255,0,229,0.38)",
+    iconSlug: "teardrop",
   },
   {
     slug: "creativity",
@@ -139,6 +155,7 @@ export const RATING_AXES: RatingAxis[] = [
     accentColor: "#FFD24A",
     accentGlow: "rgba(255,210,74,0.34)",
     accentBorder: "rgba(255,210,74,0.36)",
+    iconSlug: "sparkle",
   },
   {
     slug: "quality",
@@ -162,6 +179,7 @@ export const RATING_AXES: RatingAxis[] = [
     accentColor: "#8B5CF6",
     accentGlow: "rgba(139,92,246,0.34)",
     accentBorder: "rgba(139,92,246,0.38)",
+    iconSlug: "shield",
   },
   {
     slug: "overall",
@@ -179,14 +197,17 @@ export const RATING_AXES: RatingAxis[] = [
     exampleLow: "Regret the purchase. Would not buy again.",
     exampleHigh: "An instant favorite. Already restocking.",
     note: "All six axes carry equal weight in the score, but Overall is still your own call. A slime can nail five axes and still miss the mark for you.",
-    gradientFrom: "#0a2540",
-    gradientTo: "#1a4d2e",
-    // Cyan chrome for the "06" number badge, tick icon, glow. The axis
-    // name TEXT renders as a green→cyan gradient (accentGradient below).
-    accentColor: "#00F0FF",
-    accentGradient: "linear-gradient(135deg, #39FF14, #00F0FF)",
-    accentGlow: "rgba(57,255,20,0.30)",
-    accentBorder: "rgba(0,240,255,0.35)",
+    // 2026-07-13: Overall goes full rainbow. Green+cyan felt like a
+    // muted repeat of the other axes; rainbow makes the section
+    // instantly read as "the culmination."
+    gradientFrom: "#1a0530",
+    gradientTo: "#0a1a2e",
+    accentColor: "#FFAE3B",
+    accentGradient:
+      "linear-gradient(90deg, #FF3D6E 0%, #FFAE3B 22%, #FFD24A 40%, #39FF14 58%, #00F0FF 76%, #FF00E5 100%)",
+    accentGlow: "rgba(255,174,59,0.28)",
+    accentBorder: "rgba(255,174,59,0.35)",
+    iconSlug: "star",
   },
 ];
 

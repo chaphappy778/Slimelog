@@ -122,25 +122,11 @@ export default function AxisSection({ axis }: AxisSectionProps) {
           {axis.displayN}
         </div>
 
-        {/* Wave-of-lines decoration, top-right. Same 3-stroke motif
-            across every axis; the accentColor is what changes. Line
-            SVG only (2px stroke) — anti-AI-art hard rule. */}
-        <svg
-          aria-hidden="true"
-          width="60"
-          height="60"
-          viewBox="0 0 48 48"
-          fill="none"
-          stroke={axis.accentColor}
-          strokeWidth="2"
-          strokeLinecap="round"
-          className="absolute"
-          style={{ top: 16, right: 18, opacity: 0.9 }}
-        >
-          <path d="M6 16c4-4 8-4 12 0s8 4 12 0 8-4 12 0" />
-          <path d="M6 26c4-4 8-4 12 0s8 4 12 0 8-4 12 0" />
-          <path d="M6 36c4-4 8-4 12 0s8 4 12 0 8-4 12 0" />
-        </svg>
+        {/* 2026-07-13: per-axis icon top-right, driven by iconSlug.
+            Each axis got its own icon per Design so users can visually
+            distinguish sections at a glance. Line SVG only (2px stroke)
+            — anti-AI-art hard rule. */}
+        <AxisIcon slug={axis.iconSlug} color={axis.accentColor} />
 
         {/* Axis name — sits bottom-left of the hero card. */}
         <div
@@ -290,4 +276,73 @@ export default function AxisSection({ axis }: AxisSectionProps) {
       </div>
     </section>
   );
+}
+
+// ─── Axis icons ────────────────────────────────────────────────────────
+// Pure SVG geometry per axis, chosen by iconSlug. Signature icons ripped
+// from Design's mockup (line stroke 2px, geometric — anti-AI-art rule).
+
+function AxisIcon({
+  slug,
+  color,
+}: {
+  slug: RatingAxis["iconSlug"];
+  color: string;
+}) {
+  const common = {
+    "aria-hidden": true,
+    width: 60,
+    height: 60,
+    viewBox: "0 0 48 48",
+    fill: "none" as const,
+    stroke: color,
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    className: "absolute",
+    style: { top: 16, right: 18, opacity: 0.92 },
+  };
+  switch (slug) {
+    case "wave":
+      return (
+        <svg {...common}>
+          <path d="M6 16c4-4 8-4 12 0s8 4 12 0 8-4 12 0" />
+          <path d="M6 26c4-4 8-4 12 0s8 4 12 0 8-4 12 0" />
+          <path d="M6 36c4-4 8-4 12 0s8 4 12 0 8-4 12 0" />
+        </svg>
+      );
+    case "bars":
+      return (
+        <svg {...common}>
+          <path d="M8 30V18M16 34V14M24 38V10M32 33V15M40 29V19" />
+        </svg>
+      );
+    case "teardrop":
+      return (
+        <svg {...common}>
+          <path d="M24 6C24 6 12 20 12 30a12 12 0 0 0 24 0C36 20 24 6 24 6Z" />
+          <circle cx="24" cy="31" r="4.5" />
+        </svg>
+      );
+    case "sparkle":
+      return (
+        <svg {...common}>
+          <path d="M24 6v13M24 29v13M6 24h13M29 24h13" />
+          <path d="M13 13l7 7M28 28l7 7M35 13l-7 7M13 35l7-7" />
+        </svg>
+      );
+    case "shield":
+      return (
+        <svg {...common}>
+          <path d="M24 6l14 5v9c0 10-7 16-14 19-7-3-14-9-14-19v-9l14-5Z" />
+          <path d="M17 24l5 5 9-10" />
+        </svg>
+      );
+    case "star":
+      return (
+        <svg {...common} strokeLinejoin="round">
+          <path d="M24 5l5.6 12.2 13.4 1.4-10 9 2.8 13.2L24 33.6 12.2 40.8 15 27.6l-10-9 13.4-1.4L24 5Z" />
+        </svg>
+      );
+  }
 }

@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { HowToRatePart } from "@/app/how-to-rate/content";
-import HowToRateTOCDrawer from "./HowToRateTOCDrawer";
+// 2026-07-13: HowToRateTOCDrawer retired with the hamburger removal.
 
 interface HowToRateNavProps {
   parts: HowToRatePart[];
@@ -34,7 +34,7 @@ export default function HowToRateNav({ parts }: HowToRateNavProps) {
   const [activeId, setActiveId] = useState<string>(
     parts[0]?.id ?? "texture",
   );
-  const [tocOpen, setTocOpen] = useState(false);
+  // 2026-07-13: tocOpen retired — back-to-top button lives inline now.
   const [isPinned, setIsPinned] = useState(false);
   const [navHeight, setNavHeight] = useState<number>(52);
   const pillRowRef = useRef<HTMLDivElement | null>(null);
@@ -250,11 +250,18 @@ export default function HowToRateNav({ parts }: HowToRateNavProps) {
               );
             })}
           </div>
+          {/* 2026-07-13: hamburger TOC replaced with a back-to-top
+              arrow. The sticky pill row already handles axis jumps,
+              and this page only has 7 sections so the TOC drawer was
+              redundant. Back-to-top gets a user out of a long axis
+              deep-dive in one tap. */}
           <button
             type="button"
-            onClick={() => setTocOpen(true)}
-            aria-label="Open rating axes contents"
-            className="flex-none flex items-center justify-center transition-colors"
+            onClick={() => {
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            aria-label="Back to top"
+            className="flex-none flex items-center justify-center transition-colors active:scale-[0.94]"
             style={{
               width: 38,
               height: 38,
@@ -270,26 +277,16 @@ export default function HowToRateNav({ parts }: HowToRateNavProps) {
               stroke="currentColor"
               strokeWidth="2"
               strokeLinecap="round"
+              strokeLinejoin="round"
               className="w-5 h-5"
               aria-hidden="true"
             >
-              <path d="M3 12h18M3 6h18M3 18h18" />
+              <path d="M12 19V5" />
+              <path d="M5 12l7-7 7 7" />
             </svg>
           </button>
         </div>
       </div>
-
-      <HowToRateTOCDrawer
-        parts={parts}
-        activeId={activeId}
-        open={tocOpen}
-        onClose={() => setTocOpen(false)}
-        onJumpTo={(id) => {
-          setTocOpen(false);
-          // Small delay so the drawer close animation runs first.
-          window.setTimeout(() => jumpTo(id), 60);
-        }}
-      />
     </>
   );
 }
