@@ -302,6 +302,7 @@ function buildCollectionLog(log: FeedCardLog): CollectionLog {
     base_type: log.base_type as CollectionLog["base_type"],
     subtype_id: null,
     scent_strength: null,
+    condition: null,
     colors: log.colors,
     cost_paid: null,
     purchase_price: null,

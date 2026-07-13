@@ -313,6 +313,7 @@ export default function FeedCardCompact({
             base_type: log.base_type as SlimeBaseType | null,
             subtype_id: null,
             scent_strength: null,
+            condition: null,
             colors: log.colors,
             cost_paid: null,
             purchase_price: null,

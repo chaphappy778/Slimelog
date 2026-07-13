@@ -11,8 +11,17 @@ import { useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { logSlime } from "@/lib/slime-actions";
 import type { LogSlimeInput } from "@/lib/slime-actions";
-import { SLIME_BASE_TYPE_LABELS, SCENT_STRENGTH_LABELS } from "@/lib/types";
-import type { SlimeBaseType, ScentStrength } from "@/lib/types";
+import {
+  SLIME_BASE_TYPE_LABELS,
+  SCENT_STRENGTH_LABELS,
+  SLIME_CONDITION_LABELS,
+  SLIME_CONDITION_DESCRIPTIONS,
+} from "@/lib/types";
+import type {
+  SlimeBaseType,
+  ScentStrength,
+  SlimeCondition,
+} from "@/lib/types";
 import { ImageUpload } from "@/components/ImageUpload";
 // Audit hp-24 (2026-07-09): use the shared browser singleton.
 import { createClient } from "@/lib/supabase/client";
@@ -82,6 +91,8 @@ interface FormState {
   subtype_name: string;
   scent_strength: ScentStrength | null;
   scent_notes: string;
+  // 2026-07-12: condition of the slime (personal + future marketplace).
+  condition: SlimeCondition | null;
   keywords: string[];
   purchase_price: string;
   selected_color_values: string[];
@@ -298,6 +309,7 @@ function LogPageInner() {
     subtype_name: "",
     scent_strength: null,
     scent_notes: "",
+    condition: null,
     keywords: [],
     purchase_price: "",
     selected_color_values: [],
@@ -370,6 +382,7 @@ function LogPageInner() {
         notes: form.notes.trim() || undefined,
         // [Change 4 — scent_notes]
         scent_notes: form.scent_notes.trim() || undefined,
+        condition: form.condition ?? undefined,
         is_public: !isPrivate,
       };
       // 2026-07-12: logSlime now returns a result union so moderation
@@ -604,6 +617,51 @@ function LogPageInner() {
                 <p className="text-right text-[11px] text-slime-muted">
                   {form.scent_notes.length}/100
                 </p>
+              </Field>
+
+              {/* 2026-07-12: Condition pill picker. Optional. Matches
+                  the scent strength pattern above. Also drives the
+                  future marketplace listing form. */}
+              <Field label="Condition" optional>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    Object.entries(SLIME_CONDITION_LABELS) as [
+                      SlimeCondition,
+                      string,
+                    ][]
+                  ).map(([level, label]) => {
+                    const active = form.condition === level;
+                    return (
+                      <button
+                        key={level}
+                        type="button"
+                        onClick={() =>
+                          set("condition", active ? null : level)
+                        }
+                        title={SLIME_CONDITION_DESCRIPTIONS[level]}
+                        className="px-3.5 py-2 rounded-full text-sm font-semibold transition-all"
+                        style={{
+                          background: active
+                            ? "rgba(0,240,255,0.14)"
+                            : "rgba(45,10,78,0.3)",
+                          border: active
+                            ? "1px solid rgba(0,240,255,0.5)"
+                            : "1px solid rgba(45,10,78,0.5)",
+                          color: active
+                            ? "#00F0FF"
+                            : "rgba(245,245,245,0.5)",
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {form.condition && (
+                  <p className="text-[11px] text-slime-muted mt-1.5">
+                    {SLIME_CONDITION_DESCRIPTIONS[form.condition]}
+                  </p>
+                )}
               </Field>
 
               <Field label="Purchase Price ($)" optional>

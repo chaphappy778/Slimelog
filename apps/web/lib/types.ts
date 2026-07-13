@@ -57,6 +57,35 @@ export const SCENT_STRENGTH_LABELS: Record<ScentStrength, string> = {
   strong: "Strong",
 };
 
+// ─── SlimeCondition (2026-07-12) ─────────────────────────────────────────
+// Physical condition of a logged slime. Serves personal-shelf tracking
+// today (so users can note a slime that's dried out or is still sealed).
+// Also feeds the marketplace resale flow later: sellers list a slime
+// with its logged condition, buyers know what they're getting.
+
+export type SlimeCondition =
+  | "sealed"
+  | "new"
+  | "like_new"
+  | "used"
+  | "well_loved";
+
+export const SLIME_CONDITION_LABELS: Record<SlimeCondition, string> = {
+  sealed: "Sealed",
+  new: "New",
+  like_new: "Like new",
+  used: "Used",
+  well_loved: "Well-loved",
+};
+
+export const SLIME_CONDITION_DESCRIPTIONS: Record<SlimeCondition, string> = {
+  sealed: "Never opened",
+  new: "Opened, barely played with",
+  like_new: "Played with a few times, still fresh",
+  used: "Regular play, still in good shape",
+  well_loved: "Heavily played, may need revival",
+};
+
 // ─── Labels & Colors ──────────────────────────────────────────────────────────
 
 export type SlimeBaseType =
@@ -275,6 +304,9 @@ export interface CollectionLog {
   subtype_id: string | null;
   colors: string[] | null;
   scent_strength: ScentStrength | null;
+  // T-condition (2026-07-12) — physical state of the slime; feeds
+  // future marketplace resale flow. See migration 20260712000067.
+  condition: SlimeCondition | null;
   cost_paid: number | null;
   purchase_price: number | null;
   purchased_from: string | null;
@@ -317,6 +349,7 @@ export interface CollectionLogInsert {
   subtype_id?: string | null;
   colors?: string[] | null;
   scent_strength?: ScentStrength | null;
+  condition?: SlimeCondition | null;
   cost_paid?: number | null;
   purchased_from?: string | null;
   purchased_at?: string | null;

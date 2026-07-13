@@ -10,7 +10,11 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import type { SlimeBaseType, ScentStrength } from "@/lib/types";
+import type {
+  SlimeBaseType,
+  ScentStrength,
+  SlimeCondition,
+} from "@/lib/types";
 import {
   moderateText,
   type ModerationField,
@@ -50,6 +54,9 @@ export interface LogSlimeInput {
   scent_strength?: ScentStrength | null;
   // [Change 1 — scent_notes]
   scent_notes?: string | null;
+  // 2026-07-12: physical condition of the slime. Optional. Serves
+  // personal-shelf tracking today; feeds marketplace listing form later.
+  condition?: SlimeCondition | null;
   keywords?: string[];
   colors?: string[];
   image_url?: string;
@@ -218,6 +225,7 @@ async function logSlimeInner(input: LogSlimeInput): Promise<LogSlimeResult> {
       scent_strength: input.scent_strength ?? null,
       // [Change 2 — scent_notes]
       scent_notes: input.scent_notes ?? null,
+      condition: input.condition ?? null,
       colors: input.colors ?? null,
       image_url: input.image_url ?? null,
       notes: cleanedNotes,
@@ -381,6 +389,7 @@ async function updateSlimeLogInner(
       ...(input.scent_notes !== undefined && {
         scent_notes: input.scent_notes,
       }),
+      ...(input.condition !== undefined && { condition: input.condition }),
       ...(input.notes !== undefined && { notes: cleanedNotes }),
       ...(input.purchase_price !== undefined && {
         purchase_price: input.purchase_price,
