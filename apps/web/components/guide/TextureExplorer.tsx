@@ -417,61 +417,9 @@ function TextureDetailSheet({
           className="px-5 pt-4"
           style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 96px)" }}
         >
-          {/* 2026-07-13: hero image at the top of the detail sheet.
-              Tapping opens the full-screen lightbox. Aspect ~16:10.
-              Renders gradient-only fallback when we have no photo. */}
-          {texture.example.imagePath ? (
-            <button
-              type="button"
-              onClick={() =>
-                onOpenImage(
-                  texture.example.imagePath as string,
-                  `${texture.example.slimeName} by ${texture.example.brandName}`,
-                )
-              }
-              aria-label={`View full size photo of ${texture.example.slimeName}`}
-              className="relative rounded-2xl overflow-hidden block w-full active:scale-[0.99] transition-transform"
-              style={{
-                aspectRatio: "16 / 10",
-                background: `linear-gradient(135deg, ${texture.gradientFrom}, ${texture.gradientTo})`,
-                border: `1px solid ${texture.accentColor}55`,
-                padding: 0,
-                marginBottom: 16,
-              }}
-            >
-              <Image
-                src={texture.example.imagePath}
-                alt=""
-                fill
-                sizes="(max-width: 640px) 92vw, 480px"
-                style={{ objectFit: "cover" }}
-              />
-              {/* Zoom hint chip */}
-              <span
-                aria-hidden="true"
-                className="absolute bottom-2.5 right-2.5 flex items-center gap-1 rounded-full px-2.5 py-1 text-[10.5px] font-bold"
-                style={{
-                  background: "rgba(10,0,20,0.65)",
-                  color: "#FFFFFF",
-                  border: "1px solid rgba(255,255,255,0.18)",
-                  backdropFilter: "blur(6px)",
-                }}
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  className="w-3 h-3"
-                  aria-hidden="true"
-                >
-                  <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
-                </svg>
-                Tap to view
-              </span>
-            </button>
-          ) : null}
+          {/* 2026-07-13: hero image removed per user feedback — the
+              lightbox trigger is the small example thumbnail below.
+              Full-screen viewer opens on tap. */}
 
           {/* Name — big magenta→accent gradient text */}
           <h2

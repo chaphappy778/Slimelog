@@ -244,7 +244,9 @@ export default async function GuidePage() {
               fontFamily: "Montserrat, sans-serif",
               fontWeight: 900,
               // 2026-07-13: forced line break — "Everything" on line 1,
-              // pink-gradient "slime, decoded." on line 2.
+              // "slime, decoded" on line 2. Only "decoded" carries the
+              // pink gradient — putting the whole line in gradient
+              // washed out the standout word.
               fontSize: 44,
               lineHeight: 1.02,
               letterSpacing: "-0.03em",
@@ -252,6 +254,7 @@ export default async function GuidePage() {
           >
             Everything
             <br />
+            slime,{" "}
             <span
               style={{
                 background:
@@ -261,7 +264,7 @@ export default async function GuidePage() {
                 backgroundClip: "text",
               }}
             >
-              slime, decoded.
+              decoded.
             </span>
           </h1>
           <p

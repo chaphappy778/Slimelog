@@ -118,10 +118,20 @@ export default function GuideNav({ parts }: GuideNavProps) {
   }, [activeId]);
 
   // Hash-on-load: /guide#part-6 scrolls to Part Six on first paint.
+  //
+  // 2026-07-13: if there's no hash, force scroll to top on mount. The
+  // browser's automatic scroll-restoration was landing users on Part 2
+  // (or wherever they last scrolled) when re-entering /guide from the
+  // hamburger, since Next.js soft nav preserves scroll history. The
+  // setTimeout(0) yields to the browser's own restore attempt so our
+  // override wins.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const hash = window.location.hash?.replace(/^#/, "");
-    if (!hash) return;
+    if (!hash) {
+      window.setTimeout(() => window.scrollTo({ top: 0 }), 0);
+      return;
+    }
     if (hash.startsWith("part-")) {
       window.setTimeout(() => {
         const el = document.getElementById(hash);
@@ -158,8 +168,13 @@ export default function GuideNav({ parts }: GuideNavProps) {
         style={{
           position: isPinned ? "fixed" : "relative",
           top: isPinned ? PINNED_TOP_PX : undefined,
-          left: isPinned ? 0 : undefined,
-          right: isPinned ? 0 : undefined,
+          // 2026-07-13: match PageWrapper's `px-1.5` (6px each side) so
+          // the fixed pill row aligns with the inline width. Without
+          // this, the fixed state escaped PageWrapper's padding and the
+          // pill row briefly grew wider on the transition, causing the
+          // visual "size shift" you noticed.
+          left: isPinned ? 6 : undefined,
+          right: isPinned ? 6 : undefined,
           background:
             "linear-gradient(180deg, rgba(15,0,24,0.94), rgba(15,0,24,0.55))",
           backdropFilter: "blur(12px)",
