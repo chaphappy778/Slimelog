@@ -23,6 +23,7 @@ import {
   ChevronRight,
   Shield,
   Share2,
+  ShoppingBag,
 } from "lucide-react";
 
 type UserProfile = {
@@ -262,6 +263,36 @@ export default function SlimeMenu() {
             </Link>
 
             <Divider />
+
+            {/* T113 (2026-07-12): marketplace waitlist entry point.
+                Subtle magenta pill only for signed-in users. Sits above
+                "My Stuff" because it's forward-looking, not a permanent
+                nav item — it moves once the marketplace ships. */}
+            {user && (
+              <div className="px-4 pt-3 pb-1">
+                <Link
+                  href="/marketplace"
+                  onClick={handleClose}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-100 active:scale-[0.97]"
+                  style={{
+                    background: "rgba(204,68,255,0.10)",
+                    border: "1px solid rgba(204,68,255,0.35)",
+                    color: "#E4A3FF",
+                  }}
+                >
+                  <span className="w-5 flex items-center justify-center shrink-0">
+                    <ShoppingBag className="w-5 h-5" />
+                  </span>
+                  <span className="flex-1">Marketplace coming soon</span>
+                  <span
+                    className="text-[10px] uppercase tracking-widest font-bold"
+                    style={{ color: "#D976FF" }}
+                  >
+                    New
+                  </span>
+                </Link>
+              </div>
+            )}
 
             <NavSection title="My Stuff">
               <NavItem

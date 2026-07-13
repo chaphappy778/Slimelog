@@ -576,3 +576,27 @@ export interface NotificationsResponse {
   notifications: Notification[];
   unread_count: number;
 }
+
+// ─── Marketplace waitlist (T113 2026-07-12) ───────────────────────────────────
+//
+// See migration 20260712000068_marketplace_waitlist.sql. One row per
+// user; POST /api/marketplace/waitlist upserts on conflict so users
+// can add or update their research answers after the initial intent tap.
+
+export type WaitlistIntent = "sell" | "buy" | "both";
+
+export type WaitlistSpendBand = "10-25" | "25-50" | "50-100" | "100+";
+
+export type WaitlistSellVolume = "1-5" | "6-20" | "21-50" | "50+";
+
+export interface MarketplaceWaitlistEntry {
+  id: string;
+  user_id: string;
+  intent: WaitlistIntent;
+  brand_ids: string[] | null;
+  spend_band: WaitlistSpendBand | null;
+  sell_volume: WaitlistSellVolume | null;
+  trust_need: string | null;
+  created_at: string;
+  updated_at: string;
+}

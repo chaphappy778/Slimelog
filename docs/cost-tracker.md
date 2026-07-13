@@ -41,6 +41,24 @@ implemented mitigation and the concern is gone.
 
 ---
 
+### 2026-07-12 — Marketplace waitlist position calc (DB Query)
+
+**Query:** `SELECT COUNT(*) FROM marketplace_waitlist WHERE created_at <= (my_row.created_at)` plus a bare `COUNT(*)` for the community total. Runs on every POST to `/api/marketplace/waitlist` and every GET to `/api/marketplace/waitlist/position` (mount of `/marketplace`).
+
+**Current cost:** trivial pre-launch. Table starts at zero rows; even at ~1k entries the indexed `created_at` btree scan is sub-millisecond.
+
+**What makes it grow:** each call is O(N) over the waitlist. N doubles every time we do a growth push. Real cliff around 10k+ entries + heavy mount rate (every /marketplace visit triggers the GET) — a viral moment could turn this into a per-request table scan.
+
+**Mitigation path (order of preference):**
+
+1. **Cache the total** at the route-handler layer with a 60s TTL. Position is user-specific but total is not, and the total dominates when the table gets big.
+2. **Materialize a position column** on the row itself, set at insert time as `SELECT COUNT(*) + 1 FROM marketplace_waitlist`. Reads are O(1) forever. Insert becomes O(N) once, then O(1) reads — better tradeoff at scale.
+3. **Rank view** — materialized `marketplace_waitlist_ranked(user_id, position)` refreshed hourly or on insert via trigger. Overkill until we're past 10k entries with meaningful traffic.
+
+**Related:** T113 (Marketplace Coming Soon page).
+
+---
+
 ## Retired / resolved
 
 *(none yet)*
