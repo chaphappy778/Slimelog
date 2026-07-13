@@ -37,6 +37,76 @@ function getStatusDotColor(status: string | null): string {
   return "rgba(255,255,255,0.3)";
 }
 
+// [Discover V1 — 2026-07-13] T-minus pill computation. Returns null
+// when the drop has no date and no status. LIVE takes priority over
+// countdown so a currently-live drop always reads as LIVE, not
+// "T-6h ago".
+interface TminusPill {
+  label: string;
+  variant: "live" | "soon" | "far";
+}
+
+function computeTminus(
+  status: string | null,
+  dateStr: string | null,
+): TminusPill | null {
+  if (status === "live") return { label: "LIVE", variant: "live" };
+  if (!dateStr) return null;
+
+  const dropMs = new Date(dateStr).getTime();
+  if (Number.isNaN(dropMs)) return null;
+
+  const nowMs = Date.now();
+  const deltaMs = dropMs - nowMs;
+
+  // If the drop was in the past and status isn't "live", we still show
+  // nothing — the caller filters those out at the query layer usually.
+  if (deltaMs <= 0) return null;
+
+  const hours = deltaMs / (1000 * 60 * 60);
+  const days = hours / 24;
+  const weeks = days / 7;
+
+  // Under 24h: countdown in hours. Under a week: in days. Beyond: in
+  // weeks, capped at a rounded number.
+  if (hours < 24) {
+    const h = Math.max(1, Math.round(hours));
+    return { label: `T-${h}h`, variant: "soon" };
+  }
+  if (days < 7) {
+    const d = Math.round(days);
+    return { label: `T-${d}d`, variant: "soon" };
+  }
+  const w = Math.max(1, Math.round(weeks));
+  return { label: `T-${w}w`, variant: "far" };
+}
+
+// Style helper for the pill. Keeps the color language consistent with
+// the section it lives in: cyan for far-out drops, green + gradient
+// for LIVE, gold for imminent (under a week).
+function tminusStyle(variant: "live" | "soon" | "far"): React.CSSProperties {
+  if (variant === "live") {
+    return {
+      background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+      color: "#04110A",
+      border: "1px solid transparent",
+      boxShadow: "0 0 14px rgba(57,255,20,0.6)",
+    };
+  }
+  if (variant === "soon") {
+    return {
+      background: "rgba(255,174,59,0.14)",
+      color: "#FFD24A",
+      border: "1px solid rgba(255,174,59,0.5)",
+    };
+  }
+  return {
+    background: "rgba(0,240,255,0.10)",
+    color: "#7DF6FF",
+    border: "1px solid rgba(0,240,255,0.4)",
+  };
+}
+
 export default function FeaturedDropsCarousel({
   drops,
 }: FeaturedDropsCarouselProps) {
@@ -101,6 +171,7 @@ export default function FeaturedDropsCarousel({
             const brandInitial = (drop.brand_name?.[0] ?? "?").toUpperCase();
             const dropInitial = (drop.name?.[0] ?? "?").toUpperCase();
             const dotColor = getStatusDotColor(drop.status);
+            const tminus = computeTminus(drop.status, drop.drop_at);
 
             return (
               <Link
@@ -123,6 +194,31 @@ export default function FeaturedDropsCarousel({
                     className="relative w-full overflow-hidden"
                     style={{ height: 120 }}
                   >
+                    {/* [Discover V1 2026-07-13] T-minus pill, top-right of
+                        the cover. LIVE renders as a green→cyan gradient
+                        chip; imminent drops (under a week) render gold;
+                        further out drops render cyan-outlined. */}
+                    {tminus && (
+                      <span
+                        className="absolute rounded-full font-mono font-bold"
+                        style={{
+                          top: 8,
+                          right: 8,
+                          padding: "3px 9px",
+                          fontSize: 10.5,
+                          letterSpacing: "0.02em",
+                          zIndex: 2,
+                          ...tminusStyle(tminus.variant),
+                        }}
+                        aria-label={
+                          tminus.variant === "live"
+                            ? "Live now"
+                            : `Drops in ${tminus.label.replace("T-", "")}`
+                        }
+                      >
+                        {tminus.label}
+                      </span>
+                    )}
                     {drop.cover_image_url ? (
                       <Image
                         src={drop.cover_image_url}

@@ -1,11 +1,19 @@
 // apps/web/app/discover/page.tsx
-// [T74-A] Discover page redesign — type carousel, popular users, featured drops
-// [T74-A polish] Keywords merged into Slime Types section, carousel sizes removed
-// [T32f 2026-07-13] `?sort=<axis>` deep-links from /how-to-rate. Each axis
-//   footer on how-to-rate links to /discover?sort=<axis-slug>. This page
-//   maps the slug to the underlying avg column, changes the ORDER BY,
-//   and passes the axis down to the client so the rating-bar readout and
-//   sort math both use that axis instead of avg_overall.
+// [T74-A] Discover page redesign — type carousel, popular users, featured drops.
+// [T32f 2026-07-13] `?sort=<axis>` deep-links from /how-to-rate.
+// [Discover V1 — 2026-07-13] Design rework based on the Discover
+//   Evaluation package. Section order: Search hero → Trending pulse
+//   (or early-days empty state) → Types → Suggest a brand → Keywords
+//   → Top rated (with medal tiles for top 3) → Popular collectors
+//   (with substance line) → Upcoming drops (with T-minus pills).
+//   Trending pulse gates on `EARLY_DAYS_THRESHOLD` from
+//   `TrendingPulse.tsx` — below that we render the "seed the
+//   community" empty state instead so the widget doesn't look sad
+//   pre-launch. Collector cards now carry a specialty line
+//   ("Butter specialist · 340 slimes · avg ★4.2 given") computed
+//   from a single per-batch collection_logs query joined to slimes.
+//   Bell / For-you / notifications-inbox are intentionally NOT here —
+//   deferred to a later phase per the Discover eval review.
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
@@ -14,12 +22,21 @@ import PageHeader from "@/components/PageHeader";
 import PageWrapper from "@/components/PageWrapper";
 import TypeCarousel from "@/components/discover/TypeCarousel";
 import PopularUsersCarousel from "@/components/discover/PopularUsersCarousel";
+import type { PopularUser } from "@/components/discover/PopularUsersCarousel";
 import FeaturedDropsCarousel from "@/components/discover/FeaturedDropsCarousel";
 import DiscoverSlimesClient from "@/components/discover/DiscoverSlimesClient";
 import type {
   TopRatedSlime,
   SortAxis,
 } from "@/components/discover/DiscoverSlimesClient";
+import SearchHero from "@/components/discover/SearchHero";
+import TrendingPulse, {
+  TrendingPulseEmpty,
+  EARLY_DAYS_THRESHOLD,
+  type MomentumRow,
+} from "@/components/discover/TrendingPulse";
+import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
+import type { SlimeBaseType } from "@/lib/types";
 
 // ─── Axis slug → DB column mapping ──────────────────────────────────────
 // Public slugs match /how-to-rate ids. DB columns predate the six-axis
@@ -42,15 +59,6 @@ function normalizeAxisSlug(raw: string | undefined): AxisSlug {
   return (lower in AXIS_TO_COLUMN ? lower : "overall") as AxisSlug;
 }
 
-type PopularUser = {
-  id: string;
-  username: string;
-  display_name: string | null;
-  avatar_url: string | null;
-  is_premium: boolean;
-  follower_count: number;
-};
-
 export default async function DiscoverPage({
   searchParams,
 }: {
@@ -68,42 +76,62 @@ export default async function DiscoverPage({
     { cookies: { get: (name) => cookieStore.get(name)?.value } },
   );
 
-  const [topRatedResult, dropsResult, tagsResult, followCountResult] =
-    await Promise.all([
-      supabase
-        .from("slimes")
-        .select(
-          "id, name, base_type, subtype_id, image_url, avg_overall, avg_texture, avg_scent, avg_sound, avg_drizzle, avg_creativity, avg_sensory_fit, total_ratings, brand_id, brands(name, slug), subtypes(name)",
-        )
-        .not(sortColumn, "is", null)
-        .gte("total_ratings", 3)
-        .order(sortColumn, { ascending: false })
-        .order("total_ratings", { ascending: false })
-        .limit(20),
+  // ─── Query time boundaries ────────────────────────────────────────────
+  // We fetch collection_logs from the last 8 days so the pulse can
+  // compute both "today" and a 7-day sparkline in a single scan.
+  const now = new Date();
+  const eightDaysAgo = new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000);
 
-      supabase
-        .from("upcoming_drops")
-        .select(
-          "id, name, drop_at, status, brand_name, brand_slug, logo_url, cover_image_url",
-        )
-        .in("status", ["announced", "live"])
-        .order("drop_at", { ascending: true })
-        .limit(20),
+  const [
+    topRatedResult,
+    dropsResult,
+    tagsResult,
+    followCountResult,
+    pulseLogsResult,
+  ] = await Promise.all([
+    supabase
+      .from("slimes")
+      .select(
+        "id, name, base_type, subtype_id, image_url, avg_overall, avg_texture, avg_scent, avg_sound, avg_drizzle, avg_creativity, avg_sensory_fit, total_ratings, brand_id, brands(name, slug), subtypes(name)",
+      )
+      .not(sortColumn, "is", null)
+      .gte("total_ratings", 3)
+      .order(sortColumn, { ascending: false })
+      .order("total_ratings", { ascending: false })
+      .limit(20),
 
-      supabase
-        .from("tags")
-        .select("id, name, use_count")
-        .order("use_count", { ascending: false })
-        .limit(20),
+    supabase
+      .from("upcoming_drops")
+      .select(
+        "id, name, drop_at, status, brand_name, brand_slug, logo_url, cover_image_url",
+      )
+      .in("status", ["announced", "live"])
+      .order("drop_at", { ascending: true })
+      .limit(20),
 
-      supabase
-        .from("profile_follow_counts")
-        .select("id, username, follower_count")
-        .order("follower_count", { ascending: false })
-        .limit(12),
-    ]);
+    supabase
+      .from("tags")
+      .select("id, name, use_count")
+      .order("use_count", { ascending: false })
+      .limit(20),
 
-  // Normalize slimes join
+    supabase
+      .from("profile_follow_counts")
+      .select("id, username, follower_count")
+      .order("follower_count", { ascending: false })
+      .limit(12),
+
+    // [Discover V1] Pulse feed. We only need created_at + slime_id to
+    // hydrate today's count, the 7-day sparkline, and the top climbing
+    // base types (joined via slimes.base_type). No user_id / rating
+    // fields needed here — collector enrichment fires as its own query.
+    supabase
+      .from("collection_logs")
+      .select("created_at, slimes(base_type)")
+      .gte("created_at", eightDaysAgo.toISOString()),
+  ]);
+
+  // ─── Top-rated slimes normalization ───────────────────────────────────
   const rawSlimes = topRatedResult.error ? [] : (topRatedResult.data ?? []);
   const topSlimes: TopRatedSlime[] = rawSlimes.map((s) => ({
     ...s,
@@ -117,7 +145,66 @@ export default async function DiscoverPage({
     ? []
     : (tagsResult.data ?? []).map(({ id, name }) => ({ id, name }));
 
-  // Fetch profiles for popular users
+  // ─── Trending pulse aggregation ───────────────────────────────────────
+  // Compute logsToday, sparkline (7 days ending today), and up to 3
+  // momentum rows from base_type volume over the last 7 days. This
+  // runs entirely in JS on data we already fetched, so no extra round-
+  // trips. Pre-launch these numbers will usually be under the threshold
+  // and we'll render the early-days empty state instead.
+  const pulseLogs = pulseLogsResult.error ? [] : (pulseLogsResult.data ?? []);
+
+  // Start-of-day boundaries for the last 7 days (index 6 = today,
+  // index 0 = 7 days ago). Server tz assumed acceptable for now — a
+  // more careful pass would use the user's tz.
+  const dayBuckets: number[] = Array(7).fill(0);
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfToday_ms = startOfToday.getTime();
+
+  const baseTypeCountsLast7: Record<string, number> = {};
+  let logsToday = 0;
+
+  for (const row of pulseLogs) {
+    if (!row.created_at) continue;
+    const t = new Date(row.created_at).getTime();
+    const daysAgo = Math.floor((startOfToday_ms - t) / (24 * 60 * 60 * 1000));
+
+    if (daysAgo < 0) {
+      // Log is stamped today (or in the future by clock skew).
+      logsToday += 1;
+      dayBuckets[6] += 1;
+    } else if (daysAgo < 7) {
+      dayBuckets[6 - daysAgo] += 1;
+    }
+
+    // Base-type climbing counts, only for last-7-day rows.
+    if (daysAgo < 7) {
+      const rawSlime = row.slimes;
+      const s = Array.isArray(rawSlime) ? rawSlime[0] : rawSlime;
+      const base_type = s?.base_type ?? null;
+      if (base_type) {
+        baseTypeCountsLast7[base_type] =
+          (baseTypeCountsLast7[base_type] ?? 0) + 1;
+      }
+    }
+  }
+
+  const logsLast7Days = dayBuckets.reduce((a, b) => a + b, 0);
+
+  // Top 3 climbing base types (descending count).
+  const momentum: MomentumRow[] = Object.entries(baseTypeCountsLast7)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([base_type, count]) => ({
+      marker: "up" as const,
+      label:
+        SLIME_BASE_TYPE_LABELS[base_type as SlimeBaseType] ??
+        base_type.replace(/_/g, " "),
+      sub: "climbing this week",
+      delta: `+${count} logs`,
+    }));
+
+  // ─── Popular users + collector enrichment ─────────────────────────────
   const followData = followCountResult.error
     ? []
     : (followCountResult.data ?? []);
@@ -125,14 +212,76 @@ export default async function DiscoverPage({
   let popularUsers: PopularUser[] = [];
   if (followData.length > 0) {
     const userIds = followData.map((u) => u.id);
-    const { data: profileData } = await supabase
-      .from("profiles_public")
-      .select("id, username, display_name, avatar_url, is_premium")
-      .in("id", userIds);
+
+    // Enrichment: fetch every collection_log for the popular users so
+    // we can compute favorite base type, slime count, and average
+    // rating given in one batch. This is O(sum of shelf sizes) — safe
+    // pre-launch at 12 users × <100 shelves. Cost-tracker entry below.
+    const [profileResult, enrichmentResult] = await Promise.all([
+      supabase
+        .from("profiles_public")
+        .select("id, username, display_name, avatar_url, is_premium")
+        .in("id", userIds),
+      supabase
+        .from("collection_logs")
+        .select("user_id, rating_overall, slimes(base_type)")
+        .in("user_id", userIds),
+    ]);
+
+    const profileData = profileResult.data ?? [];
+    const enrichRows = enrichmentResult.error
+      ? []
+      : (enrichmentResult.data ?? []);
+
+    // Reduce enrichment rows into a per-user aggregate.
+    const perUser: Record<
+      string,
+      { baseTypes: Record<string, number>; ratings: number[]; count: number }
+    > = {};
+    for (const uid of userIds) {
+      perUser[uid] = { baseTypes: {}, ratings: [], count: 0 };
+    }
+    for (const row of enrichRows) {
+      const u = perUser[row.user_id];
+      if (!u) continue;
+      u.count += 1;
+      const rawSlime = row.slimes;
+      const s = Array.isArray(rawSlime) ? rawSlime[0] : rawSlime;
+      const bt = s?.base_type ?? null;
+      if (bt) {
+        u.baseTypes[bt] = (u.baseTypes[bt] ?? 0) + 1;
+      }
+      if (typeof row.rating_overall === "number") {
+        u.ratings.push(row.rating_overall);
+      }
+    }
 
     popularUsers = followData
-      .map((f) => {
-        const profile = (profileData ?? []).find((p) => p.id === f.id);
+      .map((f): PopularUser => {
+        const profile = profileData.find((p) => p.id === f.id);
+        const agg = perUser[f.id] ?? {
+          baseTypes: {},
+          ratings: [],
+          count: 0,
+        };
+
+        // Favorite base type = mode of the user's log base_types.
+        // Requires >= 3 logs before we call anyone a specialist —
+        // otherwise a single Butter log turns everyone into a
+        // "Butter specialist" and the line loses meaning.
+        let favorite_base_type: string | null = null;
+        if (agg.count >= 3) {
+          const sorted = Object.entries(agg.baseTypes).sort(
+            (a, b) => b[1] - a[1],
+          );
+          if (sorted.length > 0) favorite_base_type = sorted[0][0];
+        }
+
+        const avg_rating_given =
+          agg.ratings.length > 0
+            ? agg.ratings.reduce((a, b) => a + b, 0) / agg.ratings.length
+            : null;
+
         return {
           id: f.id,
           username: f.username ?? "",
@@ -140,49 +289,58 @@ export default async function DiscoverPage({
           avatar_url: profile?.avatar_url ?? null,
           is_premium: profile?.is_premium ?? false,
           follower_count: Number(f.follower_count ?? 0),
+          favorite_base_type,
+          slime_count: agg.count > 0 ? agg.count : null,
+          avg_rating_given,
         };
       })
       .filter((u) => u.username);
   }
+
+  // Whether to show the pulse widget or the early-days empty state.
+  const showPulse = logsLast7Days >= EARLY_DAYS_THRESHOLD;
 
   return (
     <PageWrapper dots glow="cyan">
       <PageHeader />
 
       <div className="pt-14 pb-24">
-        {/* [Change 1] Search pill — small cyan pill, hugs content */}
-        <div className="flex justify-center px-4 pt-6 pb-4">
-          <Link
-            href="/search"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold"
-            style={{
-              background: "rgba(0,240,255,0.08)",
-              border: "1px solid rgba(0,240,255,0.5)",
-              color: "#00F0FF",
-            }}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.35-4.35" />
-            </svg>
-            Search
-          </Link>
-        </div>
+        {/* ── Search hero ────────────────────────────────────────────
+            Replaces the small "Search" pill. Full-width input,
+            routes to /search?q=<text> on Enter. Typeahead is V2. */}
+        <SearchHero />
 
-        {/* T110: subtle "suggest a brand" CTA — purple-outlined card with
-            a magenta accent link. Lives above the type carousel so it
-            surfaces to anyone browsing Discover, not just people who
-            scroll to the end. */}
+        {/* ── Trending pulse / early-days state ───────────────────── */}
+        {showPulse ? (
+          <TrendingPulse
+            logsToday={logsToday}
+            logsLast7Days={logsLast7Days}
+            sparkline={dayBuckets}
+            momentum={momentum}
+          />
+        ) : (
+          <TrendingPulseEmpty />
+        )}
+
+        {/* ── Section: Slime Types ───────────────────────────────── */}
+        <section className="mb-6">
+          <div className="flex items-center justify-between px-4 mb-3">
+            <p className="section-label">Slime Types</p>
+            <Link
+              href="/guide#part-1"
+              className="text-[11.5px] font-semibold"
+              style={{ color: "rgba(245,245,245,0.5)" }}
+            >
+              What are these? ›
+            </Link>
+          </div>
+          <TypeCarousel />
+        </section>
+
+        {/* ── Suggest a brand card ───────────────────────────────────
+            T110 CTA lives here in V1 — between Types and Keywords —
+            still surfaces mid-scroll before the leaderboard, without
+            competing with the hero pulse widget. */}
         <div className="px-4 mb-6">
           <Link
             href="/submit-brand"
@@ -235,19 +393,23 @@ export default async function DiscoverPage({
           </Link>
         </div>
 
-        {/* Section: Slime Types + Keywords combined */}
-        <section className="mb-6">
-          <div className="flex items-center justify-between px-4 mb-3">
-            <p className="section-label">Slime Types</p>
-          </div>
-
-          {/* Type cards carousel */}
-          <TypeCarousel />
-
-          {/* Keywords row — lives below type carousel, inside same section */}
-          {trendingTags.length > 0 && (
+        {/* ── Section: Trending Keywords ─────────────────────────────
+            Split out from the type section per Design's V1 proposal.
+            The relationship reads cleaner as two distinct rows. */}
+        {trendingTags.length > 0 && (
+          <section className="mb-6">
+            <div className="flex items-center justify-between px-4 mb-3">
+              <p className="section-label">Trending Keywords</p>
+              <Link
+                href="/discover/keyword"
+                className="text-[11.5px] font-semibold"
+                style={{ color: "rgba(245,245,245,0.5)" }}
+              >
+                Search tags ›
+              </Link>
+            </div>
             <div
-              className="flex gap-2 overflow-x-auto scrollbar-none px-4 mt-4"
+              className="flex gap-2 overflow-x-auto scrollbar-none px-4"
               style={
                 {
                   msOverflowStyle: "none",
@@ -255,7 +417,6 @@ export default async function DiscoverPage({
                 } as React.CSSProperties
               }
             >
-              {/* Search icon pill — routes to keyword search page */}
               <Link
                 href="/discover/keyword"
                 className="shrink-0 flex items-center justify-center rounded-full transition-colors"
@@ -283,8 +444,6 @@ export default async function DiscoverPage({
                   <path d="m21 21-4.35-4.35" />
                 </svg>
               </Link>
-
-              {/* Keyword pills */}
               {trendingTags.map((tag) => (
                 <Link
                   key={tag.id}
@@ -292,7 +451,7 @@ export default async function DiscoverPage({
                   className="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
                   style={{
                     background: "rgba(45,10,78,0.3)",
-                    color: "rgba(245,245,245,0.6)",
+                    color: "rgba(245,245,245,0.7)",
                     border: "1px solid rgba(45,10,78,0.5)",
                     whiteSpace: "nowrap",
                   }}
@@ -301,23 +460,15 @@ export default async function DiscoverPage({
                 </Link>
               ))}
             </div>
-          )}
-        </section>
-
-        {/* Section: Popular Collectors */}
-        {popularUsers.length > 0 && (
-          <section className="mb-6">
-            <div className="flex items-center justify-between px-4 mb-3">
-              <p className="section-label">Popular Collectors</p>
-            </div>
-            <PopularUsersCarousel users={popularUsers} />
           </section>
         )}
 
-        {/* Section: Top Rated Slimes.
-            [T32f 2026-07-13] When ?sort=<axis> is set, the label becomes
-            "Top Rated by <Axis>" and the axis is passed to the client so
-            it can display the axis-specific rating value + sort. */}
+        {/* ── Section: Top Rated Slimes (with medal tiles) ───────────
+            [T32f 2026-07-13] When ?sort=<axis> is set, the label
+            becomes "Top Rated by <Axis>" and the axis is passed to
+            the client so the rating-bar readout + sort use that axis.
+            [Discover V1] Rank 1-3 render as medal tiles inside the
+            client. */}
         <section className="mb-6 px-4">
           <div className="flex items-center justify-between mb-3">
             <p className="section-label">
@@ -337,7 +488,26 @@ export default async function DiscoverPage({
           />
         </section>
 
-        {/* Section: Featured Drops */}
+        {/* ── Section: Popular Collectors ────────────────────────────
+            Cards now carry a substance line: fav base type ·
+            shelf size · avg rating given. Discovery signal, not
+            just follower count. */}
+        {popularUsers.length > 0 && (
+          <section className="mb-6">
+            <div className="flex items-center justify-between px-4 mb-3">
+              <p className="section-label">Popular Collectors</p>
+              <span
+                className="text-[11.5px]"
+                style={{ color: "rgba(245,245,245,0.5)" }}
+              >
+                Top shelves
+              </span>
+            </div>
+            <PopularUsersCarousel users={popularUsers} />
+          </section>
+        )}
+
+        {/* ── Section: Upcoming Drops (with T-minus pills) ─────────── */}
         <section className="mb-6">
           <div className="flex items-center justify-between px-4 mb-3">
             <p className="section-label" style={{ color: "#FF00E5" }}>

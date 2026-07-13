@@ -83,46 +83,58 @@ function RatingBar({ avg }: { avg: number | null }) {
   );
 }
 
+// [Discover V1 — 2026-07-13] Medal tiles for top 3. Rank 1 gets the
+// signature green→cyan gradient (matches the primary CTA), rank 2 a
+// silver gradient, rank 3 a bronze gradient. Rank 4+ stays as a
+// muted tile. Design's proposal was to reward the top of the list
+// without making the whole row a hero card (leaderboards should
+// stay dense).
+const MEDAL_STYLES: Record<number, React.CSSProperties> = {
+  1: {
+    background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+    color: "#04110A",
+    boxShadow: "0 0 14px rgba(57,255,20,0.55)",
+    border: "1px solid transparent",
+  },
+  2: {
+    background: "linear-gradient(135deg, #E6E6E6, #9CA3AF)",
+    color: "#0F0018",
+    boxShadow: "0 0 10px rgba(230,230,230,0.30)",
+    border: "1px solid rgba(230,230,230,0.5)",
+  },
+  3: {
+    background: "linear-gradient(135deg, #FFAE3B, #B4571B)",
+    color: "#2A1500",
+    boxShadow: "0 0 10px rgba(255,174,59,0.35)",
+    border: "1px solid rgba(255,174,59,0.5)",
+  },
+};
+
 function RankBadge({ rank }: { rank: number }) {
-  if (rank === 1) {
+  const medal = MEDAL_STYLES[rank];
+  if (medal) {
     return (
       <div
-        className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-sm font-black"
+        className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-base font-black"
         style={{
-          background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-          color: "#0A0A0A",
+          fontFamily: "Montserrat, sans-serif",
+          ...medal,
         }}
-        aria-label="Rank 1"
+        aria-label={`Rank ${rank}`}
       >
-        1
-      </div>
-    );
-  }
-  if (rank === 2) {
-    return (
-      <div
-        className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-sm font-black"
-        style={{ background: "rgba(192,192,192,0.2)", color: "#C0C0C0" }}
-        aria-label="Rank 2"
-      >
-        2
-      </div>
-    );
-  }
-  if (rank === 3) {
-    return (
-      <div
-        className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-sm font-black"
-        style={{ background: "rgba(205,127,50,0.2)", color: "#CD7F32" }}
-        aria-label="Rank 3"
-      >
-        3
+        {rank}
       </div>
     );
   }
   return (
     <div
-      className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-sm font-black bg-slime-surface text-slime-muted"
+      className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-sm font-black"
+      style={{
+        background: "rgba(45,10,78,0.35)",
+        color: "rgba(245,245,245,0.55)",
+        border: "1px solid rgba(45,10,78,0.7)",
+        fontFamily: "Montserrat, sans-serif",
+      }}
       aria-label={`Rank ${rank}`}
     >
       {rank}

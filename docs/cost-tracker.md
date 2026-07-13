@@ -77,6 +77,42 @@ implemented mitigation and the concern is gone.
 
 ---
 
+### 2026-07-13 — Discover V1 pulse feed (DB Query)
+
+**Query:** `SELECT created_at, slimes(base_type) FROM collection_logs WHERE created_at >= now() - interval '8 days'`. Runs on every mount of `/discover`.
+
+**Current cost:** trivial pre-launch. `collection_logs` is small; 8 days of activity is likely under a few hundred rows total during the seed period. Server-side JS aggregation into today count + 7-day sparkline + top climbing base types is O(rows).
+
+**What makes it grow:** unbounded row count over the 8-day window. Once we hit meaningful DAU (~500+ users each logging ~1/day = 4,000 rows over 8 days), the mount-time cost stays sub-100ms but climbs into visible territory. At ~5,000 DAU logging heavily, this becomes the biggest per-mount query on the site.
+
+**Mitigation path (order of preference):**
+
+1. **Cache the pulse payload at the route-handler layer with a 60s TTL** — logs today ticks up on a minute cadence, not per-tap. Single most impactful lever.
+2. **Materialized rollup `discover_pulse_daily(day, total_logs, base_type_counts jsonb)`** refreshed hourly by a trigger on `collection_logs`. Reads become O(8). Overkill until per-request cost becomes visible.
+3. **Streaming counter (`INCR` on Redis or similar)** — rethink territory, requires infra.
+
+**Related:** Discover V1 (Trending pulse). Related doc: `docs/error-tracker.md` for what to watch if aggregation errors.
+
+---
+
+### 2026-07-13 — Discover V1 collector enrichment (DB Query)
+
+**Query:** `SELECT user_id, rating_overall, slimes(base_type) FROM collection_logs WHERE user_id = ANY(:popularUserIds)`. Runs on every mount of `/discover` (when there are popular users).
+
+**Current cost:** trivial. 12 popular users × O(50) shelf logs each = ~600 rows aggregated in JS into per-user favorite base type + slime count + avg rating given. Sub-millisecond.
+
+**What makes it grow:** linear in (popular users count) × (average shelf size). We cap popular users at 12; the shelf size is user-controlled. Power collector at 5,000+ logs alone eats the query budget. Realistic ceiling: 12 × 500 = 6,000 rows, still fine but no longer sub-millisecond.
+
+**Mitigation path (order of preference):**
+
+1. **Persist the aggregate on `profiles_public`** as materialized columns (`favorite_base_type`, `slime_count`, `avg_rating_given`), updated by a trigger on `collection_logs` insert/update/delete. Reads become O(1). Cheapest long-term win.
+2. **Cache the enrichment at the route-handler layer** with a 5-minute TTL keyed on the popular-user-id set. Popular users churn slowly.
+3. **Alternative approach: an RPC / view (`profile_shelf_stats`)** that aggregates on the server side and returns one row per user. Reduces payload size to the browser.
+
+**Related:** Discover V1 (Popular Collectors specialty line).
+
+---
+
 ## Retired / resolved
 
 *(none yet)*
