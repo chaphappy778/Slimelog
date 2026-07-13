@@ -1,8 +1,11 @@
 // apps/web/components/guide/GuideNav.tsx
-// T32 (2026-07-13): Sticky pill row across the top of /guide, with
-// hamburger button that opens a full TOC drawer. IntersectionObserver
-// scroll-spy sets the active pill and auto-scrolls the pill into view
-// inside its row. Also supports hash-on-load navigation.
+// T32 (2026-07-13): Pinned pill row for /guide. Renders inline below
+// the hero on load. On scroll past the hero, JS switches it to
+// position: fixed so it pins under the PageHeader. Bypasses the
+// `position: sticky` route because PageWrapper's `overflow-x-hidden`
+// ancestor kills sticky-attach in some browsers (iOS Safari, some
+// Chrome combos). Also owns the scroll-spy that lights up the active
+// pill + auto-scrolls the row so the active pill stays in frame.
 
 "use client";
 
@@ -17,24 +20,36 @@ interface GuideNavProps {
 // "active". Accounts for the PageHeader (56px) + this nav (~52px) + a
 // bit of breathing room.
 const ACTIVE_OFFSET_PX = 132;
+// Where the pill row locks under the PageHeader when pinned.
+const PINNED_TOP_PX = 56;
 
 export default function GuideNav({ parts }: GuideNavProps) {
   const [activeId, setActiveId] = useState<string>(parts[0]?.id ?? "part-1");
   const [tocOpen, setTocOpen] = useState(false);
+  const [isPinned, setIsPinned] = useState(false);
+  const [navHeight, setNavHeight] = useState<number>(52);
   const pillRowRef = useRef<HTMLDivElement | null>(null);
+  const navWrapperRef = useRef<HTMLDivElement | null>(null);
+  const anchorRef = useRef<HTMLDivElement | null>(null);
   const activeIdRef = useRef(activeId);
 
   useEffect(() => {
     activeIdRef.current = activeId;
   }, [activeId]);
 
-  // Scroll-spy: on scroll, find the last section whose top is above the
-  // active line. Simpler + more reliable than IntersectionObserver here
-  // because our sections vary wildly in height.
+  // Scroll-spy + pin logic. Combined into a single scroll listener so
+  // both fire on the same RAF tick — no double-work, no jank.
+  //
+  // Pinning: we measure the anchor div's position (rendered where the
+  // nav lives inline, right after the hero). When the anchor's top
+  // drops above `PINNED_TOP_PX`, the nav flips to `position: fixed`
+  // and locks under the header. When we scroll back above the anchor,
+  // it releases back to inline.
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     const compute = () => {
+      // ── Scroll-spy ──
       const line = window.scrollY + ACTIVE_OFFSET_PX;
       let candidate = parts[0]?.id ?? "part-1";
       for (const p of parts) {
@@ -45,6 +60,14 @@ export default function GuideNav({ parts }: GuideNavProps) {
       }
       if (candidate !== activeIdRef.current) {
         setActiveId(candidate);
+      }
+
+      // ── Pin toggle ──
+      const anchor = anchorRef.current;
+      if (anchor) {
+        const anchorTop = anchor.getBoundingClientRect().top;
+        const shouldPin = anchorTop <= PINNED_TOP_PX;
+        setIsPinned((prev) => (prev === shouldPin ? prev : shouldPin));
       }
     };
 
@@ -66,6 +89,21 @@ export default function GuideNav({ parts }: GuideNavProps) {
       if (raf) window.cancelAnimationFrame(raf);
     };
   }, [parts]);
+
+  // Measure the pill row's height so the placeholder anchor reserves
+  // the right amount of layout space when the nav goes fixed.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const measure = () => {
+      const wrapper = navWrapperRef.current;
+      if (!wrapper) return;
+      const h = wrapper.getBoundingClientRect().height;
+      if (h > 0) setNavHeight(h);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
 
   // When active pill changes, auto-scroll the pill row to keep it visible.
   useEffect(() => {
@@ -107,18 +145,26 @@ export default function GuideNav({ parts }: GuideNavProps) {
 
   return (
     <>
+      {/* Anchor div — reserves layout space when the nav goes fixed
+          and gives us a stable geometry reference for the pin toggle. */}
       <div
-        className="sticky z-20"
+        ref={anchorRef}
+        aria-hidden="true"
+        style={{ height: isPinned ? navHeight : 0 }}
+      />
+      <div
+        ref={navWrapperRef}
+        className="z-20"
         style={{
-          top: 56,
-          background: "linear-gradient(180deg, rgba(15,0,24,0.94), rgba(15,0,24,0.55))",
+          position: isPinned ? "fixed" : "relative",
+          top: isPinned ? PINNED_TOP_PX : undefined,
+          left: isPinned ? 0 : undefined,
+          right: isPinned ? 0 : undefined,
+          background:
+            "linear-gradient(180deg, rgba(15,0,24,0.94), rgba(15,0,24,0.55))",
           backdropFilter: "blur(12px)",
           WebkitBackdropFilter: "blur(12px)",
           borderBottom: "1px solid rgba(45,10,78,0.55)",
-          // 2026-07-13: paints a compositor layer so the sticky doesn't
-          // repaint the whole viewport on every scroll frame, and helps
-          // some browsers keep sticky attached under overflow-x-hidden
-          // ancestors (PageWrapper).
           willChange: "transform",
         }}
       >
