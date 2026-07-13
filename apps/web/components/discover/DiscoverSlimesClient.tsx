@@ -253,6 +253,8 @@ function FilterBar({
   activeType,
   onTypeChange,
   availableTypes,
+  axis,
+  onAxisChange,
 }: {
   sortMode: SortMode;
   onSortChange: (v: SortMode) => void;
@@ -261,6 +263,8 @@ function FilterBar({
   activeType: string;
   onTypeChange: (v: string) => void;
   availableTypes: string[];
+  axis: SortAxis | null;
+  onAxisChange: (v: SortAxis | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -276,7 +280,8 @@ function FilterBar({
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  const hasActiveFilters = minRating !== null || activeType !== "all";
+  const hasActiveFilters =
+    minRating !== null || activeType !== "all" || axis !== null;
   const minRatingLabel =
     MIN_RATING_OPTIONS.find((o) => o.value === minRating)?.label ??
     "Any rating";
@@ -365,6 +370,51 @@ function FilterBar({
             minWidth: 220,
           }}
         >
+          {/* Axis picker — lets the user re-sort by any of the six
+              rating dimensions without leaving the page. Default is
+              "Overall" (null axis). */}
+          <div>
+            <p
+              className="text-[10px] font-bold uppercase tracking-wider mb-2"
+              style={{ color: "rgba(245,245,245,0.35)" }}
+            >
+              Sort by axis
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {(
+                [
+                  { value: null, label: "Overall" },
+                  { value: "texture" as SortAxis, label: "Texture" },
+                  { value: "sound" as SortAxis, label: "Sound" },
+                  { value: "aesthetic" as SortAxis, label: "Aesthetic" },
+                  { value: "creativity" as SortAxis, label: "Creativity" },
+                  { value: "quality" as SortAxis, label: "Quality" },
+                ] as { value: SortAxis | null; label: string }[]
+              ).map((opt) => {
+                const active = axis === opt.value;
+                return (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    onClick={() => onAxisChange(opt.value)}
+                    className="px-2.5 py-1 rounded-full text-xs font-semibold transition-colors"
+                    style={{
+                      background: active
+                        ? "rgba(0,240,255,0.15)"
+                        : "rgba(45,10,78,0.4)",
+                      color: active ? "#00F0FF" : "rgba(245,245,245,0.45)",
+                      border: active
+                        ? "1px solid rgba(0,240,255,0.4)"
+                        : "1px solid rgba(45,10,78,0.5)",
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Min rating */}
           <div>
             <p
@@ -466,6 +516,7 @@ function FilterBar({
               onClick={() => {
                 onMinRatingChange(null);
                 onTypeChange("all");
+                onAxisChange(null);
                 setOpen(false);
               }}
               className="text-xs font-semibold text-center py-1.5 rounded-lg transition-colors"
@@ -491,19 +542,30 @@ export default function DiscoverSlimesClient({
 }: {
   initialSlimes: TopRatedSlime[];
   trendingTags?: { id: string; name: string }[];
-  /** When set, sort + rating-bar readout switch to this axis's column. */
+  /**
+   * Initial axis (from ?sort=<axis>). The client can override this
+   * via the filter dropdown — see `axisState` below. When the user
+   * changes the axis via the filter, we DO NOT rewrite the URL for
+   * now; the URL still reflects the deep-link they arrived on.
+   */
   sortAxis?: SortAxis | null;
 }) {
   const [activeType, setActiveType] = useState<string>("all");
   const [minRating, setMinRating] = useState<number | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("top_rated");
   const [activeSubtype, setActiveSubtype] = useState<string | null>(null);
+  // 2026-07-13: axis is now filterable via the dropdown. Initializes
+  // from the deep-link `sortAxis` prop (or `null` = Overall / default)
+  // and can be changed at will. Everything downstream reads
+  // `axisState`, so the "Sorted by X" chip and the section header on
+  // the parent page stay tied to the initial deep-link while the
+  // internal sort follows the user's choice.
+  const [axisState, setAxisState] = useState<SortAxis | null>(sortAxis);
 
   // Column the "top rated" mode + min-rating filter + rating bar look at.
-  // When an axis is set from ?sort=<axis>, everything downstream reads
-  // from that axis instead of avg_overall.
-  const ratingColumn: keyof TopRatedSlime = sortAxis
-    ? AXIS_COLUMN[sortAxis]
+  // Reads from `axisState` (user-controlled) rather than the prop.
+  const ratingColumn: keyof TopRatedSlime = axisState
+    ? AXIS_COLUMN[axisState]
     : "avg_overall";
   const readRating = (s: TopRatedSlime): number | null => {
     const v = s[ratingColumn];
@@ -567,10 +629,11 @@ export default function DiscoverSlimesClient({
 
   return (
     <>
-      {/* [T32f 2026-07-13] Axis-sort chip. Only appears when the page was
-          deep-linked from /how-to-rate?sort=<axis>. Cyan chip identifies
-          which axis is active; magenta Clear link drops the URL param. */}
-      {sortAxis && (
+      {/* [T32f 2026-07-13, expanded 2026-07-13] Axis-sort chip. Shows
+          whenever a non-Overall axis is active, whether from the
+          deep-link ?sort= or from the user's own dropdown pick.
+          Tapping "Clear" resets axis to Overall (URL is untouched). */}
+      {axisState && (
         <div className="mb-3 flex items-center gap-2">
           <span
             className="text-xs"
@@ -586,15 +649,16 @@ export default function DiscoverSlimesClient({
               color: "#00F0FF",
             }}
           >
-            {AXIS_LABEL[sortAxis]}
+            {AXIS_LABEL[axisState]}
           </span>
-          <Link
-            href="/discover"
+          <button
+            type="button"
+            onClick={() => setAxisState(null)}
             className="text-xs font-semibold"
             style={{ color: "#FF7BEB" }}
           >
             Clear
-          </Link>
+          </button>
         </div>
       )}
 
@@ -610,6 +674,8 @@ export default function DiscoverSlimesClient({
           setActiveSubtype(null);
         }}
         availableTypes={availableTypes}
+        axis={axisState}
+        onAxisChange={setAxisState}
       />
 
       {/* Subtype drill-down — only when a type is selected and subtypes exist */}

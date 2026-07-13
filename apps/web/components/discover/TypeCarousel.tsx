@@ -1,28 +1,55 @@
 // apps/web/components/discover/TypeCarousel.tsx
-// [Discover V1 gap-fill 2026-07-13] Full rewrite to match Design's
-// mockup. Tighter cards, radial-gradient tinted photo area, saturated
-// colored blob with glow, two-line meta below (name + slime count).
+// [Discover V1 gap-fill 2026-07-13] Photo-based type cards.
 //
-// Per-type signature colors live in this file — Design proposed a full
-// 16-type color system as V2, so for now we ship a hand-tuned map for
-// the hero types (butter / cloud / floam / jelly / clear / thick /
-// icee / clay + a few) and fall back to a muted-cyan default. The
-// hero-tint colors are more saturated than `SLIME_BASE_TYPE_COLORS`
-// (which is used elsewhere in the app as an accent tone) so we keep
-// them local instead of overwriting the global palette.
+// v1: geometric blobs (placeholder). v2 (this pass): real texture
+// photos from `/public/guide/textures/` — the same hero shots the
+// guide uses on Part 1. Each base type has exactly one photo.
+// Overlay: dark gradient from bottom for legibility of the type
+// name / slime count that sits on top.
 //
-// Anti-AI-art hard rule respected: geometric blob (radial-gradient) +
-// line SVG only. No character mascots, no illustration.
+// Anti-AI-art hard rule respected: these are real user-submitted
+// photos, not generated illustration.
 
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
 import type { SlimeBaseType } from "@/lib/types";
 
-// Signature blob color per type. Saturated hex — used as the blob
-// solid + as the radial-gradient tint alpha behind it. Types not
-// listed here fall through to `DEFAULT_TINT`.
+// Hero photo for each base type. Paths are served from
+// `apps/web/public/guide/textures/`. When a base type is missing a
+// photo (edge case: a new base_type ships before we curate a hero),
+// we fall back to a gradient placeholder — Design's blob treatment
+// is intentionally NOT the fallback so a missing photo reads as
+// "coming soon" instead of "we forgot to update this."
+const HERO_PHOTO: Partial<Record<SlimeBaseType, string>> = {
+  avalanche: "/guide/textures/avalanche-bff.webp",
+  beaded: "/guide/textures/beaded-rodem.webp",
+  butter: "/guide/textures/butter-cats-craft.webp",
+  clay: "/guide/textures/clay-palmetto.webp",
+  clear: "/guide/textures/clear-slime-obsidian.png",
+  cloud: "/guide/textures/cloud-sandy-bros.png",
+  cloud_cream: "/guide/textures/cloud-cream-white-whale.webp",
+  floam: "/guide/textures/floam-dream-glow.webp",
+  fluffy: "/guide/textures/fluffy-ky.webp",
+  hybrid: "/guide/textures/hybrid-bingsu-jelly-clay-ky.webp",
+  icee: "/guide/textures/icee-pilot.webp",
+  jelly: "/guide/textures/jelly-og-slimes.webp",
+  magnetic: "/guide/textures/magnetic-crazy-aarons.webp",
+  sand: "/guide/textures/sand-momo.avif",
+  slay: "/guide/textures/slay-sally-sweet-pea.webp",
+  snow_fizz: "/guide/textures/snow-fizz-prismatic.webp",
+  sugar_scrub: "/guide/textures/sugar-scrub-macaroons.png",
+  thick_and_glossy:
+    "/guide/textures/thick-glossy-mythical-mushbunny.webp",
+  water: "/guide/textures/water-momo.webp",
+  wax_and_wax_cracking: "/guide/textures/wax-og-slimes.webp",
+};
+
+// Signature tint per type — used for the fallback gradient when we
+// don't have a photo, and for the card border glow. Same palette as
+// the previous blob-based version so nothing else needs to change.
 const HERO_TINTS: Partial<Record<SlimeBaseType, string>> = {
   butter: "#FFAE3B",
   cloud: "#7DF6FF",
@@ -47,7 +74,6 @@ const HERO_TINTS: Partial<Record<SlimeBaseType, string>> = {
 };
 
 const DEFAULT_TINT = "#00F0FF";
-
 const SLIME_TYPES = Object.keys(SLIME_BASE_TYPE_LABELS) as SlimeBaseType[];
 
 interface TypeCarouselProps {
@@ -58,18 +84,16 @@ interface TypeCarouselProps {
   counts?: Partial<Record<SlimeBaseType, number>>;
 }
 
+function hexToRgba(hex: string, alpha: number): string {
+  const c = hex.replace("#", "");
+  const r = parseInt(c.slice(0, 2), 16);
+  const g = parseInt(c.slice(2, 4), 16);
+  const b = parseInt(c.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 export default function TypeCarousel({ counts = {} }: TypeCarouselProps) {
   const router = useRouter();
-
-  // Convert hex + alpha to `rgba()` for the radial-gradient background.
-  // Small helper avoids adding a color-lib dep.
-  function hexToRgba(hex: string, alpha: number): string {
-    const c = hex.replace("#", "");
-    const r = parseInt(c.slice(0, 2), 16);
-    const g = parseInt(c.slice(2, 4), 16);
-    const b = parseInt(c.slice(4, 6), 16);
-    return `rgba(${r},${g},${b},${alpha})`;
-  }
 
   return (
     <div
@@ -86,76 +110,83 @@ export default function TypeCarousel({ counts = {} }: TypeCarouselProps) {
         const label = SLIME_BASE_TYPE_LABELS[type];
         const tint = HERO_TINTS[type] ?? DEFAULT_TINT;
         const count = counts[type] ?? 0;
+        const photo = HERO_PHOTO[type] ?? null;
 
         return (
           <button
             key={type}
             type="button"
             onClick={() => router.push(`/discover/type/${type}`)}
-            className="shrink-0 rounded-2xl overflow-hidden transition-all duration-150 active:scale-95 hover:scale-[1.02]"
+            className="shrink-0 rounded-2xl overflow-hidden relative transition-all duration-150 active:scale-95 hover:scale-[1.02]"
             style={{
               width: 148,
+              height: 176,
               background: "rgba(16,0,32,0.55)",
-              border: `1px solid ${hexToRgba(tint, 0.32)}`,
+              border: `1px solid ${hexToRgba(tint, 0.4)}`,
+              boxShadow: `0 0 18px ${hexToRgba(tint, 0.18)}`,
             }}
             aria-label={`Browse ${label} slimes${count > 0 ? `, ${count} logged` : ""}`}
           >
-            {/* ── Photo area: radial gradient + centered blob ────── */}
+            {/* ── Photo layer or fallback tinted gradient ─────────── */}
             <div
-              className="w-full relative overflow-hidden"
-              style={{
-                height: 100,
-                background: `radial-gradient(120% 120% at 40% 30%, ${hexToRgba(tint, 0.32)}, rgba(16,0,32,0.2))`,
-              }}
+              className="absolute inset-0"
               aria-hidden="true"
+              style={{
+                background: photo
+                  ? undefined
+                  : `radial-gradient(120% 120% at 40% 30%, ${hexToRgba(tint, 0.35)}, rgba(16,0,32,0.85))`,
+              }}
             >
-              {/* Organic blob — solid tint with heavy blur glow. Sized
-                  to feel weighty inside the photo area, positioned
-                  slightly off-center for visual dynamism. */}
-              <div
-                style={{
-                  position: "absolute",
-                  top: "50%",
-                  left: "50%",
-                  transform: "translate(-50%, -50%)",
-                  width: 62,
-                  height: 46,
-                  borderRadius:
-                    "60% 40% 55% 45% / 60% 55% 45% 40%",
-                  background: tint,
-                  filter: "blur(0.5px)",
-                  boxShadow: `0 0 28px ${hexToRgba(tint, 0.7)}, 0 0 12px ${hexToRgba(tint, 0.85)}`,
-                  opacity: 0.94,
-                }}
-              />
+              {photo && (
+                <Image
+                  src={photo}
+                  alt=""
+                  fill
+                  className="object-cover"
+                  sizes="148px"
+                  priority={false}
+                />
+              )}
             </div>
 
-            {/* ── Meta strip: name + slime count ───────────────────── */}
+            {/* ── Bottom gradient wash for legibility ──────────────
+                Ensures the type name + count read cleanly regardless
+                of what the photo is doing. Fades from transparent at
+                the top of the meta strip to near-solid at the bottom. */}
             <div
-              className="px-3 py-2.5"
-              style={{ background: "rgba(16,0,32,0.75)" }}
+              className="absolute inset-x-0 bottom-0"
+              aria-hidden="true"
+              style={{
+                height: "58%",
+                background:
+                  "linear-gradient(0deg, rgba(6,0,14,0.94) 40%, rgba(6,0,14,0.55) 80%, transparent 100%)",
+              }}
+            />
+
+            {/* ── Meta stack: name + count ─────────────────────── */}
+            <div
+              className="absolute inset-x-0 bottom-0 px-3 pb-3 pt-6 text-left"
+              style={{ zIndex: 2 }}
             >
               <div
-                className="text-left"
                 style={{
                   fontFamily: "Montserrat, sans-serif",
-                  fontWeight: 800,
-                  fontSize: 13.5,
+                  fontWeight: 900,
+                  fontSize: 15,
                   color: "#FFFFFF",
                   letterSpacing: "-0.01em",
                   lineHeight: 1.1,
+                  textShadow: "0 1px 6px rgba(0,0,0,0.6)",
                 }}
               >
                 {label}
               </div>
               <div
-                className="text-left mt-0.5 text-[10.5px]"
+                className="mt-0.5 text-[11px]"
                 style={{
-                  color:
-                    count > 0
-                      ? "rgba(245,245,245,0.55)"
-                      : "#7BFF7B",
-                  fontWeight: count > 0 ? 500 : 700,
+                  color: count > 0 ? "rgba(245,245,245,0.75)" : "#7BFF7B",
+                  fontWeight: count > 0 ? 600 : 800,
+                  fontFamily: "Montserrat, sans-serif",
                 }}
               >
                 {count > 0
@@ -163,6 +194,18 @@ export default function TypeCarousel({ counts = {} }: TypeCarouselProps) {
                   : "be the first"}
               </div>
             </div>
+
+            {/* Subtle color halo on top edge to keep the type's
+                signature color visible even when the photo dominates. */}
+            <div
+              className="absolute inset-x-0 top-0 pointer-events-none"
+              aria-hidden="true"
+              style={{
+                height: 3,
+                background: `linear-gradient(90deg, transparent, ${tint}, transparent)`,
+                opacity: 0.7,
+              }}
+            />
           </button>
         );
       })}

@@ -96,7 +96,14 @@ export default async function DiscoverPage({
         "id, name, base_type, subtype_id, image_url, avg_overall, avg_texture, avg_scent, avg_sound, avg_drizzle, avg_creativity, avg_sensory_fit, total_ratings, brand_id, brands(name, slug), subtypes(name)",
       )
       .not(sortColumn, "is", null)
-      .gte("total_ratings", 3)
+      // 2026-07-13: dropped from >= 3 to >= 1 while we're pre-launch.
+      // The 3-rating gate is a good idea for a mature leaderboard (kills
+      // one-fan-rated flukes) but pre-launch it wipes the section
+      // clean — a butter with 5 logs but only 2 rated ends up
+      // hidden. Nudge this back to 3 once we have real rating volume,
+      // and consider making it a tunable env / route param so we can
+      // adjust without a redeploy.
+      .gte("total_ratings", 1)
       .order(sortColumn, { ascending: false })
       .order("total_ratings", { ascending: false })
       .limit(20),
@@ -405,19 +412,35 @@ export default async function DiscoverPage({
         <SearchHero />
 
         {/* ── Trending pulse / early-days state ───────────────────── */}
-        {showPulse ? (
-          <TrendingPulse
-            logsToday={logsToday}
-            logsLast7Days={logsLast7Days}
-            sparkline={dayBuckets}
-            momentum={momentum}
-          />
-        ) : (
-          <TrendingPulseEmpty />
-        )}
+        <div className="mb-10">
+          {showPulse ? (
+            <TrendingPulse
+              logsToday={logsToday}
+              logsLast7Days={logsLast7Days}
+              sparkline={dayBuckets}
+              momentum={momentum}
+            />
+          ) : (
+            <TrendingPulseEmpty />
+          )}
+        </div>
+
+        {/* ── Section: Upcoming Drops (moved above Types) ──────────
+            [2026-07-13] Drops carry real urgency (LIVE / T-3d / T-1w),
+            so they pair naturally with the pulse ("what's happening
+            now") rather than sitting at the bottom of a long scroll.
+            Types are for slower exploration and can wait. */}
+        <section className="mb-10">
+          <div className="flex items-center justify-between px-4 mb-3">
+            <p className="section-label" style={{ color: "#FF00E5" }}>
+              Upcoming Drops
+            </p>
+          </div>
+          <FeaturedDropsCarousel drops={drops} />
+        </section>
 
         {/* ── Section: Slime Types ───────────────────────────────── */}
-        <section className="mb-6">
+        <section className="mb-10">
           <div className="flex items-center justify-between px-4 mb-3">
             <p className="section-label">Slime Types</p>
             <Link
@@ -435,7 +458,7 @@ export default async function DiscoverPage({
             T110 CTA lives here in V1 — between Types and Keywords —
             still surfaces mid-scroll before the leaderboard, without
             competing with the hero pulse widget. */}
-        <div className="px-4 mb-6">
+        <div className="px-4 mb-10">
           <Link
             href="/submit-brand"
             className="flex items-center justify-between gap-3 rounded-2xl px-4 py-3 transition-colors"
@@ -491,7 +514,7 @@ export default async function DiscoverPage({
             Split out from the type section per Design's V1 proposal.
             The relationship reads cleaner as two distinct rows. */}
         {trendingTags.length > 0 && (
-          <section className="mb-6">
+          <section className="mb-10">
             <div className="flex items-center justify-between px-4 mb-3">
               <p className="section-label">Trending Keywords</p>
               <Link
@@ -580,7 +603,7 @@ export default async function DiscoverPage({
             the client so the rating-bar readout + sort use that axis.
             [Discover V1] Rank 1-3 render as medal tiles inside the
             client. */}
-        <section className="mb-6 px-4">
+        <section className="mb-10 px-4">
           <div className="flex items-center justify-between mb-3">
             <p className="section-label">
               {isCustomAxis ? `Top Rated by ${sortLabel}` : "Top Rated Slimes"}
@@ -604,7 +627,7 @@ export default async function DiscoverPage({
             shelf size · avg rating given. Discovery signal, not
             just follower count. */}
         {popularUsers.length > 0 && (
-          <section className="mb-6">
+          <section className="mb-10">
             <div className="flex items-center justify-between px-4 mb-3">
               <p className="section-label">Popular Collectors</p>
               <span
@@ -617,16 +640,6 @@ export default async function DiscoverPage({
             <PopularUsersCarousel users={popularUsers} />
           </section>
         )}
-
-        {/* ── Section: Upcoming Drops (with T-minus pills) ─────────── */}
-        <section className="mb-6">
-          <div className="flex items-center justify-between px-4 mb-3">
-            <p className="section-label" style={{ color: "#FF00E5" }}>
-              Upcoming Drops
-            </p>
-          </div>
-          <FeaturedDropsCarousel drops={drops} />
-        </section>
       </div>
     </PageWrapper>
   );

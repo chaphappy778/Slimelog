@@ -84,13 +84,17 @@ export default function TrendingPulse({
       >
         <p className="section-label">Trending this week</p>
         <div className="flex items-center gap-1.5">
+          {/* Live dot pulses at 1.4s. Uses `pulse-live` keyframes
+              declared once in globals.css so multiple pulse widgets
+              on the page share the animation. */}
           <span
+            className="pulse-live"
             style={{
-              width: 7,
-              height: 7,
+              width: 8,
+              height: 8,
               borderRadius: "50%",
               background: "#39FF14",
-              boxShadow: "0 0 8px #39FF14",
+              boxShadow: "0 0 10px #39FF14",
               display: "inline-block",
             }}
           />
@@ -111,9 +115,12 @@ export default function TrendingPulse({
         className="rounded-2xl px-4 pt-4 pb-3"
         style={{
           background:
-            "linear-gradient(135deg, rgba(45,10,78,0.5), rgba(16,0,32,0.4))",
-          border: "1px solid rgba(45,10,78,0.7)",
-          boxShadow: "0 0 22px rgba(0,240,255,0.10)",
+            "linear-gradient(135deg, rgba(65,20,110,0.55), rgba(30,8,55,0.45))",
+          // 2026-07-13: brighter purple border so the card lifts off
+          // the wrapper background instead of blending in.
+          border: "1px solid rgba(155,90,220,0.55)",
+          boxShadow:
+            "0 0 26px rgba(0,240,255,0.12), inset 0 0 20px rgba(120,60,200,0.10)",
         }}
       >
         {/* Big-number row + sparkline. */}
@@ -144,31 +151,26 @@ export default function TrendingPulse({
             </div>
           </div>
 
-          {/* 7-bar sparkline. Newest bar on the right. */}
-          <div
-            className="flex items-end gap-[3px]"
-            style={{ height: 40 }}
-            aria-label="Logs per day, last 7 days"
+          {/* 7-bar sparkline with day-letter labels. Newest bar on the
+              right (today, highlighted). Labels give the "green bars"
+              real context so users can tell what they're looking at. */}
+          <SparklineWithLabels values={sparkline} maxValue={maxSpark} />
+        </div>
+
+        {/* Total-logs-this-week summary sits under the top row for
+            extra context. Reads as "220 logs · past 7 days" — makes
+            the sparkline scale explicit. */}
+        <div
+          className="mt-2 flex items-center gap-2 text-[11px]"
+          style={{ color: "rgba(245,245,245,0.5)" }}
+        >
+          <span
+            className="tabular-nums font-bold"
+            style={{ color: "rgba(245,245,245,0.85)" }}
           >
-            {sparkline.map((v, i) => {
-              const heightPct = Math.max(8, (v / maxSpark) * 100);
-              const isToday = i === sparkline.length - 1;
-              return (
-                <span
-                  key={i}
-                  style={{
-                    width: 6,
-                    height: `${heightPct}%`,
-                    borderRadius: 3,
-                    background: isToday
-                      ? "linear-gradient(0deg, rgba(57,255,20,0.5), #39FF14)"
-                      : "linear-gradient(0deg, rgba(57,255,20,0.15), rgba(57,255,20,0.85))",
-                    display: "block",
-                  }}
-                />
-              );
-            })}
-          </div>
+            {logsLast7Days.toLocaleString()}
+          </span>
+          <span>logs · past 7 days</span>
         </div>
 
         {/* Momentum rows. Empty is fine, gracefully hidden. Each row
@@ -182,6 +184,89 @@ export default function TrendingPulse({
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Sparkline with day labels ────────────────────────────────────────
+// A vertical bar chart of the last 7 days' log counts + a row of
+// day letters below so users can decode the scale at a glance. The
+// letter for "today" is highlighted brighter so the newest bar is
+// unambiguous. Bars scale by max of the series so the tallest bar
+// always hits ~90-100% of the container height.
+
+function dayLetterForOffset(offset: number): string {
+  // offset 0 = 6 days ago, offset 6 = today.
+  const daysAgo = 6 - offset;
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - daysAgo);
+  // "S M T W T F S" — 2-letter abbrevs would be clearer but eat
+  // horizontal space we don't have on a 7-bar mini chart.
+  return "SMTWTFS"[d.getDay()];
+}
+
+function SparklineWithLabels({
+  values,
+  maxValue,
+}: {
+  values: number[];
+  maxValue: number;
+}) {
+  return (
+    <div
+      className="flex flex-col items-end shrink-0"
+      role="img"
+      aria-label="Logs per day for the past 7 days"
+    >
+      <div className="flex items-end gap-[4px]" style={{ height: 40 }}>
+        {values.map((v, i) => {
+          const heightPct = Math.max(8, (v / Math.max(1, maxValue)) * 100);
+          const isToday = i === values.length - 1;
+          return (
+            <span
+              key={i}
+              title={`${v} logs`}
+              style={{
+                width: 7,
+                height: `${heightPct}%`,
+                borderRadius: 3,
+                background: isToday
+                  ? "linear-gradient(0deg, rgba(57,255,20,0.55), #39FF14)"
+                  : "linear-gradient(0deg, rgba(57,255,20,0.18), rgba(57,255,20,0.85))",
+                boxShadow: isToday
+                  ? "0 0 10px rgba(57,255,20,0.55)"
+                  : undefined,
+                display: "block",
+              }}
+            />
+          );
+        })}
+      </div>
+      <div
+        className="flex gap-[4px] mt-1.5"
+        aria-hidden="true"
+        style={{ letterSpacing: "0.02em" }}
+      >
+        {values.map((_, i) => {
+          const isToday = i === values.length - 1;
+          return (
+            <span
+              key={i}
+              className="tabular-nums text-center"
+              style={{
+                width: 7,
+                fontSize: 9,
+                fontWeight: isToday ? 900 : 600,
+                color: isToday ? "#7BFF7B" : "rgba(245,245,245,0.4)",
+                fontFamily: "Montserrat, sans-serif",
+              }}
+            >
+              {dayLetterForOffset(i)}
+            </span>
+          );
+        })}
       </div>
     </div>
   );

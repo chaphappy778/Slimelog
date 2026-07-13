@@ -61,25 +61,32 @@ export default function SearchHero() {
   return (
     <form
       onSubmit={submit}
-      className="px-4 pt-6 pb-4"
+      className="px-4 pt-6 pb-5"
       role="search"
       aria-label="Search SlimeLog"
     >
+      {/* Section header above the search bar, matching the cyan
+          section-label treatment used elsewhere on the page. */}
+      <p className="section-label mb-3">Search</p>
+
       <label
-        className="flex items-center gap-3 rounded-2xl transition-all"
+        className="flex items-center gap-3.5 rounded-2xl transition-all"
         style={{
-          minHeight: 66,
-          padding: "12px 16px",
-          background: "rgba(0,240,255,0.07)",
-          border: "1px solid rgba(0,240,255,0.44)",
+          minHeight: 78,
+          padding: "14px 18px",
+          background: "rgba(6,0,14,0.55)",
+          border: "1px solid rgba(0,240,255,0.55)",
+          // Glow only outside the pill — no inset. Matches the
+          // how-to-rate pill treatment: subtle bloom around the
+          // border, nothing behind the text.
           boxShadow:
-            "inset 0 0 24px rgba(0,240,255,0.10), 0 0 24px rgba(0,240,255,0.12)",
+            "0 0 20px rgba(0,240,255,0.28), 0 0 4px rgba(0,240,255,0.35)",
           cursor: "text",
         }}
       >
         <svg
-          width="22"
-          height="22"
+          width="28"
+          height="28"
           viewBox="0 0 24 24"
           fill="none"
           stroke="#00F0FF"
@@ -88,6 +95,9 @@ export default function SearchHero() {
           strokeLinejoin="round"
           aria-hidden="true"
           className="shrink-0"
+          style={{
+            filter: "drop-shadow(0 0 8px rgba(0,240,255,0.6))",
+          }}
         >
           <circle cx="11" cy="11" r="7" />
           <path d="m21 21-4.35-4.35" />
@@ -105,8 +115,8 @@ export default function SearchHero() {
               <div
                 style={{
                   fontFamily: "Montserrat, sans-serif",
-                  fontWeight: 800,
-                  fontSize: 15,
+                  fontWeight: 900,
+                  fontSize: 18,
                   color: "#FFFFFF",
                   letterSpacing: "-0.01em",
                   lineHeight: 1.15,
@@ -115,9 +125,9 @@ export default function SearchHero() {
                 What slime are you looking for?
               </div>
               <div
-                className="mt-0.5 text-[11.5px]"
+                className="mt-1 text-[13px]"
                 style={{
-                  color: "rgba(0,240,255,0.75)",
+                  color: "rgba(0,240,255,0.85)",
                   fontStyle: "italic",
                 }}
               >
@@ -137,10 +147,10 @@ export default function SearchHero() {
             placeholder={
               collapsed ? undefined : "Search slimes, brands, or collectors"
             }
-            className="bg-transparent outline-none text-[15px]"
+            className="bg-transparent outline-none text-[18px]"
             style={{
               fontFamily: "Montserrat, sans-serif",
-              fontWeight: 700,
+              fontWeight: 800,
               color: "#FFFFFF",
               width: collapsed ? 1 : "100%",
               height: collapsed ? 1 : "auto",

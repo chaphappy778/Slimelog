@@ -162,13 +162,37 @@ h6 {
   opacity: 0.18;
 }
 
-/* ── Section Label (cyan small-caps) ────────────────────── */
+/* ── Section Label (cyan small-caps) ──────────────────────
+   2026-07-13: bumped to Montserrat black + slightly larger size so
+   the cyan headers land on Discover with real weight. Applies
+   everywhere `.section-label` is used app-wide — same visual family
+   as /guide and /how-to-rate section chrome. */
 .section-label {
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
+  font-family: "Montserrat", sans-serif;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   color: #00f0ff;
+}
+
+/* ── Pulsing "LIVE" dot ────────────────────────────────────
+   Used on the Discover trending pulse header + anywhere else we
+   want a live-status indicator. Gentle in/out so it reads as
+   "active" without being twitchy. */
+@keyframes pulse-live {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.7);
+  }
+}
+.pulse-live {
+  animation: pulse-live 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 /* ── CTA Button Base ────────────────────────────────────── */
