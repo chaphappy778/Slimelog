@@ -198,7 +198,14 @@ export function RatingSlider({
 
         {/* Native range input drives the value. Hidden visually but
             fully accessible: keyboard arrow-key steps by 0.25,
-            aria-valuenow reflects the current value. */}
+            aria-valuenow reflects the current value.
+            2026-07-13: `touchAction: pan-y` so a vertical scroll
+            gesture starting on the slider passes through to the page
+            instead of being captured as a slider drag. The horizontal
+            drag axis is what actually moves the value, so this
+            preserves the mobile UX while un-breaking page scroll on
+            the Ratings step (six stacked sliders eat a lot of
+            vertical touch area). */}
         <input
           type="range"
           min={1}
@@ -219,6 +226,7 @@ export function RatingSlider({
             cursor: "pointer",
             margin: 0,
             padding: 0,
+            touchAction: "pan-y",
           }}
         />
       </div>
