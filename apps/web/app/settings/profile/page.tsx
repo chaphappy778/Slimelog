@@ -296,6 +296,10 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
   const { showToast } = useToast();
   const searchParams = useSearchParams();
   const router = useRouter();
+  // 2026-07-13 bug-fix: pull `refresh` so the settings hero re-hydrates
+  // with the new username after a save. Without this the outer
+  // /settings page keeps rendering the old cached username.
+  const { refresh: refreshAuth } = useAuth();
 
   const emptyForm: FormState = {
     username: "",
@@ -643,6 +647,12 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
       showToast("Profile saved", "success");
       setOriginalForm({ ...form });
       setUsernameStatus("idle");
+      // 2026-07-13 bug-fix: invalidate AuthProvider's cached profile
+      // so downstream surfaces (settings hero, header, /profile,
+      // anything using `useAuth().profile`) render the new username
+      // when the user navigates away. Fire-and-forget — no reason to
+      // gate the success toast on the re-fetch.
+      refreshAuth();
     } else {
       showToast(result.error ?? "Could not save profile", "error");
     }
