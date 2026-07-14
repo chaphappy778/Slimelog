@@ -61,6 +61,9 @@ interface UpcomingDrop {
   drop_type: "new_drop" | "restock" | null;
   discount_code: string | null;
   free_shipping_threshold: number | null;
+  // [T38 2026-07-13] Optional inventory hint. Brand-set via the
+  // dashboard; null when unmanaged.
+  tubs_available: number | null;
   drop_slimes: Array<{
     id: string;
     name: string | null;
@@ -342,7 +345,7 @@ export default async function BrandPage({
     .from("drops")
     .select(
       `id, name, description, drop_at, status, cover_image_url,
-       drop_type, discount_code, free_shipping_threshold,
+       drop_type, discount_code, free_shipping_threshold, tubs_available,
        drop_slimes ( id, name, base_type, price, slime_id )`,
     )
     .eq("brand_id", brand.id)
@@ -362,120 +365,232 @@ export default async function BrandPage({
     !!brandExtended.pinterest_handle ||
     !!brandExtended.twitter_handle;
 
-  return (
-    <PageWrapper dots>
-      <PageHeader />
+  const isPro = brand.subscription_tier === "brand_pro";
+  const proAccent = "#FF7BEB";
+  const brandTint = isPro ? proAccent : "#7BF5FF";
 
-      <main className="pt-14 pb-24 max-w-2xl mx-auto">
-        {/* Hero banner */}
-        <div className="relative w-full" style={{ height: 200 }}>
+  // T-minus pill logic — mirrors Discover's FeaturedDropsCarousel.
+  // "LIVE" wins over any countdown; unscheduled drops render no pill.
+  function computeTminus(
+    status: string | null,
+    dateStr: string | null,
+  ): { label: string; variant: "live" | "soon" | "far" } | null {
+    if (status === "live") return { label: "LIVE", variant: "live" };
+    if (!dateStr) return null;
+    const dropMs = new Date(dateStr).getTime();
+    if (Number.isNaN(dropMs)) return null;
+    const deltaMs = dropMs - Date.now();
+    if (deltaMs <= 0) return null;
+    const hours = deltaMs / (1000 * 60 * 60);
+    const days = hours / 24;
+    const weeks = days / 7;
+    if (hours < 24)
+      return {
+        label: `T-${Math.max(1, Math.round(hours))}h`,
+        variant: "soon",
+      };
+    if (days < 7)
+      return { label: `T-${Math.round(days)}d`, variant: "soon" };
+    return { label: `T-${Math.max(1, Math.round(weeks))}w`, variant: "far" };
+  }
+
+  function tminusStyle(variant: "live" | "soon" | "far"): React.CSSProperties {
+    if (variant === "live") {
+      return {
+        background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+        color: "#04110A",
+        border: "1px solid transparent",
+        boxShadow: "0 0 14px rgba(57,255,20,0.6)",
+      };
+    }
+    if (variant === "soon") {
+      return {
+        background: "rgba(0,240,255,0.10)",
+        color: "#7DF6FF",
+        border: "1px solid rgba(0,240,255,0.4)",
+      };
+    }
+    return {
+      background: "rgba(45,10,78,0.4)",
+      color: "rgba(245,245,245,0.6)",
+      border: "1px solid rgba(120,60,180,0.5)",
+    };
+  }
+
+  return (
+    <PageWrapper dots orbs>
+      <PageHeader />
+      <main className="pt-14 pb-24 max-w-[440px] mx-auto">
+        {/* ── Hero banner ────────────────────────────────────────────
+            200px cover photo (or signature purple radial fallback for
+            new brands). Bottom scrim keeps the logo edge readable on
+            any photo. Brand-pro gets a magenta 3px hairline at the
+            top of the banner as their signature reward. */}
+        <div
+          className="relative w-full overflow-hidden"
+          style={{ height: 200 }}
+        >
+          {isPro && (
+            <div
+              className="absolute inset-x-0 top-0"
+              aria-hidden="true"
+              style={{
+                height: 3,
+                background:
+                  "linear-gradient(90deg, #FF7BEB, #CC44FF, #FF7BEB)",
+                zIndex: 4,
+              }}
+            />
+          )}
           {brand.banner_url ? (
             <Image
               src={brand.banner_url}
-              alt={`${brand.name} banner`}
+              alt=""
               fill
               className="object-cover"
+              sizes="(max-width: 440px) 100vw, 440px"
               priority
             />
           ) : (
             <div
               className="absolute inset-0"
+              aria-hidden="true"
               style={{
                 background:
-                  "linear-gradient(135deg, rgba(45,10,78,0.9) 0%, rgba(0,240,255,0.08) 50%, rgba(255,0,229,0.08) 100%)",
+                  "radial-gradient(120% 130% at 72% 10%, rgba(204,68,255,0.55), rgba(71,15,96,0.7) 55%, rgba(16,0,32,1))",
               }}
             />
           )}
+          {/* Scrim */}
           <div
-            className="absolute inset-0 opacity-20"
+            className="absolute inset-0"
+            aria-hidden="true"
             style={{
-              backgroundImage:
-                "radial-gradient(circle, rgba(57,255,20,0.3) 1px, transparent 1px)",
-              backgroundSize: "24px 24px",
-            }}
-          />
-          <div
-            className="absolute inset-x-0 bottom-0"
-            style={{
-              height: 60,
-              background: "linear-gradient(to bottom, transparent, #0A0A0A)",
+              background:
+                "linear-gradient(180deg, rgba(16,0,32,0) 30%, rgba(16,0,32,0.55) 78%, rgba(16,0,32,0.9) 100%)",
             }}
           />
           {brand.banner_url && (
-            <BannerLightbox
-              bannerUrl={brand.banner_url}
-              brandName={brand.name}
-            />
+            <div className="absolute inset-0 z-[3]">
+              <BannerLightbox
+                bannerUrl={brand.banner_url}
+                brandName={brand.name}
+              />
+            </div>
           )}
         </div>
 
-        {/* Header section */}
-        <section className="px-4 -mt-12 relative z-10">
-          <div className="flex items-end gap-4">
-            <div
-              className="relative w-20 h-20 rounded-2xl border-2 overflow-hidden shrink-0"
+        {/* ── Overlapping logo ─────────────────────────────────────── */}
+        <div className="px-4">
+          <div
+            className="flex items-center justify-center rounded-2xl relative overflow-hidden"
+            style={{
+              width: 72,
+              height: 72,
+              marginTop: -30,
+              border: "3px solid #0F0018",
+              background: brand.logo_url
+                ? "#0F0018"
+                : "linear-gradient(135deg, #39FF14, #00F0FF)",
+              fontFamily: "Montserrat, sans-serif",
+              fontWeight: 900,
+              fontSize: 25,
+              color: "#04140A",
+              boxShadow: isPro
+                ? `0 0 22px ${proAccent}88, 0 8px 24px rgba(0,0,0,0.5)`
+                : "0 0 18px rgba(57,255,20,0.4), 0 8px 24px rgba(0,0,0,0.5)",
+              position: "relative",
+              zIndex: 5,
+            }}
+          >
+            {brand.logo_url ? (
+              <Image
+                src={brand.logo_url}
+                alt={brand.name}
+                fill
+                className="object-cover"
+                sizes="72px"
+              />
+            ) : (
+              initials
+            )}
+          </div>
+        </div>
+
+        {/* ── Header block ────────────────────────────────────────── */}
+        <div className="px-4 pt-3">
+          {/* Name row: name + verify check on left, Follow/Manage on right */}
+          <div className="flex items-start justify-between gap-3">
+            <h1
+              className="flex items-center gap-2 flex-wrap"
               style={{
-                borderColor: "#0A0A0A",
-                background: "rgba(45,10,78,0.6)",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.6)",
+                fontFamily: "Montserrat, sans-serif",
+                fontWeight: 900,
+                fontSize: 25,
+                letterSpacing: "-0.02em",
+                lineHeight: 1.1,
+                color: "#FFFFFF",
+                margin: 0,
               }}
             >
-              {brand.logo_url ? (
-                <Image
-                  src={brand.logo_url}
-                  alt={brand.name}
-                  fill
-                  sizes="80px"
-                  className="object-cover"
-                />
-              ) : (
-                <div
-                  className="w-full h-full flex items-center justify-center text-2xl font-black"
+              {brand.name}
+              {brand.is_verified && (
+                <span
+                  className="inline-flex items-center justify-center rounded-full flex-none"
                   style={{
-                    background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-                    color: "#0A0A0A",
-                    fontFamily: "Montserrat, Inter, sans-serif",
+                    width: 21,
+                    height: 21,
+                    background: "#39FF14",
+                    boxShadow: "0 0 12px rgba(57,255,20,0.5)",
                   }}
-                  aria-hidden="true"
-                >
-                  {initials}
-                </div>
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              {isVerifiedOwner ? (
-                <Link
-                  href={`/brand-dashboard/${brand.slug}`}
-                  className="inline-flex items-center gap-2 transition-transform active:scale-[0.97]"
-                  style={{
-                    background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-                    color: "#0A0A0A",
-                    fontWeight: 600,
-                    padding: "12px 20px",
-                    borderRadius: 10,
-                    fontFamily: "Montserrat, Inter, sans-serif",
-                    fontSize: 14,
-                  }}
+                  aria-label="Verified brand"
                 >
                   <svg
-                    width="16"
-                    height="16"
+                    width={12}
+                    height={12}
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
+                    stroke="#04140A"
+                    strokeWidth="3"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     aria-hidden="true"
                   >
-                    <line x1="4" y1="6" x2="20" y2="6" />
-                    <line x1="4" y1="12" x2="20" y2="12" />
-                    <line x1="4" y1="18" x2="20" y2="18" />
-                    <circle cx="9" cy="6" r="2" fill="#0A0A0A" />
-                    <circle cx="15" cy="12" r="2" fill="#0A0A0A" />
-                    <circle cx="7" cy="18" r="2" fill="#0A0A0A" />
+                    <path d="M20 6L9 17l-5-5" />
                   </svg>
-                  Manage Brand
+                </span>
+              )}
+            </h1>
+            <div className="shrink-0">
+              {isVerifiedOwner ? (
+                <Link
+                  href={`/brand-dashboard/${brand.slug}`}
+                  className="inline-flex items-center gap-1.5 rounded-full transition-transform active:scale-[0.98]"
+                  style={{
+                    padding: "8px 14px",
+                    background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                    color: "#04140A",
+                    fontFamily: "Montserrat, sans-serif",
+                    fontWeight: 800,
+                    fontSize: 13,
+                    textDecoration: "none",
+                    boxShadow: "0 0 14px rgba(57,255,20,0.4)",
+                  }}
+                >
+                  <svg
+                    width={13}
+                    height={13}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M4 6h16M7 12h10M10 18h4" />
+                  </svg>
+                  Manage
                 </Link>
               ) : (
                 <FollowBrandButton
@@ -487,136 +602,179 @@ export default async function BrandPage({
             </div>
           </div>
 
-          <div className="mt-3 flex items-center gap-2 flex-wrap">
-            <h1
-              className="text-2xl font-black"
+          {/* Meta row: location + restock schedule */}
+          {(brand.location || brand.restock_schedule) && (
+            <div
+              className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5"
               style={{
-                color: "#fff",
-                fontFamily: "Montserrat, Inter, sans-serif",
+                fontSize: 12.5,
+                color: "rgba(245,245,245,0.55)",
               }}
             >
-              {brand.name}
-            </h1>
-            {brand.is_verified && (
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="#00F0FF"
-                aria-label="Verified"
-              >
-                <path d="M12 0l3.09 5.26L21 6l-4.5 4.39L17.18 17 12 14.27 6.82 17l.68-6.61L3 6l5.91-.74L12 0z" />
-              </svg>
-            )}
-            <div className="ml-auto">
-              <ShareButton
-                path={`/brands/${brand.slug}`}
-                title={`${brand.name} on SlimeLog`}
-                text={`Check out ${brand.name} on SlimeLog.`}
-              />
+              {brand.location && (
+                <span className="inline-flex items-center gap-1.5">
+                  <svg
+                    width={13}
+                    height={13}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                  {brand.location}
+                </span>
+              )}
+              {brand.restock_schedule && (
+                <span className="inline-flex items-center gap-1.5">
+                  <svg
+                    width={13}
+                    height={13}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="4" width="18" height="18" rx="2" />
+                    <path d="M16 2v4M8 2v4M3 10h18" />
+                  </svg>
+                  {brand.restock_schedule}
+                </span>
+              )}
             </div>
-          </div>
+          )}
 
+          {/* Bio */}
           {brand.bio && (
-            <p className="mt-2 text-sm leading-relaxed text-slime-text/80">
+            <p
+              className="mt-3.5"
+              style={{
+                fontSize: 13.5,
+                lineHeight: 1.55,
+                color: "rgba(245,245,245,0.85)",
+                margin: "14px 0 0",
+              }}
+            >
               {brand.bio}
             </p>
           )}
 
-          {/* Stats pills */}
-          <div className="mt-4 flex items-center gap-3 flex-wrap">
-            <div
-              className="flex items-center gap-2 px-3 py-2 rounded-xl"
-              style={{
-                background: "rgba(45,10,78,0.4)",
-                border: "1px solid rgba(45,10,78,0.7)",
-              }}
-            >
+          {/* Inline stats row, top/bottom hairline rules */}
+          <div
+            className="mt-4 flex flex-wrap gap-x-5 gap-y-2 py-3.5"
+            style={{
+              borderTop: "1px solid rgba(120,60,180,0.42)",
+              borderBottom: "1px solid rgba(120,60,180,0.42)",
+              fontSize: 12,
+              color: "rgba(245,245,245,0.6)",
+            }}
+          >
+            <span className="inline-flex items-baseline gap-1.5">
               <svg
-                viewBox="0 0 12 12"
-                className="w-3 h-3 fill-current"
-                style={{ color: "#39FF14" }}
+                width={14}
+                height={14}
+                viewBox="0 0 24 24"
+                fill="#39FF14"
+                aria-hidden="true"
+                style={{ transform: "translateY(2px)" }}
               >
-                <polygon points="6,1 7.5,4.5 11,4.5 8.5,7 9.5,11 6,9 2.5,11 3.5,7 1,4.5 4.5,4.5" />
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
               </svg>
-              <div>
-                <p
-                  className="text-sm font-black leading-none"
-                  style={{ color: "#39FF14" }}
-                >
-                  {avgRating != null ? avgRating.toFixed(1) : "—"}
-                </p>
-                <p className="text-[9px] uppercase tracking-wider text-slime-muted font-semibold mt-0.5">
-                  Rating
-                </p>
-              </div>
-            </div>
-            <div
-              className="flex items-center gap-2 px-3 py-2 rounded-xl"
-              style={{
-                background: "rgba(45,10,78,0.4)",
-                border: "1px solid rgba(45,10,78,0.7)",
-              }}
-            >
+              <span
+                style={{
+                  fontFamily: "Montserrat, sans-serif",
+                  fontWeight: 800,
+                  fontSize: 19,
+                  color: avgRating != null ? "#FFFFFF" : "rgba(245,245,245,0.5)",
+                }}
+              >
+                {avgRating != null ? avgRating.toFixed(1) : "—"}
+              </span>{" "}
+              {avgRating != null && logCount > 0 ? (
+                <span>{logCount} ratings</span>
+              ) : (
+                <span>no ratings</span>
+              )}
+            </span>
+            <span className="inline-flex items-baseline gap-1.5">
               <svg
-                viewBox="0 0 12 12"
-                className="w-3 h-3 fill-current"
-                style={{ color: "#00F0FF" }}
+                width={13}
+                height={13}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#00F0FF"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                style={{ transform: "translateY(2px)" }}
               >
-                <path d="M2 2h8a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm1 2v1h6V4H3zm0 2v1h4V6H3z" />
+                <path d="M12 2 2 7l10 5 10-5-10-5z" />
+                <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
               </svg>
-              <div>
-                <p
-                  className="text-sm font-black leading-none"
-                  style={{ color: "#00F0FF" }}
-                >
-                  {logCount ?? 0}
-                </p>
-                <p className="text-[9px] uppercase tracking-wider text-slime-muted font-semibold mt-0.5">
-                  Logs
-                </p>
-              </div>
-            </div>
-            <div
-              className="flex items-center gap-2 px-3 py-2 rounded-xl"
-              style={{
-                background: "rgba(45,10,78,0.4)",
-                border: "1px solid rgba(45,10,78,0.7)",
-              }}
-            >
+              <span
+                style={{
+                  fontFamily: "Montserrat, sans-serif",
+                  fontWeight: 800,
+                  fontSize: 19,
+                  color: "#FFFFFF",
+                }}
+              >
+                {(brand.total_logs ?? 0).toLocaleString()}
+              </span>{" "}
+              <span>logs</span>
+            </span>
+            <span className="inline-flex items-baseline gap-1.5">
               <svg
-                viewBox="0 0 12 12"
-                className="w-3 h-3 fill-current"
-                style={{ color: "#FF00E5" }}
+                width={13}
+                height={13}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#FF00E5"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                style={{ transform: "translateY(2px)" }}
               >
-                <path d="M6 6a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zm-4 5c0-2.2 1.8-4 4-4s4 1.8 4 4H2z" />
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
               </svg>
-              <div>
-                <p
-                  className="text-sm font-black leading-none"
-                  style={{ color: "#FF00E5" }}
-                >
-                  {(brand.follower_count ?? 0).toLocaleString()}
-                </p>
-                <p className="text-[9px] uppercase tracking-wider text-slime-muted font-semibold mt-0.5">
-                  Followers
-                </p>
-              </div>
-            </div>
+              <span
+                style={{
+                  fontFamily: "Montserrat, sans-serif",
+                  fontWeight: 800,
+                  fontSize: 19,
+                  color: "#FFFFFF",
+                }}
+              >
+                {(brand.follower_count ?? 0).toLocaleString()}
+              </span>{" "}
+              <span>followers</span>
+            </span>
           </div>
 
-          {/* Social links — icon-only circles, always-on brand colors, no event handlers */}
+          {/* Socials — brand-pro gets magenta signature; free gets cyan */}
           {hasSocialLinks && (
-            <div className="mt-3 flex items-center gap-2 flex-wrap">
+            <div className="mt-4 flex items-center gap-2 flex-wrap">
               {brand.website_url && (
                 <SocialIconLink
                   href={brand.website_url}
                   label="Website"
-                  color="#00F0FF"
+                  color={brandTint}
                 >
                   <svg
-                    width="18"
-                    height="18"
+                    width={16}
+                    height={16}
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -635,11 +793,11 @@ export default async function BrandPage({
                 <SocialIconLink
                   href={brand.shop_url}
                   label="Shop"
-                  color="#39FF14"
+                  color={brandTint}
                 >
                   <svg
-                    width="18"
-                    height="18"
+                    width={16}
+                    height={16}
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -648,8 +806,8 @@ export default async function BrandPage({
                     strokeLinejoin="round"
                     aria-hidden="true"
                   >
-                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-                    <line x1="3" y1="6" x2="21" y2="6" />
+                    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+                    <path d="M3 6h18" />
                     <path d="M16 10a4 4 0 0 1-8 0" />
                   </svg>
                 </SocialIconLink>
@@ -658,11 +816,11 @@ export default async function BrandPage({
                 <SocialIconLink
                   href={`https://instagram.com/${brand.instagram_handle}`}
                   label="Instagram"
-                  color="#E1306C"
+                  color={brandTint}
                 >
                   <svg
-                    width="18"
-                    height="18"
+                    width={16}
+                    height={16}
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -671,9 +829,14 @@ export default async function BrandPage({
                     strokeLinejoin="round"
                     aria-hidden="true"
                   >
-                    <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
-                    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-                    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+                    <rect x="2" y="2" width="20" height="20" rx="5" />
+                    <circle cx="12" cy="12" r="4" />
+                    <circle
+                      cx="17.5"
+                      cy="6.5"
+                      r="1"
+                      style={{ fill: "currentColor", stroke: "none" }}
+                    />
                   </svg>
                 </SocialIconLink>
               )}
@@ -681,16 +844,22 @@ export default async function BrandPage({
                 <SocialIconLink
                   href={`https://tiktok.com/@${brand.tiktok_handle}`}
                   label="TikTok"
-                  color="#ffffff"
+                  color={brandTint}
                 >
                   <svg
-                    width="18"
-                    height="18"
+                    width={16}
+                    height={16}
                     viewBox="0 0 24 24"
-                    fill="currentColor"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                     aria-hidden="true"
                   >
-                    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5.21 16.74a6.34 6.34 0 0 0 10.86-4.43V8.93a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1.24-.36z" />
+                    <path d="M9 18V5l10-2v11" />
+                    <circle cx="6" cy="18" r="3" />
+                    <circle cx="16" cy="14" r="3" />
                   </svg>
                 </SocialIconLink>
               )}
@@ -698,16 +867,21 @@ export default async function BrandPage({
                 <SocialIconLink
                   href={`https://youtube.com/@${brandExtended.youtube_handle}`}
                   label="YouTube"
-                  color="#FF0000"
+                  color={brandTint}
                 >
                   <svg
-                    width="18"
-                    height="18"
+                    width={16}
+                    height={16}
                     viewBox="0 0 24 24"
-                    fill="currentColor"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                     aria-hidden="true"
                   >
-                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+                    <rect x="2" y="6" width="20" height="12" rx="3" />
+                    <path d="M10 9l5 3-5 3z" />
                   </svg>
                 </SocialIconLink>
               )}
@@ -715,212 +889,511 @@ export default async function BrandPage({
                 <SocialIconLink
                   href={`https://pinterest.com/${brandExtended.pinterest_handle}`}
                   label="Pinterest"
-                  color="#E60023"
+                  color={brandTint}
                 >
                   <svg
-                    width="18"
-                    height="18"
+                    width={16}
+                    height={16}
                     viewBox="0 0 24 24"
-                    fill="currentColor"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                     aria-hidden="true"
                   >
-                    <path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z" />
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 7v10M9 12l3 3 3-3" />
                   </svg>
                 </SocialIconLink>
               )}
               {brandExtended.twitter_handle && (
                 <SocialIconLink
-                  href={`https://x.com/${brandExtended.twitter_handle}`}
-                  label="Twitter / X"
-                  color="#ffffff"
+                  href={`https://twitter.com/${brandExtended.twitter_handle}`}
+                  label="Twitter"
+                  color={brandTint}
                 >
                   <svg
-                    width="18"
-                    height="18"
+                    width={16}
+                    height={16}
                     viewBox="0 0 24 24"
-                    fill="currentColor"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                     aria-hidden="true"
                   >
-                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.743l7.737-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                    <path d="M22 4s-.9 2.6-2 3.6C21 15.5 12.7 22 3 18c2.4.3 4.8-.5 6-1.4-6-.2-8-4.2-8-7 1 1 3 1 3 1-4-2-4-6-2-8 3 4 7 7 12 7 0-4 4-6 7-3 1.3 0 3-1 3-1z" />
                   </svg>
                 </SocialIconLink>
               )}
             </div>
           )}
 
-          {/* Claim button */}
-          <div className="mt-4">
-            <ClaimBrandButton
-              brandSlug={brand.slug}
-              brandOwnerId={brand.owner_id}
-              currentUserId={user?.id ?? null}
-              existingClaim={latestClaim}
-              canClaim={canClaim}
-            />
-          </div>
-
-          {/* View Slime Catalog pill */}
-          <div className="mt-4">
+          {/* Action row: catalog CTA + share icon */}
+          <div className="mt-4 flex items-stretch gap-2.5">
             <Link
               href={`/brands/${brand.slug}/catalog`}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 rounded-2xl transition-transform active:scale-[0.98]"
               style={{
-                border: "1px solid rgba(0,240,255,0.4)",
-                color: "#00F0FF",
-                background: "rgba(0,240,255,0.06)",
+                minHeight: 46,
+                padding: "0 16px",
+                background: "rgba(45,10,78,0.5)",
+                border: "1px solid rgba(120,60,180,0.5)",
+                color: "#FFFFFF",
+                fontFamily: "Montserrat, sans-serif",
+                fontWeight: 700,
+                fontSize: 14,
+                textDecoration: "none",
               }}
             >
-              View Slime Catalog
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path
-                  d="M3 7h8M7 3l4 4-4 4"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
+              View slime catalog
+              <svg
+                width={16}
+                height={16}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M9 18l6-6-6-6" />
               </svg>
             </Link>
-          </div>
-        </section>
-
-        {/* Upcoming Drops */}
-        {upcomingDrops.length > 0 && (
-          <section className="px-4 mt-8">
-            <p
-              className="text-[11px] font-black tracking-widest uppercase mb-3"
-              style={{ color: "#00F0FF" }}
+            <div
+              className="flex items-center justify-center rounded-2xl"
+              style={{
+                width: 46,
+                height: 46,
+                background: "rgba(45,10,78,0.5)",
+                border: "1px solid rgba(120,60,180,0.5)",
+                color: "#FFFFFF",
+              }}
             >
-              Upcoming Drops
-            </p>
-            <div className="flex flex-col gap-4">
-              {upcomingDrops.map((drop) => (
-                <DropCard key={drop.id} drop={drop} />
-              ))}
+              <ShareButton
+                path={`/brands/${brand.slug}`}
+                title={`${brand.name} on SlimeLog`}
+                text={`Check out ${brand.name} on SlimeLog.`}
+              />
             </div>
-          </section>
-        )}
+          </div>
 
-        {/* Top collectors — T107 part (b). Only shows when there are
-            at least 2 collectors so we don't run a one-person race. */}
-        {topCollectors.length >= 2 && (
-          <TopCollectorsStrip
-            brandName={brand.name}
-            brandSlug={brand.slug}
-            collectors={topCollectors}
-          />
-        )}
+          {/* Claim brand button — component itself handles the
+              rendering gate; passing canClaim + user context lets it
+              decide whether to show the primary CTA, a pending
+              badge, or nothing. */}
+          {user && (
+            <div className="mt-3">
+              <ClaimBrandButton
+                brandSlug={brand.slug}
+                brandOwnerId={brand.owner_id ?? null}
+                currentUserId={user.id}
+                existingClaim={latestClaim}
+                canClaim={canClaim}
+              />
+            </div>
+          )}
+        </div>
 
-        {/* Community logs */}
+        {/* ── Section: Upcoming drops ────────────────────────────── */}
         <section className="px-4 mt-8">
-          <p
-            className="text-[11px] font-black tracking-widest uppercase mb-3"
-            style={{ color: "#00F0FF" }}
-          >
-            Recent Community Logs
-          </p>
-          {communityLogs.length === 0 ? (
-            <p className="text-sm text-slime-muted text-center py-12">
-              No public logs for {brand.name} yet. Be the first.
-            </p>
+          <p className="section-label mb-3">Upcoming drops</p>
+          {upcomingDrops.length === 0 ? (
+            <div
+              className="rounded-2xl text-center flex flex-col items-center gap-2"
+              style={{
+                padding: "26px 20px",
+                background: "rgba(45,10,78,0.28)",
+                border: "1px solid rgba(120,60,180,0.42)",
+              }}
+            >
+              <div
+                className="flex items-center justify-center rounded-2xl"
+                style={{
+                  width: 44,
+                  height: 44,
+                  background: "rgba(45,10,78,0.4)",
+                  border: "1px solid rgba(0,240,255,0.35)",
+                  color: "#7DF6FF",
+                  marginBottom: 4,
+                }}
+                aria-hidden="true"
+              >
+                <svg
+                  width={22}
+                  height={22}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+                  <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+                </svg>
+              </div>
+              <div
+                style={{
+                  fontFamily: "Montserrat, sans-serif",
+                  fontWeight: 800,
+                  fontSize: 16,
+                  color: "#FFFFFF",
+                }}
+              >
+                No drops announced yet
+              </div>
+              <div
+                style={{
+                  fontSize: 13,
+                  color: "rgba(245,245,245,0.55)",
+                  lineHeight: 1.5,
+                  maxWidth: 240,
+                }}
+              >
+                Follow to get a heads-up the moment {brand.name} announces
+                their first drop.
+              </div>
+            </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
-              {communityLogs.map((row) => {
-                const profile = normaliseProfile(row.profiles_public);
-                const baseLabel = row.base_type
-                  ? (SLIME_BASE_TYPE_LABELS[row.base_type as SlimeBaseType] ??
-                    row.base_type.replace(/_/g, " "))
-                  : null;
-                const sub = Array.isArray(row.subtype)
-                  ? row.subtype[0]
-                  : row.subtype;
-                const typeLabel =
-                  baseLabel && sub?.name
-                    ? `${baseLabel} \u00b7 ${sub.name}`
-                    : baseLabel;
+            <div className="flex flex-col gap-3">
+              {upcomingDrops.map((drop) => {
+                const tminus = computeTminus(drop.status, drop.drop_at);
+                const isLive = drop.status === "live";
                 return (
-                  <Link
-                    key={row.id}
-                    href={`/slimes/${row.id}`}
-                    className="block rounded-xl overflow-hidden border border-slime-border bg-slime-card hover:border-slime-accent/50 transition-colors"
+                  <div
+                    key={drop.id}
+                    className="rounded-2xl flex gap-3 items-center"
+                    style={{
+                      padding: 12,
+                      background: "rgba(45,10,78,0.28)",
+                      border: isLive
+                        ? "1px solid rgba(255,0,229,0.5)"
+                        : "1px solid rgba(120,60,180,0.42)",
+                      boxShadow: isLive
+                        ? "0 0 22px rgba(255,0,229,0.28)"
+                        : "0 0 12px rgba(0,240,255,0.06)",
+                    }}
                   >
-                    <div className="relative w-full aspect-square bg-slime-surface">
-                      {row.image_url ? (
+                    <div
+                      className="rounded-xl relative overflow-hidden shrink-0"
+                      style={{
+                        width: 78,
+                        height: 78,
+                        background: drop.cover_image_url
+                          ? "#0F0018"
+                          : "linear-gradient(135deg, #100020, #470F60, #CC44FF)",
+                      }}
+                    >
+                      {drop.cover_image_url && (
                         <Image
-                          src={row.image_url}
-                          alt={row.slime_name ?? "Slime"}
+                          src={drop.cover_image_url}
+                          alt=""
                           fill
-                          sizes="(max-width: 640px) 50vw, 33vw"
                           className="object-cover"
+                          sizes="78px"
                         />
-                      ) : (
-                        <div
-                          className="w-full h-full flex items-center justify-center"
-                          style={{
-                            background:
-                              "linear-gradient(135deg, rgba(45,10,78,0.4), rgba(0,240,255,0.1))",
-                          }}
-                        >
-                          <svg
-                            width="32"
-                            height="32"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="rgba(255,255,255,0.3)"
-                            strokeWidth="1.5"
-                            aria-hidden="true"
-                          >
-                            <path d="M12 2 L14 9 L21 12 L14 15 L12 22 L10 15 L3 12 L10 9 Z" />
-                          </svg>
-                        </div>
-                      )}
-                      {typeof row.rating_overall === "number" && (
-                        <span
-                          className="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded font-bold"
-                          style={{
-                            background: "rgba(10,10,10,0.7)",
-                            color: "#39FF14",
-                          }}
-                        >
-                          {row.rating_overall.toFixed(1)}
-                        </span>
                       )}
                     </div>
-                    <div className="p-2.5">
-                      <p className="text-xs font-semibold text-slime-text line-clamp-1">
-                        {row.slime_name ?? "Unnamed"}
-                      </p>
-                      {typeLabel && (
-                        <p className="text-[10px] text-slime-muted line-clamp-1 capitalize">
-                          {typeLabel}
-                        </p>
+                    <div className="flex-1 min-w-0">
+                      {tminus && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full uppercase"
+                          style={{
+                            padding: "3px 9px",
+                            fontSize: 10.5,
+                            fontWeight: 800,
+                            letterSpacing: "0.05em",
+                            ...tminusStyle(tminus.variant),
+                          }}
+                        >
+                          {tminus.label}
+                        </span>
                       )}
-                      <div className="flex items-center gap-1.5 mt-1.5">
-                        <div className="relative w-4 h-4 rounded-full overflow-hidden shrink-0 bg-slime-surface">
-                          {profile?.avatar_url ? (
-                            <Image
-                              src={profile.avatar_url}
-                              alt=""
-                              fill
-                              sizes="16px"
-                              className="object-cover"
-                            />
-                          ) : null}
-                        </div>
-                        <span className="text-[10px] text-slime-magenta truncate">
-                          @{profile?.username ?? "unknown"}
-                        </span>
-                        <span className="text-[10px] text-slime-muted ml-auto shrink-0">
-                          {formatRelativeTime(row.created_at)}
-                        </span>
+                      <div
+                        className="truncate"
+                        style={{
+                          fontFamily: "Montserrat, sans-serif",
+                          fontWeight: 800,
+                          fontSize: 16,
+                          color: "#FFFFFF",
+                          margin: "6px 0 2px",
+                        }}
+                      >
+                        {drop.name}
+                      </div>
+                      <div
+                        className="text-[12px]"
+                        style={{ color: "rgba(245,245,245,0.55)" }}
+                      >
+                        {drop.drop_at &&
+                          new Intl.DateTimeFormat("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          }).format(new Date(drop.drop_at))}
+                        {typeof drop.tubs_available === "number" && (
+                          <>
+                            {drop.drop_at ? " · " : ""}
+                            {drop.tubs_available}{" "}
+                            {drop.tubs_available === 1 ? "tub" : "tubs"}{" "}
+                            available
+                          </>
+                        )}
                       </div>
                     </div>
-                  </Link>
+                  </div>
                 );
               })}
             </div>
           )}
         </section>
+
+        {/* ── Section: Community logs ────────────────────────────── */}
+        <section className="px-4 mt-8">
+          <p className="section-label mb-3">
+            Community logs
+            {logCount > 0 && (
+              <span
+                className="ml-2"
+                style={{
+                  color: "rgba(245,245,245,0.45)",
+                  fontWeight: 700,
+                  letterSpacing: "0.04em",
+                }}
+              >
+                {logCount.toLocaleString()}
+              </span>
+            )}
+          </p>
+          {communityLogs.length === 0 ? (
+            <div
+              className="rounded-2xl text-center flex flex-col items-center gap-2"
+              style={{
+                padding: "26px 20px",
+                background: "rgba(45,10,78,0.28)",
+                border: "1px solid rgba(120,60,180,0.42)",
+              }}
+            >
+              <div
+                className="flex items-center justify-center rounded-2xl"
+                style={{
+                  width: 44,
+                  height: 44,
+                  background: "rgba(45,10,78,0.4)",
+                  border: "1px solid rgba(0,240,255,0.35)",
+                  color: "#7DF6FF",
+                  marginBottom: 4,
+                }}
+                aria-hidden="true"
+              >
+                <svg
+                  width={22}
+                  height={22}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 2 2 7l10 5 10-5-10-5z" />
+                  <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
+                </svg>
+              </div>
+              <div
+                style={{
+                  fontFamily: "Montserrat, sans-serif",
+                  fontWeight: 800,
+                  fontSize: 16,
+                  color: "#FFFFFF",
+                }}
+              >
+                No public logs for {brand.name} yet
+              </div>
+              <div
+                style={{
+                  fontSize: 13,
+                  color: "rgba(245,245,245,0.55)",
+                  lineHeight: 1.5,
+                  maxWidth: 240,
+                }}
+              >
+                Be the first to log a {brand.name} slime and put them on the
+                map.
+              </div>
+              <Link
+                href="/log"
+                className="inline-flex items-center gap-1.5 rounded-full mt-2"
+                style={{
+                  padding: "9px 16px",
+                  background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                  color: "#04140A",
+                  fontFamily: "Montserrat, sans-serif",
+                  fontWeight: 800,
+                  fontSize: 13,
+                  textDecoration: "none",
+                  boxShadow: "0 0 14px rgba(57,255,20,0.4)",
+                }}
+              >
+                Log a slime
+              </Link>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {communityLogs.slice(0, 6).map((log) => {
+                const profile = normaliseProfile(log.profiles_public);
+                const rating =
+                  typeof log.rating_overall === "number"
+                    ? log.rating_overall.toFixed(1)
+                    : null;
+                return (
+                  <Link
+                    key={log.id}
+                    href={`/slimes/${log.id}`}
+                    className="block rounded-2xl overflow-hidden transition-transform active:scale-[0.985]"
+                    style={{
+                      background: "rgba(45,10,78,0.28)",
+                      border: "1px solid rgba(120,60,180,0.42)",
+                      textDecoration: "none",
+                    }}
+                  >
+                    <div
+                      className="relative w-full"
+                      style={{
+                        height: 172,
+                        background: log.image_url
+                          ? "#0F0018"
+                          : "linear-gradient(135deg, rgba(45,10,78,0.6), rgba(16,0,32,0.6))",
+                      }}
+                    >
+                      {log.image_url && (
+                        <Image
+                          src={log.image_url}
+                          alt={log.slime_name ?? "Slime photo"}
+                          fill
+                          className="object-cover"
+                          sizes="(max-width: 440px) 100vw, 400px"
+                        />
+                      )}
+                      {rating && (
+                        <span
+                          className="absolute inline-flex items-center gap-1"
+                          style={{
+                            top: 10,
+                            right: 10,
+                            padding: "4px 10px",
+                            borderRadius: 999,
+                            background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                            color: "#04110A",
+                            fontFamily: "Montserrat, sans-serif",
+                            fontWeight: 900,
+                            fontSize: 13,
+                            boxShadow: "0 0 14px rgba(57,255,20,0.45)",
+                          }}
+                        >
+                          <svg
+                            width={12}
+                            height={12}
+                            viewBox="0 0 24 24"
+                            fill="#04110A"
+                            aria-hidden="true"
+                          >
+                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                          </svg>
+                          {rating}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2.5 px-3 py-2.5">
+                      <div
+                        className="rounded-full overflow-hidden shrink-0"
+                        style={{
+                          width: 32,
+                          height: 32,
+                          background:
+                            "linear-gradient(135deg, #39FF14, #00F0FF)",
+                        }}
+                      >
+                        {profile?.avatar_url && (
+                          <Image
+                            src={profile.avatar_url}
+                            alt=""
+                            width={32}
+                            height={32}
+                            className="object-cover w-full h-full"
+                          />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div
+                          className="truncate"
+                          style={{
+                            fontFamily: "system-ui, sans-serif",
+                            fontWeight: 700,
+                            fontSize: 13.5,
+                            color: "#FFFFFF",
+                            lineHeight: 1.2,
+                          }}
+                        >
+                          @{profile?.username ?? "unknown"}
+                        </div>
+                        <div
+                          className="truncate text-[11.5px]"
+                          style={{ color: "rgba(245,245,245,0.55)" }}
+                        >
+                          {log.slime_name ?? "Untitled"}
+                          {log.base_type
+                            ? ` · ${SLIME_BASE_TYPE_LABELS[log.base_type as SlimeBaseType] ?? log.base_type}`
+                            : ""}
+                        </div>
+                      </div>
+                      <span
+                        className="text-[11px]"
+                        style={{
+                          color: "rgba(245,245,245,0.4)",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {formatRelativeTime(log.created_at)}
+                      </span>
+                    </div>
+                  </Link>
+                );
+              })}
+              {communityLogs.length > 6 && (
+                <div className="text-center pt-2">
+                  <span
+                    style={{
+                      color: "rgba(245,245,245,0.4)",
+                      fontSize: 12,
+                    }}
+                  >
+                    Showing 6 of {communityLogs.length} recent logs
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* ── Section: Top collectors ─────────────────────────────
+            T107 (b) discovery-loop — closes brand → leaderboard →
+            back. Only renders when we actually have collectors. */}
+        {topCollectors.length > 0 && (
+          <section className="px-4 mt-8">
+            <p className="section-label mb-3">Top collectors</p>
+            <TopCollectorsStrip
+              collectors={topCollectors}
+              brandName={brand.name}
+              brandSlug={brand.slug}
+            />
+          </section>
+        )}
       </main>
     </PageWrapper>
   );
