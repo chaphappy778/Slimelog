@@ -407,7 +407,11 @@ export default async function UserPage({
                   Logs
                 </span>
               </div>
-              <div className="flex flex-col items-center">
+              <Link
+                href={`/users/${profile.username}/followers`}
+                className="flex flex-col items-center transition-transform active:scale-[0.96]"
+                style={{ textDecoration: "none" }}
+              >
                 <span
                   className="text-lg font-black"
                   style={{
@@ -420,8 +424,12 @@ export default async function UserPage({
                 <span className="text-[10px] uppercase tracking-wider text-slime-muted font-semibold">
                   Followers
                 </span>
-              </div>
-              <div className="flex flex-col items-center">
+              </Link>
+              <Link
+                href={`/users/${profile.username}/following`}
+                className="flex flex-col items-center transition-transform active:scale-[0.96]"
+                style={{ textDecoration: "none" }}
+              >
                 <span
                   className="text-lg font-black"
                   style={{
@@ -434,7 +442,7 @@ export default async function UserPage({
                 <span className="text-[10px] uppercase tracking-wider text-slime-muted font-semibold">
                   Following
                 </span>
-              </div>
+              </Link>
             </div>
 
             {/* Follow + Share buttons */}
