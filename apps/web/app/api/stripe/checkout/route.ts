@@ -140,7 +140,17 @@ export async function POST(req: NextRequest) {
           .eq("id", user.id);
       }
 
-      sessionMetadata = { supabase_user_id: user.id };
+      // T149 (2026-07-14): also write `app_user_id` for RevenueCat's Stripe
+      // Server Notifications. RevCat's "Read App User ID from Stripe metadata"
+      // detection method looks in the Checkout Session metadata and the
+      // Subscription metadata (never Customer metadata), so we must include
+      // the field on the session — which is exactly where sessionMetadata
+      // gets attached below. Keep `supabase_user_id` for backward compatibility
+      // with our existing webhook handler in /api/stripe/webhook.
+      sessionMetadata = {
+        supabase_user_id: user.id,
+        app_user_id: user.id,
+      };
     } else {
       const { data: brand } = await getAdminClient()
         .from("brands")
