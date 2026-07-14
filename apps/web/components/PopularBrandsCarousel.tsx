@@ -1,210 +1,207 @@
 // apps/web/components/PopularBrandsCarousel.tsx
+// [T33b 2026-07-13] Redesigned per Design's /brands pack. Horizontal
+// scrolling row of 200px-wide cards. Each card: 74px cover gradient
+// with a 44px logo overlapping bottom-left, brand name +
+// verified check, rating + followers row. "Most logged" mini-tile
+// deferred to a follow-up (see T33b tracker note); when we ship it
+// this component just passes the per-brand slime name through as an
+// optional prop.
+
 "use client";
 
-import { useState, useRef } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import type { Brand } from "@/lib/types";
-
-// ─── Props ────────────────────────────────────────────────────────────────────
+import {
+  brandLogoGradient,
+  brandCoverGradient,
+  brandInitials,
+} from "@/lib/brand-gradients";
 
 interface PopularBrandsCarouselProps {
   brands: Brand[];
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function chunk<T>(arr: T[], n: number): T[][] {
-  const result: T[][] = [];
-  for (let i = 0; i < arr.length; i += n) {
-    result.push(arr.slice(i, i + n));
-  }
-  return result;
+function formatFollowers(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
 }
-
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function PopularBrandsCarousel({
   brands,
 }: PopularBrandsCarouselProps) {
-  const [page, setPage] = useState(0);
-  const touchStartX = useRef<number | null>(null);
-
   if (brands.length === 0) return null;
-
-  const pages = chunk(brands, 3);
-  const currentBrands = pages[page] ?? [];
-
-  function handleTouchStart(e: React.TouchEvent) {
-    touchStartX.current = e.touches[0]?.clientX ?? null;
-  }
-
-  function handleTouchEnd(e: React.TouchEvent) {
-    if (touchStartX.current === null) return;
-    const delta = (e.changedTouches[0]?.clientX ?? 0) - touchStartX.current;
-    if (Math.abs(delta) < 50) return;
-    if (delta < 0 && page < pages.length - 1) setPage(page + 1);
-    if (delta > 0 && page > 0) setPage(page - 1);
-    touchStartX.current = null;
-  }
 
   return (
     <div
-      className="rounded-2xl p-4"
-      style={{
-        background: "rgba(45,10,78,0.25)",
-        border: "1px solid rgba(45,10,78,0.7)",
-      }}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
+      className="flex gap-3 overflow-x-auto scrollbar-none"
+      style={
+        {
+          WebkitOverflowScrolling: "touch",
+          msOverflowStyle: "none",
+          scrollbarWidth: "none",
+          padding: "2px 0 8px",
+        } as React.CSSProperties
+      }
     >
-      {/* Brand rows */}
-      <div>
-        {currentBrands.map((brand, idx) => {
-          const initials = brand.name.slice(0, 2).toUpperCase();
-          const isLast = idx === currentBrands.length - 1;
+      {brands.map((brand) => (
+        <PopularBrandCard key={brand.id} brand={brand} />
+      ))}
+    </div>
+  );
+}
 
-          return (
-            <Link
-              key={brand.id}
-              href={`/brands/${brand.slug}`}
-              className="flex items-center gap-3 py-3 active:opacity-75 transition-opacity"
-              style={
-                !isLast
-                  ? { borderBottom: "1px solid rgba(45,10,78,0.5)" }
-                  : undefined
-              }
-            >
-              {/* Logo */}
-              <div
-                className="shrink-0 w-11 h-11 rounded-full overflow-hidden flex items-center justify-center"
-                style={{
-                  background: "rgba(45,10,78,0.5)",
-                  border: "1px solid rgba(45,10,78,0.7)",
-                }}
-              >
-                {brand.logo_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={brand.logo_url}
-                    alt={brand.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-sm font-black text-slime-accent select-none">
-                    {initials}
-                  </span>
-                )}
-              </div>
+// ─── Card ──────────────────────────────────────────────────────────────
 
-              {/* Name + rating */}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-slime-text truncate">
-                  {brand.name}
-                </p>
-                <div className="mt-0.5">
-                  {brand.avg_slime_rating != null ? (
-                    <span
-                      className="flex items-center gap-1 text-xs font-semibold"
-                      style={{ color: "#39FF14" }}
-                    >
-                      <svg
-                        viewBox="0 0 12 12"
-                        className="w-2.5 h-2.5 fill-current"
-                      >
-                        <polygon points="6,1 7.5,4.5 11,4.5 8.5,7 9.5,11 6,9 2.5,11 3.5,7 1,4.5 4.5,4.5" />
-                      </svg>
-                      {brand.avg_slime_rating.toFixed(1)}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-slime-muted">
-                      No ratings yet
-                    </span>
-                  )}
-                </div>
-              </div>
+function PopularBrandCard({ brand }: { brand: Brand }) {
+  const cover = brandCoverGradient(brand.id);
+  const logoGradient = brandLogoGradient(brand.id);
+  const initials = brandInitials(brand.name);
 
-              {/* Followers */}
-              <div className="shrink-0 text-right">
-                <p
-                  className="text-xs font-semibold"
-                  style={{ color: "#00F0FF" }}
-                >
-                  {(brand.follower_count ?? 0).toLocaleString()}
-                </p>
-                <p className="text-[10px] text-slime-muted flex items-center justify-end gap-0.5 mt-0.5">
-                  <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 fill-current">
-                    <path d="M6 6a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zm-4 5c0-2.2 1.8-4 4-4s4 1.8 4 4H2z" />
-                  </svg>
-                  followers
-                </p>
-              </div>
-            </Link>
-          );
-        })}
+  const rating =
+    typeof brand.avg_slime_rating === "number"
+      ? brand.avg_slime_rating.toFixed(1)
+      : null;
+
+  return (
+    <Link
+      href={`/brands/${brand.slug}`}
+      className="shrink-0 rounded-2xl overflow-hidden relative transition-transform active:scale-[0.985]"
+      style={{
+        width: 200,
+        background: "rgba(45,10,78,0.28)",
+        border: "1px solid rgba(120,60,180,0.42)",
+        boxShadow: "0 0 18px rgba(0,240,255,0.08)",
+        textDecoration: "none",
+      }}
+    >
+      {/* Cover — 74px gradient strip. Logo overlaps its bottom. */}
+      <div
+        className="relative w-full"
+        style={{
+          height: 74,
+          borderRadius: "15px 15px 0 0",
+          background: cover,
+        }}
+      >
+        <div
+          className="absolute flex items-center justify-center rounded-2xl overflow-hidden"
+          style={{
+            width: 44,
+            height: 44,
+            left: 13,
+            bottom: -22,
+            border: "2px solid rgba(255,255,255,0.16)",
+            background: brand.logo_url ? "#0F0018" : logoGradient,
+            fontFamily: "Montserrat, sans-serif",
+            fontWeight: 900,
+            fontSize: 15,
+            color: "#FFFFFF",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+          }}
+        >
+          {brand.logo_url ? (
+            <Image
+              src={brand.logo_url}
+              alt=""
+              fill
+              className="object-cover"
+              sizes="44px"
+            />
+          ) : (
+            initials
+          )}
+        </div>
       </div>
 
-      {/* Nav row: arrows + dots */}
-      {pages.length > 1 && (
-        <div className="flex items-center justify-between mt-3">
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            className="p-1.5 rounded-lg transition-opacity disabled:opacity-20"
-            style={{ color: "rgba(255,255,255,0.5)" }}
-            disabled={page === 0}
-            aria-label="Previous page"
+      {/* Body — paddingTop clears the overlapping logo */}
+      <div style={{ padding: "30px 14px 14px" }}>
+        <div className="flex items-center gap-1.5">
+          <span
+            className="truncate"
+            style={{
+              fontFamily: "Montserrat, sans-serif",
+              fontWeight: 800,
+              fontSize: 15,
+              color: "#FFFFFF",
+              lineHeight: 1.15,
+              minWidth: 0,
+              flex: 1,
+            }}
           >
-            <svg
-              viewBox="0 0 16 16"
-              className="w-4 h-4 fill-none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+            {brand.name}
+          </span>
+          {brand.is_verified && (
+            <span
+              className="inline-flex items-center justify-center rounded-full flex-none"
+              style={{
+                width: 16,
+                height: 16,
+                background: "#39FF14",
+                color: "#04140A",
+              }}
+              aria-label="Verified"
             >
-              <path d="M10 4L6 8l4 4" />
-            </svg>
-          </button>
-
-          {/* Dots */}
-          <div className="flex items-center gap-1.5">
-            {pages.map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setPage(i)}
-                aria-label={`Go to page ${i + 1}`}
-                className="rounded-full transition-all"
-                style={{
-                  width: i === page ? "6px" : "4px",
-                  height: i === page ? "6px" : "4px",
-                  background: i === page ? "#39FF14" : "rgba(45,10,78,0.8)",
-                }}
-              />
-            ))}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.min(pages.length - 1, p + 1))}
-            className="p-1.5 rounded-lg transition-opacity disabled:opacity-20"
-            style={{ color: "rgba(255,255,255,0.5)" }}
-            disabled={page === pages.length - 1}
-            aria-label="Next page"
-          >
-            <svg
-              viewBox="0 0 16 16"
-              className="w-4 h-4 fill-none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M6 4l4 4-4 4" />
-            </svg>
-          </button>
+              <svg
+                width={9}
+                height={9}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#04140A"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M5 12l5 5L19 7" />
+              </svg>
+            </span>
+          )}
         </div>
-      )}
-    </div>
+
+        <div
+          className="mt-1.5 flex items-center gap-3"
+          style={{
+            fontSize: 12.5,
+            color: "rgba(245,245,245,0.65)",
+          }}
+        >
+          {rating && (
+            <span
+              className="inline-flex items-center gap-1"
+              style={{ color: "#7BFF7B", fontWeight: 700 }}
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="#39FF14"
+                aria-hidden="true"
+              >
+                <path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.8 5 21.4l1.4-6.8L1.3 9.9l6.9-.8z" />
+              </svg>
+              {rating}
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="8" r="3.4" />
+              <path d="M5.5 20c0-3.3 2.9-5 6.5-5s6.5 1.7 6.5 5" />
+            </svg>
+            {formatFollowers(brand.follower_count)}
+          </span>
+        </div>
+      </div>
+    </Link>
   );
 }

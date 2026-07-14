@@ -1,180 +1,343 @@
 // apps/web/components/FeaturedBrandCard.tsx
+// [T33b 2026-07-13] Redesigned per Design's /brands pack. 120px cover
+// gradient at the top, 66px rounded-square gradient logo overlapping
+// the bottom of the cover, brand name in Montserrat 900 22px with
+// verified check, stats row (rating / followers / logs) with line-SVG
+// icons, tagline, optional restock/drop callout pill, full-width
+// green→cyan "Visit shop" CTA. When the brand has a real `logo_url`
+// we render the photo instead of the gradient placeholder.
+
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import type { Brand } from "@/lib/types";
-
-// ─── Props ────────────────────────────────────────────────────────────────────
+import {
+  brandLogoGradient,
+  brandCoverGradient,
+  brandInitials,
+} from "@/lib/brand-gradients";
 
 interface FeaturedBrandCardProps {
   brand: Brand;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+function formatFollowers(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
 
 export default function FeaturedBrandCard({ brand }: FeaturedBrandCardProps) {
-  const initials = brand.name.slice(0, 2).toUpperCase();
-  const displayText = brand.description ?? brand.bio ?? null;
+  const cover = brandCoverGradient(brand.id);
+  const logoGradient = brandLogoGradient(brand.id);
+  const initials = brandInitials(brand.name);
 
-  const externalUrl = brand.website_url ?? brand.shop_url ?? null;
-  const internalHref = `/brands/${brand.slug}`;
+  const rating =
+    typeof brand.avg_slime_rating === "number"
+      ? brand.avg_slime_rating.toFixed(1)
+      : null;
 
   return (
     <div
-      className="w-full rounded-2xl overflow-hidden"
+      className="rounded-3xl overflow-hidden relative"
       style={{
-        background:
-          "linear-gradient(135deg, rgba(45,10,78,0.95) 0%, rgba(15,0,24,0.98) 100%)",
-        border: "1px solid rgba(57,255,20,0.3)",
+        background: "rgba(45,10,78,0.28)",
+        border: "1px solid rgba(120,60,180,0.55)",
+        boxShadow:
+          "0 0 32px rgba(0,240,255,0.12), 0 8px 32px rgba(0,0,0,0.4)",
       }}
     >
-      {/* Top gradient bar */}
+      {/* Cover gradient — 120px */}
       <div
-        className="w-full"
-        style={{
-          height: "2px",
-          background: "linear-gradient(90deg, #39FF14, #00F0FF, #FF00E5)",
-        }}
-      />
-
-      <div className="p-5">
-        {/* Featured label */}
-        <span
-          className="inline-flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase px-2.5 py-1 rounded-full"
+        className="relative w-full"
+        style={{ height: 120, background: cover }}
+      >
+        {/* Bottom scrim so the logo edge reads on any cover */}
+        <div
+          className="absolute inset-0"
+          aria-hidden="true"
           style={{
-            background: "rgba(57,255,20,0.15)",
-            border: "1px solid rgba(57,255,20,0.3)",
-            color: "#39FF14",
+            background:
+              "linear-gradient(180deg, rgba(16,0,32,0) 35%, rgba(20,4,38,0.9))",
+          }}
+        />
+        {/* "FEATURED SHOP" pill top-left */}
+        <div
+          className="absolute inline-flex items-center gap-1.5 rounded-full"
+          style={{
+            top: 12,
+            left: 12,
+            padding: "5px 11px",
+            background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+            color: "#04140A",
+            fontFamily: "Montserrat, sans-serif",
+            fontWeight: 900,
+            fontSize: 10.5,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            boxShadow: "0 0 12px rgba(57,255,20,0.5)",
+            zIndex: 2,
           }}
         >
-          <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 fill-current">
-            <polygon points="6,1 7.5,4.5 11,4.5 8.5,7 9.5,11 6,9 2.5,11 3.5,7 1,4.5 4.5,4.5" />
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="#04140A"
+            aria-hidden="true"
+          >
+            <path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.8 5 21.4l1.4-6.8L1.3 9.9l6.9-.8z" />
           </svg>
-          Featured Shop
-        </span>
+          Featured shop
+        </div>
+      </div>
 
-        {/* Brand identity row */}
-        <div className="mt-4 flex items-center gap-4">
-          {/* Logo */}
-          <div
-            className="shrink-0 w-16 h-16 rounded-2xl overflow-hidden flex items-center justify-center"
+      {/* Body */}
+      <div className="px-4 pb-4">
+        {/* Logo — 66px rounded-square, overlaps cover */}
+        <div
+          className="flex items-center justify-center rounded-2xl relative overflow-hidden"
+          style={{
+            width: 66,
+            height: 66,
+            marginTop: -40,
+            border: "2px solid rgba(255,255,255,0.16)",
+            background: brand.logo_url ? "#0F0018" : logoGradient,
+            fontFamily: "Montserrat, sans-serif",
+            fontWeight: 900,
+            fontSize: 24,
+            color: "#FFFFFF",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+          }}
+        >
+          {brand.logo_url ? (
+            <Image
+              src={brand.logo_url}
+              alt=""
+              fill
+              className="object-cover"
+              sizes="66px"
+            />
+          ) : (
+            initials
+          )}
+        </div>
+
+        {/* Name + verified check */}
+        <div className="flex items-center gap-2 mt-3">
+          <h2
             style={{
-              background: "rgba(45,10,78,0.6)",
-              border: "2px solid rgba(57,255,20,0.4)",
+              fontFamily: "Montserrat, sans-serif",
+              fontWeight: 900,
+              fontSize: 22,
+              lineHeight: 1.1,
+              letterSpacing: "-0.01em",
+              color: "#FFFFFF",
+              margin: 0,
             }}
           >
-            {brand.logo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={brand.logo_url}
-                alt={brand.name}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <span className="text-xl font-black text-slime-accent select-none">
-                {initials}
-              </span>
-            )}
-          </div>
-
-          {/* Name + badge + description */}
-          <div className="flex-1 min-w-0">
-            <p className="text-lg font-black text-white leading-tight truncate">
-              {brand.name}
-            </p>
-            {brand.is_verified && (
-              <span
-                className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full tracking-wide uppercase mt-1"
-                style={{
-                  background: "rgba(57,255,20,0.2)",
-                  border: "1px solid rgba(57,255,20,0.3)",
-                  color: "#39FF14",
-                }}
-              >
-                <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 fill-current">
-                  <path d="M6 1L7.3 4H11L8.3 6.2l.9 3.3L6 7.8 2.8 9.5l.9-3.3L1 4h3.7z" />
-                </svg>
-                Verified
-              </span>
-            )}
-            {displayText && (
-              <p
-                className="text-xs mt-1 line-clamp-2"
-                style={{ color: "rgba(255,255,255,0.5)" }}
-              >
-                {displayText}
-              </p>
-            )}
-          </div>
+            {brand.name}
+          </h2>
+          {brand.is_verified && <VerifiedCheck />}
         </div>
 
         {/* Stats row */}
-        <div className="mt-4 flex items-center gap-4">
-          {/* Rating */}
-          <span
-            className="flex items-center gap-1 text-xs font-semibold"
-            style={{ color: "#39FF14" }}
-          >
-            <svg viewBox="0 0 12 12" className="w-3 h-3 fill-current">
-              <polygon points="6,1 7.5,4.5 11,4.5 8.5,7 9.5,11 6,9 2.5,11 3.5,7 1,4.5 4.5,4.5" />
-            </svg>
-            {brand.avg_slime_rating != null
-              ? brand.avg_slime_rating.toFixed(1)
-              : "No ratings"}
-          </span>
-
-          {/* Followers */}
-          <span
-            className="flex items-center gap-1 text-xs font-semibold"
-            style={{ color: "#00F0FF" }}
-          >
-            <svg viewBox="0 0 12 12" className="w-3 h-3 fill-current">
-              <path d="M6 6a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zm-4 5c0-2.2 1.8-4 4-4s4 1.8 4 4H2z" />
-            </svg>
-            {(brand.follower_count ?? 0).toLocaleString()}
-          </span>
-
-          {/* Logs */}
-          <span
-            className="flex items-center gap-1 text-xs font-semibold"
-            style={{ color: "rgba(255,255,255,0.45)" }}
-          >
-            <svg viewBox="0 0 12 12" className="w-3 h-3 fill-current">
-              <path d="M2 2h8a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm1 2v1h6V4H3zm0 2v1h4V6H3z" />
-            </svg>
-            {(brand.total_logs ?? 0).toLocaleString()} logs
-          </span>
+        <div
+          className="mt-2 flex items-center gap-4 flex-wrap"
+          style={{
+            fontSize: 13,
+            color: "rgba(245,245,245,0.6)",
+            fontFamily: "system-ui, sans-serif",
+          }}
+        >
+          <StatCell
+            icon={
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="#39FF14"
+                aria-hidden="true"
+              >
+                <path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.8 5 21.4l1.4-6.8L1.3 9.9l6.9-.8z" />
+              </svg>
+            }
+            value={rating ?? "—"}
+            sub={rating ? `(${brand.total_slime_ratings})` : "No ratings"}
+          />
+          <StatCell
+            icon={<PersonIcon />}
+            value={formatFollowers(brand.follower_count)}
+            sub="followers"
+          />
+          <StatCell
+            icon={<LogsIcon />}
+            value={formatFollowers(brand.total_logs)}
+            sub="logs"
+          />
         </div>
 
-        {/* CTA button */}
-        <div className="mt-4">
-          {externalUrl ? (
-            <a
-              href={externalUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block w-full py-3 rounded-xl text-sm font-bold text-center active:scale-[0.98] transition-all"
-              style={{
-                background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-                color: "#0A0A0A",
-              }}
+        {/* Tagline */}
+        {(brand.bio ?? brand.description) && (
+          <p
+            className="mt-3"
+            style={{
+              color: "rgba(245,245,245,0.78)",
+              fontSize: 13.5,
+              lineHeight: 1.5,
+              margin: "13px 0 0",
+            }}
+          >
+            {(brand.bio ?? brand.description)?.trim()}
+          </p>
+        )}
+
+        {/* Restock schedule callout — shows only when the brand has
+            a schedule string set. Cyan pill with clock icon. */}
+        {brand.restock_schedule && (
+          <div
+            className="mt-3 inline-flex items-center gap-2 rounded-xl"
+            style={{
+              padding: "8px 12px",
+              background: "rgba(0,240,255,0.08)",
+              border: "1px solid rgba(0,240,255,0.3)",
+              color: "#7DF6FF",
+              fontSize: 12,
+              fontWeight: 700,
+            }}
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#7DF6FF"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
             >
-              Visit Shop
-            </a>
-          ) : (
-            <Link
-              href={internalHref}
-              className="block w-full py-3 rounded-xl text-sm font-bold text-center active:scale-[0.98] transition-all"
-              style={{
-                background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-                color: "#0A0A0A",
-              }}
-            >
-              Visit Shop
-            </Link>
-          )}
-        </div>
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v5l3 3" />
+            </svg>
+            {brand.restock_schedule}
+          </div>
+        )}
+
+        {/* Visit shop CTA */}
+        <Link
+          href={`/brands/${brand.slug}`}
+          className="mt-4 flex items-center justify-center rounded-2xl transition-transform active:scale-[0.98]"
+          style={{
+            padding: "14px 18px",
+            background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+            color: "#04140A",
+            fontFamily: "Montserrat, sans-serif",
+            fontWeight: 900,
+            fontSize: 15,
+            letterSpacing: "0.01em",
+            boxShadow:
+              "0 0 22px rgba(57,255,20,0.4), 0 8px 24px -8px rgba(0,240,255,0.5)",
+            textDecoration: "none",
+          }}
+        >
+          Visit shop
+        </Link>
       </div>
     </div>
+  );
+}
+
+// ─── Small pieces ──────────────────────────────────────────────────────
+
+function VerifiedCheck() {
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-full flex-none"
+      style={{
+        width: 19,
+        height: 19,
+        background: "#39FF14",
+        color: "#04140A",
+      }}
+      aria-label="Verified"
+    >
+      <svg
+        width={11}
+        height={11}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="#04140A"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M5 12l5 5L19 7" />
+      </svg>
+    </span>
+  );
+}
+
+function StatCell({
+  icon,
+  value,
+  sub,
+}: {
+  icon: React.ReactNode;
+  value: string;
+  sub: string;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      {icon}
+      <span
+        style={{
+          color: "#FFFFFF",
+          fontFamily: "Montserrat, sans-serif",
+          fontWeight: 800,
+        }}
+      >
+        {value}
+      </span>{" "}
+      <span>{sub}</span>
+    </span>
+  );
+}
+
+function PersonIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="rgba(245,245,245,0.6)"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="8" r="3.4" />
+      <path d="M5.5 20c0-3.3 2.9-5 6.5-5s6.5 1.7 6.5 5" />
+    </svg>
+  );
+}
+
+function LogsIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="rgba(245,245,245,0.6)"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 11.5a7.5 7.5 0 0 1-10.9 6.7L4 19.5l1.3-4.2A7.5 7.5 0 1 1 21 11.5z" />
+    </svg>
   );
 }

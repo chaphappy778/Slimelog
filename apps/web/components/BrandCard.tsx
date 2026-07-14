@@ -1,238 +1,169 @@
 // apps/web/components/BrandCard.tsx
+// [T33b 2026-07-13] Compact 2-column grid card for the "All brands"
+// section. 54px rounded-square gradient logo (or real logo photo),
+// name + verified check, rating with star, followers with icon. All
+// content center-aligned.
+
+"use client";
+
+import Image from "next/image";
 import Link from "next/link";
+import type { Brand } from "@/lib/types";
+import { brandLogoGradient, brandInitials } from "@/lib/brand-gradients";
 
 interface BrandCardProps {
-  name: string;
-  slug: string;
-  location: string | null;
-  verificationTier: string | null;
-  restockSchedule: string | null;
-  totalLogs: number;
-  avgSlimeRating: number | null;
-  logoUrl?: string | null;
-  ownerName?: string | null;
+  brand: Brand;
 }
 
-function StarRating({ value }: { value: number }) {
-  const full = Math.floor(value);
-  const half = value - full >= 0.5;
-  const stars = [];
-  for (let i = 1; i <= 5; i++) {
-    if (i <= full) stars.push("full");
-    else if (i === full + 1 && half) stars.push("half");
-    else stars.push("empty");
-  }
+function formatFollowers(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
+
+export function BrandCard({ brand }: BrandCardProps) {
+  const logoGradient = brandLogoGradient(brand.id);
+  const initials = brandInitials(brand.name);
+  const rating =
+    typeof brand.avg_slime_rating === "number"
+      ? brand.avg_slime_rating.toFixed(1)
+      : null;
+
   return (
-    <span
-      className="flex items-center gap-0.5"
-      aria-label={`${value.toFixed(1)} out of 5 stars`}
+    <Link
+      href={`/brands/${brand.slug}`}
+      className="rounded-2xl transition-transform active:scale-[0.98]"
+      style={{
+        background: "rgba(45,10,78,0.28)",
+        border: "1px solid rgba(120,60,180,0.42)",
+        boxShadow: "0 0 14px rgba(0,240,255,0.06)",
+        textDecoration: "none",
+        padding: "16px 12px 14px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        textAlign: "center",
+      }}
     >
-      {stars.map((type, i) => (
-        <svg key={i} viewBox="0 0 12 12" className="w-3 h-3 shrink-0">
-          {type === "full" && (
-            <polygon
-              points="6,1 7.5,4.5 11,4.5 8.5,7 9.5,11 6,9 2.5,11 3.5,7 1,4.5 4.5,4.5"
-              className="fill-slime-accent stroke-slime-accent"
-              strokeWidth="0.5"
-            />
-          )}
-          {type === "half" && (
-            <>
-              <defs>
-                <linearGradient id={`half-${i}`} x1="0" x2="1" y1="0" y2="0">
-                  <stop offset="50%" stopColor="#39FF14" />
-                  <stop offset="50%" stopColor="#2a2a2a" />
-                </linearGradient>
-              </defs>
-              <polygon
-                points="6,1 7.5,4.5 11,4.5 8.5,7 9.5,11 6,9 2.5,11 3.5,7 1,4.5 4.5,4.5"
-                fill={`url(#half-${i})`}
-                stroke="#39FF14"
-                strokeWidth="0.5"
-              />
-            </>
-          )}
-          {type === "empty" && (
-            <polygon
-              points="6,1 7.5,4.5 11,4.5 8.5,7 9.5,11 6,9 2.5,11 3.5,7 1,4.5 4.5,4.5"
-              className="fill-slime-border stroke-slime-border"
-              strokeWidth="0.5"
-            />
-          )}
-        </svg>
-      ))}
-      <span className="ml-1 text-xs font-semibold text-slime-accent">
-        {value.toFixed(1)}
-      </span>
-    </span>
-  );
-}
-
-function VerificationBadge({ tier }: { tier: string }) {
-  const isVerified = tier === "verified";
-  return (
-    <span
-      className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full tracking-wide uppercase ${
-        isVerified
-          ? "bg-slime-accent/20 text-slime-accent border border-slime-accent/30"
-          : "border text-slime-muted"
-      }`}
-      style={
-        !isVerified
-          ? {
-              background: "rgba(45,10,78,0.4)",
-              borderColor: "rgba(45,10,78,0.8)",
-            }
-          : undefined
-      }
-    >
-      {isVerified && (
-        <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 fill-current">
-          <path d="M6 1L7.3 4H11L8.3 6.2l.9 3.3L6 7.8 2.8 9.5l.9-3.3L1 4h3.7z" />
-        </svg>
-      )}
-      {isVerified ? "Verified" : tier}
-    </span>
-  );
-}
-
-export function BrandCard({
-  name,
-  slug,
-  location,
-  verificationTier,
-  restockSchedule,
-  totalLogs,
-  avgSlimeRating,
-  logoUrl,
-  ownerName,
-}: BrandCardProps) {
-  const initials = name.slice(0, 2).toUpperCase();
-  const isVerified = verificationTier === "verified";
-
-  return (
-    <Link href={`/brands/${slug}`} className="block group">
+      {/* Logo — 54px rounded-square */}
       <div
-        className="relative rounded-2xl transition-all duration-200 overflow-hidden p-4 active:scale-[0.98]"
+        className="flex items-center justify-center rounded-2xl relative overflow-hidden"
         style={{
-          background: "rgba(45,10,78,0.35)",
-          border: "1px solid rgba(45,10,78,0.9)",
-          // Tier-based left accent border
-          borderLeft: isVerified
-            ? "3px solid #39FF14"
-            : "3px solid rgba(45,10,78,0.8)",
-          boxShadow:
-            "0 2px 12px rgba(0,0,0,0.4), inset 0 0 20px rgba(45,10,78,0.1)",
+          width: 54,
+          height: 54,
+          border: "2px solid rgba(255,255,255,0.14)",
+          background: brand.logo_url ? "#0F0018" : logoGradient,
+          fontFamily: "Montserrat, sans-serif",
+          fontWeight: 900,
+          fontSize: 18,
+          color: "#FFFFFF",
         }}
       >
-        {/* Top holo accent on hover */}
-        <div
-          className="absolute inset-x-0 top-0 h-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+        {brand.logo_url ? (
+          <Image
+            src={brand.logo_url}
+            alt=""
+            fill
+            className="object-cover"
+            sizes="54px"
+          />
+        ) : (
+          initials
+        )}
+      </div>
+
+      {/* Name + check */}
+      <div className="flex items-center gap-1 mt-2.5 min-w-0">
+        <span
+          className="truncate"
           style={{
-            background: "linear-gradient(90deg, #39FF14, #00F0FF, #FF00E5)",
+            fontFamily: "Montserrat, sans-serif",
+            fontWeight: 700,
+            fontSize: 14,
+            color: "#FFFFFF",
+            lineHeight: 1.15,
+            minWidth: 0,
           }}
-        />
-
-        <div className="flex items-start gap-3">
-          {/* Logo / Avatar */}
-          <div
-            className="shrink-0 w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center"
-            style={{
-              background: "rgba(45,10,78,0.4)",
-              border: "1px solid rgba(45,10,78,0.6)",
-            }}
-          >
-            {logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={logoUrl}
-                alt={name}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <span className="text-base font-black text-slime-accent select-none">
-                {initials}
-              </span>
-            )}
-          </div>
-
-          {/* Main content */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-sm font-bold text-slime-text group-hover:text-slime-accent transition-colors truncate">
-                {name}
-              </h3>
-              {verificationTier && (
-                <VerificationBadge tier={verificationTier} />
-              )}
-            </div>
-            {ownerName && (
-              <p className="text-[11px] text-slime-muted mt-0.5">
-                by {ownerName}
-              </p>
-            )}
-            {location && (
-              <p className="flex items-center gap-1 text-[11px] text-slime-muted mt-1">
-                <svg
-                  viewBox="0 0 12 12"
-                  className="w-3 h-3 fill-slime-accent shrink-0"
-                >
-                  <path d="M6 1a3.5 3.5 0 0 0-3.5 3.5C2.5 7.5 6 11 6 11s3.5-3.5 3.5-6.5A3.5 3.5 0 0 0 6 1zm0 4.75A1.25 1.25 0 1 1 6 3.25a1.25 1.25 0 0 1 0 2.5z" />
-                </svg>
-                {location}
-              </p>
-            )}
-          </div>
-
-          {/* Arrow */}
-          <svg
-            viewBox="0 0 16 16"
-            className="w-4 h-4 mt-1 shrink-0 text-slime-muted group-hover:text-slime-accent transition-colors"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M6 4l4 4-4 4" />
-          </svg>
-        </div>
-
-        {/* Stats row */}
-        <div
-          className="mt-3 pt-3 flex items-center justify-between flex-wrap gap-2"
-          style={{ borderTop: "1px solid rgba(45,10,78,0.5)" }}
         >
-          {restockSchedule ? (
-            <span className="inline-flex items-center gap-1 text-[11px] bg-slime-accent/10 text-slime-accent font-medium px-2 py-1 rounded-lg border border-slime-accent/20">
-              <svg viewBox="0 0 12 12" className="w-3 h-3 fill-current">
-                <path d="M6 1v2.5L8 2l.7.7-2.7 2.7-2.7-2.7L4 2l2 1.5V1h0zm0 10V8.5L4 10l-.7-.7 2.7-2.7 2.7 2.7L8 10l-2-1.5V11h0zm5-5h-2.5L10 8l-.7.7L6.6 6 9.3 3.3 10 4 8.5 5.5H11v1zm-10 0h2.5L2 4l.7-.7L5.4 6 2.7 8.7 2 8 3.5 6.5H1v-1z" />
-              </svg>
-              {restockSchedule}
-            </span>
-          ) : (
-            <span className="text-[11px] text-slime-muted italic">
-              No restock schedule
-            </span>
-          )}
+          {brand.name}
+        </span>
+        {brand.is_verified && (
+          <span
+            className="inline-flex items-center justify-center rounded-full flex-none"
+            style={{
+              width: 15,
+              height: 15,
+              background: "#39FF14",
+              color: "#04140A",
+            }}
+            aria-label="Verified"
+          >
+            <svg
+              width={9}
+              height={9}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#04140A"
+              strokeWidth="3.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M5 12l5 5L19 7" />
+            </svg>
+          </span>
+        )}
+      </div>
 
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1 text-[11px] text-slime-muted">
-              <svg viewBox="0 0 12 12" className="w-3 h-3 fill-slime-accent">
-                <path d="M2 2h8a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm1 2v1h6V4H3zm0 2v1h4V6H3z" />
-              </svg>
-              <span className="font-semibold text-slime-text">{totalLogs}</span>{" "}
-              logs
-            </span>
-            {avgSlimeRating != null ? (
-              <StarRating value={avgSlimeRating} />
-            ) : (
-              <span className="text-[11px] text-slime-muted">
-                No ratings yet
-              </span>
-            )}
-          </div>
+      {/* Rating */}
+      {rating ? (
+        <div
+          className="mt-1.5 flex items-center gap-1"
+          style={{
+            color: "#7BFF7B",
+            fontSize: 13,
+            fontWeight: 800,
+          }}
+        >
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="#39FF14"
+            aria-hidden="true"
+          >
+            <path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.8 5 21.4l1.4-6.8L1.3 9.9l6.9-.8z" />
+          </svg>
+          {rating}
         </div>
+      ) : (
+        <div
+          className="mt-1.5"
+          style={{ color: "rgba(245,245,245,0.4)", fontSize: 12 }}
+        >
+          No ratings yet
+        </div>
+      )}
+
+      {/* Followers */}
+      <div
+        className="mt-1.5 flex items-center gap-1"
+        style={{ color: "rgba(245,245,245,0.5)", fontSize: 11.5 }}
+      >
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="8" r="3.4" />
+          <path d="M5.5 20c0-3.3 2.9-5 6.5-5s6.5 1.7 6.5 5" />
+        </svg>
+        {formatFollowers(brand.follower_count)} followers
       </div>
     </Link>
   );

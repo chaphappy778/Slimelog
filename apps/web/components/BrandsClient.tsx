@@ -1,601 +1,477 @@
-"use client";
 // apps/web/components/BrandsClient.tsx
-// [Change 4 — Brands Redesign D2] Full 4-section UI
+// [T33b 2026-07-13] Redesigned per Design's /brands mockup. Big
+// Discover-style hero header + Featured shop hero card + horizontal
+// Popular Shops carousel + unified "All brands" section (search
+// input + horizontal sort chips + Verified-only toggle + 2-column
+// grid). The previous split "Verified Brands" + "Community Brands"
+// sections are consolidated per Design's mockup — feels like one app
+// instead of two.
 
-import { useState, useMemo } from "react";
+"use client";
+
+import { useMemo, useState } from "react";
+import Link from "next/link";
 import { BrandCard } from "@/components/BrandCard";
 import FeaturedBrandCard from "@/components/FeaturedBrandCard";
 import PopularBrandsCarousel from "@/components/PopularBrandsCarousel";
-import Link from "next/link";
 import type { Brand } from "@/lib/types";
-
-// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface BrandsClientProps {
   featuredBrand: Brand | null;
   popularBrands: Brand[];
-  verifiedBrands: Brand[];
-  communityBrands: Brand[];
+  /**
+   * ALL non-popular brands, merged into one list. The client filters +
+   * sorts them via the unified "All brands" section. Pre-monetization
+   * this is essentially every brand outside Featured + Popular.
+   */
+  allBrands: Brand[];
+  /** Total shops for the header stat. */
+  totalShops: number;
+  /** Verified shops for the header stat. */
+  verifiedCount: number;
+  /**
+   * Optional "N new this week" count for the hero live pill. Server
+   * computes this from `brands.created_at >= now() - 7 days`.
+   */
+  newThisWeek: number;
 }
 
-// ─── Toggle Row ───────────────────────────────────────────────────────────────
+type SortKey = "rating" | "logs" | "followers" | "alpha";
 
-function FilterToggle({
-  label,
-  sublabel,
-  checked,
-  onChange,
-}: {
-  label: string;
-  sublabel?: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!checked)}
-      className="flex items-center justify-between w-full py-3.5 border-b last:border-0 active:opacity-80 transition-opacity"
-      style={{ borderColor: "rgba(45,10,78,0.5)" }}
-    >
-      <div className="text-left">
-        <p className="text-sm font-semibold text-slime-text">{label}</p>
-        {sublabel && (
-          <p className="text-xs text-slime-muted mt-0.5">{sublabel}</p>
-        )}
-      </div>
-      <div
-        className="w-6 h-6 rounded-md flex items-center justify-center shrink-0 transition-all duration-150"
-        style={
-          checked
-            ? {
-                background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-                boxShadow: "0 0 8px rgba(57,255,20,0.4)",
-              }
-            : {
-                background: "transparent",
-                border: "2px solid rgba(45,10,78,0.8)",
-              }
-        }
-      >
-        {checked && (
-          <svg viewBox="0 0 12 12" className="w-3.5 h-3.5" fill="none">
-            <path
-              d="M2 6l3 3 5-5"
-              stroke="#0A0A0A"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        )}
-      </div>
-    </button>
-  );
-}
-
-// ─── Active Filter Pill ───────────────────────────────────────────────────────
-
-function FilterPill({
-  label,
-  onRemove,
-}: {
-  label: string;
-  onRemove: () => void;
-}) {
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full"
-      style={{
-        background: "rgba(57,255,20,0.12)",
-        border: "1px solid rgba(57,255,20,0.35)",
-        color: "#39FF14",
-      }}
-    >
-      {label}
-      <button
-        type="button"
-        onClick={onRemove}
-        className="hover:opacity-70 transition-opacity ml-0.5"
-        aria-label={`Remove ${label} filter`}
-      >
-        &times;
-      </button>
-    </span>
-  );
-}
-
-// ─── Sort Pill ────────────────────────────────────────────────────────────────
-
-function SortPill({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="text-[11px] font-semibold px-3 py-1.5 rounded-full transition-all"
-      style={
-        active
-          ? {
-              background: "rgba(57,255,20,0.15)",
-              border: "1px solid rgba(57,255,20,0.4)",
-              color: "#39FF14",
-            }
-          : {
-              background: "rgba(45,10,78,0.2)",
-              border: "1px solid rgba(45,10,78,0.6)",
-              color: "rgba(255,255,255,0.5)",
-            }
-      }
-    >
-      {label}
-    </button>
-  );
-}
-
-// ─── Main Component ───────────────────────────────────────────────────────────
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "rating", label: "Top rated" },
+  { key: "logs", label: "Most logs" },
+  { key: "followers", label: "Followers" },
+  { key: "alpha", label: "A–Z" },
+];
 
 export default function BrandsClient({
   featuredBrand,
   popularBrands,
-  verifiedBrands,
-  communityBrands,
+  allBrands,
+  totalShops,
+  verifiedCount,
+  newThisWeek,
 }: BrandsClientProps) {
-  // Community filter state
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filterVerified, setFilterVerified] = useState(false);
-  const [filterHasRestock, setFilterHasRestock] = useState(false);
-  const [filterMostLogs, setFilterMostLogs] = useState(false);
-  const [filterTopRated, setFilterTopRated] = useState(false);
-  const [showFilterSheet, setShowFilterSheet] = useState(false);
+  const [query, setQuery] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("rating");
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
 
-  const [pendingVerified, setPendingVerified] = useState(false);
-  const [pendingHasRestock, setPendingHasRestock] = useState(false);
-  const [pendingMostLogs, setPendingMostLogs] = useState(false);
-  const [pendingTopRated, setPendingTopRated] = useState(false);
+  const filteredSorted = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let list = q
+      ? allBrands.filter((b) => b.name.toLowerCase().includes(q))
+      : [...allBrands];
 
-  // Verified brands sort state
-  const [verifiedSort, setVerifiedSort] = useState<
-    "rating" | "logs" | "followers"
-  >("rating");
+    if (verifiedOnly) list = list.filter((b) => b.is_verified);
 
-  const activeFilterCount = [
-    filterVerified,
-    filterHasRestock,
-    filterMostLogs,
-    filterTopRated,
-  ].filter(Boolean).length;
-
-  function openSheet() {
-    setPendingVerified(filterVerified);
-    setPendingHasRestock(filterHasRestock);
-    setPendingMostLogs(filterMostLogs);
-    setPendingTopRated(filterTopRated);
-    setShowFilterSheet(true);
-  }
-
-  function applyFilters() {
-    setFilterVerified(pendingVerified);
-    setFilterHasRestock(pendingHasRestock);
-    setFilterMostLogs(pendingMostLogs);
-    setFilterTopRated(pendingTopRated);
-    setShowFilterSheet(false);
-  }
-
-  function resetFilters() {
-    setPendingVerified(false);
-    setPendingHasRestock(false);
-    setPendingMostLogs(false);
-    setPendingTopRated(false);
-    setFilterVerified(false);
-    setFilterHasRestock(false);
-    setFilterMostLogs(false);
-    setFilterTopRated(false);
-    setShowFilterSheet(false);
-  }
-
-  // Sorted verified brands
-  const sortedVerified = useMemo(() => {
-    const list = [...verifiedBrands];
-    if (verifiedSort === "rating") {
-      list.sort(
-        (a, b) => (b.avg_slime_rating ?? 0) - (a.avg_slime_rating ?? 0),
-      );
-    } else if (verifiedSort === "logs") {
-      list.sort((a, b) => (b.total_logs ?? 0) - (a.total_logs ?? 0));
-    } else {
-      list.sort((a, b) => (b.follower_count ?? 0) - (a.follower_count ?? 0));
-    }
-    return list;
-  }, [verifiedBrands, verifiedSort]);
-
-  // Filtered community brands
-  const filtered = useMemo(() => {
-    let list = [...communityBrands];
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter((b) => b.name.toLowerCase().includes(q));
+    switch (sortKey) {
+      case "rating":
+        list.sort(
+          (a, b) => (b.avg_slime_rating ?? 0) - (a.avg_slime_rating ?? 0),
+        );
+        break;
+      case "logs":
+        list.sort((a, b) => (b.total_logs ?? 0) - (a.total_logs ?? 0));
+        break;
+      case "followers":
+        list.sort(
+          (a, b) => (b.follower_count ?? 0) - (a.follower_count ?? 0),
+        );
+        break;
+      case "alpha":
+        list.sort((a, b) => a.name.localeCompare(b.name));
+        break;
     }
 
-    if (filterVerified)
-      list = list.filter((b) => b.verification_tier === "verified");
-    if (filterHasRestock) list = list.filter((b) => b.restock_schedule != null);
-
-    if (filterMostLogs)
-      list.sort((a, b) => (b.total_logs ?? 0) - (a.total_logs ?? 0));
-    if (filterTopRated && !filterMostLogs)
-      list.sort(
-        (a, b) => (b.avg_slime_rating ?? 0) - (a.avg_slime_rating ?? 0),
-      );
-
     return list;
-  }, [
-    communityBrands,
-    searchQuery,
-    filterVerified,
-    filterHasRestock,
-    filterMostLogs,
-    filterTopRated,
-  ]);
-
-  const anyActivePills =
-    filterVerified || filterHasRestock || filterMostLogs || filterTopRated;
+  }, [allBrands, query, sortKey, verifiedOnly]);
 
   return (
-    <>
-      {/* ── Section 1: Featured Brand ── */}
-      {featuredBrand && (
-        <div className="max-w-[390px] mx-auto px-4 pb-5">
-          <FeaturedBrandCard brand={featuredBrand} />
-        </div>
-      )}
-
-      {/* ── Section 2: Popular Shops ── */}
-      {popularBrands.length > 0 && (
-        <div className="max-w-[390px] mx-auto px-4 pb-6">
-          <p
-            className="text-[11px] font-black tracking-widest uppercase mb-3"
-            style={{ color: "#00F0FF" }}
-          >
-            Popular Shops
-          </p>
-          <PopularBrandsCarousel brands={popularBrands} />
-        </div>
-      )}
-
-      {/* ── Section 3: Verified Brands ── */}
-      {verifiedBrands.length > 0 && (
-        <div className="max-w-[390px] mx-auto px-4 pb-6">
-          <p
-            className="text-[11px] font-black tracking-widest uppercase mb-3"
-            style={{ color: "#00F0FF" }}
-          >
-            Verified Brands
-          </p>
-
-          {/* Sort control */}
-          <div className="flex items-center gap-2 mb-3">
-            <SortPill
-              label="Top Rated"
-              active={verifiedSort === "rating"}
-              onClick={() => setVerifiedSort("rating")}
-            />
-            <SortPill
-              label="Most Logs"
-              active={verifiedSort === "logs"}
-              onClick={() => setVerifiedSort("logs")}
-            />
-            <SortPill
-              label="Followers"
-              active={verifiedSort === "followers"}
-              onClick={() => setVerifiedSort("followers")}
-            />
-          </div>
-
-          {/* 2-col grid */}
-          <div className="grid grid-cols-2 gap-3">
-            {sortedVerified.map((brand) => {
-              const initials = brand.name.slice(0, 2).toUpperCase();
-              return (
-                <Link
-                  key={brand.id}
-                  href={`/brands/${brand.slug}`}
-                  className="block rounded-2xl p-3 active:scale-[0.98] transition-all"
-                  style={{
-                    background: "rgba(45,10,78,0.25)",
-                    border: "1px solid rgba(45,10,78,0.7)",
-                  }}
-                >
-                  {/* Logo */}
-                  <div
-                    className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center mx-auto mb-2"
-                    style={{
-                      background: "rgba(45,10,78,0.5)",
-                      border: "1px solid rgba(45,10,78,0.7)",
-                    }}
-                  >
-                    {brand.logo_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={brand.logo_url}
-                        alt={brand.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-sm font-black text-slime-accent select-none">
-                        {initials}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Name */}
-                  <p className="text-xs font-bold text-center text-slime-text truncate">
-                    {brand.name}
-                  </p>
-
-                  {/* Rating */}
-                  <div className="flex justify-center mt-1">
-                    {brand.avg_slime_rating != null ? (
-                      <span
-                        className="flex items-center gap-1 text-xs font-semibold"
-                        style={{ color: "#39FF14" }}
-                      >
-                        <svg
-                          viewBox="0 0 12 12"
-                          className="w-2.5 h-2.5 fill-current"
-                        >
-                          <polygon points="6,1 7.5,4.5 11,4.5 8.5,7 9.5,11 6,9 2.5,11 3.5,7 1,4.5 4.5,4.5" />
-                        </svg>
-                        {brand.avg_slime_rating.toFixed(1)}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-slime-muted">
-                        No ratings
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Followers */}
-                  <div className="flex justify-center items-center gap-0.5 mt-1">
-                    <svg
-                      viewBox="0 0 12 12"
-                      className="w-2.5 h-2.5 fill-current"
-                      style={{ color: "rgba(255,255,255,0.3)" }}
-                    >
-                      <path d="M6 6a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zm-4 5c0-2.2 1.8-4 4-4s4 1.8 4 4H2z" />
-                    </svg>
-                    <span className="text-[11px] text-slime-muted">
-                      {(brand.follower_count ?? 0).toLocaleString()}
-                    </span>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ── Section 4: Community Brands ── */}
-      <div className="max-w-[390px] mx-auto px-4 pb-2">
+    <div className="w-full max-w-[440px] mx-auto px-4">
+      {/* ── Hero header ────────────────────────────────────────────── */}
+      <div className="pt-2 pb-4">
         <p
-          className="text-[11px] font-black tracking-widest uppercase mb-3"
-          style={{ color: "#00F0FF" }}
+          className="section-label"
+          style={{ margin: 0, textShadow: "0 0 12px rgba(0,240,255,0.35)" }}
         >
-          Community Brands
+          Discover
         </p>
-      </div>
-
-      {/* Search + Filter bar */}
-      <div className="max-w-[390px] mx-auto px-4 pb-3">
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <svg
-              viewBox="0 0 20 20"
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 fill-slime-muted pointer-events-none"
-            >
-              <path d="M12.9 11.5a7 7 0 1 0-1.4 1.4l4.3 4.3 1.4-1.4-4.3-4.3zM8 13A5 5 0 1 1 8 3a5 5 0 0 1 0 10z" />
-            </svg>
-            <input
-              type="search"
-              placeholder="Search brands…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 text-sm border rounded-xl placeholder:text-slime-muted text-slime-text focus:outline-none focus:ring-1 focus:ring-slime-accent/40 focus:border-slime-accent/50 transition"
+        <h1
+          style={{
+            fontFamily: "Montserrat, sans-serif",
+            fontWeight: 900,
+            fontSize: 42,
+            letterSpacing: "-0.025em",
+            lineHeight: 0.95,
+            color: "#FFFFFF",
+            margin: "8px 0 0",
+          }}
+        >
+          Brands
+        </h1>
+        <div
+          className="flex items-center gap-2 flex-wrap"
+          style={{
+            fontSize: 14,
+            color: "rgba(245,245,245,0.68)",
+            marginTop: 13,
+          }}
+        >
+          <span>
+            <b
               style={{
-                background: "rgba(45,10,78,0.2)",
-                borderColor: "rgba(45,10,78,0.6)",
+                color: "#FFFFFF",
+                fontFamily: "Montserrat, sans-serif",
+                fontWeight: 800,
               }}
-            />
-          </div>
-
-          {/* Filter button */}
-          <button
-            type="button"
-            onClick={openSheet}
-            className="flex items-center gap-1.5 text-xs font-semibold text-slime-accent bg-slime-surface border border-slime-border px-3 py-1.5 rounded-full hover:border-slime-accent/50 transition-colors shrink-0"
+            >
+              {totalShops}
+            </b>{" "}
+            shops
+          </span>
+          <span style={{ color: "rgba(245,245,245,0.35)" }}>·</span>
+          <span>
+            <b
+              style={{
+                color: "#7BFF7B",
+                fontFamily: "Montserrat, sans-serif",
+                fontWeight: 800,
+              }}
+            >
+              {verifiedCount}
+            </b>{" "}
+            verified
+          </span>
+        </div>
+        {newThisWeek > 0 && (
+          <div
+            className="mt-3 inline-flex items-center gap-1.5 rounded-full"
+            style={{
+              padding: "6px 12px",
+              background: "rgba(57,255,20,0.10)",
+              border: "1px solid rgba(57,255,20,0.35)",
+              color: "#7BFF7B",
+              fontSize: 12,
+              fontWeight: 700,
+            }}
           >
-            <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 fill-slime-accent">
-              <path d="M1 3h14v1.5L9.5 9v5l-3-1.5V9L1 4.5V3z" />
+            <svg
+              width={12}
+              height={12}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#7BFF7B"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 2v20M2 12h20" />
             </svg>
-            {activeFilterCount > 0 ? (
-              <span className="flex items-center gap-1">
-                Filter
-                <span
-                  className="inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-black text-slime-bg"
-                  style={{
-                    background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-                  }}
-                >
-                  {activeFilterCount}
-                </span>
-              </span>
-            ) : (
-              "Filter"
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Active filter pills */}
-      {anyActivePills && (
-        <div className="max-w-[390px] mx-auto px-4 pb-3 flex flex-wrap gap-2">
-          {filterVerified && (
-            <FilterPill
-              label="Verified"
-              onRemove={() => setFilterVerified(false)}
-            />
-          )}
-          {filterHasRestock && (
-            <FilterPill
-              label="Has Restock"
-              onRemove={() => setFilterHasRestock(false)}
-            />
-          )}
-          {filterMostLogs && (
-            <FilterPill
-              label="Most Logs"
-              onRemove={() => setFilterMostLogs(false)}
-            />
-          )}
-          {filterTopRated && (
-            <FilterPill
-              label="Top Rated"
-              onRemove={() => setFilterTopRated(false)}
-            />
-          )}
-        </div>
-      )}
-
-      {/* Community brand list */}
-      <div className="max-w-[390px] mx-auto px-4 pt-1 pb-28 space-y-3">
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-            <svg viewBox="0 0 24 24" className="w-10 h-10" fill="none">
-              <circle
-                cx="12"
-                cy="12"
-                r="9"
-                stroke="rgba(45,10,78,0.8)"
-                strokeWidth="1.5"
-              />
-              <circle cx="9" cy="9" r="1.5" fill="rgba(45,10,78,0.8)" />
-            </svg>
-            <p className="text-sm font-semibold text-slime-text">
-              No brands found
-            </p>
-            <p className="text-xs text-slime-muted">
-              Try adjusting your search or filters.
-            </p>
-            {anyActivePills && (
-              <button
-                type="button"
-                onClick={resetFilters}
-                className="text-xs text-slime-accent font-semibold mt-1 hover:opacity-80 transition-opacity"
-              >
-                Clear all filters
-              </button>
-            )}
+            {newThisWeek} new this week
           </div>
-        ) : (
-          filtered.map((brand) => (
-            <BrandCard
-              key={brand.id}
-              name={brand.name}
-              slug={brand.slug}
-              location={brand.location}
-              verificationTier={brand.verification_tier}
-              restockSchedule={brand.restock_schedule}
-              totalLogs={brand.total_logs ?? 0}
-              avgSlimeRating={brand.avg_slime_rating}
-              logoUrl={brand.logo_url}
-              ownerName={brand.owner_name}
-            />
-          ))
         )}
       </div>
 
-      {/* Filter bottom sheet */}
-      {showFilterSheet && (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[2px]"
-            onClick={() => setShowFilterSheet(false)}
-            aria-hidden="true"
-          />
-          <div
-            className="fixed bottom-24 inset-x-4 z-50 rounded-2xl px-5 pt-5 pb-6"
-            style={{
-              background: "#0A0A0A",
-              border: "1px solid rgba(45,10,78,0.8)",
-              boxShadow: "0 -8px 32px rgba(45,10,78,0.4)",
-              maxHeight: "70vh",
-              overflowY: "auto",
-            }}
+      {/* ── Featured shop ──────────────────────────────────────────── */}
+      {featuredBrand && (
+        <section className="mb-6">
+          <p className="section-label" style={{ margin: "0 0 12px" }}>
+            Featured shop
+          </p>
+          <FeaturedBrandCard brand={featuredBrand} />
+        </section>
+      )}
+
+      {/* ── Popular shops ──────────────────────────────────────────── */}
+      {popularBrands.length > 0 && (
+        <section className="mb-6" style={{ marginLeft: -16, marginRight: -16 }}>
+          <p
+            className="section-label"
+            style={{ margin: "0 16px 12px" }}
           >
-            <div className="w-10 h-1 rounded-full bg-slime-border mx-auto mb-5" />
-            <h2
-              className="text-base font-black mb-4"
+            Popular shops
+          </p>
+          <div style={{ padding: "0 16px" }}>
+            <PopularBrandsCarousel brands={popularBrands} />
+          </div>
+        </section>
+      )}
+
+      {/* ── All brands ─────────────────────────────────────────────── */}
+      <section className="mb-6">
+        <p className="section-label" style={{ margin: "0 0 12px" }}>
+          All brands
+        </p>
+
+        {/* Search input */}
+        <label
+          className="flex items-center gap-3 rounded-2xl"
+          style={{
+            padding: "12px 16px",
+            background: "rgba(10,4,18,0.55)",
+            border: "1px solid rgba(120,60,180,0.4)",
+          }}
+        >
+          <svg
+            width={18}
+            height={18}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="rgba(245,245,245,0.45)"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            className="shrink-0"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="m21 21-4.35-4.35" />
+          </svg>
+          <input
+            type="search"
+            inputMode="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search brands..."
+            className="flex-1 bg-transparent outline-none text-[15px]"
+            style={{
+              fontFamily: "system-ui, sans-serif",
+              color: "#FFFFFF",
+            }}
+            aria-label="Search brands"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="Clear search"
               style={{
-                fontFamily: "'Montserrat', sans-serif",
-                color: "#F5F5F5",
+                color: "rgba(245,245,245,0.55)",
+                lineHeight: 0,
               }}
             >
-              Filter Brands
-            </h2>
-            <FilterToggle
-              label="Verified Only"
-              sublabel="Show only verified brands"
-              checked={pendingVerified}
-              onChange={setPendingVerified}
-            />
-            <FilterToggle
-              label="Has Restock Schedule"
-              sublabel="Show only brands with restock info"
-              checked={pendingHasRestock}
-              onChange={setPendingHasRestock}
-            />
-            <FilterToggle
-              label="Most Logs"
-              sublabel="Sort by community activity"
-              checked={pendingMostLogs}
-              onChange={setPendingMostLogs}
-            />
-            <FilterToggle
-              label="Top Rated"
-              sublabel="Sort by highest rating"
-              checked={pendingTopRated}
-              onChange={setPendingTopRated}
-            />
-            <div className="flex items-center justify-between mt-6 gap-3">
-              <button
-                type="button"
-                onClick={resetFilters}
-                className="text-sm text-slime-muted font-semibold hover:text-slime-text transition-colors px-2"
+              <svg
+                width={14}
+                height={14}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                aria-hidden="true"
               >
-                Reset
-              </button>
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </label>
+
+        {/* Sort chips + Verified toggle */}
+        <div
+          className="flex gap-2 mt-3 overflow-x-auto scrollbar-none"
+          style={
+            {
+              msOverflowStyle: "none",
+              scrollbarWidth: "none",
+              WebkitOverflowScrolling: "touch",
+              paddingBottom: 2,
+            } as React.CSSProperties
+          }
+        >
+          {SORT_OPTIONS.map((opt) => {
+            const active = sortKey === opt.key;
+            return (
               <button
+                key={opt.key}
                 type="button"
-                onClick={applyFilters}
-                className="flex-1 py-3 rounded-2xl text-sm font-bold text-slime-bg shadow-glow-green active:scale-[0.98] transition-all"
+                onClick={() => setSortKey(opt.key)}
+                className="shrink-0 rounded-full transition-all active:scale-[0.96]"
                 style={{
-                  background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                  padding: "8px 15px",
+                  fontFamily: "system-ui, sans-serif",
+                  fontWeight: 700,
+                  fontSize: 13.5,
+                  whiteSpace: "nowrap",
+                  background: active
+                    ? "rgba(57,255,20,0.18)"
+                    : "rgba(45,10,78,0.4)",
+                  border: active
+                    ? "1px solid rgba(57,255,20,0.55)"
+                    : "1px solid rgba(120,60,180,0.5)",
+                  color: active ? "#7BFF7B" : "rgba(245,245,245,0.55)",
+                  boxShadow: active
+                    ? "0 0 14px rgba(57,255,20,0.35)"
+                    : "none",
                 }}
               >
-                Apply
+                {opt.label}
               </button>
+            );
+          })}
+
+          {/* Divider */}
+          <div
+            className="shrink-0 self-center"
+            aria-hidden="true"
+            style={{
+              width: 1,
+              height: 22,
+              background: "rgba(120,60,180,0.5)",
+              margin: "0 4px",
+            }}
+          />
+
+          <button
+            type="button"
+            onClick={() => setVerifiedOnly((v) => !v)}
+            className="shrink-0 rounded-full transition-all active:scale-[0.96]"
+            style={{
+              padding: "8px 15px",
+              fontFamily: "system-ui, sans-serif",
+              fontWeight: 700,
+              fontSize: 13.5,
+              whiteSpace: "nowrap",
+              background: verifiedOnly
+                ? "rgba(0,240,255,0.16)"
+                : "rgba(45,10,78,0.4)",
+              border: verifiedOnly
+                ? "1px solid rgba(0,240,255,0.55)"
+                : "1px solid rgba(120,60,180,0.5)",
+              color: verifiedOnly ? "#00F0FF" : "rgba(245,245,245,0.55)",
+              boxShadow: verifiedOnly ? "0 0 14px rgba(0,240,255,0.3)" : "none",
+            }}
+            aria-pressed={verifiedOnly}
+          >
+            Verified only
+          </button>
+        </div>
+
+        {/* Grid — 2 columns */}
+        {filteredSorted.length === 0 ? (
+          <div
+            className="rounded-2xl mt-4 text-center"
+            style={{
+              padding: "30px 18px",
+              background: "rgba(45,10,78,0.2)",
+              border: "1px dashed rgba(120,60,180,0.5)",
+              color: "rgba(245,245,245,0.6)",
+              fontSize: 13,
+              lineHeight: 1.55,
+            }}
+          >
+            No shops match that yet. Try clearing filters, or suggest one
+            below.
+          </div>
+        ) : (
+          <div
+            className="grid mt-4"
+            style={{
+              gridTemplateColumns: "1fr 1fr",
+              gap: 12,
+            }}
+          >
+            {filteredSorted.map((brand) => (
+              <BrandCard key={brand.id} brand={brand} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ── Missing a shop? ────────────────────────────────────────── */}
+      <section className="mb-6">
+        <p className="section-label" style={{ margin: "0 0 12px" }}>
+          Missing a shop?
+        </p>
+        <div
+          className="rounded-2xl"
+          style={{
+            padding: 16,
+            background: "rgba(45,10,78,0.28)",
+            border: "1px solid rgba(120,60,180,0.55)",
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="flex items-center justify-center rounded-2xl shrink-0"
+              style={{
+                width: 48,
+                height: 48,
+                background: "rgba(204,68,255,0.12)",
+                border: "1px solid rgba(204,68,255,0.5)",
+                color: "#FF7BEB",
+              }}
+              aria-hidden="true"
+            >
+              <svg
+                width={24}
+                height={24}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <div
+                style={{
+                  fontFamily: "Montserrat, sans-serif",
+                  fontWeight: 800,
+                  fontSize: 15,
+                  color: "#FFFFFF",
+                  lineHeight: 1.2,
+                }}
+              >
+                Know a slime shop we should track?
+              </div>
+              <div
+                className="mt-1"
+                style={{
+                  fontSize: 12.5,
+                  color: "rgba(245,245,245,0.55)",
+                  lineHeight: 1.45,
+                }}
+              >
+                Send us the name and we will chase down their drizzle.
+              </div>
             </div>
           </div>
-        </>
-      )}
-    </>
+          <Link
+            href="/submit-brand"
+            className="mt-3.5 flex items-center justify-center rounded-2xl transition-transform active:scale-[0.98]"
+            style={{
+              padding: "12px 18px",
+              background: "rgba(0,240,255,0.06)",
+              border: "1px solid rgba(0,240,255,0.4)",
+              color: "#00F0FF",
+              fontFamily: "Montserrat, sans-serif",
+              fontWeight: 700,
+              fontSize: 14.5,
+              textDecoration: "none",
+            }}
+          >
+            Suggest a brand
+            <svg
+              width={16}
+              height={16}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              style={{ marginLeft: 8 }}
+            >
+              <path d="M9 6l6 6-6 6" />
+            </svg>
+          </Link>
+        </div>
+      </section>
+    </div>
   );
 }
