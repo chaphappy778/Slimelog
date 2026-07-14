@@ -1,28 +1,40 @@
 // apps/web/components/RatingSlider.tsx
-// [T-wizard 2026-07-13] Full rebuild per Design's log-wizard pack.
-// - Track uses the how-to-rate five-stop scale: red → orange → blue →
-//   teal → green. Values 1..5 land on the same color they land on in
-//   the guide.
-// - Five outlined line-SVG stars sit under the track, each centered
-//   on its integer position. Stars fill via SVG clip-path so 3.75
-//   shows three full stars + one three-quarter-filled star (partial
-//   fill, "clip" style — Design's default).
-// - Handle is a white disc with a band-colored double-glow. 44px
-//   tactile touch target (larger than the visible disc).
-// - Numeric readout on the right of the label row is band-colored so
-//   it visually reinforces the mapping.
-// - Overall variant renders the label in rainbow text.
-// - Accessible: hidden native <input type="range"> drives the value
-//   with arrow-key stepping + aria-valuenow. Overlay is decorative.
+// [T-wizard 2026-07-13, revised for Jenn's mobile feedback] Full
+// rebuild with custom pointer events and axis-locked dragging. The
+// previous version used a hidden native `<input type="range">` with
+// `touch-action: pan-y` — that unblocks vertical scroll on mobile
+// but iOS Safari's pan-y also refuses horizontal panning gestures,
+// so touch-drag on the slider never registered. Only taps worked.
+//
+// New pointer strategy:
+//
+//   pointerdown           → record start position, don't commit yet
+//   first pointermove     → measure dominant axis:
+//                             |dx| > |dy| ⇒ we're the slider,
+//                             setPointerCapture + start dragging
+//                             |dy| > |dx| ⇒ user is scrolling,
+//                             release and never touch the value
+//   subsequent pointermove → update value based on pointer x
+//   pointerup             → if we never captured, treat as tap
+//                             (set value to tap position). If we did
+//                             capture, we already committed.
+//
+// This gives us: horizontal drag → slider, vertical drag → page
+// scroll, tap → jump-to-position. Same feel as native mobile sliders
+// on iOS Photos / Twitter etc.
+//
+// Accessibility: kept the native `<input type="range">` fully hidden
+// (pointer-events: none) so keyboard nav (arrow keys, home/end) still
+// works via focus. Screen readers get aria-valuenow etc.
 
 "use client";
+
+import { useRef } from "react";
 
 const SCALE_GRADIENT =
   "linear-gradient(90deg, #FF3D6E 0%, #FF7A2E 26%, #00A6FF 52%, #00E28A 78%, #39FF14 100%)";
 
-// Band colors align with the five stops. A value of 1 → red,
-// 2 → orange, 3 → blue, 4 → teal, 5 → green. Fractionals adopt the
-// nearest-integer band.
+// Value 1 → red, 2 → orange, 3 → blue, 4 → teal, 5 → green.
 const BAND_COLORS = ["#FF3D6E", "#FF7A2E", "#00A6FF", "#00E28A", "#39FF14"];
 
 function bandColorFor(v: number): string {
@@ -30,7 +42,6 @@ function bandColorFor(v: number): string {
   return BAND_COLORS[idx];
 }
 
-// Star path taken from Design's mockup. viewBox 0..24.
 const STAR_D =
   "M12 3.2l2.63 5.99 6.52.55-4.95 4.28 1.49 6.38L12 16.9l-5.68 3.5 1.49-6.38L2.85 9.74l6.52-.55z";
 
@@ -38,26 +49,32 @@ interface RatingSliderProps {
   label: string;
   value: number | null;
   onChange: (val: number) => void;
-  /** Overall gets a rainbow label treatment. */
   isOverall?: boolean;
 }
 
-// Snap a raw float to the nearest 0.25 step.
 function snapTo25(raw: number): number {
   return Math.round(raw * 4) / 4;
 }
 
-// Display helper: drop trailing zeros. 5.0 → "5", 3.5 → "3.5", 2.75
-// → "2.75".
 function formatRating(val: number): string {
   return parseFloat(val.toFixed(2)).toString();
 }
 
-// Fill amount for star at index (0..4) given the current slider value.
-// Returns a number 0..1 representing the fraction of the star that
-// should be filled.
 function starFillAt(idx: number, value: number): number {
   return Math.max(0, Math.min(1, value - idx));
+}
+
+// Pixel threshold before we decide whether a drag is a slide or a
+// scroll. Smaller = snappier response, larger = fewer false positives
+// on wobbly fingers. 6px matches iOS's own gesture threshold.
+const AXIS_LOCK_THRESHOLD = 6;
+
+// Map a pointer x within the track element to a rating value 1..5,
+// then snap to the nearest 0.25 step.
+function valueFromPointer(clientX: number, el: HTMLDivElement): number {
+  const rect = el.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  return snapTo25(1 + pct * 4);
 }
 
 export function RatingSlider({
@@ -66,13 +83,116 @@ export function RatingSlider({
   onChange,
   isOverall = false,
 }: RatingSliderProps) {
-  // We render the track as if values map 1..5 → 0..100%. When the
-  // user hasn't set a rating yet, we show empty stars and a subtle
-  // dashed track with no handle.
   const hasValue = value !== null;
   const displayVal = value ?? 1;
   const band = bandColorFor(displayVal);
   const pct = hasValue ? ((displayVal - 1) / 4) * 100 : 0;
+
+  // Drag state — kept in a ref so React re-renders don't clobber it
+  // mid-drag. Cleared on pointerup / pointercancel.
+  const dragRef = useRef<{
+    el: HTMLDivElement;
+    startX: number;
+    startY: number;
+    captured: boolean;
+    pointerId: number;
+  } | null>(null);
+
+  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    // Only react to primary buttons / single-finger touches.
+    if (e.button !== undefined && e.button !== 0) return;
+    dragRef.current = {
+      el: e.currentTarget,
+      startX: e.clientX,
+      startY: e.clientY,
+      captured: false,
+      pointerId: e.pointerId,
+    };
+  }
+
+  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (!drag) return;
+
+    // First move: decide the axis. Wait until we've moved past the
+    // threshold in either direction so a wobbly touch isn't
+    // misclassified.
+    if (!drag.captured) {
+      const dx = Math.abs(e.clientX - drag.startX);
+      const dy = Math.abs(e.clientY - drag.startY);
+      if (dx < AXIS_LOCK_THRESHOLD && dy < AXIS_LOCK_THRESHOLD) return;
+
+      if (dx > dy) {
+        // Horizontal → we own the drag.
+        drag.captured = true;
+        try {
+          drag.el.setPointerCapture(e.pointerId);
+        } catch {
+          // setPointerCapture can throw if the pointer is already
+          // released. Nothing to recover — treat as uncaptured.
+          dragRef.current = null;
+          return;
+        }
+        // Preventing default here stops iOS from starting a scroll
+        // once we've committed to a slider drag.
+        e.preventDefault();
+      } else {
+        // Vertical → let the page scroll. Drop the drag state so
+        // subsequent moves don't touch the slider.
+        dragRef.current = null;
+        return;
+      }
+    }
+
+    // We're dragging. Update value based on pointer x.
+    if (drag.captured) {
+      e.preventDefault();
+      onChange(valueFromPointer(e.clientX, drag.el));
+    }
+  }
+
+  function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (!drag) return;
+
+    if (!drag.captured) {
+      // Never crossed the drag threshold — treat as a tap. Set the
+      // value to the tap x position.
+      onChange(valueFromPointer(e.clientX, drag.el));
+    }
+    dragRef.current = null;
+  }
+
+  function onPointerCancel() {
+    dragRef.current = null;
+  }
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    // Keyboard nav via the container so the visible slider is fully
+    // keyboard-controllable when it has focus. Steps by 0.25.
+    const current = value ?? 1;
+    let next: number | null = null;
+    switch (e.key) {
+      case "ArrowRight":
+      case "ArrowUp":
+        next = Math.min(5, current + 0.25);
+        break;
+      case "ArrowLeft":
+      case "ArrowDown":
+        next = Math.max(1, current - 0.25);
+        break;
+      case "Home":
+        next = 1;
+        break;
+      case "End":
+        next = 5;
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    onChange(snapTo25(next));
+  }
 
   return (
     <div>
@@ -128,11 +248,33 @@ export function RatingSlider({
         </span>
       </div>
 
-      {/* Track + handle */}
-      <div style={{ position: "relative", width: "100%", height: 44 }}>
-        {/* Track base — 12px tall, always shows the full 5-stop
-            gradient as a faint background so the ladder is visible
-            even before the user drags. */}
+      {/* Track + handle. Custom pointer events for tap + drag with
+          axis lock — see file header for the strategy. */}
+      <div
+        role="slider"
+        aria-label={label}
+        aria-valuemin={1}
+        aria-valuemax={5}
+        aria-valuenow={displayVal}
+        tabIndex={0}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
+        onKeyDown={onKeyDown}
+        style={{
+          position: "relative",
+          width: "100%",
+          height: 44,
+          cursor: "pointer",
+          // Neutral default touch-action so the browser lets us do
+          // our own axis-lock logic. If we didn't take over on
+          // pointermove, the page still scrolls fine.
+          touchAction: "auto",
+          outline: "none",
+        }}
+      >
+        {/* Track base */}
         <div
           style={{
             position: "absolute",
@@ -145,11 +287,11 @@ export function RatingSlider({
             background: SCALE_GRADIENT,
             opacity: hasValue ? 1 : 0.35,
             boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.25)",
+            pointerEvents: "none",
           }}
         />
 
-        {/* Track dimmer — a semi-opaque overlay over the UNFILLED
-            portion, so the filled portion pops. Design's technique. */}
+        {/* Dimmer over the unfilled portion */}
         {hasValue && (
           <div
             style={{
@@ -166,11 +308,10 @@ export function RatingSlider({
           />
         )}
 
-        {/* Handle — 44px tactile target, 22px visible disc with a
-            band-colored double glow. Only shown when the user has
-            actually set a value. */}
+        {/* Handle */}
         {hasValue && (
           <div
+            aria-hidden="true"
             style={{
               position: "absolute",
               top: "50%",
@@ -182,7 +323,6 @@ export function RatingSlider({
               placeItems: "center",
               pointerEvents: "none",
             }}
-            aria-hidden="true"
           >
             <div
               style={{
@@ -195,44 +335,9 @@ export function RatingSlider({
             />
           </div>
         )}
-
-        {/* Native range input drives the value. Hidden visually but
-            fully accessible: keyboard arrow-key steps by 0.25,
-            aria-valuenow reflects the current value.
-            2026-07-13: `touchAction: pan-y` so a vertical scroll
-            gesture starting on the slider passes through to the page
-            instead of being captured as a slider drag. The horizontal
-            drag axis is what actually moves the value, so this
-            preserves the mobile UX while un-breaking page scroll on
-            the Ratings step (six stacked sliders eat a lot of
-            vertical touch area). */}
-        <input
-          type="range"
-          min={1}
-          max={5}
-          step={0.25}
-          value={displayVal}
-          onChange={(e) => onChange(snapTo25(parseFloat(e.target.value)))}
-          aria-label={label}
-          aria-valuemin={1}
-          aria-valuemax={5}
-          aria-valuenow={displayVal}
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            opacity: 0,
-            cursor: "pointer",
-            margin: 0,
-            padding: 0,
-            touchAction: "pan-y",
-          }}
-        />
       </div>
 
-      {/* Star row — five outlined stars, each fills proportionally
-          via SVG clipPath. Design's "clip" fractional style. */}
+      {/* Star row */}
       <div
         style={{
           display: "flex",
@@ -240,6 +345,7 @@ export function RatingSlider({
           alignItems: "center",
           padding: "0 2px",
           marginTop: 14,
+          pointerEvents: "none",
         }}
         aria-hidden="true"
       >
@@ -256,14 +362,9 @@ export function RatingSlider({
 }
 
 // ─── Star glyph ────────────────────────────────────────────────────────
-// Outlined star; when `fill` > 0, a colored copy of the star is
-// clipped by an SVG rect covering the left N% of the box so partial
-// fills read at any 0.25 step. Line SVG only per anti-AI-art rule.
 
 function StarGlyph({ fill, accent }: { fill: number; accent: string }) {
   const on = fill > 0;
-  // Unique clipPath id per render so overlapping renders don't share
-  // rects. We hash the accent + fill into a stable-ish id.
   const cid = `star-${accent.replace("#", "")}-${Math.round(fill * 100)}`;
 
   return (
@@ -283,7 +384,6 @@ function StarGlyph({ fill, accent }: { fill: number; accent: string }) {
           </clipPath>
         </defs>
       )}
-      {/* Outline — always drawn */}
       <path
         d={STAR_D}
         fill="none"
@@ -291,7 +391,6 @@ function StarGlyph({ fill, accent }: { fill: number; accent: string }) {
         strokeWidth={2}
         strokeLinejoin="round"
       />
-      {/* Fill — clipped to fill portion */}
       {fill > 0 && (
         <path
           d={STAR_D}
