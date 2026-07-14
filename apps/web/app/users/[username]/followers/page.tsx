@@ -87,8 +87,17 @@ export default async function FollowersPage({ params }: PageProps) {
       <PageHeader />
       <main className="pt-14 pb-24 max-w-[440px] mx-auto px-4">
         <div className="pt-3 mb-4">
+          {/* [T37 fix 2026-07-13] When the viewer IS the target (looking
+              at their own followers), route back to `/profile` (the
+              user's own dashboard, where the Social tile lives). Only
+              when looking at someone ELSE's followers do we route to
+              the public `/users/<username>` page. */}
           <Link
-            href={`/users/${target.username}`}
+            href={
+              viewer && viewer.id === target.id
+                ? "/profile"
+                : `/users/${target.username}`
+            }
             className="inline-flex items-center gap-2 text-[15px]"
             style={{ color: "rgba(245,245,245,0.55)" }}
           >
@@ -106,7 +115,9 @@ export default async function FollowersPage({ params }: PageProps) {
               <path d="M19 12H5" />
               <path d="m12 19-7-7 7-7" />
             </svg>
-            Back to @{target.username}
+            {viewer && viewer.id === target.id
+              ? "Back to profile"
+              : `Back to @${target.username}`}
           </Link>
         </div>
 

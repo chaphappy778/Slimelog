@@ -42,6 +42,20 @@ import { RatingSlider } from "@/components/RatingSlider";
 import LogStepHeader from "@/components/log/LogStepHeader";
 import LogStepFooter from "@/components/log/LogStepFooter";
 import BaseTypePicker from "@/components/log/BaseTypePicker";
+// [T-wizard 2026-07-13 rev2] Shared wizard tokens + widgets so the
+// create + edit pages don't drift again.
+import {
+  RATING_FIELDS,
+  sectionCardStyle,
+  fieldInputStyle,
+  FieldLabel,
+  PickChip,
+  ToggleKnob,
+  SummaryRow,
+  RatingAxisCard,
+  ColorPicker,
+} from "@/components/log/LogWizardShared";
+import type { RatingAxisMeta } from "@/components/log/LogWizardShared";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -56,81 +70,10 @@ type RatingKey =
   | "rating_sensory_fit"
   | "rating_overall";
 
-// [T-wizard 2026-07-13] Extended per-axis metadata for the Ratings
-// step. `accent` matches the how-to-rate axis palette exactly; `hint`
-// is a one-line reminder we render under the axis title. `overall`
-// marks the last axis so it can render with the rainbow border +
-// "Almost done" eyebrow.
-interface RatingAxisMeta {
-  key: RatingKey;
-  label: string;
-  accent: string;
-  hint: string;
-  overall?: true;
-}
-const RATING_FIELDS: RatingAxisMeta[] = [
-  {
-    key: "rating_texture",
-    label: "Texture",
-    accent: "#39FF14",
-    hint: "How it feels in hand: the poke, the pull, the squish.",
-  },
-  {
-    key: "rating_sound",
-    label: "Sound / ASMR",
-    accent: "#00F0FF",
-    hint: "Crunch, click, bubble. The audio payoff.",
-  },
-  {
-    key: "rating_drizzle",
-    label: "Aesthetic",
-    accent: "#FF00E5",
-    hint: "Color, mix-ins, how it reads on the shelf.",
-  },
-  {
-    key: "rating_creativity",
-    label: "Creativity",
-    accent: "#FFD24A",
-    hint: "Original concept, add-ins, theme follow-through.",
-  },
-  {
-    key: "rating_sensory_fit",
-    label: "Quality",
-    accent: "#8B5CF6",
-    hint: "Build, hold, no over-stick, ages well.",
-  },
-  {
-    key: "rating_overall",
-    label: "Overall",
-    accent: "#00F0FF",
-    hint: "Your one number for the whole tub.",
-    overall: true,
-  },
-];
-
-interface ColorSwatch {
-  label: string;
-  hex: string;
-  value: string;
-  dark?: boolean;
-}
-
-const COLOR_SWATCHES: ColorSwatch[] = [
-  { label: "White", hex: "#FFFFFF", value: "white", dark: true },
-  { label: "Cream", hex: "#FFF5DC", value: "cream", dark: true },
-  { label: "Pink", hex: "#FFB6C1", value: "pink" },
-  { label: "Hot Pink", hex: "#FF3E8A", value: "hot pink" },
-  { label: "Purple", hex: "#9B5DE5", value: "purple" },
-  { label: "Lavender", hex: "#C9B8F5", value: "lavender" },
-  { label: "Blue", hex: "#4A90E2", value: "blue" },
-  { label: "Mint", hex: "#98E4C8", value: "mint" },
-  { label: "Green", hex: "#4CAF50", value: "green" },
-  { label: "Yellow", hex: "#FFE135", value: "yellow", dark: true },
-  { label: "Orange", hex: "#FF8C42", value: "orange" },
-  { label: "Red", hex: "#E94040", value: "red" },
-  { label: "Brown", hex: "#8B4513", value: "brown" },
-  { label: "Black", hex: "#1A1A1A", value: "black" },
-];
+// [T-wizard 2026-07-13 rev2] RatingAxisMeta / RATING_FIELDS /
+// COLOR_SWATCHES moved to `@/components/log/LogWizardShared` so the
+// edit page (`/log/edit/[id]/page.tsx`) draws from the same source
+// and no longer drifts visually.
 
 // [Change 1 — scent_notes] Added scent_notes: string to FormState
 interface FormState {
@@ -168,184 +111,18 @@ function buildColorsArray(selectedValues: string[]): string[] | undefined {
 // (sticky pill row + eyebrow + big title). Import from
 // `@/components/log/LogStepHeader`.
 
-// ─── Field ────────────────────────────────────────────────────────────────────
-
-function Field({
-  label,
-  optional,
-  hint,
-  children,
-}: {
-  label: string;
-  optional?: boolean;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-2">
-        <label className="section-label">{label}</label>
-        {optional && (
-          <span className="text-xs text-slime-muted/60 normal-case tracking-normal font-normal">
-            optional
-          </span>
-        )}
-      </div>
-      {children}
-      {hint && <p className="text-xs text-slime-muted/70 mt-0.5">{hint}</p>}
-    </div>
-  );
-}
-
-const inputCls =
-  "w-full rounded-xl bg-slime-surface border border-slime-border px-4 py-3 text-sm text-slime-text placeholder:text-slime-muted focus:outline-none focus:ring-1 focus:ring-slime-accent/40 focus:border-slime-accent/50 transition";
-
-// ─── Color Picker ─────────────────────────────────────────────────────────────
-
-function ColorPicker({
-  selectedValues,
-  onToggle,
-}: {
-  selectedValues: string[];
-  onToggle: (value: string) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-7 gap-2">
-        {COLOR_SWATCHES.map((swatch) => {
-          const isSelected = selectedValues.includes(swatch.value);
-          return (
-            <button
-              key={swatch.value}
-              type="button"
-              onClick={() => onToggle(swatch.value)}
-              aria-label={`${swatch.label}${isSelected ? " (selected)" : ""}`}
-              aria-pressed={isSelected}
-              className={`relative w-full aspect-square rounded-full transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-slime-accent ${
-                isSelected
-                  ? "ring-2 ring-slime-accent ring-offset-2 ring-offset-slime-card scale-110"
-                  : swatch.dark
-                    ? "ring-1 ring-slime-border hover:scale-105"
-                    : "hover:scale-105"
-              }`}
-              style={{ backgroundColor: swatch.hex }}
-            >
-              {isSelected && (
-                <span
-                  className="absolute inset-0 flex items-center justify-center"
-                  style={{ color: swatch.dark ? "#1A1A1A" : "#FFFFFF" }}
-                >
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <polyline points="2,6 5,9 10,3" />
-                  </svg>
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-      {selectedValues.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {selectedValues.map((val) => (
-            <span
-              key={val}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slime-accent/15 border border-slime-accent/30 text-xs font-medium text-slime-accent"
-            >
-              {val}
-              <button
-                type="button"
-                onClick={() => onToggle(val)}
-                className="ml-0.5 hover:text-slime-text transition"
-                aria-label={`Remove ${val}`}
-              >
-                &times;
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+// [T-wizard 2026-07-13 rev2] Local `Field`, `ColorPicker`, and
+// `inputCls` retired. New wizard uses `FieldLabel` +
+// `fieldInputStyle` + `ColorPicker` from
+// `@/components/log/LogWizardShared`.
 
 // cardStyle retired 2026-07-13 — the wizard no longer wraps every
 // step in a single card. Content flows through the sticky header +
 // footer, individual sections use the standard glass card treatment
 // via `sectionCardStyle` where appropriate.
 
-// Standard glass card treatment used across the wizard for the
-// wishlist toggle, the public toggle on Notes, the summary card, etc.
-const sectionCardStyle: React.CSSProperties = {
-  background: "rgba(45,10,78,0.3)",
-  border: "1px solid rgba(45,10,78,0.7)",
-  borderRadius: 20,
-  padding: 16,
-};
-
-// Field label — Montserrat 800, cyan uppercase, matches Design's
-// mockup. Includes required (magenta *) or optional treatment.
-function FieldLabel({
-  children,
-  optional,
-}: {
-  children: React.ReactNode;
-  optional?: boolean;
-}) {
-  return (
-    <div
-      className="flex items-baseline gap-1.5 mb-2"
-      style={{
-        fontFamily: "Montserrat, sans-serif",
-        fontWeight: 800,
-        fontSize: 12,
-        letterSpacing: "0.13em",
-        textTransform: "uppercase",
-        color: "#00F0FF",
-      }}
-    >
-      {children}
-      {optional ? (
-        <span
-          style={{
-            color: "rgba(245,245,245,0.42)",
-            fontFamily: "system-ui, sans-serif",
-            fontWeight: 500,
-            fontSize: 11,
-            letterSpacing: 0,
-            textTransform: "none",
-          }}
-        >
-          optional
-        </span>
-      ) : (
-        <span style={{ color: "#FF00E5" }}>*</span>
-      )}
-    </div>
-  );
-}
-
-// Common input field style — matches Design's `.field` treatment.
-const fieldInputStyle: React.CSSProperties = {
-  width: "100%",
-  background: "rgba(45,10,78,0.3)",
-  border: "1px solid rgba(45,10,78,0.7)",
-  borderRadius: 14,
-  padding: "14px 15px",
-  color: "#FFFFFF",
-  fontFamily: "system-ui, sans-serif",
-  fontSize: 15,
-  outline: "none",
-};
+// [T-wizard 2026-07-13 rev2] sectionCardStyle, FieldLabel, and
+// fieldInputStyle moved to `@/components/log/LogWizardShared`.
 
 // ─── Inner Page ───────────────────────────────────────────────────────────────
 
@@ -966,197 +743,8 @@ function LogPageInner() {
     </PageWrapper>
   );
 }
-
-// ─── Rating axis card ─────────────────────────────────────────────────
-// Wraps a `RatingSlider` in a per-axis tinted card. Overall gets a
-// rainbow border + "Almost done" eyebrow + larger padding.
-
-function RatingAxisCard({
-  axis,
-  value,
-  onChange,
-}: {
-  axis: RatingAxisMeta;
-  value: number | null;
-  onChange: (v: number) => void;
-}) {
-  const cardStyle: React.CSSProperties = axis.overall
-    ? {
-        background: "rgba(45,10,78,0.34)",
-        border: "1.5px solid transparent",
-        // Two-layer background trick: inner card fill + rainbow border.
-        backgroundImage:
-          "linear-gradient(rgba(20,4,38,0.75), rgba(20,4,38,0.75)), linear-gradient(90deg, #FF3D6E 0%, #FFAE3B 22%, #FFD24A 40%, #39FF14 58%, #00F0FF 76%, #FF00E5 100%)",
-        backgroundOrigin: "border-box",
-        backgroundClip: "padding-box, border-box",
-        boxShadow:
-          "0 0 30px -6px rgba(204,68,255,0.35), inset 0 0 40px -18px rgba(0,240,255,0.4)",
-        padding: "20px 18px 22px",
-        borderRadius: 20,
-      }
-    : {
-        background: "rgba(45,10,78,0.3)",
-        border: `1px solid ${axis.accent}66`,
-        boxShadow: `inset 0 0 34px -20px ${axis.accent}`,
-        padding: "16px 16px 18px",
-        borderRadius: 20,
-      };
-
-  return (
-    <div style={cardStyle}>
-      {axis.overall && (
-        <p
-          className="uppercase mb-2"
-          style={{
-            fontFamily: "Montserrat, sans-serif",
-            fontWeight: 800,
-            fontSize: 11,
-            letterSpacing: "0.16em",
-            color: "#FFFFFF",
-            margin: 0,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            marginBottom: 8,
-          }}
-        >
-          <span
-            aria-hidden="true"
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              background: "#FFFFFF",
-              boxShadow: "0 0 10px #FFFFFF",
-              display: "inline-block",
-            }}
-          />
-          Almost done, final call
-        </p>
-      )}
-      <p
-        className="mb-3"
-        style={{
-          color: "rgba(245,245,245,0.65)",
-          fontSize: 12.5,
-          lineHeight: 1.35,
-          margin: 0,
-          marginBottom: 12,
-        }}
-      >
-        {axis.hint}
-      </p>
-      <RatingSlider
-        label={axis.label}
-        value={value}
-        onChange={onChange}
-        isOverall={axis.overall}
-      />
-    </div>
-  );
-}
-
-// ─── Small helpers ────────────────────────────────────────────────────
-
-function ToggleKnob({ on }: { on: boolean }) {
-  return (
-    <div
-      className="flex-none relative"
-      aria-hidden="true"
-      style={{
-        width: 52,
-        height: 30,
-        borderRadius: 999,
-        background: on ? "linear-gradient(135deg, #39FF14, #00F0FF)" : "rgba(45,10,78,0.6)",
-        border: on ? "1px solid transparent" : "1px solid rgba(120,60,180,0.5)",
-        boxShadow: on ? "0 0 14px rgba(57,255,20,0.4)" : "none",
-        transition: "background 140ms ease",
-      }}
-    >
-      <div
-        className="absolute"
-        style={{
-          top: 3,
-          left: on ? 25 : 3,
-          width: 22,
-          height: 22,
-          borderRadius: "50%",
-          background: "#FFFFFF",
-          transition: "left 140ms ease",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
-        }}
-      />
-    </div>
-  );
-}
-
-function PickChip({
-  selected,
-  selectedTint,
-  onClick,
-  children,
-}: {
-  selected: boolean;
-  selectedTint: string;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="active:scale-[0.96] transition-transform"
-      style={{
-        padding: "9px 15px",
-        borderRadius: 999,
-        fontSize: 14,
-        fontWeight: 600,
-        fontFamily: "system-ui, sans-serif",
-        cursor: "pointer",
-        border: selected
-          ? `1px solid ${selectedTint}88`
-          : "1px solid rgba(120,60,180,0.5)",
-        background: selected
-          ? `${selectedTint}18`
-          : "rgba(45,10,78,0.4)",
-        color: selected ? selectedTint : "rgba(245,245,245,0.6)",
-        boxShadow: selected ? `0 0 12px ${selectedTint}55` : "none",
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function SummaryRow({
-  label,
-  value,
-  valueColor,
-}: {
-  label: string;
-  value: string;
-  valueColor?: string;
-}) {
-  return (
-    <p
-      style={{
-        color: "rgba(245,245,245,0.55)",
-        fontSize: 15,
-        margin: "3px 0",
-      }}
-    >
-      {label}:{" "}
-      <b
-        style={{
-          color: valueColor ?? "#FFFFFF",
-          fontWeight: 600,
-        }}
-      >
-        {value}
-      </b>
-    </p>
-  );
-}
+// [T-wizard 2026-07-13 rev2] RatingAxisCard, ToggleKnob,
+// PickChip, SummaryRow moved to `@/components/log/LogWizardShared`.
 
 // ─── Loading fallback ─────────────────────────────────────────────────────────
 
