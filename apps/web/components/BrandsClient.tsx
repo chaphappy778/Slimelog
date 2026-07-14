@@ -45,6 +45,13 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "alpha", label: "A–Z" },
 ];
 
+// [T35 2026-07-13] Cap the visible All-brands grid so the page stays
+// scannable at scale. 50 is enough to feel dense but never eats the
+// whole screen; users hit "Show more" to expand to the full list.
+// Filter / sort changes collapse back to the default 50 so the
+// visual weight stays consistent across state changes.
+const DEFAULT_VISIBLE = 50;
+
 export default function BrandsClient({
   featuredBrand,
   popularBrands,
@@ -56,6 +63,7 @@ export default function BrandsClient({
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("rating");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
   const filteredSorted = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -233,7 +241,10 @@ export default function BrandsClient({
             type="search"
             inputMode="search"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setShowAll(false);
+            }}
             placeholder="Search brands..."
             className="flex-1 bg-transparent outline-none text-[15px]"
             style={{
@@ -285,7 +296,10 @@ export default function BrandsClient({
               <button
                 key={opt.key}
                 type="button"
-                onClick={() => setSortKey(opt.key)}
+                onClick={() => {
+                  setSortKey(opt.key);
+                  setShowAll(false);
+                }}
                 className="shrink-0 rounded-full transition-all active:scale-[0.96]"
                 style={{
                   padding: "8px 15px",
@@ -324,7 +338,10 @@ export default function BrandsClient({
 
           <button
             type="button"
-            onClick={() => setVerifiedOnly((v) => !v)}
+            onClick={() => {
+              setVerifiedOnly((v) => !v);
+              setShowAll(false);
+            }}
             className="shrink-0 rounded-full transition-all active:scale-[0.96]"
             style={{
               padding: "8px 15px",
@@ -347,7 +364,11 @@ export default function BrandsClient({
           </button>
         </div>
 
-        {/* Grid — 2 columns */}
+        {/* Grid — 2 columns.
+            [T35 2026-07-13] `minWidth: 0` on the grid + a hard
+            fallback `overflow: hidden` on this section keep long
+            brand names from pushing the right column off-screen on
+            narrow viewports. */}
         {filteredSorted.length === 0 ? (
           <div
             className="rounded-2xl mt-4 text-center"
@@ -364,17 +385,76 @@ export default function BrandsClient({
             below.
           </div>
         ) : (
-          <div
-            className="grid mt-4"
-            style={{
-              gridTemplateColumns: "1fr 1fr",
-              gap: 12,
-            }}
-          >
-            {filteredSorted.map((brand) => (
-              <BrandCard key={brand.id} brand={brand} />
-            ))}
-          </div>
+          <>
+            <div
+              className="grid mt-4"
+              style={{
+                gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+                gap: 12,
+              }}
+            >
+              {(showAll
+                ? filteredSorted
+                : filteredSorted.slice(0, DEFAULT_VISIBLE)
+              ).map((brand) => (
+                <BrandCard key={brand.id} brand={brand} />
+              ))}
+            </div>
+
+            {filteredSorted.length > DEFAULT_VISIBLE && (
+              <button
+                type="button"
+                onClick={() => setShowAll((v) => !v)}
+                className="mt-4 w-full flex items-center justify-center gap-2 rounded-full transition-colors active:scale-[0.98]"
+                style={{
+                  padding: "12px 18px",
+                  background: "rgba(0,240,255,0.08)",
+                  border: "1px solid rgba(0,240,255,0.32)",
+                  color: "#00F0FF",
+                  fontFamily: "Montserrat, sans-serif",
+                  fontWeight: 800,
+                  fontSize: 12.5,
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
+                }}
+                aria-expanded={showAll}
+              >
+                {showAll ? (
+                  <>
+                    Show top {DEFAULT_VISIBLE}
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M6 15l6-6 6 6" />
+                    </svg>
+                  </>
+                ) : (
+                  <>
+                    Show all {filteredSorted.length}
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </>
+                )}
+              </button>
+            )}
+          </>
         )}
       </section>
 
@@ -391,58 +471,33 @@ export default function BrandsClient({
             border: "1px solid rgba(120,60,180,0.55)",
           }}
         >
-          <div className="flex items-center gap-3">
-            <div
-              className="flex items-center justify-center rounded-2xl shrink-0"
-              style={{
-                width: 48,
-                height: 48,
-                background: "rgba(204,68,255,0.12)",
-                border: "1px solid rgba(204,68,255,0.5)",
-                color: "#FF7BEB",
-              }}
-              aria-hidden="true"
-            >
-              <svg
-                width={24}
-                height={24}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-            </div>
-            <div className="flex-1">
-              <div
-                style={{
-                  fontFamily: "Montserrat, sans-serif",
-                  fontWeight: 800,
-                  fontSize: 15,
-                  color: "#FFFFFF",
-                  lineHeight: 1.2,
-                }}
-              >
-                Know a slime shop we should track?
-              </div>
-              <div
-                className="mt-1"
-                style={{
-                  fontSize: 12.5,
-                  color: "rgba(245,245,245,0.55)",
-                  lineHeight: 1.45,
-                }}
-              >
-                Send us the name and we will chase down their drizzle.
-              </div>
-            </div>
+          {/* 2026-07-13: retired the left-side + icon tile. The plus
+              glyph now lives on the CTA button (right side), which
+              balances the card text without a redundant graphic. */}
+          <div
+            style={{
+              fontFamily: "Montserrat, sans-serif",
+              fontWeight: 800,
+              fontSize: 15,
+              color: "#FFFFFF",
+              lineHeight: 1.2,
+            }}
+          >
+            Know a slime shop we should track?
+          </div>
+          <div
+            className="mt-1"
+            style={{
+              fontSize: 12.5,
+              color: "rgba(245,245,245,0.55)",
+              lineHeight: 1.45,
+            }}
+          >
+            Send us the name and we will chase down their drizzle.
           </div>
           <Link
             href="/submit-brand"
-            className="mt-3.5 flex items-center justify-center rounded-2xl transition-transform active:scale-[0.98]"
+            className="mt-3.5 flex items-center justify-center gap-2 rounded-2xl transition-transform active:scale-[0.98]"
             style={{
               padding: "12px 18px",
               background: "rgba(0,240,255,0.06)",
@@ -461,13 +516,12 @@ export default function BrandsClient({
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth="2"
+              strokeWidth="2.4"
               strokeLinecap="round"
               strokeLinejoin="round"
               aria-hidden="true"
-              style={{ marginLeft: 8 }}
             >
-              <path d="M9 6l6 6-6 6" />
+              <path d="M12 5v14M5 12h14" />
             </svg>
           </Link>
         </div>

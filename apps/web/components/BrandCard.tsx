@@ -42,6 +42,13 @@ export function BrandCard({ brand }: BrandCardProps) {
         flexDirection: "column",
         alignItems: "center",
         textAlign: "center",
+        // 2026-07-13 fix: without min-w-0 the grid item takes its
+        // intrinsic content minimum width (long brand name pushes the
+        // card wider than 1fr), which spills the right column
+        // off-screen on narrow viewports. min-width: 0 lets the card
+        // shrink to its grid track and the truncated name handles the
+        // rest.
+        minWidth: 0,
       }}
     >
       {/* Logo — 54px rounded-square */}
@@ -71,8 +78,13 @@ export function BrandCard({ brand }: BrandCardProps) {
         )}
       </div>
 
-      {/* Name + check */}
-      <div className="flex items-center gap-1 mt-2.5 min-w-0">
+      {/* Name + check — width:100% so the truncate on the name works
+          inside the column-flex parent (which by default sizes
+          children to content width). */}
+      <div
+        className="flex items-center justify-center gap-1 mt-2.5 min-w-0"
+        style={{ width: "100%" }}
+      >
         <span
           className="truncate"
           style={{
