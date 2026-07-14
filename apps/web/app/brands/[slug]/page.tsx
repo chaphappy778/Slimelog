@@ -561,7 +561,27 @@ export default async function BrandPage({
                 </span>
               )}
             </h1>
-            <div className="shrink-0">
+            {/* 2026-07-13: Share icon moved above the Manage / Follow
+                action. Reads better than the two-button action row
+                below when the primary CTA is the shop catalog and
+                Share is secondary. */}
+            <div className="shrink-0 flex flex-col items-end gap-2">
+              <div
+                className="flex items-center justify-center rounded-2xl"
+                style={{
+                  width: 40,
+                  height: 40,
+                  background: "rgba(45,10,78,0.5)",
+                  border: "1px solid rgba(120,60,180,0.5)",
+                  color: "#FFFFFF",
+                }}
+              >
+                <ShareButton
+                  path={`/brands/${brand.slug}`}
+                  title={`${brand.name} on SlimeLog`}
+                  text={`Check out ${brand.name} on SlimeLog.`}
+                />
+              </div>
               {isVerifiedOwner ? (
                 <Link
                   href={`/brand-dashboard/${brand.slug}`}
@@ -931,11 +951,12 @@ export default async function BrandPage({
             </div>
           )}
 
-          {/* Action row: catalog CTA + share icon */}
-          <div className="mt-4 flex items-stretch gap-2.5">
+          {/* Action row: catalog CTA (Share moved above Manage/Follow
+              in the name row on 2026-07-13). */}
+          <div className="mt-4">
             <Link
               href={`/brands/${brand.slug}/catalog`}
-              className="flex-1 flex items-center justify-center gap-2 rounded-2xl transition-transform active:scale-[0.98]"
+              className="w-full flex items-center justify-center gap-2 rounded-2xl transition-transform active:scale-[0.98]"
               style={{
                 minHeight: 46,
                 padding: "0 16px",
@@ -963,22 +984,6 @@ export default async function BrandPage({
                 <path d="M9 18l6-6-6-6" />
               </svg>
             </Link>
-            <div
-              className="flex items-center justify-center rounded-2xl"
-              style={{
-                width: 46,
-                height: 46,
-                background: "rgba(45,10,78,0.5)",
-                border: "1px solid rgba(120,60,180,0.5)",
-                color: "#FFFFFF",
-              }}
-            >
-              <ShareButton
-                path={`/brands/${brand.slug}`}
-                title={`${brand.name} on SlimeLog`}
-                text={`Check out ${brand.name} on SlimeLog.`}
-              />
-            </div>
           </div>
 
           {/* Claim brand button — component itself handles the
