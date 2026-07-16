@@ -31,7 +31,47 @@ interface WaitlistRow {
   id: string;
   email: string;
   source: string | null;
+  heard_from: string | null;
   created_at: string;
+}
+
+// Frontend allowlist for the "How did you hear about us?" picker.
+// Migration 20260715000074 intentionally leaves the DB unconstrained so we can
+// evolve this list (giveaway partner names, TikTok Live, podcast interviews,
+// etc.) without a schema change. Any value NOT in this list is coerced to
+// "other" server-side to keep dashboards clean, EXCEPT free-text entries
+// which arrive under the sentinel "other:<free text>" prefix (max 80 chars).
+const HEARD_FROM_ALLOWLIST = new Set<string>([
+  "instagram",
+  "tiktok",
+  "youtube",
+  "friend_or_family",
+  "giveaway",
+  "search",
+  "other",
+]);
+
+// UTM params are pass-through (no allowlist). We just cap length to keep
+// pathologically long ad-tracker fingerprints from bloating the row.
+const UTM_MAX_LEN = 200;
+
+function coerceHeardFrom(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+  // "other:<free text>" from the picker's Other input
+  if (trimmed.startsWith("other:")) {
+    return trimmed.slice(0, 80); // "other:" prefix + up to 74 chars of free text
+  }
+  const normalized = trimmed.toLowerCase();
+  return HEARD_FROM_ALLOWLIST.has(normalized) ? normalized : "other";
+}
+
+function coerceUtm(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+  return trimmed.slice(0, UTM_MAX_LEN);
 }
 
 // [Change 1] Centralise the Brevo sync side-effect so the net-new and
@@ -48,6 +88,7 @@ async function syncRowToBrevoAndRecord(
     email: row.email,
     marketingOptIn,
     source,
+    heardFrom: row.heard_from ?? undefined, // 2026-07-15: propagate acquisition channel to Brevo for list segmentation
     signupDateISO,
   });
 
@@ -88,14 +129,65 @@ async function syncRowToBrevoAndRecord(
 
 export async function POST(request: NextRequest) {
   // [Change 2] Parse + validate input. Shape matches the existing frontend.
-  const { email, marketing_consent } = (await request.json()) as {
+  // 2026-07-15 diagnostic: read raw body first so we can log it verbatim.
+  // We're chasing a bug where the client seems to pick a heard_from value
+  // but the DB stores null. Vercel Function Logs will show whether the
+  // field is missing from the payload (client-side bug) or present but
+  // being coerced to null (server-side bug). Remove this log block once
+  // the bug is diagnosed.
+  const rawBody = await request.text();
+  console.log("[waitlist] raw request body:", rawBody);
+
+  let parsedBody: Record<string, unknown> = {};
+  try {
+    parsedBody = JSON.parse(rawBody) as Record<string, unknown>;
+  } catch (e) {
+    console.error("[waitlist] request body was not valid JSON:", e);
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const {
+    email,
+    marketing_consent,
+    heard_from,
+    utm_source,
+    utm_medium,
+    utm_campaign,
+    utm_content,
+    utm_term,
+  } = parsedBody as {
     email?: string;
     marketing_consent?: boolean;
+    heard_from?: string;
+    utm_source?: string;
+    utm_medium?: string;
+    utm_campaign?: string;
+    utm_content?: string;
+    utm_term?: string;
   };
+
+  console.log("[waitlist] parsed attribution fields:", {
+    heard_from,
+    utm_source,
+    utm_medium,
+    utm_campaign,
+    utm_content,
+    utm_term,
+  });
 
   if (!email || !email.includes("@")) {
     return NextResponse.json({ error: "Invalid email" }, { status: 400 });
   }
+
+  // 2026-07-15 side quest: coerce attribution fields. All optional — null when
+  // absent. heard_from is allowlist-normalized; UTMs are pass-through with a
+  // length cap.
+  const heardFromNormalized = coerceHeardFrom(heard_from);
+  const utmSourceNormalized = coerceUtm(utm_source);
+  const utmMediumNormalized = coerceUtm(utm_medium);
+  const utmCampaignNormalized = coerceUtm(utm_campaign);
+  const utmContentNormalized = coerceUtm(utm_content);
+  const utmTermNormalized = coerceUtm(utm_term);
 
   // Audit hp-14 (2026-07-06): 10 signups per hour per IP. Waitlist
   // triggers a Brevo POST per call, and Brevo's monthly-send cap is
@@ -130,8 +222,17 @@ export async function POST(request: NextRequest) {
   // [Change 4] Insert and read back the row in a single round trip.
   const { data: insertedRow, error: insertError } = await supabase
     .from("waitlist")
-    .insert({ email, marketing_consent: marketingOptIn })
-    .select("id, email, source, created_at")
+    .insert({
+      email,
+      marketing_consent: marketingOptIn,
+      heard_from: heardFromNormalized,
+      utm_source: utmSourceNormalized,
+      utm_medium: utmMediumNormalized,
+      utm_campaign: utmCampaignNormalized,
+      utm_content: utmContentNormalized,
+      utm_term: utmTermNormalized,
+    })
+    .select("id, email, source, heard_from, created_at")
     .single<WaitlistRow>();
 
   // [Change 5] Net-new signup path.
@@ -149,7 +250,7 @@ export async function POST(request: NextRequest) {
   if (insertError && insertError.code === "23505") {
     const { data: existingRow, error: fetchError } = await supabase
       .from("waitlist")
-      .select("id, email, source, created_at")
+      .select("id, email, source, heard_from, created_at")
       .eq("email", email)
       .single<WaitlistRow>();
 
