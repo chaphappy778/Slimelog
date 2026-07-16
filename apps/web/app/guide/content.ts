@@ -221,21 +221,20 @@ export const TEXTURES: GuideTexture[] = [
   {
     // 2026-07-16 mig 077: new "basic" base type per Section 5.7. 3 shops
     // (Glitter Slimes, Slimeatory, Avocadoslimeez) elevate Basic/Base as
-    // a top-level texture. No hero photo yet — Jenn to source; gradient-
-    // only fallback via DEFAULT_HERO_TINT until then. Tagline + definition
-    // below are placeholders — Jenn to refine on the next pass.
+    // a top-level texture. Photo added 2026-07-16 (Jenn's own shot).
+    // Tagline + definition remain placeholders for Jenn's next-pass copy.
     slug: "basic",
     name: "Basic",
     tagline: "The clean starter base, no add-ins",
     definition:
-      "A basic slime is the clean unadorned starting point — the white glue base without a texture add-in stacked on top. Shops surface Basic as its own category for beginners or for anyone who wants the classic feel without extras. Placeholder copy — Jenn will refine.",
+      "A basic slime is the clean unadorned starting point, the white glue base without a texture add-in stacked on top. Shops surface Basic as its own category for beginners or for anyone who wants the classic feel without extras. Placeholder copy, Jenn will refine.",
     note: "Basic slimes are often the first thing new slime makers try. Many shops maintain a Basic line alongside their more experimental textures.",
     variantsAndRelated: [],
     example: {
       slimeName: null,
       brandName: null,
       brandSlug: null,
-      imagePath: null,
+      imagePath: "/guide/textures/basic-jenn.webp",
     },
     gradientFrom: "#0a0a12",
     gradientTo: "#1a1a24",

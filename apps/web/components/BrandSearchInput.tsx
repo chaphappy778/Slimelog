@@ -76,29 +76,57 @@ export default function BrandSearchInput({
     const myRequestId = ++requestIdRef.current;
     setLoading(true);
     setErrored(false);
-    const { data, error } = await supabase
-      .from("brands")
-      .select("id, name, slug, verification_tier")
-      .ilike("name", `%${query}%`)
-      .order("name")
-      .limit(10);
+
+    // 2026-07-16 Jennifer flagged: substring search + alphabetical
+    // sort meant typing "P" surfaced "Alpha" first because it contains
+    // a P. We now query prefix + substring in parallel, then merge
+    // with prefix matches ranked first so what the user typed
+    // actually leads. Both queries alphabetically sorted within their
+    // buckets.
+    const trimmed = query.trim();
+    const [prefixRes, substringRes] = await Promise.all([
+      supabase
+        .from("brands")
+        .select("id, name, slug, verification_tier")
+        .ilike("name", `${trimmed}%`)
+        .order("name")
+        .limit(10),
+      supabase
+        .from("brands")
+        .select("id, name, slug, verification_tier")
+        .ilike("name", `%${trimmed}%`)
+        .order("name")
+        .limit(10),
+    ]);
 
     // Stale-response guard — a newer keystroke has already fired.
     if (myRequestId !== requestIdRef.current) return;
 
-    if (error) {
-      // Do NOT silently return empty results; log and surface it.
-      // Prior behavior swallowed 400s (e.g. our recent brands.name_raw
-      // typo) and just looked like "no matches" to the user.
-      console.warn("[BrandSearchInput] brand search failed:", error.message);
+    if (prefixRes.error || substringRes.error) {
+      console.warn(
+        "[BrandSearchInput] brand search failed:",
+        prefixRes.error?.message ?? substringRes.error?.message,
+      );
       setResults([]);
       setErrored(true);
       setOpen(true);
-    } else {
-      setResults(data ?? []);
-      setErrored(false);
-      setOpen(true);
+      setLoading(false);
+      return;
     }
+
+    const prefixHits = prefixRes.data ?? [];
+    const substringHits = substringRes.data ?? [];
+    const prefixIds = new Set(prefixHits.map((b) => b.id));
+    // Merge: prefix matches first (already alpha within bucket), then
+    // substring matches that weren't already in the prefix bucket.
+    const merged = [
+      ...prefixHits,
+      ...substringHits.filter((b) => !prefixIds.has(b.id)),
+    ].slice(0, 10);
+
+    setResults(merged);
+    setErrored(false);
+    setOpen(true);
     setLoading(false);
   }, []);
 

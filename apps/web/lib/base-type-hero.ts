@@ -13,10 +13,9 @@ import type { SlimeBaseType } from "@/lib/types";
 /** Hero photo path per base type. Null for types we haven't curated. */
 export const BASE_TYPE_HERO_PHOTO: Partial<Record<SlimeBaseType, string>> = {
   avalanche: "/guide/textures/avalanche-bff.webp",
+  basic: "/guide/textures/basic-jenn.webp",
   beaded: "/guide/textures/beaded-rodem.webp",
   butter: "/guide/textures/butter-cats-craft.webp",
-  // 2026-07-16: basic added per Section 5.7. No hero photo yet (Jenn to
-  // source); gradient-only fallback until then via DEFAULT_HERO_TINT.
   clear: "/guide/textures/clear-slime-obsidian.png",
   cloud: "/guide/textures/cloud-sandy-bros.png",
   // 2026-07-16: cloud_cream renamed to snowbutter per Section 5.1.
