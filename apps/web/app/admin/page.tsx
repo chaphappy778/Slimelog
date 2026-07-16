@@ -56,6 +56,108 @@ function StatCard({
   );
 }
 
+// 2026-07-16 (#26): System reminders — surface time-sensitive admin
+// chores like key rotations. Each reminder has a due date; the card
+// tints based on urgency (amber >30d, magenta ≤30d, red ≤7d) and
+// hides itself once the due date is more than 7 days past (giving a
+// grace window in case the admin needs to confirm rotation happened).
+interface SystemReminderConfig {
+  id: string;
+  title: string;
+  body: string;
+  dueDate: string; // ISO date, YYYY-MM-DD
+  href?: string;
+  hrefLabel?: string;
+}
+
+const SYSTEM_REMINDERS: SystemReminderConfig[] = [
+  {
+    id: "siwa-key-rotation-2027-01",
+    title: "Sign in with Apple client secret rotation",
+    body:
+      "Apple hard-caps SIWA client secrets at 6 months. Supabase should auto-rotate from the uploaded .p8, but verify rotation happened around this date. If not, re-upload the same .p8 in Supabase Auth → Providers → Apple.",
+    dueDate: "2027-01-12",
+    href: "https://supabase.com/dashboard/project/zxxjpxpchvsjkvslwtvx/auth/providers",
+    hrefLabel: "Open Supabase provider config",
+  },
+];
+
+function SystemReminderCard({ reminder }: { reminder: SystemReminderConfig }) {
+  const due = new Date(reminder.dueDate + "T00:00:00Z").getTime();
+  const now = Date.now();
+  const daysUntil = Math.round((due - now) / (86400 * 1000));
+
+  // Hide once the reminder is 7+ days stale (assumed handled by then).
+  if (daysUntil < -7) return null;
+
+  const tint =
+    daysUntil <= 7
+      ? { color: "#FF3D6E", bg: "rgba(255,61,110,0.10)", border: "rgba(255,61,110,0.45)" }
+      : daysUntil <= 30
+        ? { color: "#FF00E5", bg: "rgba(255,0,229,0.08)", border: "rgba(255,0,229,0.4)" }
+        : { color: "#FFB800", bg: "rgba(255,184,0,0.08)", border: "rgba(255,184,0,0.4)" };
+
+  const dueLabel =
+    daysUntil > 0
+      ? `Due in ${daysUntil} day${daysUntil === 1 ? "" : "s"}`
+      : daysUntil === 0
+        ? "Due today"
+        : `Overdue by ${Math.abs(daysUntil)} day${Math.abs(daysUntil) === 1 ? "" : "s"}`;
+
+  return (
+    <div
+      className="rounded-2xl p-4"
+      style={{
+        background: tint.bg,
+        border: `1px solid ${tint.border}`,
+      }}
+    >
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <p
+          className="text-sm font-bold"
+          style={{
+            color: tint.color,
+            fontFamily: "Montserrat, sans-serif",
+          }}
+        >
+          {reminder.title}
+        </p>
+        <span
+          className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap px-2 py-1 rounded-full"
+          style={{
+            color: tint.color,
+            background: `${tint.color}22`,
+            border: `1px solid ${tint.border}`,
+            fontFamily: "Montserrat, sans-serif",
+          }}
+        >
+          {dueLabel}
+        </span>
+      </div>
+      <p className="text-xs" style={{ color: "rgba(245,245,245,0.7)", lineHeight: 1.5 }}>
+        {reminder.body}
+      </p>
+      <p
+        className="text-[11px] mt-2"
+        style={{ color: "rgba(245,245,245,0.4)" }}
+      >
+        Target date: {reminder.dueDate}
+      </p>
+      {reminder.href && (
+        <a
+          href={reminder.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block mt-3 text-xs font-bold underline underline-offset-2"
+          style={{ color: tint.color }}
+        >
+          {reminder.hrefLabel ?? "Open link"} →
+        </a>
+      )}
+    </div>
+  );
+}
+
 function ActionCard({
   href,
   title,
@@ -245,6 +347,31 @@ export default async function AdminPage() {
           />
           <StatCard label="Approved" value={approvedCount} color="#39FF14" />
         </div>
+
+        {/* 2026-07-16 (#26): System reminders — surfaces time-sensitive
+            admin chores (key rotations, cert expirations, etc.). Cards
+            auto-tint by urgency and hide themselves 7+ days after due. */}
+        {SYSTEM_REMINDERS.some((r) => {
+          const daysUntil = Math.round(
+            (new Date(r.dueDate + "T00:00:00Z").getTime() - Date.now()) /
+              (86400 * 1000),
+          );
+          return daysUntil >= -7;
+        }) && (
+          <>
+            <p
+              className="text-[11px] font-black tracking-widest uppercase mb-3"
+              style={{ color: "#FFB800", fontFamily: "Montserrat, sans-serif" }}
+            >
+              System Reminders
+            </p>
+            <div className="flex flex-col gap-3 mb-8">
+              {SYSTEM_REMINDERS.map((r) => (
+                <SystemReminderCard key={r.id} reminder={r} />
+              ))}
+            </div>
+          </>
+        )}
 
         {/* Quick actions */}
         <p
