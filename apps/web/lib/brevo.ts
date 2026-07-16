@@ -34,6 +34,11 @@
 //        FIRSTNAME         - TEXT    (Brevo default; usually already exists)
 //        MARKETING_OPT_IN  - BOOLEAN
 //        SIGNUP_SOURCE     - TEXT
+//        HEARD_FROM        - TEXT    (2026-07-15 side quest — waitlist form
+//                                     picker value for acquisition-channel
+//                                     segmentation. Values: instagram, tiktok,
+//                                     youtube, friend_or_family, giveaway,
+//                                     search, other, or "other:<free text>")
 //        SIGNUP_DATE       - DATE    <-- CRITICAL: must be DATE, NOT DATETIME.
 //                                         The Brevo API expects DATE attributes
 //                                         to be formatted as "YYYY-MM-DD". This
@@ -94,6 +99,11 @@ interface BrevoContactAttributes {
   MARKETING_OPT_IN: boolean;
   SIGNUP_SOURCE: string;
   SIGNUP_DATE: string; // YYYY-MM-DD format (DATE attribute), e.g. "2026-04-30"
+  // 2026-07-15 side quest: self-reported acquisition channel from the
+  // /waitlist form picker. Optional — requires HEARD_FROM contact attribute
+  // to exist in Brevo dashboard (see Brevo dashboard config comment at top
+  // of this file).
+  HEARD_FROM?: string;
 }
 
 /**
@@ -169,6 +179,11 @@ export async function addContactToWaitlist(params: {
   firstName?: string;
   marketingOptIn: boolean;
   source: string;
+  // 2026-07-15 side quest: self-reported acquisition channel from the /waitlist
+  // form picker (Instagram, TikTok, YouTube, Friend or family, Giveaway, Search,
+  // Other, or "other:<free text>"). Optional — legacy signups don't have it.
+  // Requires HEARD_FROM contact attribute to exist in Brevo dashboard.
+  heardFrom?: string;
   signupDateISO: string;
 }): Promise<AddContactResult> {
   const apiKey = process.env.BREVO_API_KEY;
@@ -209,6 +224,12 @@ export async function addContactToWaitlist(params: {
   };
   if (params.firstName && params.firstName.trim().length > 0) {
     attributes.FIRSTNAME = params.firstName.trim();
+  }
+  // 2026-07-15 side quest: pass HEARD_FROM through for list segmentation.
+  // Only set when provided so legacy signups don't overwrite existing values
+  // with a blank on updateEnabled: true.
+  if (params.heardFrom && params.heardFrom.trim().length > 0) {
+    attributes.HEARD_FROM = params.heardFrom.trim();
   }
 
   const body: BrevoCreateContactRequest = {
