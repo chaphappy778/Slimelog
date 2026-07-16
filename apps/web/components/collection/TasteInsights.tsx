@@ -42,7 +42,6 @@ const BASE_COLORS: Partial<Record<SlimeBaseType, string>> = {
   fluffy: "#FFA6D9",
   thick_and_glossy: "#FF7BFF",
   slay: "#FF4D6D",
-  clay: "#F0B060",
   beaded: "#FFB56B",
   snow_fizz: "#8FD8FF",
   magnetic: "#B0B0B0",

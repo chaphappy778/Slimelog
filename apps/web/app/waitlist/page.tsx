@@ -281,23 +281,15 @@ function WaitlistForm({ utmParams }: { utmParams: UtmParams }) {
         heardFromPayload = heardFrom;
       }
 
-      const payload = {
-        email,
-        marketing_consent: marketingConsent,
-        heard_from: heardFromPayload,
-        ...utmParams,
-      };
-      // 2026-07-15 diagnostic: chasing bug where heard_from picked in dropdown
-      // ends up null in the DB. Log the outgoing payload so we can compare
-      // to the server-side log ("[waitlist] raw request body") in Vercel.
-      // Remove once bug is diagnosed.
-      console.log("[waitlist client] submitting payload:", payload);
-      console.log("[waitlist client] current state — heardFrom:", heardFrom, "heardFromOther:", heardFromOther);
-
       const res = await fetch("/api/waitlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          email,
+          marketing_consent: marketingConsent,
+          heard_from: heardFromPayload,
+          ...utmParams,
+        }),
       });
       const data = await res.json();
       if (data.already) setStatus("duplicate");

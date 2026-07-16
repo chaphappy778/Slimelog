@@ -70,7 +70,6 @@ const TYPE_LABELS: Record<SlimeBaseType, string> = {
   avalanche: "Avalanche",
   beaded: "Beaded",
   butter: "Butter",
-  clay: "Clay",
   clear: "Clear",
   cloud: "Cloud",
   cloud_cream: "Cloud Cream",

@@ -88,11 +88,14 @@ export const SLIME_CONDITION_DESCRIPTIONS: Record<SlimeCondition, string> = {
 
 // ─── Labels & Colors ──────────────────────────────────────────────────────────
 
+// 2026-07-16: 'clay' removed per taxonomy rework Phase 1. Was a redundant
+// alias for butter (both are clay-heavy at ingredient level per Jenn's V4.1
+// guide). See migration 20260716000075_remove_clay_base_type.sql and
+// docs/handoffs/2026-07-15-taxonomy-rework-plan.md Section 3.
 export type SlimeBaseType =
   | "avalanche"
   | "beaded"
   | "butter"
-  | "clay"
   | "clear"
   | "cloud"
   | "cloud_cream"
@@ -114,7 +117,6 @@ export const SLIME_BASE_TYPE_LABELS: Record<SlimeBaseType, string> = {
   avalanche: "Avalanche",
   beaded: "Beaded",
   butter: "Butter",
-  clay: "Clay",
   clear: "Clear",
   cloud: "Cloud",
   cloud_cream: "Cloud Cream",
@@ -140,7 +142,6 @@ export const SLIME_BASE_TYPE_COLORS: Record<
   avalanche: { bg: "rgba(248,250,252,0.08)", text: "#94a3b8" },
   beaded: { bg: "rgba(254,228,230,0.12)", text: "#fda4af" },
   butter: { bg: "rgba(255,243,205,0.12)", text: "#fde68a" },
-  clay: { bg: "rgba(254,249,195,0.12)", text: "#fef08a" },
   clear: { bg: "rgba(224,247,250,0.10)", text: "#67e8f9" },
   cloud: { bg: "rgba(243,232,255,0.12)", text: "#d8b4fe" },
   cloud_cream: { bg: "rgba(253,244,255,0.12)", text: "#e879f9" },

@@ -79,7 +79,6 @@ const TYPE_STYLE: Record<
     text: "text-yellow-300",
     label: "Butter",
   },
-  clay: { bg: "bg-amber-900/40", text: "text-amber-300", label: "Clay" },
   clear: { bg: "bg-sky-900/40", text: "text-sky-300", label: "Clear" },
   cloud: { bg: "bg-slate-800", text: "text-slate-300", label: "Cloud" },
   cloud_cream: {

@@ -16,7 +16,6 @@ const TYPE_COLORS: Record<string, string> = {
   fluffy: "#FF6B9D",
   jelly: "#4ECDC4",
   beaded: "#FF00E5",
-  clay: "#E74C3C",
   floam: "#8BC34A",
 };
 

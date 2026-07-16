@@ -22,7 +22,6 @@ const TYPE_COLORS: Record<SlimeBaseType, string> = {
   avalanche: "#3498DB",
   beaded: "#FF00E5",
   butter: "#FFB347",
-  clay: "#E74C3C",
   clear: "#00F0FF",
   cloud: "#F5F5F5",
   cloud_cream: "#FFE66D",

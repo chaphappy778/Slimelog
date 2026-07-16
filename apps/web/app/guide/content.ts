@@ -161,7 +161,7 @@ export const TEXTURES: GuideTexture[] = [
     definition:
       "Dense, soft, and plush, butter is one of the most forgiving textures for anyone new to slime. A true butter slime is at least half air-dry clay.",
     note: "A fun one for DIY kit fans: plenty of clay-based DIY slimes turn into butter slimes once everything is fully mixed in.",
-    variantsAndRelated: ["Clay", "Sally Butter", "Mochi"],
+    variantsAndRelated: ["Sally Butter", "Mochi"],
     example: {
       slimeName: "Mooshake",
       brandName: "Cats Craft",
@@ -281,32 +281,12 @@ export const TEXTURES: GuideTexture[] = [
     gradientTo: "#3a1a1a",
     accentColor: "#FF00E5",
   },
-  {
-    slug: "clay",
-    name: "Clay",
-    tagline: "Smooth, soft, and endlessly moldable",
-    definition:
-      "A soft clay base that yields smooth, soft, thick slime. Clay is the building block behind butter and slay textures.",
-    note: "You will see clay more often as an ingredient in hybrid textures than as a standalone finished slime.",
-    variantsAndRelated: [
-      "Butter",
-      "Slay",
-      "Mochi",
-      "Sally Butter",
-      "Custard",
-      "Cream Cheese",
-      "Nougat",
-    ],
-    example: {
-      slimeName: "Palmetto Clay",
-      brandName: "Palmetto",
-      brandSlug: "palmetto-slimes",
-      imagePath: "/guide/textures/clay-palmetto.webp",
-    },
-    gradientFrom: "#2e1a00",
-    gradientTo: "#4a2e00",
-    accentColor: "#FFB800",
-  },
+  // 2026-07-16: 'clay' base type entry removed per taxonomy rework Phase 1.
+  // Clay is not a real base type — it was a redundant alias for Butter (both
+  // are clay-heavy at the ingredient level per Jenn's V4.1 guide). Japanese
+  // Clay + Korean Clay land as butter variants in Phase 2. See migration
+  // 20260716000075_remove_clay_base_type.sql +
+  // docs/handoffs/2026-07-15-taxonomy-rework-plan.md Section 11.2.
   {
     slug: "avalanche",
     name: "Avalanche",

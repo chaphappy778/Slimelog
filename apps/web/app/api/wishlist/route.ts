@@ -18,7 +18,6 @@ const BASE_TYPES = [
   "avalanche",
   "beaded",
   "butter",
-  "clay",
   "clear",
   "cloud",
   "cloud_cream",

@@ -129,23 +129,6 @@ async function syncRowToBrevoAndRecord(
 
 export async function POST(request: NextRequest) {
   // [Change 2] Parse + validate input. Shape matches the existing frontend.
-  // 2026-07-15 diagnostic: read raw body first so we can log it verbatim.
-  // We're chasing a bug where the client seems to pick a heard_from value
-  // but the DB stores null. Vercel Function Logs will show whether the
-  // field is missing from the payload (client-side bug) or present but
-  // being coerced to null (server-side bug). Remove this log block once
-  // the bug is diagnosed.
-  const rawBody = await request.text();
-  console.log("[waitlist] raw request body:", rawBody);
-
-  let parsedBody: Record<string, unknown> = {};
-  try {
-    parsedBody = JSON.parse(rawBody) as Record<string, unknown>;
-  } catch (e) {
-    console.error("[waitlist] request body was not valid JSON:", e);
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-
   const {
     email,
     marketing_consent,
@@ -155,7 +138,7 @@ export async function POST(request: NextRequest) {
     utm_campaign,
     utm_content,
     utm_term,
-  } = parsedBody as {
+  } = (await request.json()) as {
     email?: string;
     marketing_consent?: boolean;
     heard_from?: string;
@@ -165,15 +148,6 @@ export async function POST(request: NextRequest) {
     utm_content?: string;
     utm_term?: string;
   };
-
-  console.log("[waitlist] parsed attribution fields:", {
-    heard_from,
-    utm_source,
-    utm_medium,
-    utm_campaign,
-    utm_content,
-    utm_term,
-  });
 
   if (!email || !email.includes("@")) {
     return NextResponse.json({ error: "Invalid email" }, { status: 400 });

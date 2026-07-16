@@ -69,7 +69,6 @@ const BASE_CHIP: Partial<
   fluffy: { bg: "rgba(255,166,217,0.14)", color: "#FFA6D9" },
   thick_and_glossy: { bg: "rgba(255,123,255,0.14)", color: "#FF7BFF" },
   slay: { bg: "rgba(255,77,109,0.14)", color: "#FF4D6D" },
-  clay: { bg: "rgba(240,176,96,0.14)", color: "#F0B060" },
   beaded: { bg: "rgba(255,181,107,0.14)", color: "#FFB56B" },
   snow_fizz: { bg: "rgba(143,216,255,0.14)", color: "#8FD8FF" },
   magnetic: { bg: "rgba(176,176,176,0.14)", color: "#B0B0B0" },

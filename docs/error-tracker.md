@@ -31,6 +31,30 @@ Template for new entries:
 
 ## Known potential issues (not-yet-hit, worth watching)
 
+### 2026-07-15 — Multi-file feature commit stranded one file uncommitted (Ops)
+
+**Symptom:** Vercel build failed on `feat(brevo)` push with `Type error: Object literal may only specify known properties, and 'heardFrom' does not exist in type '{ email: string; ... }'`. The failing line was `apps/web/app/api/waitlist/route.ts` calling `addContactToWaitlist({ heardFrom: ... })`, but that call had been committed WEEKS of session-time before this Vercel build attempt — no way TypeScript should have missed it.
+
+**Root cause:** the "waitlist attribution capture" feature spanned 4 files that were staged in one `git add`, but only one commit intent — `git add A B C D && git commit -m ... && git push`. Somewhere in the sequence, `apps/web/lib/brevo.ts` (which added `heardFrom?: string` to the `addContactToWaitlist` param type) got dropped from the actual commit. When later work touched `apps/web/app/api/waitlist/route.ts` in unrelated commits (admin fixes, diagnostic logs), those commits DID pick up route.ts. So the deployed code had route.ts calling brevo.ts with an argument brevo.ts's TYPES didn't accept — because the type change was still uncommitted on disk. `git status` at the point of build showed `modified: apps/web/lib/brevo.ts` sitting there for hours, invisible to Vercel.
+
+The migration file for the same feature had a related but different symptom: `git add supabase/migrations/... && git commit && git push` was intended, but the file appeared as `Untracked` in `git status` after the fact. Suggests the file existed in the outputs directory but not the git working tree at `git add` time, OR the user ran `npx supabase db push` (which applied the migration to Supabase without touching git) and never actually ran the `git add` half of the sequence. Either way — DB was ahead of git.
+
+**Fix:** committed the stranded files in a follow-up push: `git add apps/web/lib/brevo.ts supabase/migrations/20260715000074_waitlist_source_tracking.sql docs/handoffs/... && git commit -m "feat(brevo): heardFrom param + commit migration + handoff briefs" && git push`. Vercel build immediately went green.
+
+**Regression check:** after any multi-file feature push, run `git status` to confirm no `Changes not staged for commit` or `Untracked files` from the feature bundle. If either exists, they DIDN'T get pushed and Vercel will build against a partial state.
+
+**Prevention patterns:**
+
+1. **Before pushing a multi-file feature, always run `git status` at the end.** Any file listed under "Changes not staged" or "Untracked files" that's supposed to be part of the feature MUST be added before the push. Zero exceptions. This session hit the same pattern twice — once with brevo.ts, once with the migration file being untracked. Both would have been visible in a 2-second `git status` glance.
+
+2. **Migration files require BOTH `git add` and `npx supabase db push`.** They live in the repo AND in Supabase. Applying one without the other creates the DB-ahead-of-git or git-ahead-of-DB drift class of bug. Habit: `git add supabase/migrations/...sql && git commit -m ... && git push && npx supabase db push`. All four in sequence.
+
+3. **When TypeScript errors on a call site referencing a param that "should" exist**, check `git log <the-defining-file>` and confirm the defining commit actually landed. If the last commit on the file predates the feature you're building, the intermediate edits are stranded on disk.
+
+**Related:** T149 waitlist attribution capture side quest, migration `20260715000074_waitlist_source_tracking.sql`. Same class as the migration-lag pattern below (2026-07-13 marketplace waitlist) — both involve source-of-truth drift between code and infrastructure.
+
+---
+
 ### 2026-07-13 — Marketplace waitlist hydrate silent-fail when migration lags code (DB + UI)
 
 **Symptom:** Jennifer reopened `/marketplace` after already claiming waitlist position #1 the night before. Instead of landing on the success state, the page showed the join form as if she'd never signed up.
