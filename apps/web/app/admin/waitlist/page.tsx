@@ -17,6 +17,13 @@ type WaitlistRow = {
   email: string;
   created_at: string | null;
   source: string | null;
+  // 2026-07-15 side quest: attribution capture from /waitlist form + URL params.
+  heard_from: string | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  utm_content: string | null;
+  utm_term: string | null;
   marketing_consent: boolean | null;
   invited_at: string | null;
   notes: string | null;
@@ -90,6 +97,50 @@ function SourcePill({ source }: { source: string | null }) {
   );
 }
 
+// 2026-07-15: dedicated pill for the heard_from picker value. Handles the
+// "other:<free text>" sentinel by splitting and showing the free text if
+// present, otherwise "Other". Color-differentiated (magenta) so it's visually
+// distinct from the SIGNUP_SOURCE pill (cyan) which is a legacy page identifier.
+function HeardFromPill({ value }: { value: string | null }) {
+  if (!value) return <span className="text-slime-muted">—</span>;
+  const isOtherFreeText = value.startsWith("other:");
+  const display = isOtherFreeText
+    ? value.slice("other:".length).trim() || "other"
+    : value.replace(/_/g, " ");
+  return (
+    <span
+      className="inline-block text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full max-w-[160px] truncate align-middle"
+      style={{
+        background: isOtherFreeText ? "rgba(255,0,229,0.10)" : "rgba(255,0,229,0.08)",
+        border: `1px solid ${isOtherFreeText ? "rgba(255,0,229,0.5)" : "rgba(255,0,229,0.35)"}`,
+        color: "#FF00E5",
+      }}
+      title={display}
+    >
+      {display}
+    </span>
+  );
+}
+
+// Compact display for UTM campaign (when set). Green tint so it's visually
+// distinct from both source pills.
+function UtmCampaignPill({ campaign }: { campaign: string | null }) {
+  if (!campaign) return <span className="text-slime-muted">—</span>;
+  return (
+    <span
+      className="inline-block text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full max-w-[180px] truncate align-middle"
+      style={{
+        background: "rgba(57,255,20,0.08)",
+        border: "1px solid rgba(57,255,20,0.3)",
+        color: "#39FF14",
+      }}
+      title={campaign}
+    >
+      {campaign}
+    </span>
+  );
+}
+
 function InvitedBadge({ invited_at }: { invited_at: string | null }) {
   if (invited_at) {
     return (
@@ -139,7 +190,9 @@ export default async function WaitlistAdminPage() {
   const { data: waitlist } = await admin
     .from("waitlist")
     .select(
-      "id, email, created_at, source, marketing_consent, invited_at, notes",
+      // 2026-07-15: include attribution capture columns (heard_from + UTM)
+      // added by migration 20260715000074.
+      "id, email, created_at, source, heard_from, utm_source, utm_medium, utm_campaign, utm_content, utm_term, marketing_consent, invited_at, notes",
     )
     .order("created_at", { ascending: false });
 
@@ -149,6 +202,16 @@ export default async function WaitlistAdminPage() {
   const totalCount = rows.length;
   const marketingCount = rows.filter((r) => r.marketing_consent).length;
   const pendingCount = rows.filter((r) => !r.invited_at).length;
+  // 2026-07-15: track how many signups came in with any attribution data
+  // (self-report OR any UTM param). Useful health metric — if this stays
+  // low after the /waitlist dropdown ships, promo link tagging or the
+  // dropdown itself needs attention.
+  const attributedCount = rows.filter(
+    (r) =>
+      r.heard_from !== null ||
+      r.utm_source !== null ||
+      r.utm_campaign !== null,
+  ).length;
 
   return (
     <PageWrapper glow="magenta">
@@ -174,7 +237,7 @@ export default async function WaitlistAdminPage() {
         </div>
 
         {/* ── Stats row ── */}
-        <div className="flex gap-3 mb-8">
+        <div className="flex flex-wrap gap-3 mb-8">
           <StatCard label="Total Signups" value={totalCount} color="#39FF14" />
           <StatCard
             label="Marketing Opt-in"
@@ -182,6 +245,11 @@ export default async function WaitlistAdminPage() {
             color="#00F0FF"
           />
           <StatCard label="Not Invited" value={pendingCount} color="#FF00E5" />
+          <StatCard
+            label="With Attribution"
+            value={attributedCount}
+            color="#FFD24A"
+          />
         </div>
 
         {/* ── Table ── */}
@@ -203,6 +271,8 @@ export default async function WaitlistAdminPage() {
                       "Joined",
                       "Marketing",
                       "Invited",
+                      "Heard From",
+                      "Campaign",
                       "Source",
                       "Notes",
                     ].map((h) => (
@@ -269,7 +339,17 @@ export default async function WaitlistAdminPage() {
                           <InvitedBadge invited_at={row.invited_at} />
                         </td>
 
-                        {/* Source */}
+                        {/* Heard From (self-reported picker value) */}
+                        <td className="px-4 py-3">
+                          <HeardFromPill value={row.heard_from} />
+                        </td>
+
+                        {/* UTM Campaign (paid promo attribution) */}
+                        <td className="px-4 py-3">
+                          <UtmCampaignPill campaign={row.utm_campaign} />
+                        </td>
+
+                        {/* Source (legacy page identifier) */}
                         <td className="px-4 py-3">
                           <SourcePill source={row.source} />
                         </td>

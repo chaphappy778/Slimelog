@@ -2,17 +2,49 @@
 
 // apps/web/app/waitlist/page.tsx
 //
-// NO CHANGES in this Brevo integration task. File is re-delivered verbatim
-// for convenience alongside the other artifacts. The existing form already:
-//   - Captures marketing_consent via checkbox
-//   - POSTs { email, marketing_consent } to /api/waitlist
-//   - Handles { success }, { already }, and error response shapes correctly
-// The Brevo rewrite in /api/waitlist/route.ts preserves those exact response
-// shapes, so this page works without modification.
+// 2026-07-15 side quest: attribution capture for paid promo + giveaways.
+// Adds:
+//   - "How did you hear about us?" dropdown (7 canonical values + Other free text)
+//   - Silent UTM param capture via useSearchParams (utm_source, utm_medium,
+//     utm_campaign, utm_content, utm_term)
+//   - Both vectors POST to /api/waitlist; the API stores them on public.waitlist
+//     and syncs HEARD_FROM to Brevo as a contact attribute for list segmentation.
+//
+// UI decision: styled native <select> instead of chip pills. The waitlist page's
+// primary conversion is the email signup; attribution is a secondary optional
+// question. Dropdown reads as "optional, pick if you want" whereas chips read
+// as "important, please answer" and visually compete with the CTA. Native
+// <select> also renders the iOS wheel picker + Android modal, which users know.
 
-import { useState } from "react";
+import { useState, useMemo, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ExternalLink } from "lucide-react";
+
+// ─── Types ─────────────────────────────────────────────────────────────────
+
+type UtmParams = {
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  utm_content?: string;
+  utm_term?: string;
+};
+
+// Canonical heard_from allowlist matches the server allowlist in
+// /api/waitlist/route.ts. Adding an option here requires adding it there too
+// (the API coerces unknown values to "other" silently). Ordered by expected
+// promo volume — Instagram + TikTok first since Jenn's channels are the
+// primary flywheel.
+const HEARD_FROM_OPTIONS: { value: string; label: string }[] = [
+  { value: "instagram", label: "Instagram" },
+  { value: "tiktok", label: "TikTok" },
+  { value: "youtube", label: "YouTube" },
+  { value: "friend_or_family", label: "Friend or family" },
+  { value: "giveaway", label: "Giveaway" },
+  { value: "search", label: "Search" },
+  { value: "other", label: "Other" },
+];
 
 // ─── Floating Pill ─────────────────────────────────────────────────────────
 
@@ -40,7 +72,7 @@ function FloatingPill({
   left,
   right,
   rotation = 0,
-  opacity = 0.85,
+  opacity = 0.92,
   blur = false,
 }: FloatingPillProps) {
   const gradients: Record<PillColor, string> = {
@@ -48,6 +80,17 @@ function FloatingPill({
     purple: "linear-gradient(180deg, #7C3AED 0%, #2D0A4E 100%)",
     cyan: "linear-gradient(180deg, #00F0FF 0%, #0080AA 100%)",
     magenta: "linear-gradient(180deg, #FF00E5 0%, #8B0066 100%)",
+  };
+
+  // 2026-07-15: add per-color glow so pills bleed through the card's blur +
+  // semi-transparent violet fill. Without this the pills that sit behind the
+  // card get darkened to near-invisible; the glow halo extends past the card's
+  // clip edge and reads as brightness. Matches Design's mockup treatment.
+  const glows: Record<PillColor, string> = {
+    green: "0 0 26px rgba(57,255,20,0.55)",
+    purple: "0 0 26px rgba(124,58,237,0.5)",
+    cyan: "0 0 26px rgba(0,240,255,0.5)",
+    magenta: "0 0 26px rgba(255,0,229,0.45)",
   };
 
   return (
@@ -63,6 +106,7 @@ function FloatingPill({
         height,
         borderRadius: 999,
         background: gradients[color],
+        boxShadow: glows[color],
         transform: `rotate(${rotation}deg)`,
         opacity,
         filter: blur ? "blur(2px)" : undefined,
@@ -132,11 +176,90 @@ function BackgroundDots() {
   );
 }
 
+// ─── Heard-From Dropdown ───────────────────────────────────────────────────
+
+function HeardFromDropdown({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const isPlaceholder = value === "";
+
+  return (
+    <div className="relative w-full">
+      <label
+        htmlFor="heard_from"
+        className="block text-xs font-bold uppercase tracking-widest mb-2"
+        style={{
+          color: "rgba(245,245,245,0.55)",
+          fontFamily: "'Montserrat', sans-serif",
+          letterSpacing: "0.12em",
+        }}
+      >
+        How did you hear about us?
+      </label>
+      <div className="relative w-full">
+        <select
+          id="heard_from"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full appearance-none rounded-xl px-4 py-3.5 pr-11 text-sm outline-none transition-all cursor-pointer"
+          style={{
+            background: "rgba(255,255,255,0.06)",
+            border: "1px solid rgba(255,255,255,0.12)",
+            color: isPlaceholder ? "rgba(245,245,245,0.45)" : "#F5F5F5",
+            fontFamily: "'Montserrat', sans-serif",
+          }}
+          onFocus={(e) => {
+            e.target.style.border = "1px solid #00F0FF";
+            e.target.style.boxShadow = "0 0 0 3px rgba(0,240,255,0.12)";
+          }}
+          onBlur={(e) => {
+            e.target.style.border = "1px solid rgba(255,255,255,0.12)";
+            e.target.style.boxShadow = "none";
+          }}
+        >
+          <option value="" disabled>
+            Pick one (optional)
+          </option>
+          {HEARD_FROM_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value} style={{ color: "#0A0A0A" }}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        {/* Custom chevron overlay */}
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+          <svg
+            width="12"
+            height="8"
+            viewBox="0 0 12 8"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M1 1L6 6L11 1"
+              stroke={isPlaceholder ? "rgba(245,245,245,0.45)" : "#00F0FF"}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Waitlist Form ─────────────────────────────────────────────────────────
 
-function WaitlistForm() {
+function WaitlistForm({ utmParams }: { utmParams: UtmParams }) {
   const [email, setEmail] = useState("");
   const [marketingConsent, setMarketingConsent] = useState(false);
+  const [heardFrom, setHeardFrom] = useState("");
+  const [heardFromOther, setHeardFromOther] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<
     "idle" | "success" | "duplicate" | "error"
@@ -146,10 +269,27 @@ function WaitlistForm() {
     if (!email.includes("@")) return;
     setLoading(true);
     try {
+      // Assemble heard_from payload. "other" alone means Other was picked
+      // but no free text; "other:<text>" carries the free-text answer.
+      // Empty string means user skipped the question — send undefined so
+      // the API stores NULL rather than an empty coerced value.
+      let heardFromPayload: string | undefined;
+      if (heardFrom === "other") {
+        const trimmed = heardFromOther.trim();
+        heardFromPayload = trimmed ? `other:${trimmed}` : "other";
+      } else if (heardFrom !== "") {
+        heardFromPayload = heardFrom;
+      }
+
       const res = await fetch("/api/waitlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, marketing_consent: marketingConsent }),
+        body: JSON.stringify({
+          email,
+          marketing_consent: marketingConsent,
+          heard_from: heardFromPayload,
+          ...utmParams,
+        }),
       });
       const data = await res.json();
       if (data.already) setStatus("duplicate");
@@ -249,6 +389,35 @@ function WaitlistForm() {
           e.target.style.boxShadow = "none";
         }}
       />
+
+      {/* Heard-from dropdown */}
+      <HeardFromDropdown value={heardFrom} onChange={setHeardFrom} />
+
+      {/* Other freetext — appears only when Other is picked */}
+      {heardFrom === "other" && (
+        <input
+          type="text"
+          maxLength={74}
+          placeholder="Where did you hear about us?"
+          value={heardFromOther}
+          onChange={(e) => setHeardFromOther(e.target.value)}
+          className="w-full rounded-xl px-4 py-3.5 text-sm outline-none transition-all"
+          style={{
+            background: "rgba(255,255,255,0.06)",
+            border: "1px solid rgba(255,255,255,0.12)",
+            color: "#F5F5F5",
+            fontFamily: "'Montserrat', sans-serif",
+          }}
+          onFocus={(e) => {
+            e.target.style.border = "1px solid #00F0FF";
+            e.target.style.boxShadow = "0 0 0 3px rgba(0,240,255,0.12)";
+          }}
+          onBlur={(e) => {
+            e.target.style.border = "1px solid rgba(255,255,255,0.12)";
+            e.target.style.boxShadow = "none";
+          }}
+        />
+      )}
 
       {/* Marketing consent checkbox */}
       <label className="flex items-start gap-3 cursor-pointer">
@@ -362,7 +531,23 @@ function WaitlistForm() {
 
 // ─── Waitlist Page ─────────────────────────────────────────────────────────
 
-export default function WaitlistPage() {
+function WaitlistPageInner() {
+  // 2026-07-15 side quest: capture UTM params silently. Paid ads (Instagram
+  // Ads, TikTok Ads) attach these to their click URLs; organic DMs and story
+  // shares usually don't. Both channels can coexist in the same row — self-
+  // report via the dropdown covers organic, UTMs cover paid.
+  const searchParams = useSearchParams();
+  const utmParams: UtmParams = useMemo(
+    () => ({
+      utm_source: searchParams.get("utm_source") ?? undefined,
+      utm_medium: searchParams.get("utm_medium") ?? undefined,
+      utm_campaign: searchParams.get("utm_campaign") ?? undefined,
+      utm_content: searchParams.get("utm_content") ?? undefined,
+      utm_term: searchParams.get("utm_term") ?? undefined,
+    }),
+    [searchParams],
+  );
+
   return (
     <div
       className="relative min-h-screen overflow-x-hidden flex flex-col items-center justify-center px-5 py-14"
@@ -483,14 +668,34 @@ export default function WaitlistPage() {
         <div
           className="w-full rounded-2xl p-6"
           style={{
-            background: "rgba(45,10,78,0.35)",
-            border: "1px solid rgba(45,10,78,0.8)",
-            backdropFilter: "blur(8px)",
+            // 2026-07-15: reduced card alpha from 0.35 → 0.28 so the pill glows
+            // behind the card read as brightness rather than darkening. Matches
+            // the login page's lighter treatment (0.3) but goes slightly further
+            // since the waitlist page uses stronger backdrop-blur which already
+            // provides visual separation. Inner box-shadow adds depth back
+            // without darkening the through-background.
+            background: "rgba(45,10,78,0.28)",
+            border: "1px solid rgba(45,10,78,0.7)",
+            backdropFilter: "blur(10px)",
+            WebkitBackdropFilter: "blur(10px)",
+            boxShadow:
+              "inset 0 0 40px rgba(45,10,78,0.25), 0 8px 32px rgba(0,0,0,0.4)",
           }}
         >
-          <WaitlistForm />
+          <WaitlistForm utmParams={utmParams} />
         </div>
       </div>
     </div>
+  );
+}
+
+export default function WaitlistPage() {
+  // useSearchParams requires a Suspense boundary in Next.js App Router.
+  // Fallback is transparent — the page renders its shell without UTM capture
+  // for the split-second before hydration completes.
+  return (
+    <Suspense fallback={null}>
+      <WaitlistPageInner />
+    </Suspense>
   );
 }
