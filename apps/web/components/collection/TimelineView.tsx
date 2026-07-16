@@ -23,10 +23,11 @@ const PAD_BOTTOM = 48;
 const TYPE_COLORS: Record<SlimeBaseType, string> = {
   avalanche: "#3498DB",
   beaded: "#FF00E5",
+  basic: "#CBD5E1",
   butter: "#FFB347",
   clear: "#00F0FF",
   cloud: "#F5F5F5",
-  cloud_cream: "#FFE66D",
+  snowbutter: "#FFE66D",
   floam: "#8BC34A",
   fluffy: "#FF6B9D",
   hybrid: "#B39DDB",

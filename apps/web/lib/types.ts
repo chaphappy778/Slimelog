@@ -88,17 +88,22 @@ export const SLIME_CONDITION_DESCRIPTIONS: Record<SlimeCondition, string> = {
 
 // ─── Labels & Colors ──────────────────────────────────────────────────────────
 
-// 2026-07-16: 'clay' removed per taxonomy rework Phase 1. Was a redundant
-// alias for butter (both are clay-heavy at ingredient level per Jenn's V4.1
-// guide). See migration 20260716000075_remove_clay_base_type.sql and
-// docs/handoffs/2026-07-15-taxonomy-rework-plan.md Section 3.
+// 2026-07-16: taxonomy Phase 2 (mig 077). Changes vs Phase 1:
+//   - 'clay' removed (Phase 1, mig 075)
+//   - 'cloud_cream' renamed to 'snowbutter' per Section 5.1 (Cloud Cream
+//     spelling stays a searchable alias on the subtypes.aliases column)
+//   - 'basic' added as new base type per Section 5.7 (3 shops elevate
+//     Basic/Base as a top-level texture — Glitter Slimes, Slimeatory,
+//     Avocadoslimeez)
+// Net: 20 base types (19 - clay + snowbutter + basic - cloud_cream = 20).
+// See docs/handoffs/2026-07-15-taxonomy-rework-plan.md Sections 5.1 + 5.7.
 export type SlimeBaseType =
   | "avalanche"
+  | "basic"
   | "beaded"
   | "butter"
   | "clear"
   | "cloud"
-  | "cloud_cream"
   | "floam"
   | "fluffy"
   | "hybrid"
@@ -108,6 +113,7 @@ export type SlimeBaseType =
   | "sand"
   | "slay"
   | "snow_fizz"
+  | "snowbutter"
   | "sugar_scrub"
   | "thick_and_glossy"
   | "water"
@@ -115,11 +121,11 @@ export type SlimeBaseType =
 
 export const SLIME_BASE_TYPE_LABELS: Record<SlimeBaseType, string> = {
   avalanche: "Avalanche",
+  basic: "Basic",
   beaded: "Beaded",
   butter: "Butter",
   clear: "Clear",
   cloud: "Cloud",
-  cloud_cream: "Cloud Cream",
   floam: "Floam",
   fluffy: "Fluffy",
   hybrid: "Hybrid",
@@ -129,6 +135,7 @@ export const SLIME_BASE_TYPE_LABELS: Record<SlimeBaseType, string> = {
   sand: "Sand",
   slay: "Slay",
   snow_fizz: "Snow Fizz",
+  snowbutter: "Snowbutter",
   sugar_scrub: "Sugar Scrub",
   thick_and_glossy: "Thick & Glossy",
   water: "Water",
@@ -140,11 +147,14 @@ export const SLIME_BASE_TYPE_COLORS: Record<
   { bg: string; text: string }
 > = {
   avalanche: { bg: "rgba(248,250,252,0.08)", text: "#94a3b8" },
+  // Basic: neutral cool-white — signals "default / starter" without competing
+  // with any other base type's saturated color. Slightly warmer than avalanche
+  // so they read as distinct on adjacent chips.
+  basic: { bg: "rgba(241,245,249,0.10)", text: "#cbd5e1" },
   beaded: { bg: "rgba(254,228,230,0.12)", text: "#fda4af" },
   butter: { bg: "rgba(255,243,205,0.12)", text: "#fde68a" },
   clear: { bg: "rgba(224,247,250,0.10)", text: "#67e8f9" },
   cloud: { bg: "rgba(243,232,255,0.12)", text: "#d8b4fe" },
-  cloud_cream: { bg: "rgba(253,244,255,0.12)", text: "#e879f9" },
   floam: { bg: "rgba(209,250,229,0.12)", text: "#6ee7b7" },
   fluffy: { bg: "rgba(252,231,243,0.12)", text: "#f9a8d4" },
   hybrid: { bg: "rgba(150,100,255,0.12)", text: "#c4b5fd" },
@@ -154,6 +164,9 @@ export const SLIME_BASE_TYPE_COLORS: Record<
   sand: { bg: "rgba(210,180,140,0.12)", text: "#d4a96a" },
   slay: { bg: "rgba(253,242,248,0.12)", text: "#f0abfc" },
   snow_fizz: { bg: "rgba(240,249,255,0.10)", text: "#bae6fd" },
+  // Snowbutter: inherits the palette formerly used for cloud_cream (same
+  // texture, new canonical name).
+  snowbutter: { bg: "rgba(253,244,255,0.12)", text: "#e879f9" },
   sugar_scrub: { bg: "rgba(255,220,180,0.12)", text: "#fed7aa" },
   thick_and_glossy: { bg: "rgba(237,233,254,0.12)", text: "#c4b5fd" },
   water: { bg: "rgba(50,150,255,0.12)", text: "#93c5fd" },

@@ -18,13 +18,14 @@ interface Props {
 // values for legible blob rendering vs the bg/text pair the badge map
 // provides). Typed Record<SlimeBaseType, string> to catch taxonomy drift
 // at compile time. All 20 base types present; `thermochromic` removed.
+// 2026-07-16 mig 077: basic added, cloud_cream renamed to snowbutter.
 const TYPE_COLORS: Record<SlimeBaseType, string> = {
   avalanche: "#3498DB",
+  basic: "#CBD5E1",
   beaded: "#FF00E5",
   butter: "#FFB347",
   clear: "#00F0FF",
   cloud: "#F5F5F5",
-  cloud_cream: "#FFE66D",
   floam: "#8BC34A",
   fluffy: "#FF6B9D",
   hybrid: "#B39DDB",
@@ -34,6 +35,7 @@ const TYPE_COLORS: Record<SlimeBaseType, string> = {
   sand: "#D2B48C",
   slay: "#39FF14",
   snow_fizz: "#E0E0E0",
+  snowbutter: "#FFE66D",
   sugar_scrub: "#FFC1CC",
   thick_and_glossy: "#9B59B6",
   water: "#5DADE2",

@@ -38,7 +38,10 @@ const BASE_COLORS: Partial<Record<SlimeBaseType, string>> = {
   clear: "#39FF14",
   jelly: "#FF3D6E",
   icee: "#00F0FF",
-  cloud_cream: "#FFA7C7",
+  // 2026-07-16 mig 077: cloud_cream renamed to snowbutter.
+  snowbutter: "#FFA7C7",
+  // 2026-07-16 mig 077: basic added. Neutral cool-gray.
+  basic: "#CBD5E1",
   fluffy: "#FFA6D9",
   thick_and_glossy: "#FF7BFF",
   slay: "#FF4D6D",

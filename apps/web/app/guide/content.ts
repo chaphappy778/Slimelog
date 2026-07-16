@@ -23,13 +23,17 @@ export interface GuideTexture {
   note: string;
   variantsAndRelated: string[];
   example: {
-    slimeName: string;
-    brandName: string;
+    /** Slime name for the example card. Null for base types that don't
+     * have a canonical example yet (Basic added 2026-07-16); component
+     * hides the example block when null. */
+    slimeName: string | null;
+    /** Brand name for the example card. Null when no example. */
+    brandName: string | null;
     /** Present when we know the catalog slug; component falls back to
      * plain text if the linked brand row doesn't exist yet. */
     brandSlug: string | null;
     /** Real photo path under /public/guide/textures/, or null for
-     * gradient-only fallback (sand, magnetic). */
+     * gradient-only fallback (sand, magnetic, basic). */
     imagePath: string | null;
   };
   gradientFrom: string;
@@ -191,13 +195,18 @@ export const TEXTURES: GuideTexture[] = [
     accentColor: "#00F0FF",
   },
   {
-    slug: "cloud_cream",
-    name: "Cloud Cream",
+    // 2026-07-16 mig 077: renamed from "cloud_cream" to "snowbutter" per
+    // Section 5.1 of the taxonomy plan. Cloud Cream + Cloud Creme are now
+    // searchable aliases on subtypes.aliases[] — same texture, canonical
+    // name is Snowbutter to match how the community + shops actually
+    // vocabulary (Hippocampe Slimes has a literal "Snow Butter" collection).
+    slug: "snowbutter",
+    name: "Snowbutter",
     tagline: "Dense, airy, and impossibly soft",
     definition:
-      "Cloud creams fall into a category of their own: soft yet substantial, dense yet airy. The texture comes from loading in a generous helping of instant snow, skipping air dry clay entirely.",
+      "Snowbutter falls into a category of its own: soft yet substantial, dense yet airy. The texture comes from loading in a generous helping of instant snow, skipping air dry clay entirely. Also known as Cloud Cream.",
     note: "A naming tip: snowbutter built on clear glue rather than white usually goes by mochi.",
-    variantsAndRelated: ["Mochi", "Putty Puff"],
+    variantsAndRelated: ["Mochi", "Putty Puff", "Cloud Cream"],
     example: {
       slimeName: "White Whale",
       brandName: "White Whale",
@@ -208,6 +217,29 @@ export const TEXTURES: GuideTexture[] = [
     gradientFrom: "#0d1a2e",
     gradientTo: "#1a2e4a",
     accentColor: "#00F0FF",
+  },
+  {
+    // 2026-07-16 mig 077: new "basic" base type per Section 5.7. 3 shops
+    // (Glitter Slimes, Slimeatory, Avocadoslimeez) elevate Basic/Base as
+    // a top-level texture. No hero photo yet — Jenn to source; gradient-
+    // only fallback via DEFAULT_HERO_TINT until then. Tagline + definition
+    // below are placeholders — Jenn to refine on the next pass.
+    slug: "basic",
+    name: "Basic",
+    tagline: "The clean starter base, no add-ins",
+    definition:
+      "A basic slime is the clean unadorned starting point — the white glue base without a texture add-in stacked on top. Shops surface Basic as its own category for beginners or for anyone who wants the classic feel without extras. Placeholder copy — Jenn will refine.",
+    note: "Basic slimes are often the first thing new slime makers try. Many shops maintain a Basic line alongside their more experimental textures.",
+    variantsAndRelated: [],
+    example: {
+      slimeName: null,
+      brandName: null,
+      brandSlug: null,
+      imagePath: null,
+    },
+    gradientFrom: "#0a0a12",
+    gradientTo: "#1a1a24",
+    accentColor: "#CBD5E1",
   },
   {
     slug: "fluffy",

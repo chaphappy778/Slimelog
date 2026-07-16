@@ -14,13 +14,15 @@ import {
 // migration 20260509000037. Duplicated here so the validator can
 // reject bad values at the API boundary before hitting Postgres. Keep
 // in sync if the enum ever grows a new value.
+// 2026-07-16 taxonomy Phase 2 (mig 077): +basic, cloud_cream renamed to
+// snowbutter. Net 20 base types.
 const BASE_TYPES = [
   "avalanche",
+  "basic",
   "beaded",
   "butter",
   "clear",
   "cloud",
-  "cloud_cream",
   "floam",
   "fluffy",
   "hybrid",
@@ -30,6 +32,7 @@ const BASE_TYPES = [
   "sand",
   "slay",
   "snow_fizz",
+  "snowbutter",
   "sugar_scrub",
   "thick_and_glossy",
   "water",

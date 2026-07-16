@@ -66,13 +66,14 @@ function getSwatchColor(colorName: string): string {
   return "#666";
 }
 
+// 2026-07-16 mig 077: basic added, cloud_cream renamed to snowbutter.
 const TYPE_LABELS: Record<SlimeBaseType, string> = {
   avalanche: "Avalanche",
+  basic: "Basic",
   beaded: "Beaded",
   butter: "Butter",
   clear: "Clear",
   cloud: "Cloud",
-  cloud_cream: "Cloud Cream",
   floam: "Floam",
   fluffy: "Fluffy",
   hybrid: "Hybrid",
@@ -82,6 +83,7 @@ const TYPE_LABELS: Record<SlimeBaseType, string> = {
   sand: "Sand",
   slay: "Slay",
   snow_fizz: "Snow Fizz",
+  snowbutter: "Snowbutter",
   sugar_scrub: "Sugar Scrub",
   thick_and_glossy: "Thick & Glossy",
   water: "Water",

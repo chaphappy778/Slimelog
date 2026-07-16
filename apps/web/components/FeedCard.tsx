@@ -79,12 +79,14 @@ const TYPE_STYLE: Record<
     text: "text-yellow-300",
     label: "Butter",
   },
+  // 2026-07-16 mig 077: basic added, cloud_cream renamed to snowbutter.
+  basic: { bg: "bg-slate-800", text: "text-slate-300", label: "Basic" },
   clear: { bg: "bg-sky-900/40", text: "text-sky-300", label: "Clear" },
   cloud: { bg: "bg-slate-800", text: "text-slate-300", label: "Cloud" },
-  cloud_cream: {
+  snowbutter: {
     bg: "bg-rose-900/40",
     text: "text-rose-300",
-    label: "Cloud Cream",
+    label: "Snowbutter",
   },
   floam: { bg: "bg-lime-900/40", text: "text-lime-300", label: "Floam" },
   fluffy: { bg: "bg-pink-900/40", text: "text-pink-300", label: "Fluffy" },

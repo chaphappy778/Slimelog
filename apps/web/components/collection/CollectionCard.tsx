@@ -65,7 +65,10 @@ const BASE_CHIP: Partial<
   clear: { bg: "rgba(57,255,20,0.14)", color: "#6DFF4D" },
   jelly: { bg: "rgba(255,61,110,0.14)", color: "#FF6187" },
   icee: { bg: "rgba(0,240,255,0.14)", color: "#3DF2FF" },
-  cloud_cream: { bg: "rgba(255,167,199,0.14)", color: "#FFA7C7" },
+  // 2026-07-16 mig 077: cloud_cream renamed to snowbutter.
+  snowbutter: { bg: "rgba(255,167,199,0.14)", color: "#FFA7C7" },
+  // 2026-07-16 mig 077: basic added. Neutral cool-gray.
+  basic: { bg: "rgba(203,213,225,0.12)", color: "#CBD5E1" },
   fluffy: { bg: "rgba(255,166,217,0.14)", color: "#FFA6D9" },
   thick_and_glossy: { bg: "rgba(255,123,255,0.14)", color: "#FF7BFF" },
   slay: { bg: "rgba(255,77,109,0.14)", color: "#FF4D6D" },
