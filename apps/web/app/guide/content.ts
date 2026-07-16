@@ -529,10 +529,10 @@ export const ADD_INS: GlossaryEntry[] = [
       "Phosphorescent pigment that charges in bright light and glows in the dark. Charge time and glow duration vary by pigment quality.",
   },
   {
-    term: "Air Dry Clay",
+    term: "Clay",
     tag: "structural",
     definition:
-      "Soft, lightweight clay (such as Daiso or Model Magic) mixed into a glue-based slime to produce butter, slay, and clay textures. The defining structural ingredient of butter slimes.",
+      "Soft, lightweight air-dry clay (Daiso, Model Magic, or specialty Japanese and Korean brands) mixed into a glue-based slime to produce butter and slay textures. The defining structural ingredient of butter slimes. Different clays behave differently — Daiso is a household staple, Japanese and Korean varieties are prized for softness and consistency.",
   },
   {
     term: "Shaving Foam",
