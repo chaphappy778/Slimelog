@@ -7,6 +7,9 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import FloatingPills from "@/components/FloatingPills";
 import { safeRedirect } from "@/lib/safe-redirect"; // [Change 1 — #35]
+// 2026-07-16 (#26 App Store checklist a): SIWA button, required at
+// equal visual weight because we also offer Google OAuth on this page.
+import AppleAuthButton from "@/components/auth/AppleAuthButton";
 
 function LoginPageInner() {
   const searchParams = useSearchParams();
@@ -170,6 +173,12 @@ function LoginPageInner() {
             </svg>
             Continue with Google
           </button>
+
+          {/* 2026-07-16 (#26 App Store checklist): Sign in with Apple.
+              Apple requires SIWA at equal visual weight anywhere a
+              third-party SSO is offered on iOS. Same button pattern
+              as Google above; provider swap only. */}
+          <AppleAuthButton next={next} disabled={isPending} onError={setError} />
 
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-slime-border" />

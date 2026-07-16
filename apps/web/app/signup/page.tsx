@@ -6,6 +6,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { safeRedirect } from "@/lib/safe-redirect";
+// 2026-07-16 (#26 App Store checklist a): SIWA button, required at
+// equal visual weight because we also offer Google OAuth on this page.
+import AppleAuthButton from "@/components/auth/AppleAuthButton";
 
 // Referral code shape must match the DB CHECK constraint on
 // profiles.referral_code (mig 62): 6 chars, uppercase alphanumeric only.
@@ -417,6 +420,11 @@ function SignupPageInner() {
             </svg>
             Continue with Google
           </button>
+
+          {/* 2026-07-16 (#26 App Store checklist): Sign in with Apple.
+              Apple mandates SIWA at equal visual weight anywhere Google
+              OAuth is offered. */}
+          <AppleAuthButton next={next} disabled={isPending} onError={setError} />
 
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-slime-border" />
