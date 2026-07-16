@@ -43,6 +43,11 @@ type SlimeLogRecord = CollectionLog & {
   scent_strength: string | null;
   scent_notes: string | null;
   purchase_price: number | null;
+  // 2026-07-16 Commit B-display: brand-scoped variant label. When the
+  // log has both brand_id and subtype_id AND there's an approved
+  // brand_variants row for that combo, `brand_display_name` overrides
+  // the canonical subtype name in the detail-page chip.
+  brand_variant_display_name: string | null;
 };
 
 // ─── Server-side Supabase ─────────────────────────────────────────────────────
@@ -65,13 +70,46 @@ async function getSupabase() {
 // twice on every /slimes/[id] load.
 const fetchLog = cache(async (id: string): Promise<SlimeLogRecord | null> => {
   const supabase = await getSupabase();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("collection_logs")
     .select("*, subtype:subtypes(name)")
     .eq("id", id)
     .eq("is_public", true)
     .maybeSingle();
-  return (data as SlimeLogRecord | null) ?? null;
+  if (error) {
+    console.warn("[slimes/[id]] log fetch failed:", error.message);
+    return null;
+  }
+  const log = (data as SlimeLogRecord | null) ?? null;
+  if (!log) return null;
+
+  // 2026-07-16 Commit B-display: pull brand-scoped variant label when
+  // the log carries both a catalog brand and a resolved subtype. A
+  // separate lookup (rather than a PostgREST join) because
+  // brand_variants is keyed by the composite (brand_id, subtype_id)
+  // and PostgREST can't express a compound foreign-join filter here.
+  // React `cache()` already dedupes fetchLog across the render pass so
+  // this second query only fires once.
+  log.brand_variant_display_name = null;
+  if (log.brand_id && log.subtype_id) {
+    const { data: bvRow, error: bvErr } = await supabase
+      .from("brand_variants")
+      .select("brand_display_name")
+      .eq("brand_id", log.brand_id)
+      .eq("subtype_id", log.subtype_id)
+      .eq("is_admin_approved", true)
+      .maybeSingle();
+    if (bvErr) {
+      console.warn(
+        "[slimes/[id]] brand_variants lookup failed:",
+        bvErr.message,
+      );
+    } else if (bvRow?.brand_display_name) {
+      log.brand_variant_display_name = bvRow.brand_display_name as string;
+    }
+  }
+
+  return log;
 });
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
@@ -227,6 +265,11 @@ export default async function SlimePage({
     : null;
 
   const subtypeName = log.subtype?.name ?? null;
+  // 2026-07-16 Commit B-display: prefer the brand-scoped display name
+  // (e.g. "Fluffernutter") over the canonical subtype ("Butter Whip")
+  // when we have one, so the chip reads the way the brand markets the
+  // variant. Falls back to subtypeName for legacy logs.
+  const variantLabel = log.brand_variant_display_name ?? subtypeName;
 
   const activeDimensions = RATING_DIMENSIONS.filter(
     ({ key }) => typeof log[key] === "number",
@@ -357,7 +400,22 @@ export default async function SlimePage({
                 }}
               >
                 {baseTypeLabel}
-                {subtypeName ? ` \u00b7 ${subtypeName}` : null}
+              </span>
+            )}
+            {/* 2026-07-16 Commit B-display: variant chip. Distinct
+                magenta chip so brand-scoped naming ("Fluffernutter",
+                "Cloud Puff") reads as its own signal rather than an
+                afterthought on the base type badge. */}
+            {variantLabel && (
+              <span
+                className="px-3 py-1 rounded-full text-xs font-semibold border"
+                style={{
+                  background: "rgba(255,0,229,0.14)",
+                  color: "#FF00E5",
+                  borderColor: "rgba(255,0,229,0.45)",
+                }}
+              >
+                {variantLabel}
               </span>
             )}
             {log.in_wishlist ? (

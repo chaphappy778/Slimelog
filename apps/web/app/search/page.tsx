@@ -262,14 +262,19 @@ function SearchPageInner() {
 
       const safeQ = sanitizeForOrFilter(trimmed);
 
-      const [slimesRes, tagsRes] = await Promise.all([
+      // 2026-07-16 Commit B-display: variant-aware search. First look
+      // up subtypes whose name OR aliases match the query so users
+      // searching "cloud puff" or "fluffernutter" hit slimes whose
+      // subtype has that name/alias. Then fetch slimes by BOTH the
+      // existing name/collection filter AND (union) subtype_id in the
+      // matched set. Dedupe by id + preserve total_ratings ordering.
+      const [subtypesRes, tagsRes] = await Promise.all([
         supabase
-          .from("slimes")
-          .select(
-            "id, name, collection_name, base_type, image_url, avg_overall, total_ratings, brands(name, slug)",
+          .from("subtypes")
+          .select("id, name, aliases")
+          .or(
+            `name.ilike.%${safeQ}%,aliases.cs.{${trimmed.toLowerCase()}}`,
           )
-          .or(`name.ilike.%${safeQ}%,collection_name.ilike.%${safeQ}%`)
-          .order("total_ratings", { ascending: false })
           .limit(20),
 
         supabase
@@ -280,12 +285,83 @@ function SearchPageInner() {
           .limit(20),
       ]);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rawSlimes: any[] = slimesRes.data ?? [];
-      const normalizedSlimes: SlimeResult[] = rawSlimes.map((s) => ({
-        ...s,
-        brands: Array.isArray(s.brands) ? (s.brands[0] ?? null) : s.brands,
-      }));
+      // Log (but don't surface) subtype lookup errors — search still
+      // works via the name/collection path if the join hiccups.
+      if (subtypesRes.error) {
+        console.warn(
+          "[search] subtype lookup failed:",
+          subtypesRes.error.message,
+        );
+      }
+      if (tagsRes.error) {
+        console.warn(
+          "[search] tag lookup failed:",
+          tagsRes.error.message,
+        );
+      }
+
+      const matchedSubtypeIds: string[] = (subtypesRes.data ?? []).map(
+        (r: { id: string }) => r.id,
+      );
+
+      // Slime fetches — one by name/collection, one by matched
+      // subtype_id list (only if there were any matches). Both queries
+      // return the same shape so merging is trivial.
+      const slimeSelect =
+        "id, name, collection_name, base_type, image_url, avg_overall, total_ratings, brands(name, slug)";
+
+      const nameCollectionQuery = supabase
+        .from("slimes")
+        .select(slimeSelect)
+        .or(`name.ilike.%${safeQ}%,collection_name.ilike.%${safeQ}%`)
+        .order("total_ratings", { ascending: false })
+        .limit(20);
+      const subtypeIdsQuery =
+        matchedSubtypeIds.length > 0
+          ? supabase
+              .from("slimes")
+              .select(slimeSelect)
+              .in("subtype_id", matchedSubtypeIds)
+              .order("total_ratings", { ascending: false })
+              .limit(20)
+          : null;
+      const slimesResults = await Promise.all([
+        nameCollectionQuery,
+        subtypeIdsQuery,
+      ]);
+
+      // Merge + dedupe by id, keeping the highest total_ratings first.
+      const seenIds = new Set<string>();
+      const merged: SlimeResult[] = [];
+      for (const res of slimesResults) {
+        if (!res) continue;
+        if (res.error) {
+          console.warn(
+            "[search] slime query failed:",
+            res.error.message,
+          );
+          continue;
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rows: any[] = (res.data as any[]) ?? [];
+        for (const s of rows) {
+          if (seenIds.has(s.id)) continue;
+          seenIds.add(s.id);
+          merged.push({
+            ...s,
+            brands: Array.isArray(s.brands)
+              ? (s.brands[0] ?? null)
+              : s.brands,
+          } as SlimeResult);
+        }
+      }
+      // Re-sort merged list by total_ratings desc so the union stays
+      // meaningful (the two queries were each already sorted, but the
+      // interleaving loses that ordering).
+      merged.sort(
+        (a, b) => (b.total_ratings ?? 0) - (a.total_ratings ?? 0),
+      );
+      const normalizedSlimes: SlimeResult[] = merged.slice(0, 20);
 
       setTypeResults(types);
       setSlimeResults(normalizedSlimes);
