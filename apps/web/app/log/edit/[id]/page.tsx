@@ -26,6 +26,10 @@ import { ImageUpload } from "@/components/ImageUpload";
 import PageWrapper from "@/components/PageWrapper";
 import BrandSearchInput from "@/components/BrandSearchInput";
 import SubtypeAutocomplete from "@/components/SubtypeAutocomplete";
+// 2026-07-16 Commit B-wizard — brand-scoped variant picker (with
+// "Suggest a variant" fallback). Same conditional swap as /log so edit
+// stays in visual + behavioral parity with create.
+import BrandVariantPicker from "@/components/log/BrandVariantPicker";
 import { KeywordTagInput } from "@/components/KeywordTagInput";
 // [T-wizard 2026-07-13 rev2] Redesigned wizard chrome + shared
 // widgets. Edit page now visually matches the create page — was
@@ -457,23 +461,40 @@ function EditLogPageInner() {
 
               <div>
                 <FieldLabel optional>Variant</FieldLabel>
-                <SubtypeAutocomplete
-                  baseType={form.base_type}
-                  value={form.subtype_name}
-                  subtypeId={form.subtype_id}
-                  onChange={(id, name) => {
-                    setForm((f) => ({
-                      ...f,
-                      subtype_id: id,
-                      subtype_name: name,
-                    }));
-                  }}
-                  placeholder={
-                    form.base_type
-                      ? "Search variants (optional)"
-                      : "Pick a base type first"
-                  }
-                />
+                {form.brand_id && form.base_type ? (
+                  <BrandVariantPicker
+                    brandId={form.brand_id}
+                    brandName={form.brand_name_raw}
+                    baseType={form.base_type}
+                    value={form.subtype_name}
+                    subtypeId={form.subtype_id}
+                    onChange={(id, name) => {
+                      setForm((f) => ({
+                        ...f,
+                        subtype_id: id,
+                        subtype_name: name,
+                      }));
+                    }}
+                  />
+                ) : (
+                  <SubtypeAutocomplete
+                    baseType={form.base_type}
+                    value={form.subtype_name}
+                    subtypeId={form.subtype_id}
+                    onChange={(id, name) => {
+                      setForm((f) => ({
+                        ...f,
+                        subtype_id: id,
+                        subtype_name: name,
+                      }));
+                    }}
+                    placeholder={
+                      form.base_type
+                        ? "Search variants (optional)"
+                        : "Pick a base type first"
+                    }
+                  />
+                )}
               </div>
 
               {/* Wishlist toggle card */}

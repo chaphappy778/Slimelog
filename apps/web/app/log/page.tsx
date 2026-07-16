@@ -35,6 +35,11 @@ import { createClient } from "@/lib/supabase/client";
 import PageWrapper from "@/components/PageWrapper";
 import BrandSearchInput from "@/components/BrandSearchInput";
 import SubtypeAutocomplete from "@/components/SubtypeAutocomplete";
+// 2026-07-16 Commit B-wizard — brand-scoped variant picker (with
+// "Suggest a variant" fallback + POST to /api/variant-suggestions).
+// Renders only when brand_id is a catalog brand; free-text brands keep
+// falling through to SubtypeAutocomplete.
+import BrandVariantPicker from "@/components/log/BrandVariantPicker";
 import { KeywordTagInput } from "@/components/KeywordTagInput";
 // [Change 2 — T98]
 import { RatingSlider } from "@/components/RatingSlider";
@@ -339,23 +344,47 @@ function LogPageInner() {
 
               <div>
                 <FieldLabel optional>Variant</FieldLabel>
-                <SubtypeAutocomplete
-                  baseType={form.base_type}
-                  value={form.subtype_name}
-                  subtypeId={form.subtype_id}
-                  onChange={(id, name) => {
-                    setForm((f) => ({
-                      ...f,
-                      subtype_id: id,
-                      subtype_name: name,
-                    }));
-                  }}
-                  placeholder={
-                    form.base_type
-                      ? "Search variants (optional)"
-                      : "Pick a base type first"
-                  }
-                />
+                {form.brand_id && form.base_type ? (
+                  // Catalog brand + base type known: render the brand-scoped
+                  // chip picker. If the brand has no tracked variants for
+                  // this base yet, the picker shows a "Suggest a variant"
+                  // CTA (POST /api/variant-suggestions).
+                  <BrandVariantPicker
+                    brandId={form.brand_id}
+                    brandName={form.brand_name_raw}
+                    baseType={form.base_type}
+                    value={form.subtype_name}
+                    subtypeId={form.subtype_id}
+                    onChange={(id, name) => {
+                      setForm((f) => ({
+                        ...f,
+                        subtype_id: id,
+                        subtype_name: name,
+                      }));
+                    }}
+                  />
+                ) : (
+                  // Free-text brand (or brand not yet chosen): fall back to
+                  // the global variant autocomplete so the user can still
+                  // pick a canonical subtype for their base type.
+                  <SubtypeAutocomplete
+                    baseType={form.base_type}
+                    value={form.subtype_name}
+                    subtypeId={form.subtype_id}
+                    onChange={(id, name) => {
+                      setForm((f) => ({
+                        ...f,
+                        subtype_id: id,
+                        subtype_name: name,
+                      }));
+                    }}
+                    placeholder={
+                      form.base_type
+                        ? "Search variants (optional)"
+                        : "Pick a base type first"
+                    }
+                  />
+                )}
               </div>
 
               {/* Wishlist toggle card */}
