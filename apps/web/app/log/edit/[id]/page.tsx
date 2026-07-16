@@ -122,6 +122,13 @@ function EditLogPageInner() {
   const id = params.id as string;
 
   const [step, setStep] = useState<Step>(0);
+
+  // 2026-07-16 (Jennifer feedback, mirror of create wizard fix):
+  // step transitions preserved scroll position; reset on step change.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, [step]);
+
   const [loadingLog, setLoadingLog] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);

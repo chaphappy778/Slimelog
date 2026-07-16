@@ -67,29 +67,61 @@ export default function BrandsClient({
 
   const filteredSorted = useMemo(() => {
     const q = query.trim().toLowerCase();
-    let list = q
-      ? allBrands.filter((b) => b.name.toLowerCase().includes(q))
-      : [...allBrands];
+    let list: typeof allBrands;
+
+    // 2026-07-16 (Jennifer feedback): search was substring + sorted by
+    // rating, which meant typing "P" surfaced any brand with a "p"
+    // anywhere in the name (often "Peachybbies" ranking below an
+    // unrelated shop that scored higher). Now: prefix hits first
+    // (preserving the chosen sort within that bucket), then substring
+    // hits that weren't already in the prefix bucket. Matches the
+    // BrandSearchInput fix in the log wizard.
+    if (q) {
+      const prefixHits = allBrands.filter((b) =>
+        b.name.toLowerCase().startsWith(q),
+      );
+      const prefixIds = new Set(prefixHits.map((b) => b.id));
+      const substringHits = allBrands.filter(
+        (b) =>
+          !prefixIds.has(b.id) && b.name.toLowerCase().includes(q),
+      );
+      list = [...prefixHits, ...substringHits];
+    } else {
+      list = [...allBrands];
+    }
 
     if (verifiedOnly) list = list.filter((b) => b.is_verified);
 
-    switch (sortKey) {
-      case "rating":
-        list.sort(
-          (a, b) => (b.avg_slime_rating ?? 0) - (a.avg_slime_rating ?? 0),
-        );
-        break;
-      case "logs":
-        list.sort((a, b) => (b.total_logs ?? 0) - (a.total_logs ?? 0));
-        break;
-      case "followers":
-        list.sort(
-          (a, b) => (b.follower_count ?? 0) - (a.follower_count ?? 0),
-        );
-        break;
-      case "alpha":
-        list.sort((a, b) => a.name.localeCompare(b.name));
-        break;
+    // Sort — when a query is active, sort WITHIN each bucket (prefix
+    // vs substring) but keep the prefix bucket ranked first.
+    const sortFn = (a: (typeof list)[number], b: (typeof list)[number]) => {
+      switch (sortKey) {
+        case "rating":
+          return (b.avg_slime_rating ?? 0) - (a.avg_slime_rating ?? 0);
+        case "logs":
+          return (b.total_logs ?? 0) - (a.total_logs ?? 0);
+        case "followers":
+          return (b.follower_count ?? 0) - (a.follower_count ?? 0);
+        case "alpha":
+          return a.name.localeCompare(b.name);
+      }
+    };
+
+    if (q) {
+      // Two-pass sort that preserves prefix-first ranking: split, sort
+      // each half, re-concat.
+      const prefixIds = new Set(
+        allBrands
+          .filter((b) => b.name.toLowerCase().startsWith(q))
+          .map((b) => b.id),
+      );
+      const prefixBucket = list.filter((b) => prefixIds.has(b.id));
+      const substringBucket = list.filter((b) => !prefixIds.has(b.id));
+      prefixBucket.sort(sortFn);
+      substringBucket.sort(sortFn);
+      list = [...prefixBucket, ...substringBucket];
+    } else {
+      list.sort(sortFn);
     }
 
     return list;

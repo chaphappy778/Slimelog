@@ -14,7 +14,7 @@
 //   preview card on Notes. Form state + submit logic UNCHANGED —
 //   only the visual shell and step layout are new.
 
-import { useState, useRef, Suspense } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { logSlime } from "@/lib/slime-actions";
 import type { LogSlimeInput } from "@/lib/slime-actions";
@@ -142,6 +142,13 @@ function LogPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState<Step>(0);
+
+  // 2026-07-16 (Jennifer feedback): stepping from Identity to Details
+  // preserved the previous scroll position, so users landed at the
+  // bottom of step 1 instead of the top. Reset on every step change.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, [step]);
 
   const [userId, setUserId] = useState<string | null>(null);
   const userIdFetchedRef = useRef(false);
