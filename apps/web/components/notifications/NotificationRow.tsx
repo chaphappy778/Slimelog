@@ -281,6 +281,42 @@ function renderContent(n: Notification): RenderedContent {
       };
     }
 
+    // T158 (2026-07-16): variant suggestion outcomes. Notifications
+    // for these fire from the /admin/variant-suggestions approve /
+    // reject endpoints and are linked to the brand the variant is
+    // scoped to. The wizard's picker will now include the newly
+    // approved variant next time the user opens the log flow for that
+    // brand + base type.
+    case "variant_suggestion_approved": {
+      const brandLabel = brandName ?? "your suggestion";
+      return {
+        icon: <CheckIcon />,
+        tint: TINT.green,
+        copy: (
+          <>
+            Your variant suggestion is now tracked for{" "}
+            {boldSpan(brandLabel)}.
+          </>
+        ),
+        href: brandSlug ? `/brands/${brandSlug}` : null,
+      };
+    }
+
+    case "variant_suggestion_rejected": {
+      const brandLabel = brandName ?? "that brand";
+      return {
+        icon: <XIcon />,
+        tint: TINT.slate,
+        copy: (
+          <>
+            Your variant suggestion for {boldSpan(brandLabel)} wasn&apos;t
+            accepted.
+          </>
+        ),
+        href: brandSlug ? `/brands/${brandSlug}` : null,
+      };
+    }
+
     case "new_follower": {
       return {
         icon: <UserPlusIcon />,

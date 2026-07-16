@@ -28,7 +28,10 @@ export type NotificationType =
   | "like_on_log"
   // T110 (2026-07-11): brand suggestion outcomes.
   | "brand_suggestion_approved"
-  | "brand_suggestion_rejected";
+  | "brand_suggestion_rejected"
+  // T158 (2026-07-16): variant suggestion outcomes.
+  | "variant_suggestion_approved"
+  | "variant_suggestion_rejected";
 
 export type DropStatus =
   | "announced"

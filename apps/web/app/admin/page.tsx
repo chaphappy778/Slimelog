@@ -142,6 +142,7 @@ export default async function AdminPage() {
     pendingEmailCount,
     waitlistCount,
     pendingBrandSuggestionsCount,
+    pendingVariantSuggestionsCount,
   ] = await Promise.all([
     admin
       .from("profiles")
@@ -177,6 +178,12 @@ export default async function AdminPage() {
     // action card badge.
     admin
       .from("brand_suggestions")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "pending")
+      .then((r) => r.count ?? 0),
+    // T158 (2026-07-16): pending variant suggestions count.
+    admin
+      .from("variant_suggestions")
       .select("*", { count: "exact", head: true })
       .eq("status", "pending")
       .then((r) => r.count ?? 0),
@@ -336,6 +343,28 @@ export default async function AdminPage() {
               >
                 <path d="M12 2v20" />
                 <path d="M2 12h20" />
+              </svg>
+            }
+          />
+          <ActionCard
+            href="/admin/variant-suggestions"
+            title="Variant Suggestions"
+            description="Review community-submitted brand variants"
+            badge={pendingVariantSuggestionsCount}
+            badgeColor="#39FF14"
+            icon={
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#39FF14"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M20 6L9 17l-5-5" />
               </svg>
             }
           />
