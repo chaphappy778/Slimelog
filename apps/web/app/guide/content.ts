@@ -209,9 +209,11 @@ export const TEXTURES: GuideTexture[] = [
     variantsAndRelated: ["Mochi", "Putty Puff", "Cloud Cream"],
     example: {
       slimeName: "White Whale",
-      brandName: "White Whale",
-      // 2026-07-13 slug audit: no catalog entry yet — plain text render.
-      brandSlug: null,
+      brandName: "White Whale Slimes",
+      // 2026-07-16: White Whale Slimes is now in the brand catalog
+      // (slug: white-whale-slimes, added during the July brand scan).
+      // Restoring the link.
+      brandSlug: "white-whale-slimes",
       imagePath: "/guide/textures/cloud-cream-white-whale.webp",
     },
     gradientFrom: "#0d1a2e",
@@ -231,9 +233,12 @@ export const TEXTURES: GuideTexture[] = [
     note: "Basic slimes are often the first thing new slime makers try. Many shops maintain a Basic line alongside their more experimental textures.",
     variantsAndRelated: [],
     example: {
-      slimeName: null,
-      brandName: null,
-      brandSlug: null,
+      // 2026-07-16: in-house Basic photo credited to the SlimeLog
+      // Official brand account so the example card + small thumbnail
+      // render the same way every other texture entry does.
+      slimeName: "Basic Blue",
+      brandName: "SlimeLog Official",
+      brandSlug: "slimelog-official",
       imagePath: "/guide/textures/basic-jenn.webp",
     },
     gradientFrom: "#0a0a12",
