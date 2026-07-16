@@ -304,6 +304,10 @@ function buildCollectionLog(log: FeedCardLog): CollectionLog {
     subtype_id: null,
     scent_strength: null,
     condition: null,
+    // T158 (2026-07-16): skill_level is optional at the DB level and
+    // this builder doesn't need to surface it — feed cards don't show
+    // difficulty. Null keeps the CollectionLog shape complete.
+    skill_level: null,
     colors: log.colors,
     cost_paid: null,
     purchase_price: null,

@@ -19,12 +19,15 @@ import {
   SLIME_BASE_TYPE_LABELS,
   SCENT_STRENGTH_LABELS,
   SLIME_CONDITION_LABELS,
+  SLIME_SKILL_LEVEL_LABELS,
+  SLIME_SKILL_LEVEL_COLORS,
 } from "@/lib/types";
 import type {
   CollectionLog,
   SlimeBaseType,
   ScentStrength,
   SlimeCondition,
+  SlimeSkillLevel,
 } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -416,6 +419,34 @@ export default async function SlimePage({
                 }}
               >
                 {variantLabel}
+              </span>
+            )}
+            {/* T158 (2026-07-16): subtle skill_level chip. Lighter tint
+                than the base-type chip so the difficulty reads as an
+                info tag rather than the primary identifier. */}
+            {log.skill_level && (
+              <span
+                className="px-3 py-1 rounded-full text-[11px] font-semibold border"
+                style={{
+                  background:
+                    SLIME_SKILL_LEVEL_COLORS[
+                      log.skill_level as SlimeSkillLevel
+                    ].bg,
+                  color:
+                    SLIME_SKILL_LEVEL_COLORS[
+                      log.skill_level as SlimeSkillLevel
+                    ].text,
+                  borderColor:
+                    SLIME_SKILL_LEVEL_COLORS[
+                      log.skill_level as SlimeSkillLevel
+                    ].border,
+                }}
+              >
+                {
+                  SLIME_SKILL_LEVEL_LABELS[
+                    log.skill_level as SlimeSkillLevel
+                  ]
+                }
               </span>
             )}
             {log.in_wishlist ? (

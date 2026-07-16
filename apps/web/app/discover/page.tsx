@@ -35,8 +35,12 @@ import TrendingPulse, {
   EARLY_DAYS_THRESHOLD,
   type MomentumRow,
 } from "@/components/discover/TrendingPulse";
-import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
-import type { SlimeBaseType } from "@/lib/types";
+import {
+  SLIME_BASE_TYPE_LABELS,
+  SLIME_SKILL_LEVEL_LABELS,
+  SLIME_SKILL_LEVEL_COLORS,
+} from "@/lib/types";
+import type { SlimeBaseType, SlimeSkillLevel } from "@/lib/types";
 
 // ─── Axis slug → DB column mapping ──────────────────────────────────────
 // Public slugs match /how-to-rate ids. DB columns predate the six-axis
@@ -59,15 +63,37 @@ function normalizeAxisSlug(raw: string | undefined): AxisSlug {
   return (lower in AXIS_TO_COLUMN ? lower : "overall") as AxisSlug;
 }
 
+// T158 (2026-07-16) — normalize the `?skill=` query param. Anything
+// outside the enum is dropped (returns null) so we don't ship a bad
+// value to Postgres.
+function normalizeSkillSlug(
+  raw: string | undefined,
+): SlimeSkillLevel | null {
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+  if (
+    lower === "beginner" ||
+    lower === "intermediate" ||
+    lower === "advanced"
+  ) {
+    return lower;
+  }
+  return null;
+}
+
 export default async function DiscoverPage({
   searchParams,
 }: {
-  searchParams: Promise<{ sort?: string }>;
+  searchParams: Promise<{ sort?: string; skill?: string }>;
 }) {
   const params = await searchParams;
   const axisSlug = normalizeAxisSlug(params.sort);
   const { column: sortColumn, label: sortLabel } = AXIS_TO_COLUMN[axisSlug];
   const isCustomAxis = axisSlug !== "overall";
+  // T158 (2026-07-16) — optional skill_level filter. When present, the
+  // top-rated collection_logs query narrows to that level and the chip
+  // row above the section highlights the active choice.
+  const skillFilter = normalizeSkillSlug(params.skill);
 
   const cookieStore = await cookies();
   const supabase = createServerClient(
@@ -81,6 +107,19 @@ export default async function DiscoverPage({
   // compute both "today" and a 7-day sparkline in a single scan.
   const now = new Date();
   const eightDaysAgo = new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000);
+
+  // T158 (2026-07-16) — build the top-rated query in a variable so the
+  // optional `.eq("skill_level", ...)` can be conditionally chained
+  // before we hand the thenable to Promise.all.
+  let topRatedQuery = supabase
+    .from("collection_logs")
+    .select(
+      "id, slime_id, slime_name, brand_id, brand_name_raw, base_type, subtype_id, image_url, rating_overall, rating_texture, rating_sound, rating_drizzle, rating_creativity, rating_sensory_fit, subtypes(name)",
+    )
+    .eq("is_public", true);
+  if (skillFilter) {
+    topRatedQuery = topRatedQuery.eq("skill_level", skillFilter);
+  }
 
   const [
     topRatedResult,
@@ -103,12 +142,10 @@ export default async function DiscoverPage({
     // when present, else by (slime_name, brand_name_raw). Fetches
     // all six rating axes + image + brand_id so the client can render
     // per-axis sorting without an extra round-trip.
-    supabase
-      .from("collection_logs")
-      .select(
-        "id, slime_id, slime_name, brand_id, brand_name_raw, base_type, subtype_id, image_url, rating_overall, rating_texture, rating_sound, rating_drizzle, rating_creativity, rating_sensory_fit, subtypes(name)",
-      )
-      .eq("is_public", true),
+    // T158 (2026-07-16): the top-rated query optionally narrows to a
+    // skill_level via the `?skill=<beginner|intermediate|advanced>`
+    // query param — see topRatedQuery construction above.
+    topRatedQuery,
     // NOTE 2026-07-13: intentionally NOT filtering `.not("rating_overall", "is", null)`
     // here — the axis-specific filter happens in the JS aggregate below so a
     // user who rated Texture but skipped Overall still shows up when the
@@ -784,7 +821,10 @@ export default async function DiscoverPage({
             becomes "Top Rated by <Axis>" and the axis is passed to
             the client so the rating-bar readout + sort use that axis.
             [Discover V1] Rank 1-3 render as medal tiles inside the
-            client. */}
+            client.
+            T158 (2026-07-16): "Filter by skill" chip row above the
+            list. Each chip is a Link that swaps the `?skill=` query
+            param; clicking the active chip clears the filter. */}
         <section className="mb-10 px-4">
           <div className="flex items-center justify-between mb-3">
             <p className="section-label">
@@ -797,6 +837,59 @@ export default async function DiscoverPage({
               Community ratings
             </span>
           </div>
+
+          {/* T158 skill filter chips */}
+          <div className="mb-4">
+            <p
+              className="text-[10px] font-bold uppercase tracking-wider mb-2"
+              style={{ color: "rgba(245,245,245,0.4)" }}
+            >
+              Filter by skill
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {(
+                Object.entries(SLIME_SKILL_LEVEL_LABELS) as [
+                  SlimeSkillLevel,
+                  string,
+                ][]
+              ).map(([level, label]) => {
+                const active = skillFilter === level;
+                const tint = SLIME_SKILL_LEVEL_COLORS[level];
+                // Build the href: active chip clears the filter,
+                // inactive chip swaps to that level. Sort param is
+                // preserved so this stacks cleanly with ?sort=.
+                const nextParams = new URLSearchParams();
+                if (params.sort) nextParams.set("sort", params.sort);
+                if (!active) nextParams.set("skill", level);
+                const qs = nextParams.toString();
+                const href = qs ? `/discover?${qs}` : "/discover";
+                return (
+                  <Link
+                    key={level}
+                    href={href}
+                    scroll={false}
+                    className="inline-flex items-center rounded-full transition-all"
+                    style={{
+                      padding: "7px 14px",
+                      fontSize: 12.5,
+                      fontWeight: 700,
+                      fontFamily: "system-ui, sans-serif",
+                      background: active ? tint.bg : "rgba(45,10,78,0.3)",
+                      color: active ? tint.text : "rgba(245,245,245,0.55)",
+                      border: active
+                        ? `1px solid ${tint.border}`
+                        : "1px solid rgba(45,10,78,0.55)",
+                      boxShadow: active ? `0 0 10px ${tint.text}44` : "none",
+                      textDecoration: "none",
+                    }}
+                  >
+                    {label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
           <DiscoverSlimesClient
             initialSlimes={topSlimes}
             trendingTags={[]}

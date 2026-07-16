@@ -315,6 +315,8 @@ export default function FeedCardCompact({
             subtype_id: null,
             scent_strength: null,
             condition: null,
+            // T158 (2026-07-16): compact feed doesn't render skill_level.
+            skill_level: null,
             colors: log.colors,
             cost_paid: null,
             purchase_price: null,

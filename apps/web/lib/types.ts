@@ -60,6 +60,45 @@ export const SCENT_STRENGTH_LABELS: Record<ScentStrength, string> = {
   strong: "Strong",
 };
 
+// ─── SlimeSkillLevel (T158 2026-07-16) ───────────────────────────────────
+// Optional maker-declared (or user-overridden) difficulty for a slime.
+// Mirrors the SlimeBaseType label/color pattern so wizard chips and
+// detail-page badges pull consistent copy + tint from one source.
+// Migration: 20260716000079_skill_level_attribute.sql adds the enum on
+// public.slimes and public.collection_logs (both nullable). Some users
+// find a slime harder than the maker labeled it, so both layers get it.
+
+export type SlimeSkillLevel = "beginner" | "intermediate" | "advanced";
+
+export const SLIME_SKILL_LEVEL_LABELS: Record<SlimeSkillLevel, string> = {
+  beginner: "Beginner",
+  intermediate: "Intermediate",
+  advanced: "Advanced",
+};
+
+// Signature tints per level. Consistent with the neon palette but muted
+// enough that the badge reads as informational not celebratory.
+export const SLIME_SKILL_LEVEL_COLORS: Record<
+  SlimeSkillLevel,
+  { bg: string; text: string; border: string }
+> = {
+  beginner: {
+    bg: "rgba(57,255,20,0.10)",
+    text: "#39FF14",
+    border: "rgba(57,255,20,0.35)",
+  },
+  intermediate: {
+    bg: "rgba(0,240,255,0.10)",
+    text: "#00F0FF",
+    border: "rgba(0,240,255,0.35)",
+  },
+  advanced: {
+    bg: "rgba(255,0,229,0.10)",
+    text: "#FF00E5",
+    border: "rgba(255,0,229,0.35)",
+  },
+};
+
 // ─── SlimeCondition (2026-07-12) ─────────────────────────────────────────
 // Physical condition of a logged slime. Serves personal-shelf tracking
 // today (so users can note a slime that's dried out or is still sealed).
@@ -324,6 +363,10 @@ export interface CollectionLog {
   // T-condition (2026-07-12) — physical state of the slime; feeds
   // future marketplace resale flow. See migration 20260712000067.
   condition: SlimeCondition | null;
+  // T158 (2026-07-16) — per-log user override of the maker-declared
+  // difficulty. Both this and slimes.skill_level (brand-catalog) are
+  // optional. See migration 20260716000079_skill_level_attribute.sql.
+  skill_level: SlimeSkillLevel | null;
   cost_paid: number | null;
   purchase_price: number | null;
   purchased_from: string | null;
@@ -367,6 +410,8 @@ export interface CollectionLogInsert {
   colors?: string[] | null;
   scent_strength?: ScentStrength | null;
   condition?: SlimeCondition | null;
+  // T158 (2026-07-16) — see CollectionLog.skill_level.
+  skill_level?: SlimeSkillLevel | null;
   cost_paid?: number | null;
   purchased_from?: string | null;
   purchased_at?: string | null;

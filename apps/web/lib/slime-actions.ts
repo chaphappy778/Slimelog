@@ -14,6 +14,7 @@ import type {
   SlimeBaseType,
   ScentStrength,
   SlimeCondition,
+  SlimeSkillLevel,
 } from "@/lib/types";
 import {
   moderateText,
@@ -57,6 +58,10 @@ export interface LogSlimeInput {
   // 2026-07-12: physical condition of the slime. Optional. Serves
   // personal-shelf tracking today; feeds marketplace listing form later.
   condition?: SlimeCondition | null;
+  // T158 (2026-07-16): per-log user assessment of difficulty. Optional
+  // at every layer — users who don't want to track it just skip it.
+  // Migration 20260716000079_skill_level_attribute.sql.
+  skill_level?: SlimeSkillLevel | null;
   keywords?: string[];
   colors?: string[];
   image_url?: string;
@@ -226,6 +231,8 @@ async function logSlimeInner(input: LogSlimeInput): Promise<LogSlimeResult> {
       // [Change 2 — scent_notes]
       scent_notes: input.scent_notes ?? null,
       condition: input.condition ?? null,
+      // T158 (2026-07-16): per-log skill_level override.
+      skill_level: input.skill_level ?? null,
       colors: input.colors ?? null,
       image_url: input.image_url ?? null,
       notes: cleanedNotes,
@@ -390,6 +397,10 @@ async function updateSlimeLogInner(
         scent_notes: input.scent_notes,
       }),
       ...(input.condition !== undefined && { condition: input.condition }),
+      // T158 (2026-07-16): user can un-tag skill_level by passing null.
+      ...(input.skill_level !== undefined && {
+        skill_level: input.skill_level,
+      }),
       ...(input.notes !== undefined && { notes: cleanedNotes }),
       ...(input.purchase_price !== undefined && {
         purchase_price: input.purchase_price,

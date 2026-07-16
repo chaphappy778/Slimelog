@@ -16,11 +16,14 @@ import {
   SCENT_STRENGTH_LABELS,
   SLIME_CONDITION_LABELS,
   SLIME_CONDITION_DESCRIPTIONS,
+  SLIME_SKILL_LEVEL_LABELS,
+  SLIME_SKILL_LEVEL_COLORS,
 } from "@/lib/types";
 import type {
   SlimeBaseType,
   ScentStrength,
   SlimeCondition,
+  SlimeSkillLevel,
 } from "@/lib/types";
 import { ImageUpload } from "@/components/ImageUpload";
 import PageWrapper from "@/components/PageWrapper";
@@ -85,6 +88,8 @@ interface FormState {
   scent_notes: string;
   // 2026-07-12: condition (personal + future marketplace).
   condition: SlimeCondition | null;
+  // T158 (2026-07-16): optional per-log difficulty tag.
+  skill_level: SlimeSkillLevel | "";
   keywords: string[];
   purchase_price: string;
   selected_color_values: string[];
@@ -138,6 +143,7 @@ function EditLogPageInner() {
     scent_strength: null,
     scent_notes: "",
     condition: null,
+    skill_level: "",
     keywords: [],
     purchase_price: "",
     selected_color_values: [],
@@ -200,6 +206,8 @@ function EditLogPageInner() {
         scent_notes: data.scent_notes ?? "",
         // 2026-07-12: hydrate condition from DB when present.
         condition: (data.condition as SlimeCondition) ?? null,
+        // T158 (2026-07-16): hydrate skill_level; "" = unpicked.
+        skill_level: (data.skill_level as SlimeSkillLevel) ?? "",
         keywords: [],
         // [Change 1 — T64] Fix: use purchase_price not cost_paid
         purchase_price:
@@ -293,6 +301,8 @@ function EditLogPageInner() {
         scent_notes: form.scent_notes.trim() || undefined,
         // 2026-07-12: null when cleared so users can un-tag.
         condition: form.condition,
+        // T158 (2026-07-16): null when cleared so users can un-tag.
+        skill_level: form.skill_level || null,
         is_public: !isPrivate,
       };
 
@@ -593,6 +603,41 @@ function EditLogPageInner() {
                     {SLIME_CONDITION_DESCRIPTIONS[form.condition]}
                   </p>
                 )}
+              </div>
+
+              {/* T158 (2026-07-16) — same skill_level PickChip row as
+                  the create wizard so the two stay in visual parity. */}
+              <div>
+                <FieldLabel optional>Skill level</FieldLabel>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    Object.entries(SLIME_SKILL_LEVEL_LABELS) as [
+                      SlimeSkillLevel,
+                      string,
+                    ][]
+                  ).map(([level, label]) => {
+                    const active = form.skill_level === level;
+                    return (
+                      <PickChip
+                        key={level}
+                        selected={active}
+                        selectedTint={SLIME_SKILL_LEVEL_COLORS[level].text}
+                        onClick={() =>
+                          set("skill_level", active ? "" : level)
+                        }
+                      >
+                        {label}
+                      </PickChip>
+                    );
+                  })}
+                  <PickChip
+                    selected={form.skill_level === ""}
+                    selectedTint="#CC44FF"
+                    onClick={() => set("skill_level", "")}
+                  >
+                    Skip
+                  </PickChip>
+                </div>
               </div>
 
               <div>

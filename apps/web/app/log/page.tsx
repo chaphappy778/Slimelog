@@ -23,11 +23,14 @@ import {
   SCENT_STRENGTH_LABELS,
   SLIME_CONDITION_LABELS,
   SLIME_CONDITION_DESCRIPTIONS,
+  SLIME_SKILL_LEVEL_LABELS,
+  SLIME_SKILL_LEVEL_COLORS,
 } from "@/lib/types";
 import type {
   SlimeBaseType,
   ScentStrength,
   SlimeCondition,
+  SlimeSkillLevel,
 } from "@/lib/types";
 import { ImageUpload } from "@/components/ImageUpload";
 // Audit hp-24 (2026-07-09): use the shared browser singleton.
@@ -93,6 +96,10 @@ interface FormState {
   scent_notes: string;
   // 2026-07-12: condition of the slime (personal + future marketplace).
   condition: SlimeCondition | null;
+  // T158 (2026-07-16): optional per-log difficulty tag. "" is the
+  // unpicked / "Skip" state, kept as an empty string (not null) so it
+  // aligns with base_type's convention above.
+  skill_level: SlimeSkillLevel | "";
   keywords: string[];
   purchase_price: string;
   selected_color_values: string[];
@@ -159,6 +166,7 @@ function LogPageInner() {
     scent_strength: null,
     scent_notes: "",
     condition: null,
+    skill_level: "",
     keywords: [],
     purchase_price: "",
     selected_color_values: [],
@@ -232,6 +240,9 @@ function LogPageInner() {
         // [Change 4 — scent_notes]
         scent_notes: form.scent_notes.trim() || undefined,
         condition: form.condition ?? undefined,
+        // T158 (2026-07-16): send null (not undefined) when unpicked
+        // so the payload matches "cleared" semantics on the server.
+        skill_level: form.skill_level || null,
         is_public: !isPrivate,
       };
       // 2026-07-12: logSlime now returns a result union so moderation
@@ -483,6 +494,43 @@ function LogPageInner() {
                     {SLIME_CONDITION_DESCRIPTIONS[form.condition]}
                   </p>
                 )}
+              </div>
+
+              {/* T158 (2026-07-16) — optional skill_level. Same PickChip
+                  rhythm as scent-strength + condition above. Each level
+                  chip tints in its signature color; the Skip chip
+                  clears the value using the muted purple treatment. */}
+              <div>
+                <FieldLabel optional>Skill level</FieldLabel>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    Object.entries(SLIME_SKILL_LEVEL_LABELS) as [
+                      SlimeSkillLevel,
+                      string,
+                    ][]
+                  ).map(([level, label]) => {
+                    const active = form.skill_level === level;
+                    return (
+                      <PickChip
+                        key={level}
+                        selected={active}
+                        selectedTint={SLIME_SKILL_LEVEL_COLORS[level].text}
+                        onClick={() =>
+                          set("skill_level", active ? "" : level)
+                        }
+                      >
+                        {label}
+                      </PickChip>
+                    );
+                  })}
+                  <PickChip
+                    selected={form.skill_level === ""}
+                    selectedTint="#CC44FF"
+                    onClick={() => set("skill_level", "")}
+                  >
+                    Skip
+                  </PickChip>
+                </div>
               </div>
 
               <div>

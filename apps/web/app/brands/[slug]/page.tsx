@@ -22,8 +22,17 @@ import DropCard from "./components/DropCard";
 // loop — brand page → leaderboard → back. See docs/SlimeLog_Tracker.md.
 import TopCollectorsStrip from "@/components/brand/TopCollectorsStrip";
 import type { TopCollector } from "@/components/brand/TopCollectorsStrip";
-import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
-import type { Brand, SlimeBaseType, BrandClaimStatus } from "@/lib/types";
+import {
+  SLIME_BASE_TYPE_LABELS,
+  SLIME_SKILL_LEVEL_LABELS,
+  SLIME_SKILL_LEVEL_COLORS,
+} from "@/lib/types";
+import type {
+  Brand,
+  SlimeBaseType,
+  BrandClaimStatus,
+  SlimeSkillLevel,
+} from "@/lib/types";
 import { validateBusinessEmail } from "@/lib/brand-claims";
 // T29 (2026-07-12): formatRelativeTime moved to a shared lib so the
 // notification feed can share it. Same behavior — see the `{ long: true }`
@@ -195,12 +204,37 @@ export async function generateMetadata({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+// T158 (2026-07-16) — normalize the `?skill=` query param. Anything
+// outside the enum is dropped (returns null) so we don't ship a bad
+// value to Postgres.
+function normalizeSkillSlug(
+  raw: string | undefined,
+): SlimeSkillLevel | null {
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+  if (
+    lower === "beginner" ||
+    lower === "intermediate" ||
+    lower === "advanced"
+  ) {
+    return lower;
+  }
+  return null;
+}
+
 export default async function BrandPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ skill?: string }>;
 }) {
   const { slug } = await params;
+  const { skill: skillParam } = await searchParams;
+  // T158 (2026-07-16) — optional skill_level filter for the community
+  // logs section. Same UX pattern as /discover: chip row above the
+  // section, clicking the active chip clears the filter.
+  const skillFilter = normalizeSkillSlug(skillParam);
   const brand = await fetchBrand(slug);
   if (!brand) notFound();
 
@@ -258,7 +292,9 @@ export default async function BrandPage({
     twitter_handle?: string | null;
   };
 
-  const { data: communityRows } = await supabase
+  // T158 (2026-07-16) — build the community-logs query in a variable so
+  // the optional `.eq("skill_level", ...)` can be conditionally chained.
+  let communityQuery = supabase
     .from("collection_logs")
     .select(
       `id, user_id, slime_name, base_type, rating_overall, image_url, created_at,
@@ -266,7 +302,11 @@ export default async function BrandPage({
        profiles_public!collection_logs_user_id_fkey ( username, avatar_url )`,
     )
     .eq("brand_id", brand.id)
-    .eq("is_public", true)
+    .eq("is_public", true);
+  if (skillFilter) {
+    communityQuery = communityQuery.eq("skill_level", skillFilter);
+  }
+  const { data: communityRows } = await communityQuery
     .order("created_at", { ascending: false })
     .limit(12);
 
@@ -1175,6 +1215,55 @@ export default async function BrandPage({
               </span>
             )}
           </p>
+
+          {/* T158 (2026-07-16): skill_level filter chips. Same UX as
+              /discover — chip is a Link that swaps the ?skill= param,
+              clicking the active chip clears the filter. */}
+          <div className="mb-4">
+            <p
+              className="text-[10px] font-bold uppercase tracking-wider mb-2"
+              style={{ color: "rgba(245,245,245,0.4)" }}
+            >
+              Filter by skill
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {(
+                Object.entries(SLIME_SKILL_LEVEL_LABELS) as [
+                  SlimeSkillLevel,
+                  string,
+                ][]
+              ).map(([level, label]) => {
+                const active = skillFilter === level;
+                const tint = SLIME_SKILL_LEVEL_COLORS[level];
+                const href = active
+                  ? `/brands/${brand.slug}`
+                  : `/brands/${brand.slug}?skill=${level}`;
+                return (
+                  <Link
+                    key={level}
+                    href={href}
+                    scroll={false}
+                    className="inline-flex items-center rounded-full transition-all"
+                    style={{
+                      padding: "7px 14px",
+                      fontSize: 12.5,
+                      fontWeight: 700,
+                      fontFamily: "system-ui, sans-serif",
+                      background: active ? tint.bg : "rgba(45,10,78,0.3)",
+                      color: active ? tint.text : "rgba(245,245,245,0.55)",
+                      border: active
+                        ? `1px solid ${tint.border}`
+                        : "1px solid rgba(45,10,78,0.55)",
+                      boxShadow: active ? `0 0 10px ${tint.text}44` : "none",
+                      textDecoration: "none",
+                    }}
+                  >
+                    {label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
           {communityLogs.length === 0 ? (
             <div
               className="rounded-2xl text-center flex flex-col items-center gap-2"
