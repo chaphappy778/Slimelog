@@ -48,6 +48,9 @@ const BACK_BUTTON_ROUTES = [
   /^\/admin\/waitlist$/,
   /^\/admin\/brand-claims(\/.+)?$/,
   /^\/admin\/brand-suggestions(\/.+)?$/,
+  // 2026-07-16: variant-suggestions admin queue (T158 Commit B-admin)
+  // needs the same back-to-/admin affordance the other subpages have.
+  /^\/admin\/variant-suggestions(\/.+)?$/,
 ];
 
 function shouldShowBackButton(pathname: string | null): boolean {

@@ -404,29 +404,6 @@ export default async function AdminVariantSuggestionsPage({
    <PageHeader />
 
    <main className="pt-20 pb-24 px-4 max-w-4xl mx-auto">
-    {/* 2026-07-16: back-to-Admin link (Jennifer feedback). Subtle
-        chevron + "Admin" pattern matches /search back-to-Discover. */}
-    <Link
-     href="/admin"
-     className="inline-flex items-center gap-1.5 text-sm mb-3"
-     style={{ color: "rgba(245,245,245,0.55)" }}
-    >
-     <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-     >
-      <path d="M19 12H5" />
-      <path d="M12 19l-7-7 7-7" />
-     </svg>
-     Admin
-    </Link>
     <div className="mb-6">
      <h1
       className="text-2xl font-black tracking-tight"
