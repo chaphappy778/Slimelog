@@ -368,7 +368,15 @@ VALUES
 
 ## 5. Rename / move decisions flagged for Jenn
 
-None of these should be executed until Jenn has signed off. Each item has a locked-in default in Phase 4 that ships if Jenn selects "keep as-is."
+**RESOLVED 2026-07-16.** Jenn walked through all six items and picked her canonical answers. The picks are inlined under each item below (look for `► JENN 2026-07-16:`). Phase 2 execution follows those picks — no re-litigation needed.
+
+Summary of picks (for quick reference):
+- 5.1 → Option B: rename base type `cloud_cream` → `snowbutter`, Cloud Cream / Cloud Creme become aliases
+- 5.2 → Custom of Option B: Crunchy lives under Beaded (not Floam, not Snow Fizz)
+- 5.3 → Custom of Option B: Beaded stays canonical, Bingsu stays as a subtype under Beaded (already there)
+- 5.4 → Option C: Jiggly dual-home under both Water AND Clear
+- 5.5 → Option A: rename Fishbowl Beads → Fishbowl, `fishbowl beads` becomes alias
+- 5.6 → Option A for now, feature request added to T137 for brand dashboard redesign scope
 
 ### 5.1 Cloud Cream vs Snowbutter as canonical name
 
@@ -381,6 +389,8 @@ None of these should be executed until Jenn has signed off. Each item has a lock
 
 **Tradeoff.** Option A is the additive path — no enum rename, both terms searchable, market data (9 vs 4) wins by default. Option B honors the naming Jenn drafted in the V4.1 guide (Part One: "Cloud Cream" is Jenn's own canonical choice, but the guide also notes "snowbutter built on clear glue rather than white usually goes by mochi" — suggesting Snowbutter is the more precise underlying term). Option C is theoretically neutral but needs infrastructure we don't have. **Default if no decision: A.**
 
+**► JENN 2026-07-16: Option B.** Rename base type `cloud_cream` → `snowbutter`. "Cloud Cream" / "Cloud Creme" become searchable aliases on the base type. Phase 2 migration needs: enum rename via the same dance we used for clay removal (rename old enum → create new with `snowbutter` instead of `cloud_cream` → ALTER TABLE ... USING with CASE mapping `cloud_cream` → `snowbutter` on all four dependent tables including drop_slimes → drop old enum). Plus code sweep of every file that hardcodes `cloud_cream` (types.ts SlimeBaseType union + LABELS + COLORS, base-type-hero.ts photo + tint keys, 5 chart color maps, guide/content.ts entry, wishlist validator, feed card style maps, opengraph image). Plus updates to seeded subtypes that currently reference cloud_cream (Mochi, Putty Puff — their `base_type` column value migrates automatically via the CASE, but the alias data added for them should reference "snowbutter" going forward).
+
 ### 5.2 Crunchy home (Floam vs Bingsu / Beaded vs both)
 
 **Data.** xlsx: 13 shops use "Crunchy" as a top-level category (cosmicslime, elmers, mintyslimes, mythicalmushbunny, poppymelloslimes, slimeaficionados, slimedazzle, slimeprincess, squishysquashyslimes, talisatossell, thechaosshop, theslimelabs, theslimespace). Poppy Mello's Crunchy slug is `/collections/bingsu`. The Slime Space's Bingsu slug is `bingsu-crunchy-bubbly`. Current model (mig 37) seeds "Crunchy" under **both** Floam and Snow Fizz (two rows).
@@ -391,6 +401,8 @@ None of these should be executed until Jenn has signed off. Each item has a lock
 - **(C)** Make "Crunchy" a **brand-scoped display label** in `brand_variants` — the canonical row stays a specific bead type per brand's shop taxonomy, but their picker labels it "Crunchy" for their customers.
 
 **Tradeoff.** (A) is what mig 37 already ships and is the safest; the dual-home is only a mild UX confusion. (B) is Jenn's tightest naming but requires her to declare which existing shop mappings we override. (C) is the model-purist path — matches xlsx evidence that "Crunchy" is a shop-choice label, not a durable texture — but ends up hiding the canonical variant name behind branded chrome. **Default if no decision: A.**
+
+**► JENN 2026-07-16: Custom of Option B — Crunchy lives ONLY under Beaded** (paired with 5.3 which keeps Beaded as canonical). Phase 2 migration needs to: (a) INSERT a new `crunchy` subtype under `beaded`, (b) reassign any collection_logs / slimes rows currently referencing the Floam/Crunchy or Snow Fizz/Crunchy subtype IDs to the new Beaded/Crunchy ID, (c) DELETE the two obsolete Crunchy rows (Floam/Crunchy and Snow Fizz/Crunchy from mig 37). All within one transaction so subtype_id FK never points at a missing row.
 
 ### 5.3 Bingsu vs Beaded — merge or keep distinct
 
@@ -403,6 +415,8 @@ None of these should be executed until Jenn has signed off. Each item has a lock
 
 **Tradeoff.** (B) preserves Jenn's V4.1 guide (Beaded, Snow Fizz, Bingsu are distinct concepts) while adding search coverage. (C) matches shop merchandising but overwrites Jenn's guide vocabulary. (A) would lose the plastic-snow specificity of Snow Fizz. **Default if no decision: B.**
 
+**► JENN 2026-07-16: Custom of Option B — Beaded stays canonical; Bingsu stays as a subtype under Beaded** (Bingsu is already seeded under Snow Fizz per mig 37 — that row can stay for now as a search-coverage alias, or Phase 2 moves it under Beaded too to match Jenn's mental model of "bingsu is a bead type"). Snow Fizz stays its own base type (plastic snow, crisp/dry crunch per Jenn's guide). Phase 2 decision: relocate the existing Snow Fizz/Bingsu subtype row to Beaded/Bingsu (single canonical home for Bingsu = Beaded), following the same reassignment-then-delete dance as Crunchy in 5.2.
+
 ### 5.4 Jiggly home (Water vs Thick Clear)
 
 **Data.** xlsx flags On Cloud's `Coated Jiggly` slug as `coated-thick-clear-slime`, i.e. their jiggly is a thick clear not a water slime. Poppy Mello also uses Jiggly. Current model seeds `Jiggly` as a subtype under `water`.
@@ -414,6 +428,8 @@ None of these should be executed until Jenn has signed off. Each item has a lock
 
 **Tradeoff.** Jenn's V4.1 guide places Jiggly in the Water family ("kindred textures that share the same runny, wobbly personality"). (A) honors the guide + treats On Cloud as the outlier. (C) is the most permissive but creates the same dual-home confusion as Crunchy. **Default if no decision: A.**
 
+**► JENN 2026-07-16: Option C — Jiggly dual-home under both Water AND Clear.** Phase 2 keeps the existing Water/Jiggly subtype row + INSERTs a new Clear/Jiggly subtype row. Wizard's brand-scoped picker will show the right one based on whichever base the user selected. Note the mild UX gotcha: users picking "Water" base then seeing Jiggly, and users picking "Clear" base ALSO seeing Jiggly, may briefly wonder if they picked the wrong base. Acceptable per Jenn — matches how the market actually uses the term (both wet/wobbly and thick-clear-wobbly get called Jiggly).
+
 ### 5.5 Fishbowl vs Fishbowl Beads — merge
 
 **Data.** Current mig 37 seeds `Fishbowl Beads` under Beaded. xlsx observes 4 shops using shorter `Fishbowl` (chappyslimes, poppymelloslimes, slimeprincess, thechaosshop). Section 4 draft adds a second `Fishbowl` row.
@@ -424,6 +440,8 @@ None of these should be executed until Jenn has signed off. Each item has a lock
 
 **Tradeoff.** (A) collapses redundancy. **Default if no decision: A.**
 
+**► JENN 2026-07-16: Option A.** Phase 2 UPDATEs the existing `fishbowl_beads` subtype row: `name` becomes "Fishbowl", `slug` becomes `fishbowl`, `aliases` array gains `["fishbowl beads", "fishbowl bead"]`. No collection_logs / slimes reassignment needed since the row's `id` doesn't change — only its `name` and `slug`. FKs stay intact.
+
 ### 5.6 Metallic promotion for Poppy Mello
 
 **Data.** xlsx: Poppy Mello uses `Metallic` as a top-level texture nav item, elsewhere Metallic is a Clear subtype (seeded mig 37).
@@ -433,6 +451,8 @@ None of these should be executed until Jenn has signed off. Each item has a lock
 - **(B)** Wire a `brand_top_level_variants` join (new) allowing brands to promote a subtype to the top of their brand catalog view. Deferred infrastructure — bigger than the taxonomy rework.
 
 **Tradeoff.** (A) ships with the plan; (B) is a wishlist for the T137 brand dashboard redesign. **Default if no decision: A.**
+
+**► JENN 2026-07-16: Option A for now, feature request added to T137.** Phase 2 makes no change here. The `brand_top_level_variants` join table + brand-side UI to promote a subtype to top-level filter chips gets scoped into T137 (brand dashboard visual redesign) as a small addition. When we hit T137, decide whether to include this micro-feature or defer further. Rationale: only 1 brand (Poppy Mello) needs it today, but the pattern will recur as more brands claim their catalogs (Peachybbies with Butter, Cats Craft, etc.) — better to add it inside the dashboard redesign than as one-off infra now.
 
 ---
 
