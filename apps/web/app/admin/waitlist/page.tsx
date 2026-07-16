@@ -187,14 +187,58 @@ export default async function WaitlistAdminPage() {
   // ── Data fetch (service role — bypasses RLS) ──────────────────────────────
   const admin = createAdminClient();
 
-  const { data: waitlist } = await admin
+  // 2026-07-15: destructure { data, error } per CLAUDE.md rule ("Never
+  // silently swallow errors"). Previous version omitted `error` and any
+  // Supabase failure (missing column, RLS drift, connection blip) would
+  // silently render 0s across the board. Also runs a defensive fallback
+  // for the "migration-lag" pattern from docs/error-tracker.md — if the
+  // attribution columns from migration 20260715000074 aren't applied yet
+  // in the environment we're reading from, we retry with just the base
+  // columns so the admin page keeps working.
+  const FULL_COLUMNS =
+    "id, email, created_at, source, heard_from, utm_source, utm_medium, utm_campaign, utm_content, utm_term, marketing_consent, invited_at, notes";
+  const LEGACY_COLUMNS =
+    "id, email, created_at, source, marketing_consent, invited_at, notes";
+
+  let waitlist: WaitlistRow[] | null = null;
+  let migrationApplied = true;
+
+  const fullQuery = await admin
     .from("waitlist")
-    .select(
-      // 2026-07-15: include attribution capture columns (heard_from + UTM)
-      // added by migration 20260715000074.
-      "id, email, created_at, source, heard_from, utm_source, utm_medium, utm_campaign, utm_content, utm_term, marketing_consent, invited_at, notes",
-    )
+    .select(FULL_COLUMNS)
     .order("created_at", { ascending: false });
+
+  if (fullQuery.error) {
+    console.warn(
+      "[admin/waitlist] full-column select failed, retrying with legacy columns:",
+      fullQuery.error.message,
+    );
+    migrationApplied = false;
+    const legacyQuery = await admin
+      .from("waitlist")
+      .select(LEGACY_COLUMNS)
+      .order("created_at", { ascending: false });
+    if (legacyQuery.error) {
+      console.error(
+        "[admin/waitlist] legacy select ALSO failed:",
+        legacyQuery.error.message,
+      );
+    } else if (legacyQuery.data) {
+      // Coerce legacy rows into WaitlistRow shape by filling the missing
+      // attribution columns with nulls.
+      waitlist = legacyQuery.data.map((r) => ({
+        ...r,
+        heard_from: null,
+        utm_source: null,
+        utm_medium: null,
+        utm_campaign: null,
+        utm_content: null,
+        utm_term: null,
+      })) as WaitlistRow[];
+    }
+  } else {
+    waitlist = fullQuery.data as WaitlistRow[] | null;
+  }
 
   const rows: WaitlistRow[] = waitlist ?? [];
 
@@ -235,6 +279,50 @@ export default async function WaitlistAdminPage() {
           </div>
           <ExportCSV data={rows} />
         </div>
+
+        {/* Migration-lag banner — surfaces when the attribution columns
+            aren't applied in the current environment yet. Renders as a
+            subtle amber warning so the operator knows the "With Attribution"
+            stat + Heard From + Campaign columns are showing empty because
+            the DB isn't ready, not because signups have no attribution. */}
+        {!migrationApplied && (
+          <div
+            className="rounded-2xl px-4 py-3 mb-6 flex items-start gap-3"
+            style={{
+              background: "rgba(255,210,74,0.08)",
+              border: "1px solid rgba(255,210,74,0.35)",
+            }}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#FFD24A"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ flexShrink: 0, marginTop: 2 }}
+              aria-hidden="true"
+            >
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <div className="flex-1 text-xs leading-relaxed" style={{ color: "#FFD24A" }}>
+              <p className="font-bold uppercase tracking-widest mb-1" style={{ fontSize: 10 }}>
+                Migration pending
+              </p>
+              <p style={{ color: "rgba(255,210,74,0.9)" }}>
+                Attribution columns (heard_from, utm_*) aren&apos;t applied to this
+                database yet. Signups still work — the picker + UTM values are
+                just being stored as nulls until migration 20260715000074 runs.
+                Run <code style={{ fontFamily: "monospace", background: "rgba(0,0,0,0.3)", padding: "1px 5px", borderRadius: 4 }}>npx supabase db push</code> to apply. See Vercel logs for
+                the exact Supabase error.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* ── Stats row ── */}
         <div className="flex flex-wrap gap-3 mb-8">
