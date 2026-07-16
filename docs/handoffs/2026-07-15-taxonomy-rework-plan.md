@@ -378,6 +378,14 @@ Summary of picks (for quick reference):
 - 5.5 → Option A: rename Fishbowl Beads → Fishbowl, `fishbowl beads` becomes alias
 - 5.6 → Option A for now, feature request added to T137 for brand dashboard redesign scope
 
+## 5-supplement — decisions from Phase 2 scan findings (2026-07-16)
+
+Phase 2 brand-scan surfaced three new candidate items. Jenn ruled on each 2026-07-16:
+
+- **5.7 "Basic" base type** — 3 shops (Glitter Slimes, Slimeatory, Avocadoslimeez) use "Basic Slime" as a top-level texture. **► JENN 2026-07-16: ADD as top-level base type.** Phase 2 migration now includes `basic` in the enum alongside the existing 19 — takes us to 20 base types. Requires the same code sweep pattern as clay removal (types.ts SlimeBaseType union + LABELS + COLORS, base-type-hero.ts photo + tint keys, chart color maps, guide/content.ts new Part 1 entry, feed card style maps, wishlist validator). Guide entry needs Jenn's copy for Basic's tagline + definition + variantsAndRelated. Hero photo needed too — Jenn to source or use gradient-only fallback until we have one.
+- **5.8 Slushee as its own texture** — 3 shops treat Slushee distinctly (transparent hard beads). **► JENN 2026-07-16: NO CHANGE.** Slushee stays as a subtype under Icee per mig 37. Jenn hasn't personally seen it treated as its own texture; not worth a schema move today.
+- **5.9 Skill-Level taxonomy (Beginner / Intermediate / Advanced)** — 5+ shops merchandise by difficulty. NOT a texture, but a first-class product attribute. **► JENN 2026-07-16: ADD as an OPTIONAL attribute on slimes.** New nullable column `skill_level slime_skill_level NULL` on `slimes` (and by extension on `collection_logs.skill_level` for user overrides). Enum values: `beginner`, `intermediate`, `advanced`. Nullable so users who don't want to track it can just skip. Adds a small optional field to the log wizard (Details step) + a filter chip on Discover / brand-detail. Filed as T158 for standalone execution rather than lumping into the taxonomy Phase 2 migration since it's schema-independent from the base-type / subtype work.
+
 ### 5.1 Cloud Cream vs Snowbutter as canonical name
 
 **Data.** xlsx shows `Cloud Creme` at 9 shops (dominant `Creme` spelling: babycatslimes, chappyslimes, mintyslimes, oncloudslime, royalslime, sliimeyhoney, slimeaficionados, sloomooslime, squishysquashyslimes). `Snowbutter` at 4 shops (ammaslimes, babycatslimes, scentedslimebyamy, sliimeyhoney). Babycat treats them as different products.

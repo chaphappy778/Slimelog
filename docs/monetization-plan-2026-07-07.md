@@ -106,6 +106,28 @@ Weekly newsletter placements sold direct to brands at $200-500. **$1-3k/mo.**
 
 Enable trusted reviewers (Jen's IG audience is the pipeline) to accept tips and brand deals through SlimeLog with 10-20% platform take. Y2+ feature. Turns creators into distribution engine. **$5-20k/mo at scale.**
 
+### 9. Slime Dictionary e-book (digital + Amazon paperback) — added 2026-07-16
+
+Phase 2 brand scan (2026-07-16) surfaced 4 shops maintaining in-shop "Slime Dictionary" / "Texture Guide" pages. The category exists but nobody has built a definitive reference. SlimeLog's V4.1 guide (`docs/slime_guide_v41_extracted.txt` + `/guide` page) is 90%+ ready to package. Publish as digital first, follow with Amazon KDP paperback if digital sells.
+
+**Digital play:** PDF download at $9.99, either as a free perk for Pro subscribers OR as a standalone one-time purchase for free-tier users. Generation is a straight export from the same source of truth as `/guide` — near-zero marginal cost. Ties in T125 (aging + activator care chapter) and the brand glossary from the taxonomy rework, plus a "how to review a slime" section adapted from `/how-to-rate`.
+
+**Amazon paperback play:** KDP paperback at $19.99 opens gift-giving + brick-and-mortar visibility. Margin per book after KDP printing + Amazon cut is ~$4-6. Volume math: even 200 units/mo = ~$1k/mo passive with an unforgettable brand-authority signal.
+
+**Math:** at 500 digital sales/mo at $9.99, that's ~$60k/yr at zero marginal cost. Even 200 sales/mo = $24k/yr. Buyers become evangelists — every paperback in a slime collector's hands is a distribution event to their household + IG audience.
+
+**Risks:** anti-AI-art community will scrutinize any visual asset — every illustration must be human-commissioned or geometric, no AI-generated content on any page (per CLAUDE.md hard rule). Cover art via a real illustrator commission budget of ~$500-1500.
+
+**Execution:** filed as T159 in tracker. Deprioritize v1 launch, but should be executable within 3-6 months post-launch if we validate demand via a lightweight download-gate experiment on `/guide` (offer PDF version behind email capture, measure conversion).
+
+**Y2 mature — 20k DAU baseline (Pillars 1+2+3+4+5+9 running):** e-book at 500-2000 sales/mo blends into $30-100k/yr revenue stream. Adds ~5-10% to the total monetization stack. Not a lead pillar, but a fast-to-ship differentiator that reinforces the authority positioning.
+
+---
+
+## Growth strategy notes (living section, added 2026-07-16)
+
+**Big-brand shop-share flywheel** — Jenn's 2026-07-16 observation: SlimeLog's 4 biggest Instagram posts (all 15k+ views, top one at 18k) came from Momo Slimes' shop-share of a review Jenn logged. Momo has 1M+ IG followers. Pattern: **the growth flywheel is large-brand shop-shares, not organic user posting.** Priority: build a shortlist of the top 20 highest-follower shops in the catalog (Momo, Peachybbies, Sloomoo Institute, Kawaii Slime Company, Snoop Slimes, Slimeatory, etc.) and prioritize them for early brand-claim outreach + custom brand-page polish. Every logged review from those brands should be a "share moment" the app nudges the user toward. Ties into T39 (tag flow friction audit) + T40 (share-to-social deep link) + T121 (drop push notifications) + T160 (shop-share outreach ticket). Realistic launch target: 5 of the top 20 have claimed their brand pages + are actively sharing SlimeLog logs within 30 days of the IG-driven paid promo push.
+
 ---
 
 ## Sequenced rollout
