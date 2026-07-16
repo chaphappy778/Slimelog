@@ -9,3 +9,4 @@ node_modules
 docs/*.docx
 docs/Project_Summary
 docs/hub-snapshot.md
+.fuse_hidden*
