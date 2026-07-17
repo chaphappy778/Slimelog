@@ -169,7 +169,25 @@ async function notifyBrandOwnerOfNewLog(args: {
 }): Promise<void> {
   const { logId, brandId, userId, isPublic } = args;
 
-  if (!brandId || !isPublic) return;
+  // 2026-07-17 TEMP debug: T167 fired successfully on the first
+  // log-tagged-to-claimed-brand event but silently skipped on
+  // subsequent identical events. Adding a step-by-step trace so we
+  // can pinpoint which branch the second+ calls exit on. Remove
+  // after we confirm the root cause + fix.
+  console.error("[notify-debug] entry", {
+    logId,
+    brandId,
+    userId,
+    isPublic,
+  });
+
+  if (!brandId || !isPublic) {
+    console.error("[notify-debug] skip: missing brandId or not public", {
+      brandId,
+      isPublic,
+    });
+    return;
+  }
 
   try {
     const admin = createAdminClient();
@@ -190,8 +208,18 @@ async function notifyBrandOwnerOfNewLog(args: {
     }
 
     const ownerId = (brand?.owner_id as string | null | undefined) ?? null;
-    if (!ownerId) return; // unclaimed brand
-    if (ownerId === userId) return; // self-notification
+    console.error("[notify-debug] brand lookup", { brandId, ownerId, userId });
+    if (!ownerId) {
+      console.error("[notify-debug] skip: unclaimed brand", { brandId });
+      return;
+    }
+    if (ownerId === userId) {
+      console.error("[notify-debug] skip: self-notification", {
+        ownerId,
+        userId,
+      });
+      return;
+    }
 
     const { error: notifErr } = await admin.from("notifications").insert({
       recipient_id: ownerId,
@@ -207,7 +235,14 @@ async function notifyBrandOwnerOfNewLog(args: {
         notifErr.message,
         { brandId, logId, ownerId },
       );
+      return;
     }
+    console.error("[notify-debug] insert ok", {
+      recipientId: ownerId,
+      actorId: userId,
+      brandId,
+      logId,
+    });
   } catch (err) {
     // Any thrown error (missing env vars for admin client, network, etc)
     // must never propagate — the log operation is already committed.
@@ -572,6 +607,22 @@ async function updateSlimeLogInner(
     input.is_public !== undefined ? input.is_public : prevIsPublic;
   const nowQualifies = Boolean(newBrandId) && newIsPublic === true;
   const previouslyQualified = Boolean(prevBrandId) && prevIsPublic === true;
+
+  // 2026-07-17 TEMP debug: prove that updateSlimeLog is being invoked
+  // AND log the exact transition state. Remove after we confirm the
+  // root cause of the edit-path notification miss.
+  console.error("[notify-debug] updateSlimeLog decision", {
+    logId,
+    prevBrandId,
+    prevIsPublic,
+    inputBrandId: input.brand_id,
+    inputIsPublic: input.is_public,
+    newBrandId,
+    newIsPublic,
+    nowQualifies,
+    previouslyQualified,
+    willFire: nowQualifies && !previouslyQualified,
+  });
 
   if (nowQualifies && !previouslyQualified) {
     await notifyBrandOwnerOfNewLog({
