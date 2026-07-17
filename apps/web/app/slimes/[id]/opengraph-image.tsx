@@ -3,21 +3,22 @@ import { ImageResponse } from "next/og";
 import { createClient } from "@supabase/supabase-js";
 import { readFile } from "fs/promises";
 import path from "path";
+import {
+  SLIME_BASE_TYPE_COLORS,
+  SLIME_BASE_TYPE_LABELS,
+  type SlimeBaseType,
+} from "@/lib/types";
 
 export const contentType = "image/png";
 export const size = { width: 1200, height: 630 };
 export const alt = "SlimeLog slime review";
 
-const TYPE_COLORS: Record<string, string> = {
-  butter: "#FFB347",
-  clear: "#00F0FF",
-  cloud: "#F5F5F5",
-  icee: "#4FC3F7",
-  fluffy: "#FF6B9D",
-  jelly: "#4ECDC4",
-  beaded: "#FF00E5",
-  floam: "#8BC34A",
-};
+// 2026-07-17 T39-M4: retired the local TYPE_COLORS map (only had 8
+// legacy `slime_type` values from before the T71 taxonomy migration).
+// SLIME_BASE_TYPE_COLORS in lib/types.ts is the source of truth for the
+// current 20 base types plus their neon-palette tints, so we pull from
+// there. Also flips the query below from `slime_type` (dead column) to
+// `base_type` (current column) so OG tiles actually get colored again.
 
 function getSupabase() {
   // [Change 1 — #35] Plain anon-key client. OG routes have no cookie ctx.
@@ -51,24 +52,41 @@ export default async function OpengraphImage({
   const { id } = await params;
   const supabase = getSupabase();
 
+  // 2026-07-17 T39-M2 + M4: fixed the stale `slime_type` reference
+  // (retired by the T71 taxonomy migration) and extended the query to
+  // join `brands` for the logo lookup. brand_id may be null for
+  // free-text brands, so the join is left; when it resolves we prefer
+  // the catalog name over brand_name_raw so casing is canonical.
   const { data: logRow } = await supabase
     .from("collection_logs")
     .select(
-      "slime_name, brand_name_raw, slime_type, rating_overall, image_url, notes, user_id",
+      `slime_name, brand_name_raw, base_type, rating_overall, image_url,
+       notes, user_id, brand:brands(name, logo_url)`,
     )
     .eq("id", id)
     .eq("is_public", true)
     .maybeSingle();
 
+  type BrandJoin = { name: string | null; logo_url: string | null } | null;
   const log = logRow as {
     slime_name: string | null;
     brand_name_raw: string | null;
-    slime_type: string | null;
+    base_type: string | null;
     rating_overall: number | null;
     image_url: string | null;
     notes: string | null;
     user_id: string;
+    brand: BrandJoin | BrandJoin[];
   } | null;
+
+  // Supabase's typegen returns 1:1 joins as arrays; normalize.
+  const brandJoin: BrandJoin =
+    log?.brand === undefined
+      ? null
+      : Array.isArray(log.brand)
+        ? (log.brand[0] ?? null)
+        : log.brand;
+  const brandLogoUrl = brandJoin?.logo_url ?? null;
 
   let username: string | null = null;
   if (log?.user_id) {
@@ -82,12 +100,23 @@ export default async function OpengraphImage({
   }
 
   const slimeName = log?.slime_name ?? "Unnamed slime";
-  const brandName = log?.brand_name_raw ?? "Unknown brand";
+  // Prefer the catalog brand name when the join resolved (canonical
+  // casing + spelling); fall back to the log's raw text. Only reach
+  // "Unknown brand" when there's literally no brand data at all.
+  const brandName =
+    brandJoin?.name ?? log?.brand_name_raw ?? "Unknown brand";
   const rating = log?.rating_overall;
-  const typeColor = log?.slime_type
-    ? (TYPE_COLORS[log.slime_type] ?? "#39FF14")
+  // 2026-07-17 T39-M4: base_type is the current column; map its value
+  // into the shared neon palette. Falls back to slime green when the
+  // base_type is unknown (extremely rare — should only happen for
+  // pre-migration rows, all backfilled during the taxonomy work).
+  const baseTypeKey = log?.base_type as SlimeBaseType | null | undefined;
+  const typeColor = baseTypeKey
+    ? (SLIME_BASE_TYPE_COLORS[baseTypeKey]?.text ?? "#39FF14")
     : "#39FF14";
-  const typeLabel = log?.slime_type ? log.slime_type.replace(/_/g, " ") : null;
+  const typeLabel = baseTypeKey
+    ? (SLIME_BASE_TYPE_LABELS[baseTypeKey] ?? baseTypeKey.replace(/_/g, " "))
+    : null;
 
   const [bold, regular] = await Promise.all([
     loadFont("Montserrat-Bold.ttf"),
@@ -260,17 +289,45 @@ export default async function OpengraphImage({
           {slimeName.length > 32 ? `${slimeName.slice(0, 32)}...` : slimeName}
         </div>
 
-        {/* Brand */}
+        {/* Brand — with logo when the catalog brand join resolved.
+            2026-07-17 T39-M2: small round logo tile improves the
+            "native-looking product card" read when a reshared log
+            preview appears in IG/DM. Falls back to the plain cyan
+            wordmark for free-text brands. */}
         <div
           style={{
-            fontSize: 24,
-            color: "#00F0FF",
-            fontWeight: 700,
-            marginBottom: 32,
             display: "flex",
+            alignItems: "center",
+            gap: 14,
+            marginBottom: 32,
           }}
         >
-          {brandName}
+          {brandLogoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={brandLogoUrl}
+              alt=""
+              width={36}
+              height={36}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                objectFit: "cover",
+                border: "1.5px solid rgba(0,240,255,0.35)",
+              }}
+            />
+          )}
+          <div
+            style={{
+              fontSize: 24,
+              color: "#00F0FF",
+              fontWeight: 700,
+              display: "flex",
+            }}
+          >
+            {brandName}
+          </div>
         </div>
 
         {/* Rating */}

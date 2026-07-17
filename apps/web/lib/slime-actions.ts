@@ -283,6 +283,15 @@ async function logSlimeInner(input: LogSlimeInput): Promise<LogSlimeResult> {
     input.notes && input.notes.trim() !== ""
       ? moderateOrThrow(input.notes, "slime_notes")
       : null;
+  // 2026-07-17 (Jennifer feedback during T167 smoke test): scent_notes
+  // is user-authored free text and was slipping through unmoderated.
+  // Reuse the `slime_notes` moderation rule since the length + content
+  // profile is basically the same (descriptive short-form like "brown
+  // sugar cookies" or "citrus, cardamom").
+  const cleanedScentNotes =
+    input.scent_notes && input.scent_notes.trim() !== ""
+      ? moderateOrThrow(input.scent_notes, "slime_notes")
+      : null;
   const cleanedKeywords = moderateKeywords(input.keywords);
 
   const { data, error } = await supabase
@@ -306,8 +315,10 @@ async function logSlimeInner(input: LogSlimeInput): Promise<LogSlimeResult> {
       rating_sensory_fit: input.rating_sensory_fit ?? null,
       rating_overall: input.rating_overall ?? null,
       scent_strength: input.scent_strength ?? null,
-      // [Change 2 — scent_notes]
-      scent_notes: input.scent_notes ?? null,
+      // 2026-07-17: cleanedScentNotes goes through moderateOrThrow
+      // above so scent_notes now enforces the same banned-words gate
+      // as slime_notes.
+      scent_notes: cleanedScentNotes,
       condition: input.condition ?? null,
       // T158 (2026-07-16): per-log skill_level override.
       skill_level: input.skill_level ?? null,
@@ -427,6 +438,15 @@ async function updateSlimeLogInner(
         ? moderateOrThrow(input.notes, "slime_notes")
         : null;
   }
+  // 2026-07-17: scent_notes joins the moderation gate on edits too. See
+  // matching handling in the create path above.
+  let cleanedScentNotes: string | null | undefined;
+  if (input.scent_notes !== undefined) {
+    cleanedScentNotes =
+      input.scent_notes && input.scent_notes.trim() !== ""
+        ? moderateOrThrow(input.scent_notes, "slime_notes")
+        : null;
+  }
   const cleanedKeywords =
     input.keywords !== undefined ? moderateKeywords(input.keywords) : undefined;
 
@@ -502,9 +522,10 @@ async function updateSlimeLogInner(
       ...(input.scent_strength !== undefined && {
         scent_strength: input.scent_strength,
       }),
-      // [Change 3 — scent_notes]
+      // 2026-07-17: scent_notes uses cleanedScentNotes so the update
+      // path runs the moderation gate too (matches slime_notes).
       ...(input.scent_notes !== undefined && {
-        scent_notes: input.scent_notes,
+        scent_notes: cleanedScentNotes,
       }),
       ...(input.condition !== undefined && { condition: input.condition }),
       // T158 (2026-07-16): user can un-tag skill_level by passing null.
