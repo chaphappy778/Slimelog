@@ -13,6 +13,13 @@
 //   dropdown), photo tile moved to Identity (step 0), summary
 //   preview card on Notes. Form state + submit logic UNCHANGED —
 //   only the visual shell and step layout are new.
+// [T168 2026-07-17] sessionStorage draft persistence for the wizard —
+//   T39-H4 fix. When a user detours to /submit-brand (or any other
+//   route) mid-log, the form state used to blow away. Now we serialize
+//   the wizard's FormState under `slimelog:logWizardDraft`, debounce
+//   writes at ~300ms, flush synchronously on pagehide, and hydrate on
+//   mount when the URL doesn't carry a pre-fill query param. Cleared
+//   on successful submit and on step-0 Cancel.
 
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -78,6 +85,24 @@ type RatingKey =
   | "rating_sensory_fit"
   | "rating_overall";
 
+// [T168 2026-07-17] Draft-persistence constants. `slimelog:` prefix
+// namespaces the key for future disambiguation (edit-wizard, drops
+// composer, etc.). Session-scoped — dies with the tab, which is
+// intentional; there's no cross-session recovery story here.
+const DRAFT_KEY = "slimelog:logWizardDraft";
+// Pre-fill query-param names honored by the initial form state below.
+// If any of these are present in the URL, hydration from sessionStorage
+// is skipped and the query-param values win. Rationale: a deep link
+// from Discover or a share is an explicit "start fresh with this seed"
+// intent, and a stale draft would silently override it.
+const PREFILL_PARAM_KEYS = [
+  "slime_name",
+  "brand",
+  "collection",
+  "base_type",
+] as const;
+const DRAFT_DEBOUNCE_MS = 300;
+
 // [T-wizard 2026-07-13 rev2] RatingAxisMeta / RATING_FIELDS /
 // COLOR_SWATCHES moved to `@/components/log/LogWizardShared` so the
 // edit page (`/log/edit/[id]/page.tsx`) draws from the same source
@@ -117,6 +142,59 @@ interface FormState {
 
 function buildColorsArray(selectedValues: string[]): string[] | undefined {
   return selectedValues.length > 0 ? selectedValues : undefined;
+}
+
+// [T168 2026-07-17] sessionStorage draft I/O helpers. Kept at module
+// scope so the wizard body reads/writes/deletes through one funnel
+// (easier to grep + guaranteed key consistency).
+//
+// Read semantics: returns a Partial<FormState> that the wizard merges
+// on top of its base state. Any JSON.parse throw, non-object payload,
+// or missing-window scenario silently returns null AND scrubs the
+// corrupted key so we don't retry the same broken payload every render.
+// Never throws — the wizard degrades to an empty start, which is the
+// right failure mode.
+function readDraft(): Partial<FormState> | null {
+  if (typeof window === "undefined") return null;
+  let raw: string | null = null;
+  try {
+    raw = window.sessionStorage.getItem(DRAFT_KEY);
+  } catch {
+    // sessionStorage disabled (Safari private mode w/ quota, etc.)
+    return null;
+  }
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      window.sessionStorage.removeItem(DRAFT_KEY);
+      return null;
+    }
+    return parsed as Partial<FormState>;
+  } catch {
+    // Corrupted payload — nuke the key so subsequent mounts start clean.
+    try {
+      window.sessionStorage.removeItem(DRAFT_KEY);
+    } catch {}
+    return null;
+  }
+}
+
+function writeDraft(form: FormState): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(form));
+  } catch {
+    // Storage full or blocked — silent no-op, the user still has the
+    // in-memory state, we just lose the crash-recovery net.
+  }
+}
+
+function clearDraft(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(DRAFT_KEY);
+  } catch {}
 }
 
 // StepIndicator retired 2026-07-13 — replaced by LogStepHeader
@@ -195,6 +273,67 @@ function LogPageInner() {
   // [Bundle E] Privacy toggle state
   const [isPrivate, setIsPrivate] = useState(false);
 
+  // [T168 2026-07-17] Draft persistence wiring. Three refs coordinate
+  // the lifecycle:
+  //   * hydratedRef — flips true after the one-shot hydration effect
+  //     runs, so we don't repeatedly try (or race with) draft reads.
+  //   * closedRef — flips true when the wizard is either submitted or
+  //     cancelled, so the pagehide flush knows NOT to re-write a draft
+  //     we just cleared. Otherwise: user submits → clear key → browser
+  //     tears the page down → pagehide fires → we re-persist a
+  //     just-cleared state → next /log visit hydrates stale data.
+  //   * formRef — the pagehide handler needs the latest form snapshot
+  //     without re-binding the listener on every keystroke.
+  const hydratedRef = useRef(false);
+  const closedRef = useRef(false);
+  const formRef = useRef(form);
+  useEffect(() => {
+    formRef.current = form;
+  });
+
+  // One-shot hydration: if the URL doesn't carry any pre-fill query
+  // params (fresh /log or a returning-from-/submit-brand round trip),
+  // merge any persisted draft over the base state. Runs after mount so
+  // sessionStorage is safely available and there's no SSR/CSR mismatch.
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    hydratedRef.current = true;
+    const hasPrefill = PREFILL_PARAM_KEYS.some((k) => searchParams.get(k));
+    if (hasPrefill) return;
+    const draft = readDraft();
+    if (!draft) return;
+    setForm((prev) => ({ ...prev, ...draft }));
+    // searchParams reference is stable within a render cycle; the
+    // hydratedRef guard prevents re-entry if it does change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Debounced save on every form change. 300ms is short enough that
+  // navigating away via a tap (which fires pagehide, see below) is
+  // covered even without the pagehide flush, but the pagehide belt +
+  // suspenders is there because tab-close doesn't wait for a timer.
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    if (closedRef.current) return;
+    const t = setTimeout(() => writeDraft(form), DRAFT_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [form]);
+
+  // pagehide flush: fires just before the browser tears down the page
+  // for a navigation (including internal Next.js Link clicks in most
+  // browsers). Synchronously writes the latest form snapshot so the
+  // "user tapped Submit brand within 300ms of their last keystroke"
+  // edge case doesn't lose their most recent edit. Skipped when the
+  // wizard has already been closed via submit or cancel.
+  useEffect(() => {
+    const handler = () => {
+      if (closedRef.current) return;
+      writeDraft(formRef.current);
+    };
+    window.addEventListener("pagehide", handler);
+    return () => window.removeEventListener("pagehide", handler);
+  }, []);
+
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
   }
@@ -260,6 +399,11 @@ function LogPageInner() {
         setSaveError(result.error);
         return;
       }
+      // [T168 2026-07-17] Success = the draft has done its job. Mark
+      // closed BEFORE clearing so the pagehide listener that fires as
+      // the router.push tears down the page can't race and re-persist.
+      closedRef.current = true;
+      clearDraft();
       // 2026-07-17 T39-H1: route to the new slime's detail page with
       // ?justLogged=1 so the detail view can render a "share your log"
       // CTA at the top. Previously we dumped users on /collection, which
@@ -829,9 +973,18 @@ function LogPageInner() {
           step={step}
           nextDisabled={step === 0 && !form.slime_name.trim()}
           saving={saving}
-          onBack={() =>
-            step === 0 ? router.back() : setStep((s) => (s - 1) as Step)
-          }
+          onBack={() => {
+            if (step === 0) {
+              // [T168 2026-07-17] Cancel = user is walking away. Nuke
+              // the draft so the next /log visit starts clean; flip
+              // closedRef so pagehide can't resurrect it.
+              closedRef.current = true;
+              clearDraft();
+              router.back();
+            } else {
+              setStep((s) => (s - 1) as Step);
+            }
+          }}
           onNext={
             step === 3
               ? handleSubmit

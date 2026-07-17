@@ -22,9 +22,16 @@
 // no results (and isn't an errored request), render a "Not seeing your
 // brand? Submit it →" link in the dropdown so users can escape into
 // /submit-brand without abandoning the log flow. Prefills the name.
+//
+// T168 (2026-07-17): the "Submit it" Link now carries a `returnTo=/log`
+// query param so /submit-brand knows to send the user back to the log
+// wizard on successful submit. Combined with the /log wizard's
+// sessionStorage draft persistence, the user picks the wizard back up
+// exactly where they left it (photo + ratings + slime name intact).
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 // Audit hp-24 (2026-07-09): use the shared browser singleton.
 import { createClient } from "@/lib/supabase/client";
 
@@ -52,6 +59,18 @@ export default function BrandSearchInput({
   onChange,
   placeholder = "Search brands...",
 }: Props) {
+  // T168 (2026-07-17): only wire the log-wizard return trip when the
+  // component is rendering inside the /log create wizard. On
+  // /log/edit/[id] the wizard hydrates from a DB row, not
+  // sessionStorage, so bouncing edit users back to /log after submit
+  // would land them in the wrong wizard. On any other consumer
+  // (settings, etc.) we also want the vanilla behavior.
+  const pathname = usePathname();
+  const submitBrandHref =
+    pathname === "/log"
+      ? `/submit-brand?name=${encodeURIComponent(value.trim())}&returnTo=${encodeURIComponent("/log")}`
+      : `/submit-brand?name=${encodeURIComponent(value.trim())}`;
+
   const [results, setResults] = useState<BrandResult[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -307,7 +326,7 @@ export default function BrandSearchInput({
                 item when there are no matches at all. */}
             {!loading && !errored && value.trim().length >= 2 && (
               <Link
-                href={`/submit-brand?name=${encodeURIComponent(value.trim())}`}
+                href={submitBrandHref}
                 style={{
                   display: "flex",
                   alignItems: "center",

@@ -8,6 +8,13 @@
 // Accepts a `?name=` query so log-wizard fallback links can prefill the
 // name field when the user clicks "Not seeing your brand? Submit it →"
 // from BrandSearchInput.
+//
+// T168 (2026-07-17): also accepts a `?returnTo=/log` query param used
+// by the log-wizard entry point. On successful submit the form routes
+// the user back to `returnTo` (validated with safeRedirect) instead of
+// the default success-card + Back-to-home path. Signed-out users have
+// their `returnTo` preserved through the /login bounce so it survives
+// the round trip. See T168 in docs/SlimeLog_Tracker.md.
 
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
@@ -15,6 +22,7 @@ import PageWrapper from "@/components/PageWrapper";
 import PageHeader from "@/components/PageHeader";
 import SubmitBrandForm from "@/components/brand/SubmitBrandForm";
 import { createClient } from "@/lib/supabase/server";
+import { safeRedirect } from "@/lib/safe-redirect";
 
 export const metadata: Metadata = {
   title: "Suggest a brand — SlimeLog",
@@ -24,6 +32,7 @@ export const metadata: Metadata = {
 
 interface SearchParams {
   name?: string;
+  returnTo?: string;
 }
 
 export default async function SubmitBrandPage({
@@ -36,15 +45,30 @@ export default async function SubmitBrandPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect("/login?next=/submit-brand");
-  }
-
   const params = await searchParams;
   const rawName = params.name ?? "";
   // Trim + clamp to the same length the DB CHECK enforces. Bad input
   // (60+ chars in the URL) just gets sliced rather than 500ing.
   const prefilledName = rawName.trim().slice(0, 60);
+  // [T168 2026-07-17] Validate the returnTo path against open-redirect
+  // attacks. Falls back to null (no return handling) if unsafe.
+  const returnToRaw = params.returnTo ?? null;
+  const returnToSafe = returnToRaw
+    ? safeRedirect(returnToRaw, "") || null
+    : null;
+
+  if (!user) {
+    // Preserve name + returnTo through the auth bounce so the log-wizard
+    // draft persistence chain still works for signed-out users.
+    const nextParams = new URLSearchParams();
+    if (rawName.trim()) nextParams.set("name", rawName.trim());
+    if (returnToSafe) nextParams.set("returnTo", returnToSafe);
+    const nextQuery = nextParams.toString();
+    const nextPath = nextQuery
+      ? `/submit-brand?${nextQuery}`
+      : "/submit-brand";
+    redirect(`/login?next=${encodeURIComponent(nextPath)}`);
+  }
 
   return (
     <PageWrapper dots glow="magenta">
@@ -80,7 +104,10 @@ export default async function SubmitBrandPage({
               "inset 0 0 30px rgba(45,10,78,0.2), 0 8px 32px rgba(0,0,0,0.4)",
           }}
         >
-          <SubmitBrandForm initialName={prefilledName} />
+          <SubmitBrandForm
+            initialName={prefilledName}
+            returnTo={returnToSafe}
+          />
         </div>
       </main>
     </PageWrapper>

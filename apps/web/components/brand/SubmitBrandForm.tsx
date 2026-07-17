@@ -8,10 +8,18 @@
 //   * 429 rate-limit — friendly "come back tomorrow".
 //   * 400/500 — standard error pill.
 //
+// T168 (2026-07-17): optional `returnTo` prop lets an entry point
+// (currently just the log wizard via BrandSearchInput) request that
+// the user be routed back to a specific internal path on successful
+// submit. When present, we skip the standard success card and
+// router.push straight to that path so the log wizard's sessionStorage
+// draft hydrates instantly. When absent, behavior is unchanged.
+//
 // Voice per project rules: "you" not "user"; no em-dashes in copy.
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface DuplicateInfo {
   kind: "brand";
@@ -22,6 +30,10 @@ interface DuplicateInfo {
 
 interface Props {
   initialName?: string;
+  // T168 (2026-07-17): validated internal path (already run through
+  // safeRedirect by the server component). When present, successful
+  // submit navigates here instead of showing the local success card.
+  returnTo?: string | null;
 }
 
 type SubmitState =
@@ -44,7 +56,11 @@ const inputStyle = {
   boxSizing: "border-box" as const,
 };
 
-export default function SubmitBrandForm({ initialName = "" }: Props) {
+export default function SubmitBrandForm({
+  initialName = "",
+  returnTo = null,
+}: Props) {
+  const router = useRouter();
   const [name, setName] = useState<string>(initialName);
   const [websiteUrl, setWebsiteUrl] = useState<string>("");
   const [instagramHandle, setInstagramHandle] = useState<string>("");
@@ -109,6 +125,15 @@ export default function SubmitBrandForm({ initialName = "" }: Props) {
 
     if (res.status === 200) {
       const data = json as { ok?: boolean; already_pending?: boolean };
+      // T168 (2026-07-17): if a validated returnTo path is present
+      // (e.g. `/log` from the log-wizard entry point), route the user
+      // back there instead of showing the local success card. The log
+      // wizard's sessionStorage draft hydrates on mount so they pick
+      // up right where they left off.
+      if (returnTo) {
+        router.push(returnTo);
+        return;
+      }
       setState({
         kind: "success",
         alreadyPending: data.already_pending === true,
@@ -192,15 +217,19 @@ export default function SubmitBrandForm({ initialName = "" }: Props) {
             : "Admin review usually happens within 48 hours. You'll get a notification when your brand joins the catalog."}
         </p>
         <div className="flex flex-wrap gap-3">
+          {/* T168 (2026-07-17): default to /brands here since the user
+              just submitted a brand suggestion. When returnTo is set
+              we redirect away before reaching this card, so this Link
+              only runs for the vanilla /submit-brand entry point. */}
           <Link
-            href="/"
+            href={returnTo ?? "/brands"}
             className="inline-flex items-center px-4 py-2 rounded-full text-xs font-bold text-slime-bg"
             style={{
               background: "linear-gradient(135deg, #39FF14, #00F0FF)",
               fontFamily: "Montserrat, sans-serif",
             }}
           >
-            Back to home
+            {returnTo ? "Back to your log" : "Back to brands"}
           </Link>
           <button
             type="button"
