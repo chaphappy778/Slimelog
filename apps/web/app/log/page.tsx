@@ -260,7 +260,22 @@ function LogPageInner() {
         setSaveError(result.error);
         return;
       }
-      router.push("/collection");
+      // 2026-07-17 T39-H1: route to the new slime's detail page with
+      // ?justLogged=1 so the detail view can render a "share your log"
+      // CTA at the top. Previously we dumped users on /collection, which
+      // is a passive grid view; the highest-emotional moment (they JUST
+      // rated a slime) was going unused. The detail view is also where
+      // the reshare-tuned OG preview lives, so this doubles as a
+      // dry-run of what their post would look like on IG.
+      // For wishlist-only logs we keep the old /collection destination
+      // since sharing a wishlist entry has no "I rated this" hook and
+      // brand notifications would fire on a slime the user hasn't
+      // actually held yet.
+      router.push(
+        form.in_wishlist
+          ? "/collection?tab=wishlist"
+          : `/slimes/${result.id}?justLogged=1`,
+      );
     } catch (err) {
       setSaveError(
         err instanceof Error ? err.message : "Something went wrong.",

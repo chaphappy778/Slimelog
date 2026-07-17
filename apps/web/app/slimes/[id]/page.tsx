@@ -182,10 +182,17 @@ const RATING_DIMENSIONS: Array<{ key: keyof CollectionLog; label: string }> = [
 
 export default async function SlimePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  // 2026-07-17 T39-H1: read `?justLogged=1` so we can render the post-log
+  // share CTA at the top. Any other value falls back to the normal
+  // detail view.
+  searchParams: Promise<{ justLogged?: string }>;
 }) {
   const { id } = await params;
+  const { justLogged: justLoggedParam } = await searchParams;
+  const justLogged = justLoggedParam === "1";
   const log = await fetchLog(id);
 
   if (!log) {
@@ -223,10 +230,15 @@ export default async function SlimePage({
     // "Goo Lagoon" in the catalog. Previously used eq(), which failed
     // silently on any case mismatch and left the brand rendering as
     // plain text with no link — users couldn't navigate to the brand.
+    // 2026-07-17 T39-H3: include `instagram_handle` so the share
+    // caption can tag the brand's IG when the log is reshared. The
+    // brand-owner notification queue only lights up when their handle
+    // appears in the caption, so this is load-bearing for the growth
+    // flywheel documented in the T39 audit.
     log.brand_name_raw
       ? supabase
           .from("brands")
-          .select("slug")
+          .select("slug, instagram_handle")
           .ilike("name", log.brand_name_raw)
           .maybeSingle()
       : Promise.resolve({ data: null }),
@@ -246,10 +258,19 @@ export default async function SlimePage({
   ]);
 
   const owner = (ownerRes.data as OwnerProfile | null) ?? null;
-  const brandSlug =
-    ((brandRes as { data: { slug?: string } | null }).data?.slug as
-      | string
-      | undefined) ?? null;
+  const brandJoin =
+    (brandRes as {
+      data: { slug?: string; instagram_handle?: string | null } | null;
+    }).data ?? null;
+  const brandSlug = (brandJoin?.slug as string | undefined) ?? null;
+  // 2026-07-17 T39-H3: normalize the IG handle for the share caption.
+  // Strip a leading @ if the DB row happens to include one (older
+  // brand-suggestion rows accepted them).
+  const brandInstagramHandle =
+    typeof brandJoin?.instagram_handle === "string" &&
+    brandJoin.instagram_handle.trim().length > 0
+      ? brandJoin.instagram_handle.trim().replace(/^@+/, "")
+      : null;
   const { count: likeCount } = likeCountRes;
   const { data: userLikeRow } = userLikeRes;
   const { data: logTagsData } = logTagsRes;
@@ -313,6 +334,81 @@ export default async function SlimePage({
         )}
 
         <div className="px-4 mt-4 flex flex-col gap-4">
+          {/* 2026-07-17 T39-H1: Just-logged share CTA. Fires only when
+              (a) the URL carries ?justLogged=1 (only set by the wizard's
+              post-submit redirect), and (b) the viewer is the owner
+              (isOwner). Placed above the owner row so the first thing
+              on-screen after the hero photo is the invitation to share.
+              This is the point of highest emotional peak — user JUST
+              rated their slime; the reshare rate here dwarfs any other
+              in-app share prompt.
+
+              Deliberately no dismiss control. The banner only appears
+              on the ?justLogged=1 URL, so revisiting /slimes/[id]
+              without the param never shows it. If a user navigates
+              back and forth they'll see it again, which is fine (the
+              share flow is idempotent). */}
+          {justLogged && isOwner && (
+            <div
+              className="rounded-2xl p-4 flex items-start gap-3"
+              style={{
+                background:
+                  "linear-gradient(135deg, rgba(255,0,229,0.14), rgba(0,240,255,0.14))",
+                border: "1px solid rgba(255,0,229,0.45)",
+                boxShadow: "0 0 24px rgba(255,0,229,0.20)",
+              }}
+            >
+              <div className="flex-1 min-w-0">
+                <p
+                  className="text-[11px] font-black uppercase tracking-widest mb-1"
+                  style={{
+                    color: "#FF00E5",
+                    fontFamily: "Montserrat, sans-serif",
+                  }}
+                >
+                  Your slime is logged
+                </p>
+                <p
+                  className="text-sm font-bold text-white leading-snug"
+                  style={{ fontFamily: "Montserrat, sans-serif" }}
+                >
+                  Share it and tag the shop
+                  {brandInstagramHandle ? ` (@${brandInstagramHandle})` : ""}.
+                </p>
+                <p
+                  className="text-[12px] mt-1"
+                  style={{ color: "rgba(245,245,245,0.72)" }}
+                >
+                  Post to Instagram or TikTok. Small shops love seeing
+                  their slime rated, and every reshare brings new
+                  collectors to SlimeLog.
+                </p>
+                <div className="mt-3">
+                  <ShareButton
+                    path={`/slimes/${log.id}?utm_source=share&utm_medium=post_log_cta`}
+                    title={log.slime_name ?? "A slime on SlimeLog"}
+                    text={(() => {
+                      const parts: string[] = [
+                        `Just logged this on SlimeLog: ${log.slime_name ?? "this slime"}`,
+                      ];
+                      if (typeof log.rating_overall === "number") {
+                        parts.push(`${log.rating_overall.toFixed(1)}/5`);
+                      }
+                      if (brandInstagramHandle) {
+                        parts.push(`@${brandInstagramHandle}`);
+                      } else if (log.brand_name_raw) {
+                        parts.push(`by ${log.brand_name_raw}`);
+                      }
+                      return parts.join(" · ");
+                    })()}
+                    label="Share now"
+                    variant="primary"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Owner row */}
           {owner && (
             <Link
@@ -366,10 +462,31 @@ export default async function SlimePage({
               >
                 {log.slime_name ?? "Unnamed Slime"}
               </h1>
+              {/* 2026-07-17 T39-H3: caption rebuilt to tag the brand's
+                  Instagram handle when available, surface the numeric
+                  rating so people scanning IG stories immediately see
+                  the score, and append UTM tracking so we can measure
+                  share-driven signups against organic. Warmer intro
+                  per T39-L1 ("Just logged this on SlimeLog" is more
+                  community than "I rated this on"). Falls back
+                  gracefully when brand/handle/rating are missing. */}
               <ShareButton
-                path={`/slimes/${log.id}`}
+                path={`/slimes/${log.id}?utm_source=share&utm_medium=slime_log`}
                 title={log.slime_name ?? "A slime on SlimeLog"}
-                text={`I rated this on SlimeLog: ${log.slime_name ?? "check out this slime"}${log.brand_name_raw ? ` by ${log.brand_name_raw}` : ""}.`}
+                text={(() => {
+                  const parts: string[] = [
+                    `Just logged this on SlimeLog: ${log.slime_name ?? "this slime"}`,
+                  ];
+                  if (typeof log.rating_overall === "number") {
+                    parts.push(`${log.rating_overall.toFixed(1)}/5`);
+                  }
+                  if (brandInstagramHandle) {
+                    parts.push(`@${brandInstagramHandle}`);
+                  } else if (log.brand_name_raw) {
+                    parts.push(`by ${log.brand_name_raw}`);
+                  }
+                  return parts.join(" · ");
+                })()}
               />
             </div>
             {log.brand_name_raw && (
