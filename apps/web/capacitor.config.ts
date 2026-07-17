@@ -65,6 +65,34 @@ const config: CapacitorConfig = {
   },
   // Cross-platform background — same reason as ios.backgroundColor.
   backgroundColor: '#0A0A0A',
+  // 2026-07-17: native plugin config. Each plugin whose native
+  // behavior we want to influence gets a section here. TypeScript
+  // API on the JS side is still available for runtime overrides
+  // (e.g., swapping status bar style when navigating into a
+  // temporarily light-themed screen), but the defaults below take
+  // effect from cold launch onward.
+  plugins: {
+    // Dark status bar with light text so it blends into the neon
+    // palette. `overlaysWebView: false` reserves the notch area for
+    // the status bar itself; the WebView starts below. Alternative
+    // true would let the WebView paint under the status bar, useful
+    // for full-bleed splash media (we don't need it today).
+    StatusBar: {
+      style: 'DARK',
+      backgroundColor: '#0A0A0A',
+      overlaysWebView: false,
+    },
+    // Cold-launch splash. Auto-hides after ~1.5s so the WebView takes
+    // over quickly. Custom logo swap lives in
+    // ios/App/App/Base.lproj/LaunchScreen.storyboard for a later
+    // polish pass; for now this just kills the default white flash.
+    SplashScreen: {
+      launchShowDuration: 1500,
+      backgroundColor: '#0A0A0A',
+      launchAutoHide: true,
+      showSpinner: false,
+    },
+  },
 };
 
 export default config;
