@@ -335,6 +335,27 @@ function renderContent(n: Notification): RenderedContent {
       };
     }
 
+    // T167 (2026-07-17): a user logged a public slime tagged to this
+    // brand owner's brand. Prompt them to reshare — that's how the
+    // growth flywheel spins.
+    case "brand_log_received": {
+      const brandLabel = brandName ?? "your brand";
+      return {
+        icon: <PlusSquareIcon />,
+        tint: TINT.magenta,
+        copy: (
+          <>
+            {boldSpan(actorLabel)} logged {boldSpan(brandLabel)}.
+          </>
+        ),
+        href: logId
+          ? `/slimes/${logId}`
+          : brandSlug
+            ? `/brands/${brandSlug}`
+            : null,
+      };
+    }
+
     case "friend_rating": {
       const target = slimeName ? boldSpan(slimeName) : boldSpan("a slime");
       return {

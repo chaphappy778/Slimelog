@@ -31,7 +31,10 @@ export type NotificationType =
   | "brand_suggestion_rejected"
   // T158 (2026-07-16): variant suggestion outcomes.
   | "variant_suggestion_approved"
-  | "variant_suggestion_rejected";
+  | "variant_suggestion_rejected"
+  // T167 (2026-07-17): brand owner is notified when a user logs a slime
+  // tagged to their claimed brand. See migration 0080.
+  | "brand_log_received";
 
 export type DropStatus =
   | "announced"

@@ -1,0 +1,42 @@
+-- 20260717000080_brand_log_received_notification.sql
+--
+-- T167 (2026-07-17): brand-owner notification when a user logs a slime
+-- tagged to their brand. Closes T39-H2 from the tag-flow audit.
+--
+-- Context
+-- -------
+-- Right now `logSlime` inserts a `collection_logs` row and stops. Brand
+-- owners never learn that a new public log about their brand exists,
+-- so the reshare flywheel (brand sees log, reposts to IG, drives new
+-- signups) doesn't spin without them proactively checking the brand
+-- dashboard's Recent Activity view. This migration adds the enum value
+-- the new notification row will carry; the INSERT step lives in
+-- `apps/web/lib/slime-actions.ts`.
+--
+-- Volume
+-- ------
+-- One INSERT per public log that ties to a catalog brand with a
+-- claimed owner. Skips fired for:
+--   - private logs (is_public = false)
+--   - logs without a brand_id (free-text brand_name_raw only)
+--   - unclaimed brands (brands.owner_id IS NULL)
+--   - self-notifications (log author IS the brand owner)
+-- Expected: well under one notification per log on average given
+-- current claim rates.
+--
+-- Scope
+-- -----
+-- Pure enum extension. No new tables, no new columns, no RLS changes.
+-- The existing notifications table shape already carries recipient_id,
+-- actor_id, brand_id, and log_id — all fields we need.
+--
+-- Not in scope
+-- ------------
+-- The weekly Resend digest ("N new logs for [brand] this week") is
+-- filed as a separate follow-up ticket. This migration ships only the
+-- in-app notification path.
+
+
+-- ─── 1. Extend notification_type enum ────────────────────────────────────
+
+ALTER TYPE public.notification_type ADD VALUE IF NOT EXISTS 'brand_log_received';

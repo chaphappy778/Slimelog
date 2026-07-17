@@ -9,6 +9,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import type {
   SlimeBaseType,
@@ -135,6 +136,83 @@ function moderateKeywords(raw: string[] | undefined): string[] {
   }
   // Match prior behavior — cap at 10 keywords per log.
   return out.slice(0, 10);
+}
+
+// ─── Brand-owner notification (T167 2026-07-17) ─────────────────────────────
+//
+// Fires when a user logs (or edits an existing log so it now qualifies)
+// a public slime tagged to a catalog brand with a claimed owner. The
+// brand owner receives an in-app `brand_log_received` notification so
+// they can reshare the log to their IG — that's how the growth flywheel
+// spins (T39-H2 finding).
+//
+// Skip conditions:
+//   - brand_id is null (free-text brand only)
+//   - is_public is false (private shelf entry)
+//   - brand.owner_id is null (unclaimed brand)
+//   - brand.owner_id === log.user_id (self-notification, dead space)
+//
+// Best-effort — every failure is logged with console.error and swallowed.
+// The log INSERT / UPDATE has already succeeded by the time we run; a
+// missed notification is annoying but not user-visible-breaking.
+//
+// Uses the admin client because we (a) need to read brands.owner_id
+// which the log author may not have RLS access to, and (b) INSERT a
+// notifications row targeting a different user (recipient_id !=
+// auth.uid()) which the anon-key client would be blocked from doing.
+
+async function notifyBrandOwnerOfNewLog(args: {
+  logId: string;
+  brandId: string | null | undefined;
+  userId: string;
+  isPublic: boolean;
+}): Promise<void> {
+  const { logId, brandId, userId, isPublic } = args;
+
+  if (!brandId || !isPublic) return;
+
+  try {
+    const admin = createAdminClient();
+
+    const { data: brand, error: brandErr } = await admin
+      .from("brands")
+      .select("owner_id")
+      .eq("id", brandId)
+      .maybeSingle();
+
+    if (brandErr) {
+      console.error(
+        "[notifyBrandOwnerOfNewLog] brand lookup failed:",
+        brandErr.message,
+        { brandId },
+      );
+      return;
+    }
+
+    const ownerId = (brand?.owner_id as string | null | undefined) ?? null;
+    if (!ownerId) return; // unclaimed brand
+    if (ownerId === userId) return; // self-notification
+
+    const { error: notifErr } = await admin.from("notifications").insert({
+      recipient_id: ownerId,
+      notification_type: "brand_log_received",
+      actor_id: userId,
+      brand_id: brandId,
+      log_id: logId,
+    });
+
+    if (notifErr) {
+      console.error(
+        "[notifyBrandOwnerOfNewLog] notification insert failed:",
+        notifErr.message,
+        { brandId, logId, ownerId },
+      );
+    }
+  } catch (err) {
+    // Any thrown error (missing env vars for admin client, network, etc)
+    // must never propagate — the log operation is already committed.
+    console.error("[notifyBrandOwnerOfNewLog] unexpected error:", err);
+  }
 }
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
@@ -271,6 +349,15 @@ async function logSlimeInner(input: LogSlimeInput): Promise<LogSlimeResult> {
     }
   }
 
+  // T167 (2026-07-17): notify the brand owner of the new log so they
+  // can reshare it. Best-effort — see helper for skip conditions.
+  await notifyBrandOwnerOfNewLog({
+    logId: data.id as string,
+    brandId: input.brand_id ?? null,
+    userId,
+    isPublic: input.is_public ?? true,
+  });
+
   revalidatePath("/collection");
   revalidatePath("/");
 
@@ -342,6 +429,29 @@ async function updateSlimeLogInner(
   }
   const cleanedKeywords =
     input.keywords !== undefined ? moderateKeywords(input.keywords) : undefined;
+
+  // T167 (2026-07-17): snapshot the pre-update (brand_id, is_public)
+  // so we can detect the transition into "public + branded" state and
+  // fire a brand-owner notification if this edit is what tipped the
+  // log across that line. Cheap single-row read on the primary key.
+  // Best-effort — a lookup error only skips the notification path, it
+  // does NOT block the edit.
+  const { data: preUpdate, error: preUpdateErr } = await supabase
+    .from("collection_logs")
+    .select("brand_id, is_public")
+    .eq("id", logId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (preUpdateErr) {
+    console.error(
+      "[updateSlimeLog] pre-update snapshot failed:",
+      preUpdateErr.message,
+    );
+  }
+
+  const prevBrandId = (preUpdate?.brand_id as string | null | undefined) ?? null;
+  const prevIsPublic = (preUpdate?.is_public as boolean | undefined) ?? false;
 
   // Audit hp-19 (2026-07-07): add `.select("id")` and throw when the
   // returned array is empty. Previously .update().eq(...).eq(...)
@@ -448,6 +558,28 @@ async function updateSlimeLogInner(
           .insert(tagRows.map((t) => ({ log_id: logId, tag_id: t.id })));
       }
     }
+  }
+
+  // T167 (2026-07-17): brand-owner notification on the "just qualified"
+  // transition. Fires when this edit is the first time the log is BOTH
+  // brand-tagged AND public — i.e. the previous row did NOT satisfy
+  // both. Guards against re-notifying on unrelated edits (rating tweak,
+  // scent change) where the brand + visibility have been stable since
+  // creation.
+  const newBrandId =
+    input.brand_id !== undefined ? (input.brand_id ?? null) : prevBrandId;
+  const newIsPublic =
+    input.is_public !== undefined ? input.is_public : prevIsPublic;
+  const nowQualifies = Boolean(newBrandId) && newIsPublic === true;
+  const previouslyQualified = Boolean(prevBrandId) && prevIsPublic === true;
+
+  if (nowQualifies && !previouslyQualified) {
+    await notifyBrandOwnerOfNewLog({
+      logId,
+      brandId: newBrandId,
+      userId,
+      isPublic: newIsPublic,
+    });
   }
 
   revalidatePath("/collection");
