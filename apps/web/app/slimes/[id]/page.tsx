@@ -73,11 +73,20 @@ async function getSupabase() {
 // twice on every /slimes/[id] load.
 const fetchLog = cache(async (id: string): Promise<SlimeLogRecord | null> => {
   const supabase = await getSupabase();
+  // 2026-07-17 T166 hotfix: previously we filtered `.eq("is_public",
+  // true)` here, which made private logs 404 for their own owner too.
+  // That regressed after T166 (T39-H1) started routing the post-log
+  // wizard to `/slimes/{id}?justLogged=1`, since a private log lands
+  // on this page and the owner needs to see it. RLS on collection_logs
+  // is `USING (is_public = true OR auth.uid() = user_id)` (see mig 26,
+  // fix_collection_logs_rls.sql) — so removing the explicit filter is
+  // safe: public logs stay visible to everyone, private logs are only
+  // returned when the caller is the owner. Non-owners still get null →
+  // notFound() on private logs.
   const { data, error } = await supabase
     .from("collection_logs")
     .select("*, subtype:subtypes(name)")
     .eq("id", id)
-    .eq("is_public", true)
     .maybeSingle();
   if (error) {
     console.warn("[slimes/[id]] log fetch failed:", error.message);
