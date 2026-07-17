@@ -11,6 +11,13 @@ import { useRouter, useParams } from "next/navigation";
 // Audit hp-24 (2026-07-09): use the shared browser singleton.
 import { createClient } from "@/lib/supabase/client";
 import type { LogSlimeInput } from "@/lib/slime-actions";
+// 2026-07-17 T167 hotfix: edit UI was writing directly to Supabase and
+// bypassing the server action, which meant (a) T167 brand-owner
+// notifications never fired on brand-tag or public-visibility
+// transitions, and (b) moderation of user-authored text (slime_name,
+// notes, etc.) was being skipped entirely. Route through the server
+// action so both concerns are handled in one funnel.
+import { updateSlimeLog } from "@/lib/slime-actions";
 import {
   SLIME_BASE_TYPE_LABELS,
   SCENT_STRENGTH_LABELS,
@@ -313,36 +320,20 @@ function EditLogPageInner() {
         is_public: !isPrivate,
       };
 
-      const { error } = await supabaseRef.current
-        .from("collection_logs")
-        .update(updates)
-        .eq("id", id);
-
-      if (error) throw new Error(error.message);
-
-      // [T72] Keywords: full replace strategy
-      const supabase = supabaseRef.current;
-      await supabase.from("log_tags").delete().eq("log_id", id);
-
-      if (form.keywords.length > 0) {
-        const normalized = form.keywords
-          .map((k) => k.toLowerCase().trim())
-          .filter(Boolean)
-          .slice(0, 10);
-
-        const { data: tagRows } = await supabase
-          .from("tags")
-          .upsert(
-            normalized.map((name) => ({ name })),
-            { onConflict: "name", ignoreDuplicates: false },
-          )
-          .select("id");
-
-        if (tagRows && tagRows.length > 0) {
-          await supabase
-            .from("log_tags")
-            .insert(tagRows.map((t) => ({ log_id: id, tag_id: t.id })));
-        }
+      // 2026-07-17 T167 hotfix: use the server action instead of a
+      // direct client-side DB write. `updateSlimeLog` handles
+      // moderation (slime_name, brand_name_raw, collection_name,
+      // notes, keywords), replaces log_tags atomically, and fires the
+      // brand-owner notification on the "just became public + branded"
+      // transition. All three were being skipped by the old direct
+      // .update() call.
+      const result = await updateSlimeLog(id, {
+        ...updates,
+        keywords: form.keywords,
+      });
+      if (!result.ok) {
+        setSaveError(result.error);
+        return;
       }
 
       router.push(`/slimes/${id}`);
