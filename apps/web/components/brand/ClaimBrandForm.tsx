@@ -304,6 +304,12 @@ export default function ClaimBrandForm({
           onClearFile={() => setSelectedFile(null)}
           onSubmit={handleUploadDocument}
           submitting={submitting}
+          // 2026-07-17 T175: back to step 1 so users can revise the
+          // legal name / role / email / notes without losing the flow.
+          // Browser back navigates all the way out of the wizard which
+          // was Jennifer's specific pain point during the auto-approve
+          // smoke test.
+          onBack={() => setStep("claimant_info")}
         />
       )}
 
@@ -596,6 +602,10 @@ interface Step2Props {
   onClearFile: () => void;
   onSubmit: (e: React.MouseEvent) => void;
   submitting: boolean;
+  // 2026-07-17 T175: step 2 → step 1 back navigation. Optional so
+  // any other consumer (there aren't any today) that mounts this
+  // step in a one-shot context can leave it out.
+  onBack?: () => void;
 }
 
 function DocumentUploadStep(props: Step2Props) {
@@ -730,13 +740,31 @@ function DocumentUploadStep(props: Step2Props) {
         share it.
       </p>
 
-      <div className="mt-5">
+      <div className="mt-5 flex flex-col gap-2">
         <PrimaryButton
           onClick={props.onSubmit}
           disabled={props.submitting || !props.selectedFile}
         >
           {props.submitting ? "Uploading..." : "Upload and continue"}
         </PrimaryButton>
+        {/* 2026-07-17 T175: back to step 1 (claimant info) so users can
+            revise legal name / role / email / notes without losing the
+            wizard. Ghost styling so it visually defers to the primary
+            "Upload and continue" CTA above. */}
+        {props.onBack && (
+          <button
+            type="button"
+            onClick={props.onBack}
+            disabled={props.submitting}
+            className="w-full text-xs font-semibold py-2 rounded-lg transition-colors disabled:opacity-50"
+            style={{
+              background: "transparent",
+              color: "rgba(245,245,245,0.55)",
+            }}
+          >
+            ← Back to your info
+          </button>
+        )}
       </div>
     </CardShell>
   );
