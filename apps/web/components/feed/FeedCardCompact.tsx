@@ -224,14 +224,16 @@ export default function FeedCardCompact({
             {brandName && (
               <div className="text-[11.5px] font-semibold mt-0.5 flex items-center gap-1">
                 {/* 2026-07-17 T173: small brand logo next to the name in
-                    the compact card. Slightly smaller (14px vs 16px in
-                    the photo-hero card) so the compact row stays tight. */}
+                    the compact card.
+                    2026-07-17 rev2: bumped 14→20 per Jennifer feedback —
+                    still smaller than the photo-hero card (24) so the
+                    compact row stays tight, but actually legible. */}
                 {brandLogoUrl && (
                   <Image
                     src={brandLogoUrl}
                     alt=""
-                    width={14}
-                    height={14}
+                    width={20}
+                    height={20}
                     className="rounded-full shrink-0"
                     style={{
                       objectFit: "cover",
@@ -364,7 +366,11 @@ export default function FeedCardCompact({
           }}
           imageUrl={log.image_url}
           brandSlug={brandSlug}
-          brandLogoUrl={null}
+          // 2026-07-17 T173 rev2: was hardcoded null, so the in-feed
+          // detail card fell back to the first-letter initial even
+          // when the brand had a real logo. Now threads through the
+          // map lookup.
+          brandLogoUrl={brandLogoUrl}
           onClose={closeDetail}
           onImageOpen={() => {}}
           likeCount={log.like_count}

@@ -614,13 +614,15 @@ export default function FeedCard({
               {/* 2026-07-17 T173: brand logo mark next to name, mirrors
                   the T39-M2 OG treatment so reshared previews and
                   in-app feed cards feel consistent. Uses next/image so
-                  the URL is remote-optimized. */}
+                  the URL is remote-optimized.
+                  2026-07-17 rev2: bumped 16→24 per Jennifer feedback —
+                  16 was too small to actually read the brand mark. */}
               {brandLogoUrl && (
                 <Image
                   src={brandLogoUrl}
                   alt=""
-                  width={16}
-                  height={16}
+                  width={24}
+                  height={24}
                   className="rounded-full shrink-0"
                   style={{
                     objectFit: "cover",
@@ -723,7 +725,12 @@ export default function FeedCard({
           log={buildCollectionLog(log)}
           imageUrl={log.image_url}
           brandSlug={brandSlug}
-          brandLogoUrl={null}
+          // 2026-07-17 T173 rev2: was hardcoded null which forced the
+          // in-feed detail card to fall back to the first-letter
+          // initial even when the brand had a real logo uploaded.
+          // Now threads the map lookup through so the same tile that
+          // renders on the feed card also renders on the detail card.
+          brandLogoUrl={brandLogoUrl}
           onClose={closeDetail}
           onImageOpen={handleImageOpen}
           likeCount={log.like_count}
