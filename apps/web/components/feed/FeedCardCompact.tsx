@@ -32,6 +32,10 @@ import LikeButton from "@/components/collection/LikeButton";
 interface Props {
   log: FeedCardLog;
   brandSlugMap: Record<string, string>;
+  // 2026-07-17 T173: mirrors brandSlugMap for the small round brand
+  // logo tile next to the cyan name. Optional so consumers that never
+  // adopted the map can fall through to the text-only rendering.
+  brandLogoMap?: Record<string, string>;
   currentUserId: string | null;
 }
 
@@ -107,6 +111,7 @@ function formatRelativeTime(isoString: string): string {
 export default function FeedCardCompact({
   log,
   brandSlugMap,
+  brandLogoMap,
   currentUserId,
 }: Props) {
   const [showDetail, setShowDetail] = useState(false);
@@ -119,6 +124,10 @@ export default function FeedCardCompact({
   const brandName = log.brand_name_raw ?? null;
   const brandSlug = brandName
     ? (brandSlugMap[brandName.toLowerCase()] ?? null)
+    : null;
+  // 2026-07-17 T173: mirrors the slug lookup.
+  const brandLogoUrl = brandName
+    ? (brandLogoMap?.[brandName.toLowerCase()] ?? null)
     : null;
   const typeLabel = log.base_type
     ? (TYPE_LABELS[log.base_type as SlimeBaseType] ?? log.base_type)
@@ -213,7 +222,23 @@ export default function FeedCardCompact({
               {slimeName}
             </div>
             {brandName && (
-              <div className="text-[11.5px] font-semibold mt-0.5">
+              <div className="text-[11.5px] font-semibold mt-0.5 flex items-center gap-1">
+                {/* 2026-07-17 T173: small brand logo next to the name in
+                    the compact card. Slightly smaller (14px vs 16px in
+                    the photo-hero card) so the compact row stays tight. */}
+                {brandLogoUrl && (
+                  <Image
+                    src={brandLogoUrl}
+                    alt=""
+                    width={14}
+                    height={14}
+                    className="rounded-full shrink-0"
+                    style={{
+                      objectFit: "cover",
+                      border: "1px solid rgba(0,240,255,0.35)",
+                    }}
+                  />
+                )}
                 {brandSlug ? (
                   <Link
                     href={`/brands/${brandSlug}`}

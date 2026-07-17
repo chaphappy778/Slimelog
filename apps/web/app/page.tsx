@@ -532,24 +532,32 @@ export default async function HomePage({
   // them. The catalog is small (dozens of brands), and even at scale
   // this only fires per unique brand on the feed page (bounded by the
   // page's log limit).
+  //
+  // 2026-07-17 T173: also pull `logo_url` so feed cards can render the
+  // brand's tiny round mark next to the name (matches the T39-M2 OG
+  // treatment). Same query — one column added, no extra RPC.
   let brandSlugMap: Record<string, string> = {};
+  let brandLogoMap: Record<string, string> = {};
 
   if (uniqueBrandNames.length > 0) {
     const brandResults = await Promise.all(
       uniqueBrandNames.map((name) =>
         supabase
           .from("brands")
-          .select("slug")
+          .select("slug, logo_url")
           .ilike("name", name)
           .maybeSingle()
           .then(({ data }) => ({
             key: name.toLowerCase(),
             slug: (data?.slug as string | undefined) ?? null,
+            logo_url:
+              (data?.logo_url as string | null | undefined) ?? null,
           })),
       ),
     );
     for (const r of brandResults) {
       if (r.slug) brandSlugMap[r.key] = r.slug;
+      if (r.logo_url) brandLogoMap[r.key] = r.logo_url;
     }
   }
 
@@ -643,6 +651,7 @@ export default async function HomePage({
                 <FeedListClient
                   logs={displayLogs}
                   brandSlugMap={brandSlugMap}
+                  brandLogoMap={brandLogoMap}
                   currentUserId={user?.id ?? null}
                 />
               )}

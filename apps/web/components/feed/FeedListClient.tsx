@@ -188,11 +188,17 @@ function DensityToggle({
 export default function FeedListClient({
   logs,
   brandSlugMap,
+  brandLogoMap,
   currentUserId,
   toggleSlot,
 }: {
   logs: FeedCardLog[];
   brandSlugMap: Record<string, string>;
+  // 2026-07-17 T173: parallel to brandSlugMap; lets FeedCard render the
+  // brand's small round logo next to the name. Optional so consumers
+  // that never adopted the map (fewer than one at time of writing) can
+  // default to no-logo rendering rather than error.
+  brandLogoMap?: Record<string, string>;
   currentUserId: string | null;
   // Optional slot for consumers that want to place the density toggle
   // somewhere other than the top of the list (e.g., inline with tabs).
@@ -261,6 +267,7 @@ export default function FeedListClient({
                     key={log.id}
                     log={log}
                     brandSlugMap={brandSlugMap}
+                    brandLogoMap={brandLogoMap}
                     currentUserId={currentUserId}
                   />
                 ) : (
@@ -268,6 +275,7 @@ export default function FeedListClient({
                     key={log.id}
                     log={log}
                     brandSlugMap={brandSlugMap}
+                    brandLogoMap={brandLogoMap}
                     currentUserId={currentUserId}
                   />
                 );

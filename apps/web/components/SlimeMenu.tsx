@@ -10,6 +10,9 @@ import Link from "next/link";
 // (which triggers another profile query). Also gives us email verified /
 // role gating without a second round-trip.
 import { useAuth } from "@/components/AuthProvider";
+// 2026-07-17 T174: shared browser Supabase client for the "brands I own"
+// lookup below. Fires exactly once per sign-in when the menu mounts.
+import { createClient } from "@/lib/supabase/client";
 import {
   Layers,
   Heart,
@@ -173,6 +176,46 @@ export default function SlimeMenu() {
   const isAdmin =
     !!user?.email_confirmed_at && authProfile?.role === "admin";
 
+  // 2026-07-17 T174: brands this user owns (via `brands.owner_id`). Fires
+  // one query per session when the user object resolves, then caches in
+  // component state until sign-out. Ordered alphabetically so a user
+  // with multiple claimed brands sees a stable list. Silent failure —
+  // if the query errors we just don't render the section, no toast.
+  const [ownedBrands, setOwnedBrands] = useState<
+    { id: string; slug: string; name: string; logo_url: string | null }[]
+  >([]);
+  useEffect(() => {
+    if (!user) {
+      setOwnedBrands([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("brands")
+        .select("id, slug, name, logo_url")
+        .eq("owner_id", user.id)
+        .order("name");
+      if (cancelled) return;
+      if (error) {
+        console.warn("[SlimeMenu] owned brands lookup failed:", error.message);
+        return;
+      }
+      setOwnedBrands(
+        (data ?? []) as {
+          id: string;
+          slug: string;
+          name: string;
+          logo_url: string | null;
+        }[],
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
   useEffect(() => {
     if (isOpen) handleClose();
   }, [pathname]); // eslint-disable-line
@@ -261,6 +304,57 @@ export default function SlimeMenu() {
               </div>
               <ChevronRight className="w-4 h-4 text-slime-muted shrink-0" />
             </Link>
+
+            {/* 2026-07-17 T174: brand-owner shortcut(s). Renders one row
+                per brand the user owns, styled like the user profile row
+                above so brand ownership feels like a peer identity, not
+                a buried admin action. Deep-links to that brand's
+                dashboard so a claimed brand is one tap from managing
+                drops, logs, and analytics. Hidden entirely when the
+                user owns no brands (which is the common case). */}
+            {ownedBrands.map((brand) => (
+              <Link
+                key={brand.id}
+                href={`/brand-dashboard/${brand.slug}`}
+                onClick={handleClose}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-slime-purple/40 transition-colors"
+              >
+                {brand.logo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={brand.logo_url}
+                    alt=""
+                    width={36}
+                    height={36}
+                    className="w-9 h-9 rounded-full object-cover ring-2 ring-slime-magenta/30 shrink-0"
+                  />
+                ) : (
+                  <div
+                    className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, #FF00E5, #00F0FF)",
+                      color: "#0A0A0A",
+                    }}
+                    aria-hidden="true"
+                  >
+                    {brand.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p
+                    className="text-[11px] font-bold uppercase tracking-widest leading-tight"
+                    style={{ color: "#FF00E5" }}
+                  >
+                    Your brand
+                  </p>
+                  <p className="text-sm font-bold text-slime-text truncate mt-0.5 leading-tight">
+                    {brand.name}
+                  </p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slime-muted shrink-0" />
+              </Link>
+            ))}
 
             <Divider />
 

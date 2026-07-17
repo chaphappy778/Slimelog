@@ -37,6 +37,11 @@ export type FeedCardLog = {
 interface FeedCardProps {
   log: FeedCardLog;
   brandSlugMap: Record<string, string>;
+  // 2026-07-17 T173: mirrors brandSlugMap. When we have a logo_url for
+  // the log's brand we render a small round mark next to the cyan name,
+  // matching the T39-M2 OG image treatment. Optional so the older
+  // consumers can drop in without a logo.
+  brandLogoMap?: Record<string, string>;
   currentUserId: string | null;
 }
 
@@ -336,6 +341,7 @@ function buildCollectionLog(log: FeedCardLog): CollectionLog {
 export default function FeedCard({
   log,
   brandSlugMap,
+  brandLogoMap,
   currentUserId,
 }: FeedCardProps) {
   const [showDetail, setShowDetail] = useState(false);
@@ -363,6 +369,10 @@ export default function FeedCard({
   // so lookups match regardless of case in brand_name_raw.
   const brandSlug = brandName
     ? (brandSlugMap[brandName.toLowerCase()] ?? null)
+    : null;
+  // 2026-07-17 T173: mirrors the slug lookup — same lowercase key.
+  const brandLogoUrl = brandName
+    ? (brandLogoMap?.[brandName.toLowerCase()] ?? null)
     : null;
   // [Change F5] Inline relative time replaces formatDistanceToNow.
   const timeAgo = formatRelativeTime(log.created_at);
@@ -598,9 +608,26 @@ export default function FeedCard({
           </h2>
           {brandName && (
             <div
-              className="text-[12.5px] font-semibold"
+              className="text-[12.5px] font-semibold flex items-center gap-1.5"
               style={{ color: "#00F0FF" }}
             >
+              {/* 2026-07-17 T173: brand logo mark next to name, mirrors
+                  the T39-M2 OG treatment so reshared previews and
+                  in-app feed cards feel consistent. Uses next/image so
+                  the URL is remote-optimized. */}
+              {brandLogoUrl && (
+                <Image
+                  src={brandLogoUrl}
+                  alt=""
+                  width={16}
+                  height={16}
+                  className="rounded-full shrink-0"
+                  style={{
+                    objectFit: "cover",
+                    border: "1px solid rgba(0,240,255,0.35)",
+                  }}
+                />
+              )}
               {brandSlug ? (
                 <Link
                   href={`/brands/${brandSlug}`}

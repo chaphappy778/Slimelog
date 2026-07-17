@@ -244,10 +244,13 @@ export default async function SlimePage({
     // brand-owner notification queue only lights up when their handle
     // appears in the caption, so this is load-bearing for the growth
     // flywheel documented in the T39 audit.
+    // 2026-07-17 T173: also pulls `logo_url` so the detail-page brand
+    // row can render the round mark next to the name (matches the
+    // T39-M2 OG treatment + the new feed-card treatment).
     log.brand_name_raw
       ? supabase
           .from("brands")
-          .select("slug, instagram_handle")
+          .select("slug, instagram_handle, logo_url")
           .ilike("name", log.brand_name_raw)
           .maybeSingle()
       : Promise.resolve({ data: null }),
@@ -269,9 +272,15 @@ export default async function SlimePage({
   const owner = (ownerRes.data as OwnerProfile | null) ?? null;
   const brandJoin =
     (brandRes as {
-      data: { slug?: string; instagram_handle?: string | null } | null;
+      data: {
+        slug?: string;
+        instagram_handle?: string | null;
+        logo_url?: string | null;
+      } | null;
     }).data ?? null;
   const brandSlug = (brandJoin?.slug as string | undefined) ?? null;
+  const brandLogoUrl =
+    (brandJoin?.logo_url as string | null | undefined) ?? null;
   // 2026-07-17 T39-H3: normalize the IG handle for the share caption.
   // Strip a leading @ if the DB row happens to include one (older
   // brand-suggestion rows accepted them).
@@ -499,7 +508,23 @@ export default async function SlimePage({
               />
             </div>
             {log.brand_name_raw && (
-              <div className="text-sm">
+              <div className="text-sm flex items-center gap-2">
+                {/* 2026-07-17 T173: brand logo mark. Same 18px round tile
+                    as the feed card treatment, sized up slightly for
+                    the taller detail-page text. */}
+                {brandLogoUrl && (
+                  <Image
+                    src={brandLogoUrl}
+                    alt=""
+                    width={18}
+                    height={18}
+                    className="rounded-full shrink-0"
+                    style={{
+                      objectFit: "cover",
+                      border: "1px solid rgba(0,240,255,0.35)",
+                    }}
+                  />
+                )}
                 {brandSlug ? (
                   <Link
                     href={`/brands/${brandSlug}`}
