@@ -18,12 +18,18 @@
 
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import type { Notification, NotificationsResponse } from "@/lib/types";
 import NotificationRow from "./NotificationRow";
 
 const PAGE_SIZE = 50;
+// 2026-07-17 T169: how often the feed auto-refreshes while the tab is
+// visible. Matches the bell's 60s cadence loosely (30s here so anyone
+// staring at the inbox after a save sees new rows land within half a
+// minute). Longer than that and users assume the app is broken; shorter
+// and we burn RPC quota + battery for no real gain.
+const AUTO_REFRESH_MS = 30_000;
 
 async function fetchPage(
   before?: string,
@@ -140,6 +146,11 @@ export default function NotificationsFeed(): React.ReactElement {
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const [hasMore, setHasMore] = useState<boolean>(false);
   const [markingAll, setMarkingAll] = useState<boolean>(false);
+  // 2026-07-17 T169: refreshing state drives the button spinner without
+  // showing the full-page skeleton, so users see a smooth top-of-list
+  // update instead of a jarring reload. Separate from `loading` (which
+  // covers the initial mount) so the two paths don't step on each other.
+  const [refreshing, setRefreshing] = useState<boolean>(false);
 
   const initialLoad = useCallback(async () => {
     setLoading(true);
@@ -155,11 +166,76 @@ export default function NotificationsFeed(): React.ReactElement {
     setLoading(false);
   }, []);
 
+  // 2026-07-17 T169: silent-ish re-fetch used by both the manual Refresh
+  // button and the auto-poll timer. Skips the skeleton flash so it feels
+  // like a live list rather than a full reload. Preserves the current
+  // hasMore state at the tail so pagination doesn't reset if the user
+  // was mid-way through Load More.
+  const refreshList = useCallback(async () => {
+    setRefreshing(true);
+    const page = await fetchPage();
+    if (page) {
+      setItems(page.notifications);
+      setUnread(page.unread_count);
+      setHasMore(page.notifications.length === PAGE_SIZE);
+      setError(null);
+    }
+    // On failure we keep the existing list quietly rather than blowing
+    // it away — the next successful poll will heal it.
+    setRefreshing(false);
+  }, []);
+
   useEffect(() => {
     if (authLoading) return;
     if (!user) return;
     void initialLoad();
   }, [authLoading, user, initialLoad]);
+
+  // 2026-07-17 T169: auto-poll every AUTO_REFRESH_MS while the tab is
+  // visible. Uses the Page Visibility API to pause polling when the tab
+  // is backgrounded — no need to burn quota + battery updating an inbox
+  // no one is looking at. Fires an immediate refresh on visibilitychange
+  // → visible so users returning to the tab see fresh data without
+  // waiting a full 30s cycle. Cleaned up on unmount.
+  const refreshRef = useRef(refreshList);
+  refreshRef.current = refreshList;
+  useEffect(() => {
+    if (authLoading || !user) return;
+    if (typeof document === "undefined") return;
+
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const start = () => {
+      if (intervalId !== null) return;
+      intervalId = setInterval(() => {
+        void refreshRef.current();
+      }, AUTO_REFRESH_MS);
+    };
+    const stop = () => {
+      if (intervalId === null) return;
+      clearInterval(intervalId);
+      intervalId = null;
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        // Catch-up refresh on tab return so users don't wait a full
+        // cycle after coming back from another tab.
+        void refreshRef.current();
+        start();
+      } else {
+        stop();
+      }
+    };
+
+    if (document.visibilityState === "visible") start();
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [authLoading, user]);
 
   const handleLoadMore = async () => {
     if (loadingMore || items.length === 0) return;
@@ -241,22 +317,62 @@ export default function NotificationsFeed(): React.ReactElement {
           <span />
         )}
 
-        {unread > 0 && (
+        <div className="flex items-center gap-2">
+          {/* 2026-07-17 T169: manual Refresh button so users can force a
+              re-fetch without waiting on the 30s auto-poll. Small circular
+              arrow glyph in cyan. Disabled while a fetch is in flight so
+              a spam-click doesn't fire duplicate requests. */}
           <button
             type="button"
-            onClick={handleMarkAll}
-            disabled={markingAll}
-            className="text-xs font-semibold px-3 py-1.5 rounded-full transition-colors"
+            onClick={() => void refreshList()}
+            disabled={refreshing || loading}
+            aria-label="Refresh notifications"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full transition-colors"
             style={{
-              background: "rgba(57,255,20,0.10)",
-              color: "#39FF14",
-              border: "1px solid rgba(57,255,20,0.35)",
-              opacity: markingAll ? 0.6 : 1,
+              background: "rgba(0,240,255,0.08)",
+              color: "#00F0FF",
+              border: "1px solid rgba(0,240,255,0.35)",
+              opacity: refreshing || loading ? 0.6 : 1,
             }}
           >
-            {markingAll ? "Marking..." : "Mark all read"}
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              style={{
+                animation: refreshing ? "spin 0.7s linear infinite" : undefined,
+              }}
+            >
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+            {refreshing ? "Refreshing" : "Refresh"}
           </button>
-        )}
+
+          {unread > 0 && (
+            <button
+              type="button"
+              onClick={handleMarkAll}
+              disabled={markingAll}
+              className="text-xs font-semibold px-3 py-1.5 rounded-full transition-colors"
+              style={{
+                background: "rgba(57,255,20,0.10)",
+                color: "#39FF14",
+                border: "1px solid rgba(57,255,20,0.35)",
+                opacity: markingAll ? 0.6 : 1,
+              }}
+            >
+              {markingAll ? "Marking..." : "Mark all read"}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Body */}

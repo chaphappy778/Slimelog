@@ -204,6 +204,14 @@ h6 {
   }
 }
 
+/* 2026-07-17 T169: 360deg loop for the notifications-feed Refresh
+   button icon. Used inline via `animation: spin 0.7s linear infinite`. */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ── CTA Button Base ────────────────────────────────────── */
 .btn-cta {
   background: var(--gradient-cta);
