@@ -31,6 +31,46 @@ Template for new entries:
 
 ## Known potential issues (not-yet-hit, worth watching)
 
+### 2026-07-17 — Capacitor shell opens Safari on first launch instead of loading the WebView (Ops)
+
+**Symptom:** Newly scaffolded Capacitor iOS shell was expected to render `https://slimelog.com` inside its WKWebView on cold launch. Instead, the SlimeLog app icon on the simulator home screen opened to a black screen, and Safari opened in parallel with slimelog.com in its address bar (URL bar visible at the bottom, "◀ SlimeLog" return-to-app affordance visible at the top). Xcode console showed `WebPageProxy::didFailProvisionalLoadForFrame ... code=102` (`WKErrorFrameLoadInterrupted`) followed by `Error: Frame load interrupted` and `TypeError: undefined is not an object (evaluating 'window.Capacitor.triggerEvent')` — the Capacitor bridge script never ran because the frame load was interrupted before it could inject.
+
+**Root cause:** Capacitor 8's default navigation policy treats any request to a domain not in its `server.allowNavigation` whitelist as an external link and hands it off to `UIApplication.shared.open(url)`, which routes to Safari. Setting `server.url` alone is not sufficient. When `allowNavigation` is unspecified AND the initial navigation target is external, WKWebView cancels the load (code 102) after Capacitor's delegate returns `.cancel`, and the OS opens the URL in Safari as the fallback handler.
+
+Two things made this hard to spot:
+1. Capacitor's docs describe `server.url` as sufficient for a remote-load shell, but the interaction with the default navigation policy is documented only in a Discord post from the Ionic team. The Frame load interrupted error message is generic (WKWebView produces it for any cancelled navigation).
+2. The Xcode log DOES contain `Loading app at https://slimelog.com` right before the failure, which reads as success at first glance. The actual `didFailProvisionalLoadForFrame` line comes several lines later once the WKWebView's async delegate fires.
+
+Also a red herring earlier in debug: I initially suspected `iosScheme: 'https'` was the cause (I had set it in the config for cookie-scheme alignment). Removing it did not fix the issue on its own — the `allowNavigation` whitelist was what actually mattered. Left the `iosScheme` removal in place because setting it made no difference and the default is what Capacitor expects.
+
+**Fix:** Explicit `allowNavigation` whitelist in `apps/web/capacitor.config.ts` covering every domain the WebView is allowed to load in-app:
+
+```ts
+server: {
+  url: 'https://slimelog.com',
+  cleartext: false,
+  allowNavigation: [
+    'slimelog.com',
+    '*.slimelog.com',
+    'zxxjpxpchvsjkvslwtvx.supabase.co', // OAuth callbacks
+  ],
+},
+```
+
+Any domain NOT in this list continues to open in Safari via `UIApplication.shared.open`, which is what we want for external links (brand IG profiles, TikTok links, etc.). Domain we absolutely need in-app: `slimelog.com` itself, `*.slimelog.com` for any subdomain (staging.slimelog.com if we ever add it), and the Supabase project host for the OAuth callback round-trip. Stripe checkout, Instagram embeds, or any other third-party domain we integrate later needs to be added to this list at build time.
+
+After the config change, `npx cap sync ios` copies the update into the iOS project, then Clean Build Folder (⌘⇧K) + Play in Xcode. The `WebView loaded` line replaces the `WebView failed provisional navigation` in the log, and the shell renders slimelog.com in-app.
+
+**Regression check:** Every time we add a third-party domain to the app (Stripe checkout, Google Maps embed, Instagram oEmbed, RevenueCat's paywall URLs, etc.), check whether the WebView needs to handle it directly or should open it externally. If in-app, add to `allowNavigation`. If external, do nothing (it opens in Safari automatically). Symptom to watch for: a link click leads to a black screen or opens Safari when we expect an in-app modal — that's an `allowNavigation` gap.
+
+For the very first cold-launch check: Xcode console MUST show `WebView loaded` after `Loading app at https://slimelog.com`. If it shows `WebView failed provisional navigation`, the whitelist is misconfigured and Safari will grab the URL.
+
+**Prevention pattern:** For any Capacitor Pattern B (remote-load) shell setup, `server.allowNavigation` is mandatory, not optional. Every domain the app expects to render in-app must be listed. This is a `should-be-in-Capacitor's-getting-started-doc` gotcha; file docs feedback with Ionic separately if we hit similar landmines with future plugin additions.
+
+**Related:** #23 Capacitor packaging (tracker), 2026-07-17 Capacitor 8 UIScene deprecation warning (T163 filed).
+
+---
+
 ### 2026-07-16 — Protective trigger silently reverts migration writes (DB + Ops)
 
 **Symptom:** `supabase db push` on migration `20260716000076_brand_catalog_dedupe_and_expand.sql` failed at the second `SELECT _merge_brand(...)` call with `SQLSTATE 23503`: "update or delete on table 'brands' violates foreign key constraint 'slimes_brand_id_fkey' on table 'slimes'. Key (id)=(<peachybbbies uuid>) is still referenced from table 'slimes'." — but my `_merge_brand` function does `UPDATE slimes SET brand_id = keep WHERE brand_id = del` BEFORE the DELETE. The UPDATE should have reassigned every slime, leaving no references. Why did it fail?
