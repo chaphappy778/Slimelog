@@ -1,10 +1,10 @@
-# Jenn asset brief — RevenueCat + App Store submission
+# Jenn asset brief — App Store + Play Store submission
 
-**Purpose:** everything Jenn needs to produce before we can finish the RevenueCat + App Store Connect setup we paused on 2026-07-17.
+**Purpose:** everything Jenn needs to produce before we can finish the RevenueCat + App Store Connect + Play Console setup. Refreshed 2026-07-18 to reflect the parallel iOS + Android launch decision (see T183) and three new work streams: launch badges (T184), slime recipes for /guide (T185), brand shop notes (T186).
 
-Split into **Copy** (writing) and **Graphics** (design/screenshots). Each item has purpose, spec, and where it lives once produced.
+Split into **Copy** (writing), **Graphics** (design/screenshots), and **Content** (guide expansion + badge concepts). Each item has purpose, spec, and where it lives once produced.
 
-Everything here blocks our path to iOS App Store submission (~1-2 months out). Nothing is urgent-urgent, but batching production now saves rework later.
+Most items block our path to iOS + Android submission (~1-2 months out). Badges + recipes can start now in parallel with the store submission grind.
 
 ---
 
@@ -170,6 +170,25 @@ Everything here blocks our path to iOS App Store submission (~1-2 months out). N
 
 **Ask Jenn:** produce 4-6 screenshots at 1290 × 2796 that tell the SlimeLog story. Simulator screenshots from the iOS Simulator work if she wants clean device chrome — I can help capture those on my Mac once needed.
 
+### 11a. Play Store product page screenshots (REQUIRED for Android launch — added 2026-07-18)
+
+**Purpose:** the visuals shown on the SlimeLog Play Store product page. New requirement per T183 (parallel iOS + Android launch).
+
+**Spec (Play Console's aspect ratios differ from Apple's):**
+- **Phone screenshots:** minimum 320px, maximum 3840px on either side, aspect ratio between 9:16 and 16:9. Practical recommendation: 1080 × 1920 portrait, PNG or JPG, each up to 8 MB.
+- **7" tablet (optional):** 1200 × 1920.
+- **10" tablet (optional, only if we target tablet):** 1920 × 1200 or 2048 × 2732.
+- Between **2 and 8** screenshots per format (Play's min is lower than Apple's).
+- No transparency, no alpha channel — Play flat-rejects transparent PNGs.
+
+**Content to feature:** same story as iOS screenshots (Discover feed, log wizard, slime detail, guide, Pro subscription), just re-exported at the Play aspect ratios.
+
+**Ask Jenn:** produce 4-6 screenshots at 1080 × 1920. If she's already made the iOS 1290 × 2796 shots, cropping to 1080 × 1920 usually works — but frame content with the smaller safe area in mind so the crop doesn't clip anything important.
+
+**Also required for Play:**
+- **Feature graphic (Play Store banner):** 1024 × 500, PNG or JPG, up to 1 MB, no transparency, no text near edges (Play crops for different device widths). Big brand mark + tagline centered. Jenn's design call.
+- **Play Store icon:** 512 × 512, PNG, 32-bit with alpha (opposite of Apple's flat-PNG rule). Can be derived from the same master logo as the iOS icon, just re-exported.
+
 ### 12. Promotional Image (OPTIONAL, 1024×1024)
 
 **Purpose:** shows on the App Store product page if we promote the subscription there, or for win-back offer emails.
@@ -180,6 +199,101 @@ Everything here blocks our path to iOS App Store submission (~1-2 months out). N
 - No rounded corners
 
 **Skip for launch.** Only produce if we want to run win-back offers or promote the sub on the App Store product page. File as future work.
+
+### 12a. First 30 launch badges — designer brief (T184, added 2026-07-18)
+
+**Purpose:** SlimeLog needs a visual badge system at launch to gamify collection, activity, and community participation. Jenn to lead the concept + reach out to a designer. James/Claude to spec and build the schema + earn logic.
+
+**Concept:** 30 launch badges spanning four categories.
+
+**Category A — Collection milestones (5 badges):**
+1. **First Log** — logged your first slime
+2. **Ten and Counting** — 10 logs
+3. **Shelf Established** — 25 logs
+4. **Century Club** — 100 logs
+5. **Slime Sommelier** — 500 logs
+
+**Category B — Textural explorer (8 badges, tie to base types Jenn defined in V4 guide):**
+6. **Butter Believer** — first butter log
+7. **Cloud Chaser** — first cloud log
+8. **Floam Fluent** — first floam log
+9. **Jelly Jockey** — first jelly log
+10. **Glossy Goer** — first glossy log
+11. **Clear Enthusiast** — first clear log
+12. **Icee Initiate** — first icee log
+13. **Textural Explorer** — logged in 10+ distinct base types
+
+**Category C — Community actions (8 badges):**
+14. **Brand Follower** — followed your first brand
+15. **First Suggestion** — suggested a brand that got approved
+16. **First Voice** — left your first comment
+17. **Sharer** — shared a shelf link
+18. **Streak Starter** — 7-day rating streak
+19. **Streak Champion** — 30-day rating streak
+20. **Drop Catcher** — logged a slime within 24 hr of its drop
+21. **Popular Collector** — earned your first 10 followers
+
+**Category D — Rare/special (9 badges):**
+22. **Founding Member** — one of the first 500 signups (auto-fire on signup during launch window)
+23. **Early Bird** — logged in the first 30 days
+24. **Jenn's Pick** — a slime you logged got Jenn's-favorite tag
+25. **Recipe Attempter** — logged a homemade slime (fires once T185 recipes ship + `is_homemade` column exists)
+26. **Guide Scholar** — visited all 12 parts of the guide in one session (client-side tracker)
+27. **Rating Rigor** — 20 consecutive logs rated on all 6 axes
+28. **Brand Loyal** — 10+ logs of a single brand
+29. **One-of-One** — logged a limited-run drop (fires when the drop's `total_tubs` was ≤50)
+30. **Suggester** — 5 suggested brands got approved (community curator)
+
+**Design spec (for the designer Jenn hires):**
+- 30 unique badge visuals at **512 × 512 PNG** (transparent bg OK, we'll composite over glass cards).
+- Also **256 × 256** variant for compact display (small rows, notifications, etc).
+- Also **SVG source** for infinite-scale crispness.
+- **Palette:** SlimeLog's signature colors — cyan `#00F0FF`, slime green `#39FF14`, magenta `#FF00E5`, violet `#2D0A4E`, gold `#FFD24A`. Rare/legendary badges lean gold + magenta.
+- **Style:** matches SlimeLog's neon-glass aesthetic. No character mascots, no illustrated humans, no AI-generated visuals. Geometric shapes + gradient fills + line-SVG icons + glow effects.
+- **Rarity tier visual cue:** common = cyan glow, uncommon = green glow, rare = magenta glow, legendary = gold glow + rainbow border.
+- **Coherent set:** all 30 should read as belonging to one system when displayed together on a profile.
+
+**Ask Jenn:**
+1. Review + refine the 30-badge list above (rename, cut, add).
+2. Draft a designer brief (Jenn can use this section as a starting point).
+3. Reach out to community designers on Instagram / Twitter — the slime community has a talent pool who understand the aesthetic. Bidding on a fixed-price package ($1500-3500 typical range for a 30-badge set) rather than hourly.
+4. Deliver files into `/docs/handoffs/badges/` when they land.
+
+**Post-launch:** seasonal badges + brand-collab badges become a hook for cross-promo. Locked-in Aug 2026 planning.
+
+### 12b. Slime recipes for The SlimeLog Guide (T185, added 2026-07-18)
+
+**Purpose:** expand /guide to include basic slime recipes so the guide doubles as a "before you buy / before you make" resource. Adds educational depth, long-tail SEO, and a natural bridge to homemade-log support in v2.
+
+**Ask Jenn:** write ten starter recipes matching the ten most common base types.
+
+**Recipe list (Jenn confirms/edits):**
+1. Classic Butter Slime
+2. Basic Cloud Slime
+3. Fluffy Floam
+4. Jelly Slime
+5. Glossy Slime
+6. Clear Slime
+7. Thick + Glossy
+8. Icee / Instant Snow Slime
+9. Snow Fizz
+10. Magnetic Slime
+
+**Per-recipe spec:**
+- Ingredient list with typical availability note ("PVA glue, Amazon or Michaels")
+- Tools needed (mixing bowl, spoon, activator)
+- Step-by-step (numbered, direct voice, **no em-dashes** per house rule)
+- Knead time
+- Activator ratio (borax solution / contact solution / saline — safety note for borax)
+- Storage tips
+- "How to know it's done" tactile signal
+- 2-3 line "What went wrong" mini-troubleshooting
+
+**Legal callout at top of Part 13** (Jenn to write, Claude can draft): activator safety (borax mixing warnings, adult supervision, no eating), sourcing note that homemade is complementary to buying from real slime shops (not competitive — we still want people supporting the community).
+
+**Visuals:** Jenn's own kitchen shots ideal. Anti-AI-art rule: real photos or geometric visuals only.
+
+**Timing:** any time in next 4 weeks. Once Jenn delivers, Claude ships as `/guide` Part 13 in ~1-2 days.
 
 ### 13. Feature graphic / preview video (OPTIONAL)
 
@@ -208,7 +322,10 @@ Everything here blocks our path to iOS App Store submission (~1-2 months out). N
 | 8 | Support page decision (build lightweight FAQ page? OR external URL?) | Product call | Before submission |
 | 9 | 1024×1024 flat PNG app icon | Graphic | Once new logo lands (this weekend) |
 | 10 | Paywall screenshot (from `/settings/subscription` post-rewrite) | Graphic | Once copy rewrites land |
-| 11 | 4-6 App Store product-page screenshots at 1290×2796 | Graphic | Before submission |
+| 11 | 4-6 App Store product-page screenshots at 1290×2796 | Graphic | Before iOS submission |
+| 11a | 4-6 Play Store product-page screenshots at 1080×1920 + 1024×500 feature graphic + 512×512 Play icon | Graphic | Before Android submission |
+| 12a | 30-badge concept refinement + designer outreach (T184) | Content + Ops | Any time, ideally before Aug so designer has runway |
+| 12b | 10 slime recipes (T185) — ingredients, steps, activator ratio, storage, troubleshooting | Content | Any time in next 4 weeks |
 
 ---
 
@@ -225,3 +342,7 @@ Everything here blocks our path to iOS App Store submission (~1-2 months out). N
 - **T171** — Rewrite `/settings/subscription` page copy to match final Pro feature set. Blocked on item 2 above.
 - **T170** — SlimeLog Guide as standalone $9.99 non-consumable IAP (from earlier chat).
 - **#26 App Store checklist** — items (b) metadata pack, (c) privacy delta, (d) privacy nutrition label, (e) age rating, (f) support email, (g) demo account — all covered here.
+- **T183** — Parallel iOS + Android launch track. Drives items 11a + the Play-side add-ons (Data Safety form, content rating questionnaire, Play Billing SKU mirroring).
+- **T184** — First 30 launch badges. Item 12a is the concept refinement + designer outreach.
+- **T185** — Slime recipes in /guide Part 13. Item 12b is Jenn's ten recipes.
+- **T186** — Brand shop notes / user reviews. No Jenn asset requirement — design decision needed first (private-by-default V1 vs public reviews V2). Post-launch weeks 2-4.
