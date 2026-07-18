@@ -324,7 +324,12 @@ export default async function HomePage({
       ) // [Change 2c] was slime_type,
       .eq("is_public", true)
       .order("created_at", { ascending: false })
-      .limit(20);
+      // 2026-07-17: bumped 20 -> 100 as a stopgap. With 50+ waitlist
+      // signups + paid-promo push not yet started, a 20-row hard cap
+      // was already truncating a single tester's day of activity.
+      // Proper cursor-based pagination is T177 — treat this as the
+      // last band-aid before real pagination lands.
+      .limit(100);
 
     if (baseError) {
       communityError = true;
@@ -418,7 +423,9 @@ export default async function HomePage({
           .in("activity_type", ["log_created", "wishlist_added"])
           .in("actor_id", followingIds)
           .order("created_at", { ascending: false })
-          .limit(20);
+          // 2026-07-17: bumped 20 -> 100 as a stopgap. See T177 for
+          // cursor-based pagination follow-up.
+          .limit(100);
 
         if (activityErr) {
           followingError = true;
