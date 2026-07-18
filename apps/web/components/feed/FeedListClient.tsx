@@ -49,17 +49,22 @@ function bucketLogsByDay(logs: FeedCardLog[]): Array<{
   key: BucketKey;
   logs: FeedCardLog[];
 }> {
+  // 2026-07-17 T177 rev: switched from UTC midnight to LOCAL midnight.
+  // The old UTC-based bucketing meant a user on East Coast at 9pm ET
+  // (which is already tomorrow in UTC) saw all of their own "today"
+  // logs bucketed as "This week" — Jennifer flagged this on the
+  // pagination smoke test. FeedListClient is a client component so
+  // `new Date()` is already the browser's local time; using getFullYear
+  // / getMonth / getDate keeps everything in the viewer's timezone.
   const now = new Date();
   const todayStart = new Date(
-    Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate(),
-      0,
-      0,
-      0,
-      0,
-    ),
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    0,
+    0,
+    0,
+    0,
   );
   const sevenDaysAgo = new Date(
     todayStart.getTime() - 7 * 24 * 60 * 60 * 1000,
