@@ -10,15 +10,22 @@
 //
 // Day-bucket dividers wrap either card style; grouping logic lives here
 // so both densities render Today / This week / Earlier consistently.
+//
+// T177 (2026-07-17): cursor-based Load More lives here too. Server-
+// rendered `logs` seed the first page; the button fetches subsequent
+// pages from /api/feed?tab={activeTab}&before={cursor}&limit=50 and
+// appends them to local `moreLogs`. Brand slug + logo maps merge across
+// pages so newly-loaded logs still render their brand marks.
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FeedCardLog } from "@/components/FeedCard";
 import FeedCard from "@/components/FeedCard";
 import FeedCardCompact from "@/components/feed/FeedCardCompact";
 
 const FEED_DENSITY_KEY = "slimelog:feed_density";
+const PAGE_SIZE = 50;
 
 type Density = "a" | "c";
 type BucketKey = "today" | "week" | "earlier";
@@ -27,6 +34,16 @@ const BUCKET_LABELS: Record<BucketKey, string> = {
   week: "This week",
   earlier: "Earlier",
 };
+
+// T177: response shape returned by /api/feed. Kept local so this
+// client bundle doesn't have to import from lib/feed (which pulls in
+// the Supabase server client).
+interface ApiFeedPage {
+  logs: FeedCardLog[];
+  brandSlugMap: Record<string, string>;
+  brandLogoMap: Record<string, string>;
+  hasMore: boolean;
+}
 
 function bucketLogsByDay(logs: FeedCardLog[]): Array<{
   key: BucketKey;
@@ -185,12 +202,82 @@ function DensityToggle({
   );
 }
 
+// T177: Load More button. Cyan glass treatment matching the Refresh
+// button on the notifications feed. Spinning arrow while a fetch is in
+// flight; inline error copy below on failure so the user can retry.
+function LoadMoreButton({
+  loading,
+  error,
+  onClick,
+}: {
+  loading: boolean;
+  error: string | null;
+  onClick: () => void;
+}) {
+  return (
+    <div className="pt-4 pb-2 flex flex-col items-center gap-2">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={loading}
+        aria-label="Load more logs"
+        className="inline-flex items-center gap-2 text-sm font-bold px-5 py-2.5 rounded-full transition-colors"
+        style={{
+          background: "rgba(0,240,255,0.08)",
+          color: "#00F0FF",
+          border: "1px solid rgba(0,240,255,0.35)",
+          opacity: loading ? 0.6 : 1,
+          fontFamily: "Montserrat, sans-serif",
+        }}
+      >
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          style={{
+            animation: loading ? "spin 0.7s linear infinite" : undefined,
+          }}
+        >
+          {loading ? (
+            <>
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </>
+          ) : (
+            <>
+              <polyline points="6 9 12 15 18 9" />
+            </>
+          )}
+        </svg>
+        {loading ? "Loading" : "Load more"}
+      </button>
+      {error && (
+        <p
+          className="text-xs text-center"
+          style={{ color: "#FF6B9D", maxWidth: 260 }}
+        >
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function FeedListClient({
   logs,
   brandSlugMap,
   brandLogoMap,
   currentUserId,
   toggleSlot,
+  activeTab,
+  hasMore,
 }: {
   logs: FeedCardLog[];
   brandSlugMap: Record<string, string>;
@@ -204,6 +291,13 @@ export default function FeedListClient({
   // somewhere other than the top of the list (e.g., inline with tabs).
   // If not provided, the toggle renders above the first divider.
   toggleSlot?: (toggle: React.ReactNode) => React.ReactNode;
+  // T177 (2026-07-17): which tab we're rendering. Threaded down so
+  // Load More knows which endpoint to hit.
+  activeTab: "community" | "following";
+  // T177 (2026-07-17): initial hasMore flag from the SSR page. If the
+  // server rendered fewer than the page size we already know there's
+  // nothing left, so the button never shows.
+  hasMore: boolean;
 }) {
   // Default to A (photo-hero). Read localStorage after mount to avoid
   // an SSR/hydration mismatch — the initial server render always uses
@@ -228,7 +322,81 @@ export default function FeedListClient({
     }
   };
 
-  const buckets = bucketLogsByDay(logs);
+  // T177: Load More state. `moreLogs` holds every additional page
+  // concatenated; the effective render source is [...logs, ...moreLogs].
+  const [moreLogs, setMoreLogs] = useState<FeedCardLog[]>([]);
+  const [extraSlugMap, setExtraSlugMap] = useState<Record<string, string>>({});
+  const [extraLogoMap, setExtraLogoMap] = useState<Record<string, string>>({});
+  const [currentHasMore, setCurrentHasMore] = useState<boolean>(hasMore);
+  const [loadingMore, setLoadingMore] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Reset the client-side pagination cache when the SSR-provided list
+  // changes (e.g., the user switched tabs — Next router hands us a
+  // fresh `logs` prop with a different activeTab). Without this the
+  // stale following-page logs would linger under the community tab.
+  useEffect(() => {
+    setMoreLogs([]);
+    setExtraSlugMap({});
+    setExtraLogoMap({});
+    setCurrentHasMore(hasMore);
+    setLoadError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, hasMore]);
+
+  const allLogs = useMemo(() => [...logs, ...moreLogs], [logs, moreLogs]);
+  const mergedBrandSlugMap = useMemo(
+    () => ({ ...extraSlugMap, ...brandSlugMap }),
+    [extraSlugMap, brandSlugMap],
+  );
+  const mergedBrandLogoMap = useMemo(
+    () => ({ ...extraLogoMap, ...(brandLogoMap ?? {}) }),
+    [extraLogoMap, brandLogoMap],
+  );
+
+  const handleLoadMore = async () => {
+    if (loadingMore || allLogs.length === 0) return;
+    setLoadingMore(true);
+    setLoadError(null);
+
+    // Cursor is the earliest created_at across everything we already
+    // have. `before` is strictly-less-than on the server so the next
+    // page starts at the next-older row.
+    let earliest = allLogs[0].created_at;
+    for (const l of allLogs) {
+      if (l.created_at < earliest) earliest = l.created_at;
+    }
+
+    const params = new URLSearchParams({
+      tab: activeTab,
+      before: earliest,
+      limit: String(PAGE_SIZE),
+    });
+
+    try {
+      const res = await fetch(`/api/feed?${params.toString()}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        setLoadError("Could not load more logs. Tap to retry.");
+        setLoadingMore(false);
+        return;
+      }
+      const page = (await res.json()) as ApiFeedPage;
+      setMoreLogs((prev) => [...prev, ...page.logs]);
+      setExtraSlugMap((prev) => ({ ...prev, ...page.brandSlugMap }));
+      setExtraLogoMap((prev) => ({ ...prev, ...page.brandLogoMap }));
+      setCurrentHasMore(page.hasMore);
+    } catch (err) {
+      console.error("[FeedListClient] load more failed:", err);
+      setLoadError("Could not load more logs. Tap to retry.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const buckets = bucketLogsByDay(allLogs);
   const toggle = <DensityToggle density={density} setDensity={setDensity} />;
 
   return (
@@ -266,16 +434,16 @@ export default function FeedListClient({
                   <FeedCardCompact
                     key={log.id}
                     log={log}
-                    brandSlugMap={brandSlugMap}
-                    brandLogoMap={brandLogoMap}
+                    brandSlugMap={mergedBrandSlugMap}
+                    brandLogoMap={mergedBrandLogoMap}
                     currentUserId={currentUserId}
                   />
                 ) : (
                   <FeedCard
                     key={log.id}
                     log={log}
-                    brandSlugMap={brandSlugMap}
-                    brandLogoMap={brandLogoMap}
+                    brandSlugMap={mergedBrandSlugMap}
+                    brandLogoMap={mergedBrandLogoMap}
                     currentUserId={currentUserId}
                   />
                 );
@@ -283,6 +451,13 @@ export default function FeedListClient({
             </div>
           </div>
         ))}
+        {currentHasMore && (
+          <LoadMoreButton
+            loading={loadingMore}
+            error={loadError}
+            onClick={() => void handleLoadMore()}
+          />
+        )}
       </div>
     </div>
   );

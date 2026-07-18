@@ -16,67 +16,17 @@ import CommunityStatsHero, {
 // density toggle + day-bucket dividers + card list. Manages its own
 // localStorage-backed density state.
 import FeedListClient from "@/components/feed/FeedListClient";
+// T177 (2026-07-17): shared helpers used by both this SSR page and the
+// /api/feed Load More route. Keeps the query shape + FeedCardLog
+// assembly in one place so the two paths cannot drift.
+import { fetchCommunityFeed, fetchFollowingFeed } from "@/lib/feed";
 
-// ─── Internal query row types ──────────────────────────────────────────────────
-// [Change 1 — #35] These types now describe the profiles_public projection
-// rather than the base profiles table. The shape is identical for the
-// fields we read (username, avatar_url) — the swap is in the FK hint below.
-
-type CommunityQueryRow = {
-  id: string;
-  user_id: string;
-  created_at: string;
-  updated_at: string;
-  slime_name: string | null;
-  brand_name_raw: string | null;
-  base_type: string | null; // [Change 2a] was slime_type
-  colors: string[] | null;
-  rating_overall: number | null;
-  image_url: string | null;
-  in_wishlist: boolean | null;
-  // PostgREST returns a to-one join as a plain object, not an array.
-  // We normalise this below so the rest of the code never has to branch.
-  profiles_public:
-    | { username: string | null; avatar_url: string | null }
-    | { username: string | null; avatar_url: string | null }[]
-    | null;
-};
-
-type ActivityFeedQueryRow = {
-  id: string;
-  created_at: string;
-  actor_id: string;
-  activity_type: string;
-  log_id: string | null;
-  metadata: {
-    slime_name?: string | null;
-    base_type?: string | null; // [Change 2b] was slime_type
-    brand_name_raw?: string | null;
-    rating_overall?: number | null;
-    colors?: string[] | null;
-    image_url?: string | null;
-    in_wishlist?: boolean | null;
-  } | null;
-  profiles_public:
-    | { username: string | null; avatar_url: string | null }
-    | { username: string | null; avatar_url: string | null }[]
-    | null;
-};
-
-// ─── Profile normaliser ────────────────────────────────────────────────────────
-// PostgREST can return a to-one relation as either an object or a single-item
-// array depending on the join hint used. Always normalise to the object form.
-
-function normaliseProfile(
-  raw:
-    | { username: string | null; avatar_url: string | null }
-    | { username: string | null; avatar_url: string | null }[]
-    | null,
-): { username: string | null; avatar_url: string | null } | null {
-  if (!raw) return null;
-  if (Array.isArray(raw)) return raw[0] ?? null;
-  return raw;
-}
+// T177 (2026-07-17): initial page size for the server-rendered feed.
+// The old code was hard-capped at .limit(100) as a stopgap after a
+// tester's day of activity already truncated the 20-row limit. With
+// cursor-based Load More now landed we drop back to a healthy 50 for
+// the initial paint — the button covers the rest.
+const INITIAL_PAGE_SIZE = 50;
 
 // (Day-bucket dividers + density toggle now live in the client
 // component <FeedListClient>. Feed rework batches 2 + 3, 2026-07-11.)
@@ -294,277 +244,56 @@ export default async function HomePage({
     redirect("/landing");
   }
 
-  // ─── Community feed ────────────────────────────────────────────────────────
+  // ─── Feed pages ────────────────────────────────────────────────────────────
+  // T177 (2026-07-17): the community + following queries + FeedCardLog
+  // assembly live in `lib/feed.ts` now. Both this SSR path and the
+  // /api/feed Load More route call the same helpers.
 
-  let communityLogs: FeedCardLog[] = [];
-  let communityError = false;
+  let displayLogs: FeedCardLog[] = [];
+  let displayError = false;
+  let brandSlugMap: Record<string, string> = {};
+  let brandLogoMap: Record<string, string> = {};
+  let hasMore = false;
 
   if (activeTab === "community") {
-    // [Change 2 — #35] FK hint swapped from
-    //   profiles!collection_logs_user_id_fkey
-    // to
-    //   profiles_public!collection_logs_user_id_fkey
-    // The FK lives on the base profiles table; the view exposes `id` so
-    // PostgREST resolves the relationship via the underlying FK.
-    const { data: baseData, error: baseError } = await supabase
-      .from("collection_logs")
-      .select(
-        `id,
-         user_id,
-         created_at,
-         updated_at,
-         slime_name,
-         brand_name_raw,
-         base_type,
-         colors,
-         rating_overall,
-         image_url,
-         in_wishlist,
-         profiles_public!collection_logs_user_id_fkey ( username, avatar_url )`,
-      ) // [Change 2c] was slime_type,
-      .eq("is_public", true)
-      .order("created_at", { ascending: false })
-      // 2026-07-17: bumped 20 -> 100 as a stopgap. With 50+ waitlist
-      // signups + paid-promo push not yet started, a 20-row hard cap
-      // was already truncating a single tester's day of activity.
-      // Proper cursor-based pagination is T177 — treat this as the
-      // last band-aid before real pagination lands.
-      .limit(100);
-
-    if (baseError) {
-      communityError = true;
-    } else {
-      const rows = (baseData ?? []) as unknown as CommunityQueryRow[];
-      const ids = rows.map((r) => r.id);
-
-      const { data: likesData } = await supabase
-        .from("likes")
-        .select("log_id")
-        .in("log_id", ids);
-
-      const { data: commentsData } = await supabase
-        .from("comments")
-        .select("log_id")
-        .in("log_id", ids);
-
-      const { data: userLikesData } = user
-        ? await supabase
-            .from("likes")
-            .select("log_id")
-            .eq("user_id", user.id)
-            .in("log_id", ids)
-        : { data: [] };
-
-      const likeCountMap: Record<string, number> = {};
-      const commentCountMap: Record<string, number> = {};
-      const userLikedSet = new Set<string>();
-
-      for (const row of likesData ?? []) {
-        likeCountMap[row.log_id] = (likeCountMap[row.log_id] ?? 0) + 1;
-      }
-      for (const row of commentsData ?? []) {
-        commentCountMap[row.log_id] = (commentCountMap[row.log_id] ?? 0) + 1;
-      }
-      for (const row of userLikesData ?? []) {
-        userLikedSet.add(row.log_id);
-      }
-
-      communityLogs = rows.map((r): FeedCardLog => {
-        const profile = normaliseProfile(r.profiles_public);
-        return {
-          id: r.id,
-          created_at: r.created_at,
-          updated_at: r.updated_at,
-          slime_name: r.slime_name,
-          brand_name_raw: r.brand_name_raw,
-          base_type: r.base_type, // [Change 2d] was slime_type: r.slime_type
-          colors: r.colors,
-          rating_overall: r.rating_overall,
-          image_url: r.image_url,
-          in_wishlist: r.in_wishlist ?? false,
-          activity_type: "log_created",
-          actor_id: r.user_id,
-          username: profile?.username ?? null,
-          avatar_url: profile?.avatar_url ?? null,
-          like_count: likeCountMap[r.id] ?? 0,
-          comment_count: commentCountMap[r.id] ?? 0,
-          is_liked_by_current_user: userLikedSet.has(r.id),
-        };
+    try {
+      const page = await fetchCommunityFeed(supabase, {
+        userId: user?.id ?? null,
+        limit: INITIAL_PAGE_SIZE,
       });
+      displayLogs = page.logs;
+      brandSlugMap = page.brandSlugMap;
+      brandLogoMap = page.brandLogoMap;
+      hasMore = page.hasMore;
+    } catch {
+      displayError = true;
     }
-  }
-
-  // ─── Following feed ────────────────────────────────────────────────────────
-
-  let followingLogs: FeedCardLog[] = [];
-  let followingError = false;
-
-  if (activeTab === "following" && user) {
+  } else if (activeTab === "following" && user) {
     const { data: followRows, error: followsErr } = await supabase
       .from("follows")
       .select("following_id")
       .eq("follower_id", user.id);
 
     if (followsErr) {
-      followingError = true;
+      displayError = true;
     } else {
       const followingIds = (followRows ?? []).map(
         (r) => r.following_id as string,
       );
 
-      if (followingIds.length > 0) {
-        // [Change 3 — #35] FK hint swapped to profiles_public.
-        const { data: activityRows, error: activityErr } = await supabase
-          .from("activity_feed")
-          .select(
-            `id, created_at, actor_id, activity_type, log_id, metadata,
-             profiles_public!activity_feed_actor_id_fkey ( username, avatar_url )`,
-          )
-          .in("activity_type", ["log_created", "wishlist_added"])
-          .in("actor_id", followingIds)
-          .order("created_at", { ascending: false })
-          // 2026-07-17: bumped 20 -> 100 as a stopgap. See T177 for
-          // cursor-based pagination follow-up.
-          .limit(100);
-
-        if (activityErr) {
-          followingError = true;
-        } else {
-          const typedRows = (activityRows ??
-            []) as unknown as ActivityFeedQueryRow[];
-          const followingLogIds = typedRows
-            .map((r) => r.log_id)
-            .filter((id): id is string => id != null);
-
-          const { data: fLikesData } = await supabase
-            .from("likes")
-            .select("log_id")
-            .in("log_id", followingLogIds);
-
-          const { data: fCommentsData } = await supabase
-            .from("comments")
-            .select("log_id")
-            .in("log_id", followingLogIds);
-
-          const { data: fUserLikesData } = await supabase
-            .from("likes")
-            .select("log_id")
-            .eq("user_id", user.id)
-            .in("log_id", followingLogIds);
-
-          const { data: updatedAtData } = await supabase
-            .from("collection_logs")
-            .select("id, updated_at, in_wishlist")
-            .in("id", followingLogIds);
-
-          const updatedAtMap: Record<string, string> = {};
-          const wishlistMap: Record<string, boolean> = {};
-          for (const row of updatedAtData ?? []) {
-            updatedAtMap[row.id] = row.updated_at;
-            wishlistMap[row.id] = row.in_wishlist ?? false;
-          }
-
-          const fLikeCountMap: Record<string, number> = {};
-          const fCommentCountMap: Record<string, number> = {};
-          const fUserLikedSet = new Set<string>();
-
-          for (const row of fLikesData ?? []) {
-            fLikeCountMap[row.log_id] = (fLikeCountMap[row.log_id] ?? 0) + 1;
-          }
-          for (const row of fCommentsData ?? []) {
-            fCommentCountMap[row.log_id] =
-              (fCommentCountMap[row.log_id] ?? 0) + 1;
-          }
-          for (const row of fUserLikesData ?? []) {
-            fUserLikedSet.add(row.log_id);
-          }
-
-          followingLogs = typedRows.map((row): FeedCardLog => {
-            const meta = row.metadata ?? {};
-            const profile = normaliseProfile(row.profiles_public);
-            const logId = row.log_id ?? row.id;
-
-            return {
-              id: logId,
-              created_at: row.created_at,
-              updated_at: updatedAtMap[logId] ?? row.created_at,
-              slime_name: meta.slime_name ?? null,
-              brand_name_raw: meta.brand_name_raw ?? null,
-              base_type: meta.base_type ?? null, // [Change 2e] was slime_type: meta.slime_type ?? null
-              colors: meta.colors ?? null,
-              rating_overall:
-                meta.rating_overall != null
-                  ? Number(meta.rating_overall)
-                  : null,
-              image_url: meta.image_url ?? null,
-              in_wishlist:
-                wishlistMap[logId] ??
-                meta.in_wishlist ??
-                row.activity_type === "wishlist_added",
-              activity_type: row.activity_type,
-              actor_id: row.actor_id,
-              username: profile?.username ?? null,
-              avatar_url: profile?.avatar_url ?? null,
-              like_count: fLikeCountMap[logId] ?? 0,
-              comment_count: fCommentCountMap[logId] ?? 0,
-              is_liked_by_current_user: fUserLikedSet.has(logId),
-            };
-          });
-        }
+      try {
+        const page = await fetchFollowingFeed(supabase, {
+          userId: user.id,
+          followingIds,
+          limit: INITIAL_PAGE_SIZE,
+        });
+        displayLogs = page.logs;
+        brandSlugMap = page.brandSlugMap;
+        brandLogoMap = page.brandLogoMap;
+        hasMore = page.hasMore;
+      } catch {
+        displayError = true;
       }
-    }
-  }
-
-  // ─── Brand slug lookup ─────────────────────────────────────────────────────
-
-  const displayLogs = activeTab === "following" ? followingLogs : communityLogs;
-  const displayError =
-    activeTab === "following" ? followingError : communityError;
-
-  const uniqueBrandNames = [
-    ...new Set(
-      displayLogs
-        .map((l) => l.brand_name_raw)
-        .filter((n): n is string => n != null && n.trim() !== ""),
-    ),
-  ];
-
-  // 2026-07-11 v2: brandSlugMap keyed by lowercased brand name.
-  // Previous version tried to build one `.or()` clause of ilike filters,
-  // but Supabase's PostgREST OR syntax mangles values containing spaces
-  // or commas — so brand lookups silently returned nothing and the
-  // links rendered as text.
-  //
-  // Now: fire one ilike query per unique brand name and Promise.all
-  // them. The catalog is small (dozens of brands), and even at scale
-  // this only fires per unique brand on the feed page (bounded by the
-  // page's log limit).
-  //
-  // 2026-07-17 T173: also pull `logo_url` so feed cards can render the
-  // brand's tiny round mark next to the name (matches the T39-M2 OG
-  // treatment). Same query — one column added, no extra RPC.
-  let brandSlugMap: Record<string, string> = {};
-  let brandLogoMap: Record<string, string> = {};
-
-  if (uniqueBrandNames.length > 0) {
-    const brandResults = await Promise.all(
-      uniqueBrandNames.map((name) =>
-        supabase
-          .from("brands")
-          .select("slug, logo_url")
-          .ilike("name", name)
-          .maybeSingle()
-          .then(({ data }) => ({
-            key: name.toLowerCase(),
-            slug: (data?.slug as string | undefined) ?? null,
-            logo_url:
-              (data?.logo_url as string | null | undefined) ?? null,
-          })),
-      ),
-    );
-    for (const r of brandResults) {
-      if (r.slug) brandSlugMap[r.key] = r.slug;
-      if (r.logo_url) brandLogoMap[r.key] = r.logo_url;
     }
   }
 
@@ -660,6 +389,8 @@ export default async function HomePage({
                   brandSlugMap={brandSlugMap}
                   brandLogoMap={brandLogoMap}
                   currentUserId={user?.id ?? null}
+                  activeTab={activeTab}
+                  hasMore={hasMore}
                 />
               )}
             </>
