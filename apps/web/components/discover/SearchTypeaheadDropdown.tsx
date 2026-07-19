@@ -28,20 +28,20 @@ const supabase = createClient();
 
 // Same shape helpers as /search/page.tsx. Kept lean because the
 // dropdown only shows a handful of rows.
-// [Item #28 Phase C hotfix 2026-07-18] `log_id` is the representative
-// collection_logs.id we route to when a user clicks a slime row.
-// /slimes/[id] resolves against collection_logs, not the slimes
-// catalog, so linking to a catalog id 404s. Post-fetch we
-// batch-query collection_logs to find each slime's most recent
-// public log and attach its id here. Slimes with no public log get
-// dropped from the dropdown (no clickable destination).
+// [Item #28 Phase C hotfix 2026-07-18] `/slimes/[id]` resolves
+// against `collection_logs`, not the `slimes` catalog. Post-fetch we
+// prefer a representative log id; fall back to the brand slug when
+// no public log exists; last resort we render the row unclickable.
+// [Phase C hotfix rev-2] Was dropping no-log slimes entirely which
+// hid almost all pre-launch catalog matches from the dropdown.
 type SlimeHit = {
   id: string;
   name: string;
   base_type: string | null;
   image_url: string | null;
   brands: { name: string; slug: string } | null;
-  log_id: string;
+  href: string | null;
+  hrefKind: "log" | "brand" | "none";
 };
 
 type BrandHit = {
@@ -155,18 +155,17 @@ export default function SearchTypeaheadDropdown({
       }
 
       // Normalize slime brands join (Supabase returns as array in some
-      // cases; we always want an object-or-null). log_id is filled in
-      // by the enrichment step below.
+      // cases; we always want an object-or-null). href/hrefKind get
+      // filled in by the enrichment step below.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawSlimes: any[] = (slimesRes.data as any[]) ?? [];
-      type PreSlime = Omit<SlimeHit, "log_id"> & { log_id: string | null };
+      type PreSlime = Omit<SlimeHit, "href" | "hrefKind">;
       const preSlimes: PreSlime[] = rawSlimes.map((s) => ({
         id: s.id,
         name: s.name,
         base_type: s.base_type,
         image_url: s.image_url,
         brands: Array.isArray(s.brands) ? (s.brands[0] ?? null) : s.brands,
-        log_id: null,
       }));
 
       // Rank first so we only enrich the top-N with a log id lookup.
@@ -175,11 +174,11 @@ export default function SearchTypeaheadDropdown({
         .sort((a, b) => b.score - a.score);
       const topPre = scoredPre.slice(0, 5).map((r) => r.row);
 
-      // [Item #28 Phase C hotfix 2026-07-18] Enrich each of the top
-      // slimes with a representative public collection_logs.id.
-      // /slimes/[id] resolves against collection_logs so we must link
-      // to a log id, not a catalog slime id (which 404s). One batch
-      // query keeps this cheap.
+      // [Item #28 Phase C hotfix 2026-07-18 + rev-2] Attach an href
+      // for each slime: prefer a real log page, fall back to the
+      // brand page when no public log exists (pre-launch data has
+      // almost no logs, so dropping no-log slimes hid the whole
+      // section). One batch query keeps this cheap.
       const topSlimeIds = topPre.map((s) => s.id);
       const logIdBySlime = new Map<string, string>();
       if (topSlimeIds.length > 0) {
@@ -203,15 +202,39 @@ export default function SearchTypeaheadDropdown({
           }
         }
       }
-      // Drop pre-slimes that have no public log — a catalog-only
-      // slime has no /slimes/[id] destination in the current app.
       const scoredSlimes = topPre
         .map((s) => {
           const log_id = logIdBySlime.get(s.id);
-          return log_id ? ({ ...s, log_id } as SlimeHit) : null;
-        })
-        .filter((s): s is SlimeHit => s !== null)
-        .map((row) => ({ row, score: 0 }));
+          if (log_id) {
+            return {
+              row: {
+                ...s,
+                href: `/slimes/${log_id}`,
+                hrefKind: "log" as const,
+              } as SlimeHit,
+              score: 0,
+            };
+          }
+          const brandSlug = s.brands?.slug;
+          if (brandSlug) {
+            return {
+              row: {
+                ...s,
+                href: `/brands/${brandSlug}`,
+                hrefKind: "brand" as const,
+              } as SlimeHit,
+              score: 0,
+            };
+          }
+          return {
+            row: {
+              ...s,
+              href: null,
+              hrefKind: "none" as const,
+            } as SlimeHit,
+            score: 0,
+          };
+        });
       const scoredBrands = ((brandsRes.data ?? []) as BrandHit[])
         .map((b) => ({
           row: b,
@@ -387,15 +410,14 @@ function TypeaheadSlimeRow({
   slime: SlimeHit;
   onPick?: () => void;
 }) {
-  return (
-    <Link
-      // [Item #28 Phase C hotfix 2026-07-18] Route to log_id, not the
-      // catalog slime id (see SlimeHit doc above).
-      href={`/slimes/${slime.log_id}`}
-      onClick={onPick}
-      className="flex items-center gap-3 px-4 py-2.5 transition-all"
-      style={{ borderBottom: "1px solid rgba(45,10,78,0.35)" }}
-    >
+  // [Item #28 Phase C hotfix rev-2 2026-07-18] Renders as a Link
+  // when there's an href, plain div otherwise. See SlimeHit.href
+  // doc for the log → brand → null fallback ladder.
+  const rowClassName =
+    "flex items-center gap-3 px-4 py-2.5 transition-all";
+  const rowStyle = { borderBottom: "1px solid rgba(45,10,78,0.35)" };
+  const body = (
+    <>
       <div
         className="shrink-0 rounded-md overflow-hidden"
         style={{ width: 32, height: 32, background: "rgba(45,10,78,0.5)" }}
@@ -431,7 +453,25 @@ function TypeaheadSlimeRow({
           </p>
         )}
       </div>
-    </Link>
+    </>
+  );
+
+  if (slime.href) {
+    return (
+      <Link
+        href={slime.href}
+        onClick={onPick}
+        className={rowClassName}
+        style={rowStyle}
+      >
+        {body}
+      </Link>
+    );
+  }
+  return (
+    <div className={rowClassName} style={rowStyle}>
+      {body}
+    </div>
   );
 }
 

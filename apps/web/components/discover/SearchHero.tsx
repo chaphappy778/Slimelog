@@ -248,7 +248,14 @@ export default function SearchHero({
               width: 24,
               height: 24,
               borderRadius: 12,
-              color: "rgba(245,245,245,0.55)",
+              // [Item #28 Phase C hotfix rev-2 2026-07-18] Was a
+              // washed-out off-white (rgba(245,245,245,0.55)) which
+              // read as gray next to the browser's native clear-X.
+              // Bumped to on-brand cyan so it's obviously our button,
+              // matches the SearchHero border, and there's no
+              // ambiguity about which X to tap.
+              color: "#00F0FF",
+              background: "rgba(0,240,255,0.10)",
             }}
             aria-label="Clear search"
           >
@@ -256,7 +263,7 @@ export default function SearchHero({
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth="2"
+              strokeWidth="2.5"
               strokeLinecap="round"
               aria-hidden="true"
               width="14"

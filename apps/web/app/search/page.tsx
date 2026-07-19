@@ -67,17 +67,23 @@ type RawSlime = {
   brands: BrandJoin;
 };
 
-// [Item #28 Phase C hotfix 2026-07-18] Post-enrichment slime shape
-// with `log_id` — the representative collection_logs.id we route to
-// when a user clicks a slime row. `/slimes/[id]` fetches from
-// `collection_logs`, NOT the `slimes` catalog, so linking to a
-// catalog id 404s. Post-fetch we batch-query collection_logs to find
-// each slime's most recent public log and attach its id here. Slimes
-// with no public logs are dropped from the results (there's nowhere
-// to route them yet — filed in the tracker as a follow-up to build
-// a catalog-only detail page for zero-log slimes).
+// [Item #28 Phase C hotfix 2026-07-18] Post-enrichment slime shape.
+// `/slimes/[id]` fetches from `collection_logs`, NOT the `slimes`
+// catalog, so we prefer routing to the slime's most recent public
+// log. When there is no public log yet (common in pre-launch data),
+// we fall back to the brand page rather than either 404-ing or
+// dropping the row — pre-launch users still want to see their brand
+// catalog matches.
+// [Item #28 Phase C hotfix rev-2 2026-07-18] Was dropping no-log
+// slimes entirely, which nuked most butter/etc results in the
+// pre-launch DB. Now we always keep the row and use hrefKind to
+// pick the best available destination.
 type SlimeResult = RawSlime & {
-  log_id: string;
+  // Where clicking the row navigates. Prefer a real log for the
+  // richest destination; fall back to brand; last-resort null means
+  // the row renders as unclickable text.
+  href: string | null;
+  hrefKind: "log" | "brand" | "none";
 };
 
 type TagResult = {
@@ -222,17 +228,7 @@ function SlimeRow({ slime }: { slime: SlimeResult }) {
   }
 
   return (
-    <Link
-      // [Item #28 Phase C hotfix 2026-07-18] Uses log_id, not the
-      // catalog slime id, because /slimes/[id] resolves against
-      // collection_logs. See SlimeResult.log_id doc for context.
-      href={`/slimes/${slime.log_id}`}
-      className="flex items-center gap-3 px-4 py-3 rounded-xl transition-all"
-      style={{
-        background: "rgba(45,10,78,0.25)",
-        border: "1px solid rgba(45,10,78,0.6)",
-      }}
-    >
+    <SlimeRowShell href={slime.href}>
       <div
         className="shrink-0 rounded-lg overflow-hidden"
         style={{ width: 44, height: 44, background: "rgba(45,10,78,0.5)" }}
@@ -293,7 +289,38 @@ function SlimeRow({ slime }: { slime: SlimeResult }) {
           </div>
         </div>
       )}
-    </Link>
+    </SlimeRowShell>
+  );
+}
+
+// [Item #28 Phase C hotfix rev-2 2026-07-18] Renders as a Link when
+// there's an href, or a plain div when there isn't. Keeps the row
+// visible for catalog-only slimes (no public log, no brand slug)
+// instead of dropping them entirely from search results.
+function SlimeRowShell({
+  href,
+  children,
+}: {
+  href: string | null;
+  children: React.ReactNode;
+}) {
+  const className =
+    "flex items-center gap-3 px-4 py-3 rounded-xl transition-all";
+  const style = {
+    background: "rgba(45,10,78,0.25)",
+    border: "1px solid rgba(45,10,78,0.6)",
+  };
+  if (href) {
+    return (
+      <Link href={href} className={className} style={style}>
+        {children}
+      </Link>
+    );
+  }
+  return (
+    <div className={className} style={style}>
+      {children}
+    </div>
   );
 }
 
@@ -899,6 +926,11 @@ function SearchPageInner() {
       // with a representative collection_logs.id so SlimeRow can link
       // to a real log detail page (see SlimeResult / RawSlime docs
       // above). One batch query for all slimes in the result set.
+      // [Phase C hotfix rev-2] No longer drops slimes without a
+      // public log — falls back to the brand page as the click
+      // destination instead. Pre-launch data has almost no logs, so
+      // dropping every no-log slime removed almost all catalog
+      // matches from the results.
       const slimeIds = rankedRawSlimes.map((s) => s.id);
       const logIdBySlime = new Map<string, string>();
       if (slimeIds.length > 0) {
@@ -922,15 +954,25 @@ function SearchPageInner() {
           }
         }
       }
-      // Attach log_id and drop slimes with no public log — there's no
-      // catalog-only detail page yet, so an unclickable row would be
-      // a dead end.
-      const normalizedSlimes: SlimeResult[] = rankedRawSlimes
-        .map((s) => {
-          const log_id = logIdBySlime.get(s.id);
-          return log_id ? { ...s, log_id } : null;
-        })
-        .filter((s): s is SlimeResult => s !== null);
+      const normalizedSlimes: SlimeResult[] = rankedRawSlimes.map((s) => {
+        const log_id = logIdBySlime.get(s.id);
+        if (log_id) {
+          return {
+            ...s,
+            href: `/slimes/${log_id}`,
+            hrefKind: "log" as const,
+          };
+        }
+        const brandSlug = s.brands?.slug;
+        if (brandSlug) {
+          return {
+            ...s,
+            href: `/brands/${brandSlug}`,
+            hrefKind: "brand" as const,
+          };
+        }
+        return { ...s, href: null, hrefKind: "none" as const };
+      });
 
       // [Item #28 Phase B 2026-07-18] Score + sort Brands. Score
       // primarily on name (0..100), secondarily on slug (0.7×). Bio
