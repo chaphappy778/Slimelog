@@ -263,7 +263,7 @@ export default function SubscriptionPage() {
               <div className="flex flex-wrap gap-3">
                 <UpgradeButton
                   priceId={process.env.NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID!}
-                  label="Go Pro — $2.99/mo for 3 months"
+                  label="Go Pro — $2.99/mo for 6 months"
                   mode="user"
                   currentPath="/settings/subscription"
                 />
@@ -278,7 +278,7 @@ export default function SubscriptionPage() {
                 className="text-[11px] leading-relaxed"
                 style={{ color: "rgba(245,245,245,0.5)" }}
               >
-                Monthly renews at $4.99/mo after the first 3 months.
+                Monthly renews at $4.99/mo after the first 6 months.
                 Annual renews at $29.99/yr after the first year. Cancel
                 anytime from Settings.
               </p>
