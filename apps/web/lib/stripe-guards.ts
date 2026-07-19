@@ -43,6 +43,36 @@ export function isAllowedPriceIdForMode(
   return allowedPriceIdsForMode(mode).has(priceId);
 }
 
+/**
+ * [Item T171 / anchor-pricing 2026-07-19] Given a Stripe price ID,
+ * return the introductory Stripe coupon that should auto-attach at
+ * checkout — or null if the price has no active intro.
+ *
+ * Anchor-pricing strategy: SlimeLog Pro base prices are $4.99/mo and
+ * $29.99/yr, but new subscribers get $2.99/mo for the first 3 months
+ * (Monthly) or $19.99 for the first year (Annual). The introductory
+ * offer is a Stripe Coupon we auto-apply to the Checkout Session.
+ *
+ * Coupon IDs live in env vars (server-side only — not NEXT_PUBLIC —
+ * so bad actors can't discover the coupon IDs by inspecting client
+ * JS and try to smuggle them into their own checkout sessions). The
+ * server maps price → coupon so the client only ever sends a price.
+ *
+ * Returns null when no matching env var is set, which is safe: the
+ * checkout still succeeds at the base price, we just don't apply the
+ * intro discount. Keeps the flow non-fatal during env-var
+ * misconfiguration or when we retire an intro offer later.
+ */
+export function introCouponForPriceId(priceId: string): string | null {
+  const monthlyPrice = process.env.NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID;
+  const yearlyPrice = process.env.NEXT_PUBLIC_STRIPE_PRO_YEARLY_PRICE_ID;
+  const monthlyCoupon = process.env.STRIPE_PRO_MONTHLY_INTRO_COUPON;
+  const yearlyCoupon = process.env.STRIPE_PRO_YEARLY_INTRO_COUPON;
+  if (priceId === monthlyPrice && monthlyCoupon) return monthlyCoupon;
+  if (priceId === yearlyPrice && yearlyCoupon) return yearlyCoupon;
+  return null;
+}
+
 /** Verify a client-supplied redirect URL is safe to hand to Stripe as
  *  success_url / cancel_url / return_url. Returns null when the URL is
  *  parseable AND its origin matches this site; otherwise returns a

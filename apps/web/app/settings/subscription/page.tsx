@@ -248,24 +248,40 @@ export default function SubscriptionPage() {
             </div>
           ) : (
             <div className="space-y-3">
+              {/* [T171 / anchor-pricing 2026-07-19] Old copy sold
+                  features that don't exist yet (unlimited logging is
+                  already free; "advanced stats" isn't built). New
+                  copy leads with the actual Pro feature set and
+                  displays the intro pricing. Renewal rates disclosed
+                  under each button so we're not selling a hidden
+                  price jump — Apple + Stripe both require this. */}
               <p className="text-xs text-slime-muted leading-relaxed">
-                Upgrade to Pro for unlimited logging, advanced stats, ad-free
-                experience, and a Pro badge.
+                SlimeLog Pro: ad-free browsing, personalized activator
+                reminders for your shelf, private logs, and the How to
+                Rate a Slime guide as a downloadable PDF. Cancel anytime.
               </p>
               <div className="flex flex-wrap gap-3">
                 <UpgradeButton
                   priceId={process.env.NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID!}
-                  label="Go Pro — $2.99/mo"
+                  label="Go Pro — $2.99/mo for 3 months"
                   mode="user"
                   currentPath="/settings/subscription"
                 />
                 <UpgradeButton
                   priceId={process.env.NEXT_PUBLIC_STRIPE_PRO_YEARLY_PRICE_ID!}
-                  label="Go Pro — $14.99/yr"
+                  label="Go Pro — $19.99 first year"
                   mode="user"
                   currentPath="/settings/subscription"
                 />
               </div>
+              <p
+                className="text-[11px] leading-relaxed"
+                style={{ color: "rgba(245,245,245,0.5)" }}
+              >
+                Monthly renews at $4.99/mo after the first 3 months.
+                Annual renews at $29.99/yr after the first year. Cancel
+                anytime from Settings.
+              </p>
             </div>
           )}
         </section>

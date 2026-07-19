@@ -8,6 +8,7 @@ import {
 import { stripe } from "@/lib/stripe";
 import {
   isAllowedPriceIdForMode,
+  introCouponForPriceId,
   validateRedirectUrl,
 } from "@/lib/stripe-guards";
 
@@ -269,6 +270,17 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // [Item T171 / anchor-pricing 2026-07-19] Auto-attach the intro
+    // coupon for consumer Pro checkouts (Monthly $2.99 for 3 months
+    // off $4.99 base, Annual $19.99 for the first year off $29.99
+    // base). No client-supplied promo code required; the server maps
+    // price → coupon so users can't cross-apply an annual coupon to
+    // a monthly checkout. Brand-Pro price passes through unchanged
+    // (no intro offer configured for brand subs). Non-fatal when the
+    // env var isn't set — checkout still succeeds at the base price.
+    const introCoupon =
+      mode === "user" ? introCouponForPriceId(price_id) : null;
+
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer: customerId,
@@ -279,6 +291,9 @@ export async function POST(req: NextRequest) {
       subscription_data: {
         metadata: sessionMetadata,
       },
+      ...(introCoupon
+        ? { discounts: [{ coupon: introCoupon }] }
+        : {}),
     });
 
     return NextResponse.json({ url: session.url });
