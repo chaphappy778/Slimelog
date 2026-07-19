@@ -1,10 +1,18 @@
 // apps/web/app/search/page.tsx
-// [Global search page] — routes to slime types, slime catalog, and keywords.
+// [Global search page] — routes to slime types, slime catalog, brands,
+// collectors, and keywords.
 // [Discover V1 2026-07-13] Redesigned to visually match the Discover
 // SearchHero. Reads the `?q=` URL param on mount so users landing
 // from /discover?q=butter see their query in the field and the
-// results already computed. Types matched in memory; slimes + tags
-// fetched from Supabase.
+// results already computed. Types matched in memory; slimes + tags +
+// brands + collectors fetched from Supabase.
+// [Item #28 Phase A — 2026-07-18] Global search now returns Brand +
+// Collector sections. Previously the empty-state copy promised
+// "slimes, base types, brands, and keywords" but only the first three
+// were actually searched — brand queries returned zero rows and
+// there was no way to find a user by @handle. Phase A closes that
+// gap. Phase B (relevance ranking, typeahead, faceted filters) and
+// T161 (personal /collection search) still to come.
 
 "use client";
 
@@ -48,6 +56,33 @@ type TagResult = {
 type TypeResult = {
   key: SlimeBaseType;
   label: string;
+};
+
+// [Item #28 Phase A 2026-07-18] Brand search result row shape. All
+// fields are materialized on the `brands` table so this is a single
+// cheap query — no per-brand aggregation needed.
+type BrandResult = {
+  id: string;
+  slug: string;
+  name: string;
+  logo_url: string | null;
+  is_verified: boolean;
+  follower_count: number;
+  total_logs: number;
+};
+
+// [Item #28 Phase A 2026-07-18] Collector search result row shape.
+// Reads from `profiles_public` view (already RLS-filtered to
+// profile_visibility = 'public'). Log counts intentionally omitted
+// in Phase A — would require per-row aggregation against
+// collection_logs. Phase B adds those + relevance ranking.
+type UserResult = {
+  id: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  is_verified: boolean;
+  is_premium: boolean;
 };
 
 // Strip characters that break PostgREST .or() filter parsing
@@ -233,6 +268,221 @@ function KeywordRow({ tag }: { tag: TagResult }) {
   );
 }
 
+// [Item #28 Phase A 2026-07-18] Brand row — 44px logo (matches
+// SlimeRow silhouette so mixed sections visually align), name +
+// verified check inline, follower count + log count on the secondary
+// line. Links to /brands/[slug].
+function BrandRow({ brand }: { brand: BrandResult }) {
+  const initial = brand.name.charAt(0).toUpperCase();
+  return (
+    <Link
+      href={`/brands/${brand.slug}`}
+      className="flex items-center gap-3 px-4 py-3 rounded-xl transition-all"
+      style={{
+        background: "rgba(45,10,78,0.25)",
+        border: "1px solid rgba(45,10,78,0.6)",
+      }}
+    >
+      <div
+        className="shrink-0 rounded-lg overflow-hidden relative"
+        style={{ width: 44, height: 44, background: "rgba(45,10,78,0.5)" }}
+      >
+        {brand.logo_url ? (
+          <Image
+            src={brand.logo_url}
+            alt={brand.name}
+            width={44}
+            height={44}
+            className="object-cover w-full h-full"
+          />
+        ) : (
+          <div
+            className="w-full h-full flex items-center justify-center"
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(0,240,255,0.35), rgba(255,0,229,0.35))",
+              color: "#FFFFFF",
+              fontFamily: "Montserrat, sans-serif",
+              fontWeight: 900,
+              fontSize: 18,
+            }}
+          >
+            {initial}
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <p
+            className="truncate"
+            style={{
+              fontFamily: "Montserrat, sans-serif",
+              fontWeight: 700,
+              fontSize: 14,
+              color: "#F5F5F5",
+            }}
+          >
+            {brand.name}
+          </p>
+          {brand.is_verified && (
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="#39FF14"
+              aria-label="Verified"
+              className="shrink-0"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path
+                d="M8 12l3 3 5-6"
+                stroke="#0A0A0A"
+                strokeWidth="2.5"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          )}
+        </div>
+        <p
+          className="text-xs truncate mt-0.5"
+          style={{ color: "rgba(245,245,245,0.55)" }}
+        >
+          {brand.follower_count.toLocaleString()} followers ·{" "}
+          {brand.total_logs.toLocaleString()} logs
+        </p>
+      </div>
+
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="rgba(245,245,245,0.35)"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        className="shrink-0"
+      >
+        <path d="M9 18l6-6-6-6" />
+      </svg>
+    </Link>
+  );
+}
+
+// [Item #28 Phase A 2026-07-18] Collector row — 44px avatar (or
+// initial-fallback with brand-gradient), display_name + verified
+// check + Pro badge, @username on secondary line. Links to
+// /users/[username].
+function UserRow({ user }: { user: UserResult }) {
+  const primary = user.display_name?.trim() || user.username;
+  const initial = primary.charAt(0).toUpperCase();
+  return (
+    <Link
+      href={`/users/${user.username}`}
+      className="flex items-center gap-3 px-4 py-3 rounded-xl transition-all"
+      style={{
+        background: "rgba(45,10,78,0.25)",
+        border: "1px solid rgba(45,10,78,0.6)",
+      }}
+    >
+      <div
+        className="shrink-0 rounded-full overflow-hidden relative"
+        style={{
+          width: 44,
+          height: 44,
+          background: "rgba(45,10,78,0.5)",
+          border: user.is_verified
+            ? "1.5px solid #39FF14"
+            : "1.5px solid transparent",
+        }}
+      >
+        {user.avatar_url ? (
+          <Image
+            src={user.avatar_url}
+            alt={primary}
+            width={44}
+            height={44}
+            className="object-cover w-full h-full"
+          />
+        ) : (
+          <div
+            className="w-full h-full flex items-center justify-center"
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(57,255,20,0.35), rgba(0,240,255,0.35))",
+              color: "#FFFFFF",
+              fontFamily: "Montserrat, sans-serif",
+              fontWeight: 900,
+              fontSize: 18,
+            }}
+          >
+            {initial}
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <p
+            className="truncate"
+            style={{
+              fontFamily: "Montserrat, sans-serif",
+              fontWeight: 700,
+              fontSize: 14,
+              color: "#F5F5F5",
+            }}
+          >
+            {primary}
+          </p>
+          {user.is_premium && (
+            <span
+              className="shrink-0 tabular-nums"
+              style={{
+                fontFamily: "Montserrat, sans-serif",
+                fontWeight: 800,
+                fontSize: 9,
+                letterSpacing: "0.08em",
+                color: "#FFD24A",
+                border: "1px solid rgba(255,210,74,0.55)",
+                borderRadius: 4,
+                padding: "1px 5px",
+                textTransform: "uppercase",
+              }}
+            >
+              Pro
+            </span>
+          )}
+        </div>
+        <p
+          className="text-xs truncate mt-0.5"
+          style={{ color: "#00F0FF" }}
+        >
+          @{user.username}
+        </p>
+      </div>
+
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="rgba(245,245,245,0.35)"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        className="shrink-0"
+      >
+        <path d="M9 18l6-6-6-6" />
+      </svg>
+    </Link>
+  );
+}
+
 function SearchPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -242,6 +492,9 @@ function SearchPageInner() {
   const [typeResults, setTypeResults] = useState<TypeResult[]>([]);
   const [slimeResults, setSlimeResults] = useState<SlimeResult[]>([]);
   const [keywordResults, setKeywordResults] = useState<TagResult[]>([]);
+  // [Item #28 Phase A 2026-07-18] Brand + collector result state.
+  const [brandResults, setBrandResults] = useState<BrandResult[]>([]);
+  const [userResults, setUserResults] = useState<UserResult[]>([]);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -249,6 +502,8 @@ function SearchPageInner() {
       setTypeResults([]);
       setSlimeResults([]);
       setKeywordResults([]);
+      setBrandResults([]);
+      setUserResults([]);
       return;
     }
 
@@ -268,7 +523,11 @@ function SearchPageInner() {
       // subtype has that name/alias. Then fetch slimes by BOTH the
       // existing name/collection filter AND (union) subtype_id in the
       // matched set. Dedupe by id + preserve total_ratings ordering.
-      const [subtypesRes, tagsRes] = await Promise.all([
+      //
+      // [Item #28 Phase A 2026-07-18] Added parallel brand + user
+      // queries here so a single .then() wave fans all five sections
+      // out at once instead of chaining.
+      const [subtypesRes, tagsRes, brandsRes, usersRes] = await Promise.all([
         supabase
           .from("subtypes")
           .select("id, name, aliases")
@@ -283,6 +542,35 @@ function SearchPageInner() {
           .ilike("name", `${trimmed}%`)
           .order("use_count", { ascending: false })
           .limit(20),
+
+        // Brand search — hits materialized name, slug, and bio.
+        // Ordered by total_logs desc so a well-known brand outranks a
+        // name-alike newcomer. All fields on the row are already
+        // stored on `brands` (no per-row aggregation), so this is a
+        // single cheap read.
+        supabase
+          .from("brands")
+          .select(
+            "id, slug, name, logo_url, is_verified, follower_count, total_logs",
+          )
+          .or(
+            `name.ilike.%${safeQ}%,slug.ilike.%${safeQ}%,bio.ilike.%${safeQ}%`,
+          )
+          .order("total_logs", { ascending: false })
+          .limit(10),
+
+        // Collector search against profiles_public. The view already
+        // RLS-filters to profile_visibility = 'public', so no
+        // extra guard needed. Matches username OR display_name.
+        supabase
+          .from("profiles_public")
+          .select(
+            "id, username, display_name, avatar_url, is_verified, is_premium",
+          )
+          .or(
+            `username.ilike.%${safeQ}%,display_name.ilike.%${safeQ}%`,
+          )
+          .limit(10),
       ]);
 
       // Log (but don't surface) subtype lookup errors — search still
@@ -297,6 +585,21 @@ function SearchPageInner() {
         console.warn(
           "[search] tag lookup failed:",
           tagsRes.error.message,
+        );
+      }
+      // [Item #28 Phase A 2026-07-18] Same warn-only pattern for the
+      // new sections. A failure in one section should never take out
+      // the whole page.
+      if (brandsRes.error) {
+        console.warn(
+          "[search] brand lookup failed:",
+          brandsRes.error.message,
+        );
+      }
+      if (usersRes.error) {
+        console.warn(
+          "[search] user lookup failed:",
+          usersRes.error.message,
         );
       }
 
@@ -366,6 +669,13 @@ function SearchPageInner() {
       setTypeResults(types);
       setSlimeResults(normalizedSlimes);
       setKeywordResults(tagsRes.data ?? []);
+      // [Item #28 Phase A 2026-07-18] Persist brand + user results.
+      // Cast is here because the auto-generated types from Supabase
+      // widen json/boolean columns in a way that doesn't line up 1:1
+      // with our narrower interface. Fields are hand-verified against
+      // the query above.
+      setBrandResults((brandsRes.data ?? []) as BrandResult[]);
+      setUserResults((usersRes.data ?? []) as UserResult[]);
       setSearching(false);
     }, 300);
 
@@ -376,7 +686,12 @@ function SearchPageInner() {
   const hasResults =
     typeResults.length > 0 ||
     slimeResults.length > 0 ||
-    keywordResults.length > 0;
+    keywordResults.length > 0 ||
+    // [Item #28 Phase A 2026-07-18] Include brand + user counts so the
+    // "no results" empty state doesn't fire when we DO have brand or
+    // collector matches (just no slime/type/keyword).
+    brandResults.length > 0 ||
+    userResults.length > 0;
 
   // Update the URL as the user types so refresh / share works.
   // `replace` (not `push`) so the back button skips the intermediate
@@ -445,7 +760,16 @@ function SearchPageInner() {
 
               {/* [T33a 2026-07-13] Section order per Design's spec:
                   Slimes → Types → Keywords. Impact first, less-common
-                  matches after. */}
+                  matches after.
+                  [Item #28 Phase A 2026-07-18] Extended to include
+                  Brands + Collectors. Order is Slimes → Brands →
+                  Collectors → Types → Keywords — same "impact first"
+                  logic (concrete slime/brand hits are typically what
+                  a searcher wants; taxonomy + tags are refinements).
+                  Real relevance ranking is Phase B; for now each
+                  section is independently ordered by its own signal
+                  (total_ratings for slimes, total_logs for brands,
+                  use_count for keywords). */}
               {!searching && hasResults && (
                 <div className="flex flex-col gap-8">
                   {slimeResults.length > 0 && (
@@ -454,6 +778,28 @@ function SearchPageInner() {
                       <div className="flex flex-col gap-2">
                         {slimeResults.map((s) => (
                           <SlimeRow key={s.id} slime={s} />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {brandResults.length > 0 && (
+                    <section>
+                      <p className="section-label mb-3">Brands</p>
+                      <div className="flex flex-col gap-2">
+                        {brandResults.map((b) => (
+                          <BrandRow key={b.id} brand={b} />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {userResults.length > 0 && (
+                    <section>
+                      <p className="section-label mb-3">Collectors</p>
+                      <div className="flex flex-col gap-2">
+                        {userResults.map((u) => (
+                          <UserRow key={u.id} user={u} />
                         ))}
                       </div>
                     </section>
@@ -567,8 +913,8 @@ function SearchEmptyPrompt() {
           color: "rgba(245,245,245,0.55)",
         }}
       >
-        Find slimes, base types, brands, and keywords across the whole
-        community.
+        Find slimes, brands, collectors, base types, and keywords
+        across the whole community.
       </p>
     </div>
   );
@@ -599,8 +945,8 @@ function SearchNoResults({ query }: { query: string }) {
           color: "rgba(245,245,245,0.55)",
         }}
       >
-        We could not find any slimes, types, or keywords. Try a different
-        spelling or browse Discover.
+        We could not find any slimes, brands, collectors, types, or
+        keywords. Try a different spelling or browse Discover.
       </p>
       <Link
         href="/discover"
