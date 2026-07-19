@@ -15,6 +15,7 @@ import Image from "next/image";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import PageWrapper from "@/components/PageWrapper";
+import BackLink from "@/components/BackLink";
 import TypeLogsClient from "@/components/discover/TypeLogsClient";
 import { SLIME_BASE_TYPE_LABELS, type SlimeBaseType } from "@/lib/types";
 import {
@@ -112,29 +113,12 @@ export default async function TypeDetailPage({ params }: PageProps) {
     <PageWrapper dots glow="cyan" orbs>
       <PageHeader />
       <main className="pt-14 pb-24">
-        {/* Back link */}
+        {/* Back link — [Item #28 Phase C hotfix 2026-07-18] uses
+            router.back() so users arriving from /search return to
+            their search results rather than being kicked out to
+            /discover. Falls back to /discover for direct-link opens. */}
         <div className="px-4 pt-4 mb-3">
-          <Link
-            href="/discover"
-            className="inline-flex items-center gap-2 text-[15px]"
-            style={{ color: "rgba(245,245,245,0.55)" }}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M19 12H5" />
-              <path d="m12 19-7-7 7-7" />
-            </svg>
-            Back to Discover
-          </Link>
+          <BackLink fallbackHref="/discover" label="Back" />
         </div>
 
         {/* Hero card — real photo with gradient wash for legibility */}

@@ -53,7 +53,10 @@ const supabase = createClient();
 
 type BrandJoin = { name: string; slug: string } | null;
 
-type SlimeResult = {
+// Catalog slime shape returned from the initial `slimes` query.
+// Doesn't have a `log_id` — that gets attached by the post-fetch
+// enrichment step below (see the log_id doc on SlimeResult).
+type RawSlime = {
   id: string;
   name: string;
   collection_name: string | null;
@@ -62,6 +65,19 @@ type SlimeResult = {
   avg_overall: number | null;
   total_ratings: number;
   brands: BrandJoin;
+};
+
+// [Item #28 Phase C hotfix 2026-07-18] Post-enrichment slime shape
+// with `log_id` — the representative collection_logs.id we route to
+// when a user clicks a slime row. `/slimes/[id]` fetches from
+// `collection_logs`, NOT the `slimes` catalog, so linking to a
+// catalog id 404s. Post-fetch we batch-query collection_logs to find
+// each slime's most recent public log and attach its id here. Slimes
+// with no public logs are dropped from the results (there's nowhere
+// to route them yet — filed in the tracker as a follow-up to build
+// a catalog-only detail page for zero-log slimes).
+type SlimeResult = RawSlime & {
+  log_id: string;
 };
 
 type TagResult = {
@@ -90,13 +106,16 @@ type BrandResult = {
 
 // [Item #28 Phase A 2026-07-18] Collector search result row shape.
 // Reads from `profiles_public` view (already RLS-filtered to
-// profile_visibility = 'public'). Log counts intentionally omitted
-// in Phase A — would require per-row aggregation against
-// collection_logs. Phase B adds those + relevance ranking.
+// profile_visibility = 'public').
+// [Item #28 Phase C hotfix 2026-07-18] `display_name` was DROPPED
+// from the view in migration T88 (see 20260521000045). Selecting or
+// filtering on it errors the entire query and surfaces as the
+// "couldn't load collectors" state in the UI. Username is the
+// primary label everywhere else in the app; matching that pattern
+// here.
 type UserResult = {
   id: string;
   username: string;
-  display_name: string | null;
   avatar_url: string | null;
   is_verified: boolean;
   is_premium: boolean;
@@ -204,7 +223,10 @@ function SlimeRow({ slime }: { slime: SlimeResult }) {
 
   return (
     <Link
-      href={`/slimes/${slime.id}`}
+      // [Item #28 Phase C hotfix 2026-07-18] Uses log_id, not the
+      // catalog slime id, because /slimes/[id] resolves against
+      // collection_logs. See SlimeResult.log_id doc for context.
+      href={`/slimes/${slime.log_id}`}
       className="flex items-center gap-3 px-4 py-3 rounded-xl transition-all"
       style={{
         background: "rgba(45,10,78,0.25)",
@@ -430,12 +452,14 @@ function BrandRow({ brand }: { brand: BrandResult }) {
 }
 
 // [Item #28 Phase A 2026-07-18] Collector row — 44px avatar (or
-// initial-fallback with brand-gradient), display_name + verified
-// check + Pro badge, @username on secondary line. Links to
-// /users/[username].
+// initial-fallback with brand-gradient), @username + verified check +
+// Pro badge inline. Links to /users/[username].
+// [Item #28 Phase C hotfix 2026-07-18] display_name was dropped from
+// profiles_public in T88; using username as the primary label
+// (consistent with FollowListRow + PopularCollectorsCarousel).
 function UserRow({ user }: { user: UserResult }) {
-  const primary = user.display_name?.trim() || user.username;
-  const initial = primary.charAt(0).toUpperCase();
+  const primary = `@${user.username}`;
+  const initial = user.username.charAt(0).toUpperCase();
   return (
     <Link
       href={`/users/${user.username}`}
@@ -489,7 +513,7 @@ function UserRow({ user }: { user: UserResult }) {
               fontFamily: "Montserrat, sans-serif",
               fontWeight: 700,
               fontSize: 14,
-              color: "#F5F5F5",
+              color: "#00F0FF",
             }}
           >
             {primary}
@@ -513,12 +537,6 @@ function UserRow({ user }: { user: UserResult }) {
             </span>
           )}
         </div>
-        <p
-          className="text-xs truncate mt-0.5"
-          style={{ color: "#00F0FF" }}
-        >
-          @{user.username}
-        </p>
       </div>
 
       <svg
@@ -735,16 +753,13 @@ function SearchPageInner() {
           .limit(10),
 
         // Collector search against profiles_public. The view already
-        // RLS-filters to profile_visibility = 'public', so no
-        // extra guard needed. Matches username OR display_name.
+        // RLS-filters to profile_visibility = 'public'. Matches on
+        // username only — display_name was dropped from the view in
+        // migration T88 (see 20260521000045).
         supabase
           .from("profiles_public")
-          .select(
-            "id, username, display_name, avatar_url, is_verified, is_premium",
-          )
-          .or(
-            `username.ilike.%${safeQ}%,display_name.ilike.%${safeQ}%`,
-          )
+          .select("id, username, avatar_url, is_verified, is_premium")
+          .ilike("username", `%${safeQ}%`)
           .limit(10),
       ]);
 
@@ -819,7 +834,7 @@ function SearchPageInner() {
       // by variant, which is genuine relevance even if the slime's own
       // name doesn't contain the query).
       const seenIds = new Set<string>();
-      const merged: SlimeResult[] = [];
+      const merged: RawSlime[] = [];
       const matchedBySubtype = new Set<string>();
       let slimeQueryFailed = false;
       for (let i = 0; i < slimesResults.length; i++) {
@@ -847,7 +862,7 @@ function SearchPageInner() {
             brands: Array.isArray(s.brands)
               ? (s.brands[0] ?? null)
               : s.brands,
-          } as SlimeResult);
+          } as RawSlime);
         }
       }
       // [Item #28 Phase B 2026-07-18] Track slime-section failure only
@@ -876,9 +891,46 @@ function SearchPageInner() {
         if (b.score !== a.score) return b.score - a.score;
         return (b.row.total_ratings ?? 0) - (a.row.total_ratings ?? 0);
       });
-      const normalizedSlimes: SlimeResult[] = scoredSlimes
+      const rankedRawSlimes: RawSlime[] = scoredSlimes
         .map((r) => r.row)
         .slice(0, 20);
+
+      // [Item #28 Phase C hotfix 2026-07-18] Enrich each ranked slime
+      // with a representative collection_logs.id so SlimeRow can link
+      // to a real log detail page (see SlimeResult / RawSlime docs
+      // above). One batch query for all slimes in the result set.
+      const slimeIds = rankedRawSlimes.map((s) => s.id);
+      const logIdBySlime = new Map<string, string>();
+      if (slimeIds.length > 0) {
+        const { data: logRows, error: logErr } = await supabase
+          .from("collection_logs")
+          .select("id, slime_id, created_at")
+          .in("slime_id", slimeIds)
+          .eq("is_public", true)
+          .order("created_at", { ascending: false });
+        if (logErr) {
+          console.warn(
+            "[search] log-id enrichment failed:",
+            logErr.message,
+          );
+        }
+        for (const l of logRows ?? []) {
+          const sid = (l as { slime_id: string | null }).slime_id;
+          const lid = (l as { id: string }).id;
+          if (sid && !logIdBySlime.has(sid)) {
+            logIdBySlime.set(sid, lid);
+          }
+        }
+      }
+      // Attach log_id and drop slimes with no public log — there's no
+      // catalog-only detail page yet, so an unclickable row would be
+      // a dead end.
+      const normalizedSlimes: SlimeResult[] = rankedRawSlimes
+        .map((s) => {
+          const log_id = logIdBySlime.get(s.id);
+          return log_id ? { ...s, log_id } : null;
+        })
+        .filter((s): s is SlimeResult => s !== null);
 
       // [Item #28 Phase B 2026-07-18] Score + sort Brands. Score
       // primarily on name (0..100), secondarily on slug (0.7×). Bio
@@ -900,17 +952,13 @@ function SearchPageInner() {
       });
       const normalizedBrands = scoredBrands.map((r) => r.row);
 
-      // [Item #28 Phase B 2026-07-18] Score + sort Collectors. Username
-      // is a strong signal (people typing "@handle" want an exact
-      // match), display_name is weaker (0.7×). No tiebreaker beyond
-      // score since we don't fetch log counts in Phase A/B.
+      // [Item #28 Phase B 2026-07-18] Score + sort Collectors on the
+      // username field only (display_name no longer exists on
+      // profiles_public — see hotfix note above).
       const rawUsers = (usersRes.data ?? []) as UserResult[];
       const scoredUsers = rawUsers.map((u) => ({
         row: u,
-        score: Math.max(
-          scoreMatch(u.username, lower),
-          scoreMatch(u.display_name, lower) * 0.7,
-        ),
+        score: scoreMatch(u.username, lower),
       }));
       scoredUsers.sort((a, b) => b.score - a.score);
       const normalizedUsers = scoredUsers.map((r) => r.row);

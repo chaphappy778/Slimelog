@@ -206,7 +206,13 @@ export default function SearchHero({
           )}
           <input
             ref={inputRef}
-            type="search"
+            // [Item #28 Phase C hotfix 2026-07-18] Was `type="search"`,
+            // which caused Chrome/Safari to render their native gray
+            // clear-X on top of our custom cyan clear button. Switching
+            // to `type="text"` disables the native chrome; `inputMode`
+            // + `enterKeyHint` still give the search-optimized mobile
+            // keyboard.
+            type="text"
             inputMode="search"
             enterKeyHint="search"
             value={value}

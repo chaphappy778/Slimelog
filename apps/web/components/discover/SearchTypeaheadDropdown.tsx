@@ -28,12 +28,20 @@ const supabase = createClient();
 
 // Same shape helpers as /search/page.tsx. Kept lean because the
 // dropdown only shows a handful of rows.
+// [Item #28 Phase C hotfix 2026-07-18] `log_id` is the representative
+// collection_logs.id we route to when a user clicks a slime row.
+// /slimes/[id] resolves against collection_logs, not the slimes
+// catalog, so linking to a catalog id 404s. Post-fetch we
+// batch-query collection_logs to find each slime's most recent
+// public log and attach its id here. Slimes with no public log get
+// dropped from the dropdown (no clickable destination).
 type SlimeHit = {
   id: string;
   name: string;
   base_type: string | null;
   image_url: string | null;
   brands: { name: string; slug: string } | null;
+  log_id: string;
 };
 
 type BrandHit = {
@@ -44,10 +52,12 @@ type BrandHit = {
   is_verified: boolean;
 };
 
+// [Item #28 Phase C hotfix 2026-07-18] Removed `display_name` — the
+// column was dropped from `profiles_public` in migration T88.
+// Selecting or filtering on it errors the whole query.
 type UserHit = {
   id: string;
   username: string;
-  display_name: string | null;
   avatar_url: string | null;
 };
 
@@ -127,8 +137,8 @@ export default function SearchTypeaheadDropdown({
           .limit(8),
         supabase
           .from("profiles_public")
-          .select("id, username, display_name, avatar_url")
-          .or(`username.ilike.%${safeQ}%,display_name.ilike.%${safeQ}%`)
+          .select("id, username, avatar_url")
+          .ilike("username", `%${safeQ}%`)
           .limit(8),
       ]);
 
@@ -145,23 +155,63 @@ export default function SearchTypeaheadDropdown({
       }
 
       // Normalize slime brands join (Supabase returns as array in some
-      // cases; we always want an object-or-null).
+      // cases; we always want an object-or-null). log_id is filled in
+      // by the enrichment step below.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawSlimes: any[] = (slimesRes.data as any[]) ?? [];
-      const normalizedSlimes: SlimeHit[] = rawSlimes.map((s) => ({
+      type PreSlime = Omit<SlimeHit, "log_id"> & { log_id: string | null };
+      const preSlimes: PreSlime[] = rawSlimes.map((s) => ({
         id: s.id,
         name: s.name,
         base_type: s.base_type,
         image_url: s.image_url,
         brands: Array.isArray(s.brands) ? (s.brands[0] ?? null) : s.brands,
+        log_id: null,
       }));
 
-      // Rank + cap. Same scoring rules as /search: exact > prefix >
-      // substring, tiebreaker by original list order (already sorted
-      // by popularity on the server).
-      const scoredSlimes = normalizedSlimes
+      // Rank first so we only enrich the top-N with a log id lookup.
+      const scoredPre = preSlimes
         .map((s) => ({ row: s, score: scoreMatch(s.name, lower) }))
         .sort((a, b) => b.score - a.score);
+      const topPre = scoredPre.slice(0, 5).map((r) => r.row);
+
+      // [Item #28 Phase C hotfix 2026-07-18] Enrich each of the top
+      // slimes with a representative public collection_logs.id.
+      // /slimes/[id] resolves against collection_logs so we must link
+      // to a log id, not a catalog slime id (which 404s). One batch
+      // query keeps this cheap.
+      const topSlimeIds = topPre.map((s) => s.id);
+      const logIdBySlime = new Map<string, string>();
+      if (topSlimeIds.length > 0) {
+        const { data: logRows, error: logErr } = await supabase
+          .from("collection_logs")
+          .select("id, slime_id, created_at")
+          .in("slime_id", topSlimeIds)
+          .eq("is_public", true)
+          .order("created_at", { ascending: false });
+        if (logErr) {
+          console.warn(
+            "[typeahead] log-id enrichment failed:",
+            logErr.message,
+          );
+        }
+        for (const l of logRows ?? []) {
+          const sid = (l as { slime_id: string | null }).slime_id;
+          const lid = (l as { id: string }).id;
+          if (sid && !logIdBySlime.has(sid)) {
+            logIdBySlime.set(sid, lid);
+          }
+        }
+      }
+      // Drop pre-slimes that have no public log — a catalog-only
+      // slime has no /slimes/[id] destination in the current app.
+      const scoredSlimes = topPre
+        .map((s) => {
+          const log_id = logIdBySlime.get(s.id);
+          return log_id ? ({ ...s, log_id } as SlimeHit) : null;
+        })
+        .filter((s): s is SlimeHit => s !== null)
+        .map((row) => ({ row, score: 0 }));
       const scoredBrands = ((brandsRes.data ?? []) as BrandHit[])
         .map((b) => ({
           row: b,
@@ -174,13 +224,12 @@ export default function SearchTypeaheadDropdown({
       const scoredUsers = ((usersRes.data ?? []) as UserHit[])
         .map((u) => ({
           row: u,
-          score: Math.max(
-            scoreMatch(u.username, lower),
-            scoreMatch(u.display_name, lower) * 0.7,
-          ),
+          score: scoreMatch(u.username, lower),
         }))
         .sort((a, b) => b.score - a.score);
 
+      // slice already applied above via topPre.slice(0,5) — take the
+      // top 3 that survived enrichment for the dropdown.
       setSlimes(scoredSlimes.slice(0, 3).map((r) => r.row));
       setBrands(scoredBrands.slice(0, 3).map((r) => r.row));
       setUsers(scoredUsers.slice(0, 2).map((r) => r.row));
@@ -340,7 +389,9 @@ function TypeaheadSlimeRow({
 }) {
   return (
     <Link
-      href={`/slimes/${slime.id}`}
+      // [Item #28 Phase C hotfix 2026-07-18] Route to log_id, not the
+      // catalog slime id (see SlimeHit doc above).
+      href={`/slimes/${slime.log_id}`}
       onClick={onPick}
       className="flex items-center gap-3 px-4 py-2.5 transition-all"
       style={{ borderBottom: "1px solid rgba(45,10,78,0.35)" }}
@@ -471,8 +522,9 @@ function TypeaheadUserRow({
   user: UserHit;
   onPick?: () => void;
 }) {
-  const primary = user.display_name?.trim() || user.username;
-  const initial = primary.charAt(0).toUpperCase();
+  // display_name was dropped from profiles_public in T88, so
+  // username is the only label we can show.
+  const initial = user.username.charAt(0).toUpperCase();
   return (
     <Link
       href={`/users/${user.username}`}
@@ -487,7 +539,7 @@ function TypeaheadUserRow({
         {user.avatar_url ? (
           <Image
             src={user.avatar_url}
-            alt={primary}
+            alt={user.username}
             width={32}
             height={32}
             className="object-cover w-full h-full"
@@ -515,14 +567,8 @@ function TypeaheadUserRow({
             fontFamily: "Montserrat, sans-serif",
             fontWeight: 700,
             fontSize: 13,
-            color: "#F5F5F5",
+            color: "#00F0FF",
           }}
-        >
-          {primary}
-        </p>
-        <p
-          className="text-[11px] truncate"
-          style={{ color: "#00F0FF" }}
         >
           @{user.username}
         </p>
