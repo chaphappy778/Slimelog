@@ -1,18 +1,24 @@
 // apps/web/components/discover/SearchHero.tsx
 // [Discover V1 — 2026-07-13] Search hero: full-width input at the top of
 // /discover that replaces the small "Search" pill. Submits to
-// /search?q=<text> on Enter. Typeahead is deferred to V2 per Design's
-// shipping tiers. Placeholder rotates through example queries so the
-// user sees the intent immediately.
+// /search?q=<text> on Enter. Placeholder rotates through example
+// queries so the user sees the intent immediately.
 //
 // The wrapper card mirrors how-to-rate's cyan hero language: cyan
 // border + inset glow on the card, cyan-tinted search icon, Montserrat
 // prompt copy.
+//
+// [Item #28 Phase C — 2026-07-18] Opt-in `typeahead` prop enables an
+// absolute-positioned dropdown under the input showing top hits
+// across slimes / brands / collectors as the user types. Used on
+// /discover; explicitly disabled on /search (which already shows
+// live results below the input, so a typeahead would double up).
 
 "use client";
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import SearchTypeaheadDropdown from "./SearchTypeaheadDropdown";
 
 const PLACEHOLDER_ROTATION = [
   'try "butter"',
@@ -47,6 +53,14 @@ interface SearchHeroProps {
    * with `router.replace` instead of pushing a new history entry.
    */
   onSubmit?: (value: string) => void;
+  /**
+   * [Item #28 Phase C 2026-07-18] Enable the typeahead dropdown that
+   * shows top slime / brand / collector hits under the input as the
+   * user types. Defaults false so /search (which already has live
+   * results-below-input) doesn't double-render. Enable on /discover
+   * for the quick-navigation UX.
+   */
+  typeahead?: boolean;
 }
 
 export default function SearchHero({
@@ -54,6 +68,7 @@ export default function SearchHero({
   onValueChange,
   autoFocus = false,
   onSubmit,
+  typeahead = false,
 }: SearchHeroProps = {}) {
   const router = useRouter();
   const [value, setValueLocal] = useState(initialValue);
@@ -115,7 +130,7 @@ export default function SearchHero({
   return (
     <form
       onSubmit={submit}
-      className="px-4 pt-6 pb-5"
+      className="px-4 pt-6 pb-5 relative"
       role="search"
       aria-label="Search SlimeLog"
     >
@@ -246,6 +261,37 @@ export default function SearchHero({
           </button>
         )}
       </label>
+
+      {/* [Item #28 Phase C 2026-07-18] Typeahead dropdown — only
+          renders when the parent opts in (`typeahead` prop true) AND
+          the input has 2+ chars AND is focused. Component handles
+          all fetching + ranking internally. */}
+      {typeahead && (
+        <SearchTypeaheadDropdown
+          query={value}
+          focused={focused}
+          onSeeAll={(q) => {
+            // Same behavior as pressing Enter: route to full /search.
+            if (onSubmit) {
+              onSubmit(q);
+              return;
+            }
+            if (!q) {
+              router.push("/search");
+              return;
+            }
+            router.push(`/search?q=${encodeURIComponent(q)}`);
+          }}
+          onEntityPick={() => {
+            // Clear the input + blur so the dropdown closes cleanly
+            // after a nav — otherwise coming back to /discover
+            // via back button re-renders the dropdown with the old
+            // query.
+            setValue("");
+            inputRef.current?.blur();
+          }}
+        />
+      )}
     </form>
   );
 }

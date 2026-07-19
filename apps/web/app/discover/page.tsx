@@ -674,8 +674,14 @@ export default async function DiscoverPage({
       <div className="pt-14 pb-24">
         {/* ── Search hero ────────────────────────────────────────────
             Replaces the small "Search" pill. Full-width input,
-            routes to /search?q=<text> on Enter. Typeahead is V2. */}
-        <SearchHero />
+            routes to /search?q=<text> on Enter.
+            [Item #28 Phase C 2026-07-18] `typeahead` on — shows a
+            dropdown of top slime/brand/collector hits below the
+            input as the user types, so users can skip the /search
+            page for direct-navigation queries. Left explicitly OFF
+            on /search itself where results already render below
+            the input. */}
+        <SearchHero typeahead />
 
         {/* ── Trending pulse / early-days state ─────────────────────
             2026-07-13: tightened bottom margin from mb-10 → mb-4 so

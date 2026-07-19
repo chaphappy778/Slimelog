@@ -11,8 +11,25 @@
 // "slimes, base types, brands, and keywords" but only the first three
 // were actually searched — brand queries returned zero rows and
 // there was no way to find a user by @handle. Phase A closes that
-// gap. Phase B (relevance ranking, typeahead, faceted filters) and
-// T161 (personal /collection search) still to come.
+// gap.
+// [Item #28 Phase B — 2026-07-18] Relevance ranking + graceful
+// degradation. Every section now scores each row: exact match (100)
+// beats prefix (50) beats substring (10), then falls back to the
+// section's existing tiebreaker (total_ratings for slimes,
+// total_logs for brands, use_count for keywords). Per-section errors
+// are tracked in state and surface as inline "couldn't load Brands"
+// messages instead of silently dropping the section, so a Supabase
+// hiccup on one query doesn't visually erase results the searcher
+// might expect.
+// [Item #28 Phase C — 2026-07-18] Added base-type chip filter above
+// the Slimes section — user can narrow Slime results to a specific
+// base type without a new query (in-memory filter). Chips only
+// render when there are slime results with 2+ distinct base types
+// to filter across, otherwise the row would just be visual noise.
+// Typeahead lives on the Discover page's SearchHero (`typeahead`
+// prop), NOT here — this page already renders live results below
+// the input which would double-render with a typeahead dropdown.
+// T161 (personal /collection search) still separate.
 
 "use client";
 
@@ -89,6 +106,45 @@ type UserResult = {
 function sanitizeForOrFilter(q: string): string {
   return q.replace(/[,()]/g, "").replace(/^\.+|\.+$/g, "");
 }
+
+// [Item #28 Phase B 2026-07-18] Relevance scoring helper.
+//
+// Every section receives rows that are already SUBSTRING matches
+// (thanks to `ilike %q%`). This function tells us HOW GOOD a match a
+// specific field is, so we can rank exact-name-matches above
+// partial-bio-matches within a single section.
+//
+// Scale:
+//   100 — normalized field IS the query (case- + whitespace-insensitive)
+//    50 — field starts with the query (great for handles + brand names)
+//    10 — field contains the query as a substring
+//     0 — no match (or empty field)
+//
+// Callers pass an already-lowercased query for perf (avoids
+// re-lowercasing across N rows × M fields).
+function scoreMatch(
+  field: string | null | undefined,
+  loweredQuery: string,
+): number {
+  if (!field || !loweredQuery) return 0;
+  const f = field.toLowerCase().trim();
+  if (!f) return 0;
+  if (f === loweredQuery) return 100;
+  if (f.startsWith(loweredQuery)) return 50;
+  if (f.includes(loweredQuery)) return 10;
+  return 0;
+}
+
+// [Item #28 Phase B 2026-07-18] Which sections can independently fail
+// their query and want an inline "couldn't load" fallback.
+type SectionKey =
+  | "slimes"
+  | "brands"
+  | "users"
+  | "types"
+  | "keywords";
+
+type SectionErrorState = Partial<Record<SectionKey, string>>;
 
 function TypeRow({ result }: { result: TypeResult }) {
   const accentColor = SLIME_BASE_TYPE_COLORS[result.key]?.text ?? "#00F0FF";
@@ -483,6 +539,100 @@ function UserRow({ user }: { user: UserResult }) {
   );
 }
 
+// [Item #28 Phase C 2026-07-18] Horizontal scrollable chip row for
+// narrowing the Slimes section to a specific base type. First chip
+// is always "All" (cyan-filled when selected). Each subsequent chip
+// uses the base type's signature accent color (from
+// SLIME_BASE_TYPE_COLORS) for its selected state so the chip row
+// visually echoes the type carousel elsewhere in the app.
+function BaseTypeFilterChips({
+  types,
+  selected,
+  onSelect,
+}: {
+  types: SlimeBaseType[];
+  selected: SlimeBaseType | null;
+  onSelect: (v: SlimeBaseType | null) => void;
+}) {
+  return (
+    <div
+      className="flex gap-2 mb-3 overflow-x-auto"
+      // Hide scrollbar for cleanliness — chip row is small so users
+      // discover overflow via swipe, not visible scrollbars.
+      style={{ scrollbarWidth: "none" }}
+    >
+      <FilterChip
+        active={selected == null}
+        label="All"
+        accent="#00F0FF"
+        onClick={() => onSelect(null)}
+      />
+      {types.map((t) => (
+        <FilterChip
+          key={t}
+          active={selected === t}
+          label={SLIME_BASE_TYPE_LABELS[t] ?? t}
+          accent={SLIME_BASE_TYPE_COLORS[t]?.text ?? "#00F0FF"}
+          onClick={() => onSelect(t)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function FilterChip({
+  active,
+  label,
+  accent,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  accent: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="shrink-0 rounded-full transition-all"
+      style={{
+        padding: "6px 14px",
+        fontFamily: "Montserrat, sans-serif",
+        fontWeight: 800,
+        fontSize: 12,
+        letterSpacing: "0.02em",
+        color: active ? "#0A0A0A" : accent,
+        background: active ? accent : "rgba(45,10,78,0.35)",
+        border: `1px solid ${active ? accent : "rgba(45,10,78,0.7)"}`,
+        boxShadow: active ? `0 0 12px ${accent}55` : "none",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+// [Item #28 Phase B 2026-07-18] Inline "couldn't load" fallback for
+// when an individual section's Supabase query fails. Rendered inside
+// the section header so the section keeps its label but shows an
+// honest error state instead of silently disappearing.
+function SectionErrorRow({ label }: { label: string }) {
+  return (
+    <div
+      className="px-4 py-3 rounded-xl"
+      style={{
+        background: "rgba(255,61,110,0.08)",
+        border: "1px solid rgba(255,61,110,0.35)",
+        color: "rgba(245,245,245,0.75)",
+        fontSize: 13,
+      }}
+    >
+      Couldn&apos;t load {label} results. Try again in a moment.
+    </div>
+  );
+}
+
 function SearchPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -495,6 +645,17 @@ function SearchPageInner() {
   // [Item #28 Phase A 2026-07-18] Brand + collector result state.
   const [brandResults, setBrandResults] = useState<BrandResult[]>([]);
   const [userResults, setUserResults] = useState<UserResult[]>([]);
+  // [Item #28 Phase B 2026-07-18] Per-section error state so a failed
+  // Supabase query can render an inline "couldn't load X" fallback
+  // instead of silently dropping the section.
+  const [sectionErrors, setSectionErrors] = useState<SectionErrorState>(
+    {},
+  );
+  // [Item #28 Phase C 2026-07-18] Optional base-type narrowing on the
+  // Slimes section. `null` = show all. Filter is in-memory over the
+  // already-fetched results so switching between types is instant.
+  const [selectedBaseType, setSelectedBaseType] =
+    useState<SlimeBaseType | null>(null);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -504,16 +665,30 @@ function SearchPageInner() {
       setKeywordResults([]);
       setBrandResults([]);
       setUserResults([]);
+      setSectionErrors({});
       return;
     }
 
     const timeout = setTimeout(async () => {
       setSearching(true);
+      // Reset errors for this new query. Each section will set its
+      // own key below only if the query fails.
+      const errs: SectionErrorState = {};
 
       const lower = trimmed.toLowerCase();
+      // [Item #28 Phase B 2026-07-18] Score + sort Types by relevance
+      // instead of alphabetical / order of definition. A user
+      // searching "butter" should land Butter → Butter Slime →
+      // anything containing "butter" as the sort tail.
       const types: TypeResult[] = Object.entries(SLIME_BASE_TYPE_LABELS)
-        .filter(([, label]) => label.toLowerCase().includes(lower))
-        .map(([key, label]) => ({ key: key as SlimeBaseType, label }));
+        .map(([key, label]) => ({
+          key: key as SlimeBaseType,
+          label,
+          score: scoreMatch(label, lower),
+        }))
+        .filter((t) => t.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map(({ key, label }) => ({ key, label }));
 
       const safeQ = sanitizeForOrFilter(trimmed);
 
@@ -573,34 +748,40 @@ function SearchPageInner() {
           .limit(10),
       ]);
 
-      // Log (but don't surface) subtype lookup errors — search still
-      // works via the name/collection path if the join hiccups.
+      // Log subtype lookup errors — search still works via the
+      // name/collection path if the join hiccups. This one doesn't
+      // get a user-facing message because it's a QUERY ENHANCEMENT
+      // (widens slime matches), not a section of its own.
       if (subtypesRes.error) {
         console.warn(
           "[search] subtype lookup failed:",
           subtypesRes.error.message,
         );
       }
+      // [Item #28 Phase B 2026-07-18] Per-section error tracking.
+      // Log to console AND record a per-section error message so the
+      // UI can show inline "couldn't load" copy instead of silently
+      // dropping the section.
       if (tagsRes.error) {
         console.warn(
           "[search] tag lookup failed:",
           tagsRes.error.message,
         );
+        errs.keywords = tagsRes.error.message;
       }
-      // [Item #28 Phase A 2026-07-18] Same warn-only pattern for the
-      // new sections. A failure in one section should never take out
-      // the whole page.
       if (brandsRes.error) {
         console.warn(
           "[search] brand lookup failed:",
           brandsRes.error.message,
         );
+        errs.brands = brandsRes.error.message;
       }
       if (usersRes.error) {
         console.warn(
           "[search] user lookup failed:",
           usersRes.error.message,
         );
+        errs.users = usersRes.error.message;
       }
 
       const matchedSubtypeIds: string[] = (subtypesRes.data ?? []).map(
@@ -633,23 +814,34 @@ function SearchPageInner() {
         subtypeIdsQuery,
       ]);
 
-      // Merge + dedupe by id, keeping the highest total_ratings first.
+      // Merge + dedupe by id. Also remember which slimes came in via
+      // the subtype-alias path so Phase B can boost them (they matched
+      // by variant, which is genuine relevance even if the slime's own
+      // name doesn't contain the query).
       const seenIds = new Set<string>();
       const merged: SlimeResult[] = [];
-      for (const res of slimesResults) {
+      const matchedBySubtype = new Set<string>();
+      let slimeQueryFailed = false;
+      for (let i = 0; i < slimesResults.length; i++) {
+        const res = slimesResults[i];
         if (!res) continue;
         if (res.error) {
           console.warn(
             "[search] slime query failed:",
             res.error.message,
           );
+          slimeQueryFailed = true;
           continue;
         }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const rows: any[] = (res.data as any[]) ?? [];
+        // Index 1 is the subtype-id union query; anything found there
+        // gets the Phase B subtype boost.
+        const isSubtypePath = i === 1;
         for (const s of rows) {
           if (seenIds.has(s.id)) continue;
           seenIds.add(s.id);
+          if (isSubtypePath) matchedBySubtype.add(s.id);
           merged.push({
             ...s,
             brands: Array.isArray(s.brands)
@@ -658,24 +850,97 @@ function SearchPageInner() {
           } as SlimeResult);
         }
       }
-      // Re-sort merged list by total_ratings desc so the union stays
-      // meaningful (the two queries were each already sorted, but the
-      // interleaving loses that ordering).
-      merged.sort(
-        (a, b) => (b.total_ratings ?? 0) - (a.total_ratings ?? 0),
-      );
-      const normalizedSlimes: SlimeResult[] = merged.slice(0, 20);
+      // [Item #28 Phase B 2026-07-18] Track slime-section failure only
+      // when BOTH slime queries failed. If the name/collection query
+      // returned rows but the subtype query hiccuped, the section
+      // still has meaningful results and we don't want an alarming
+      // "couldn't load" banner.
+      if (slimeQueryFailed && merged.length === 0) {
+        errs.slimes = "Slime query failed";
+      }
+      // [Item #28 Phase B 2026-07-18] Score each merged slime:
+      //   - Slime name is the strongest signal (score 0..100)
+      //   - Collection name is a weaker signal (0.6× multiplier)
+      //   - Subtype-match rows get a fixed +15 relevance boost
+      // Tiebreaker stays as total_ratings so popular slimes with
+      // equivalent relevance still bubble up.
+      const scoredSlimes = merged.map((s) => ({
+        row: s,
+        score:
+          Math.max(
+            scoreMatch(s.name, lower),
+            scoreMatch(s.collection_name, lower) * 0.6,
+          ) + (matchedBySubtype.has(s.id) ? 15 : 0),
+      }));
+      scoredSlimes.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return (b.row.total_ratings ?? 0) - (a.row.total_ratings ?? 0);
+      });
+      const normalizedSlimes: SlimeResult[] = scoredSlimes
+        .map((r) => r.row)
+        .slice(0, 20);
+
+      // [Item #28 Phase B 2026-07-18] Score + sort Brands. Score
+      // primarily on name (0..100), secondarily on slug (0.7×). Bio
+      // matches are already included via the .or() ilike filter, but
+      // we DON'T rank on bio — a substring match in a long free-text
+      // bio doesn't reliably signal relevance. Tiebreaker stays as
+      // total_logs so well-known brands bubble up on ties.
+      const rawBrands = (brandsRes.data ?? []) as BrandResult[];
+      const scoredBrands = rawBrands.map((b) => ({
+        row: b,
+        score: Math.max(
+          scoreMatch(b.name, lower),
+          scoreMatch(b.slug, lower) * 0.7,
+        ),
+      }));
+      scoredBrands.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return (b.row.total_logs ?? 0) - (a.row.total_logs ?? 0);
+      });
+      const normalizedBrands = scoredBrands.map((r) => r.row);
+
+      // [Item #28 Phase B 2026-07-18] Score + sort Collectors. Username
+      // is a strong signal (people typing "@handle" want an exact
+      // match), display_name is weaker (0.7×). No tiebreaker beyond
+      // score since we don't fetch log counts in Phase A/B.
+      const rawUsers = (usersRes.data ?? []) as UserResult[];
+      const scoredUsers = rawUsers.map((u) => ({
+        row: u,
+        score: Math.max(
+          scoreMatch(u.username, lower),
+          scoreMatch(u.display_name, lower) * 0.7,
+        ),
+      }));
+      scoredUsers.sort((a, b) => b.score - a.score);
+      const normalizedUsers = scoredUsers.map((r) => r.row);
+
+      // [Item #28 Phase B 2026-07-18] Keyword rows are already
+      // prefix-matched at query time (ilike ${q}%), but within that
+      // prefix set we want an exact-match tag on top of a
+      // longer-prefix tag. Then fall back to use_count for popularity.
+      const rawTags = (tagsRes.data ?? []) as TagResult[];
+      const scoredTags = rawTags.map((t) => ({
+        row: t,
+        score: scoreMatch(t.name, lower),
+      }));
+      scoredTags.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return (b.row.use_count ?? 0) - (a.row.use_count ?? 0);
+      });
+      const normalizedTags = scoredTags.map((r) => r.row);
 
       setTypeResults(types);
       setSlimeResults(normalizedSlimes);
-      setKeywordResults(tagsRes.data ?? []);
+      setKeywordResults(normalizedTags);
       // [Item #28 Phase A 2026-07-18] Persist brand + user results.
       // Cast is here because the auto-generated types from Supabase
       // widen json/boolean columns in a way that doesn't line up 1:1
       // with our narrower interface. Fields are hand-verified against
       // the query above.
-      setBrandResults((brandsRes.data ?? []) as BrandResult[]);
-      setUserResults((usersRes.data ?? []) as UserResult[]);
+      setBrandResults(normalizedBrands);
+      setUserResults(normalizedUsers);
+      setSectionErrors(errs);
       setSearching(false);
     }, 300);
 
@@ -683,6 +948,34 @@ function SearchPageInner() {
   }, [query]);
 
   const trimmed = query.trim();
+  const hasErrors = Object.keys(sectionErrors).length > 0;
+
+  // [Item #28 Phase C 2026-07-18] Compute the distinct base types
+  // present in the current slime results — these are the chips we'll
+  // render as a filter row. Only render the row if there are ≥2
+  // distinct types (otherwise the row would just contain "All" and
+  // one chip, useless).
+  const slimeBaseTypes: SlimeBaseType[] = Array.from(
+    new Set(
+      slimeResults
+        .map((s) => s.base_type as SlimeBaseType | null)
+        .filter((t): t is SlimeBaseType => !!t),
+    ),
+  );
+  const shouldShowBaseTypeFilter = slimeBaseTypes.length >= 2;
+
+  // Apply the filter for the render pass. Passthrough when null.
+  const filteredSlimes =
+    selectedBaseType == null
+      ? slimeResults
+      : slimeResults.filter((s) => s.base_type === selectedBaseType);
+
+  // Reset the filter when the query changes so a new search doesn't
+  // land you on an empty section because the previous query's filter
+  // is stuck on a base type that isn't in the new results.
+  useEffect(() => {
+    setSelectedBaseType(null);
+  }, [query]);
   const hasResults =
     typeResults.length > 0 ||
     slimeResults.length > 0 ||
@@ -691,7 +984,12 @@ function SearchPageInner() {
     // "no results" empty state doesn't fire when we DO have brand or
     // collector matches (just no slime/type/keyword).
     brandResults.length > 0 ||
-    userResults.length > 0;
+    userResults.length > 0 ||
+    // [Item #28 Phase B 2026-07-18] If any section errored, we still
+    // want to render the sections wrapper so the inline "couldn't
+    // load" fallback shows instead of the generic "no results"
+    // empty state — those are different signals.
+    hasErrors;
 
   // Update the URL as the user types so refresh / share works.
   // `replace` (not `push`) so the back button skips the intermediate
@@ -772,36 +1070,83 @@ function SearchPageInner() {
                   use_count for keywords). */}
               {!searching && hasResults && (
                 <div className="flex flex-col gap-8">
-                  {slimeResults.length > 0 && (
+                  {/* [Item #28 Phase B 2026-07-18] Each section now
+                      renders its results OR (if the section-specific
+                      Supabase query failed) an inline SectionErrorRow.
+                      Sections with zero results AND no error still
+                      hide themselves — that's the empty-tail case. */}
+                  {(slimeResults.length > 0 || sectionErrors.slimes) && (
                     <section>
                       <p className="section-label mb-3">Slimes</p>
-                      <div className="flex flex-col gap-2">
-                        {slimeResults.map((s) => (
-                          <SlimeRow key={s.id} slime={s} />
-                        ))}
-                      </div>
+                      {sectionErrors.slimes ? (
+                        <SectionErrorRow label="slime" />
+                      ) : (
+                        <>
+                          {/* [Item #28 Phase C 2026-07-18]
+                              Base-type filter chip row. Only shown
+                              when there are ≥2 distinct base types
+                              in the current results. In-memory
+                              filter over the already-fetched slimes
+                              so switching is instant. */}
+                          {shouldShowBaseTypeFilter && (
+                            <BaseTypeFilterChips
+                              types={slimeBaseTypes}
+                              selected={selectedBaseType}
+                              onSelect={setSelectedBaseType}
+                            />
+                          )}
+                          {filteredSlimes.length > 0 ? (
+                            <div className="flex flex-col gap-2">
+                              {filteredSlimes.map((s) => (
+                                <SlimeRow key={s.id} slime={s} />
+                              ))}
+                            </div>
+                          ) : (
+                            <div
+                              className="px-4 py-3 rounded-xl text-sm"
+                              style={{
+                                background: "rgba(45,10,78,0.20)",
+                                border: "1px dashed rgba(45,10,78,0.55)",
+                                color: "rgba(245,245,245,0.65)",
+                              }}
+                            >
+                              No slimes match this base type in your
+                              current search. Try another chip or
+                              clear the filter.
+                            </div>
+                          )}
+                        </>
+                      )}
                     </section>
                   )}
 
-                  {brandResults.length > 0 && (
+                  {(brandResults.length > 0 || sectionErrors.brands) && (
                     <section>
                       <p className="section-label mb-3">Brands</p>
-                      <div className="flex flex-col gap-2">
-                        {brandResults.map((b) => (
-                          <BrandRow key={b.id} brand={b} />
-                        ))}
-                      </div>
+                      {sectionErrors.brands ? (
+                        <SectionErrorRow label="brand" />
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {brandResults.map((b) => (
+                            <BrandRow key={b.id} brand={b} />
+                          ))}
+                        </div>
+                      )}
                     </section>
                   )}
 
-                  {userResults.length > 0 && (
+                  {(userResults.length > 0 || sectionErrors.users) && (
                     <section>
                       <p className="section-label mb-3">Collectors</p>
-                      <div className="flex flex-col gap-2">
-                        {userResults.map((u) => (
-                          <UserRow key={u.id} user={u} />
-                        ))}
-                      </div>
+                      {sectionErrors.users ? (
+                        <SectionErrorRow label="collector" />
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {userResults.map((u) => (
+                            <UserRow key={u.id} user={u} />
+                          ))}
+                        </div>
+                      )}
                     </section>
                   )}
 
@@ -816,14 +1161,18 @@ function SearchPageInner() {
                     </section>
                   )}
 
-                  {keywordResults.length > 0 && (
+                  {(keywordResults.length > 0 || sectionErrors.keywords) && (
                     <section>
                       <p className="section-label mb-3">Keywords</p>
-                      <div className="flex flex-col gap-2">
-                        {keywordResults.map((tag) => (
-                          <KeywordRow key={tag.id} tag={tag} />
-                        ))}
-                      </div>
+                      {sectionErrors.keywords ? (
+                        <SectionErrorRow label="keyword" />
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {keywordResults.map((tag) => (
+                            <KeywordRow key={tag.id} tag={tag} />
+                          ))}
+                        </div>
+                      )}
                     </section>
                   )}
                 </div>
