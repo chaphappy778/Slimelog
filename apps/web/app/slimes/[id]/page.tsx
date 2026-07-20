@@ -305,11 +305,9 @@ export default async function SlimePage({
   // We fire both in parallel via fetchDualAgingInsights; the Pro
   // one skips when the viewer isn't a Pro subscriber to avoid
   // wasted queries.
-  // Viewer profile — used for both the community-insights Pro gate
-  // (via is_premium on profiles_public) AND the owner aging banner
-  // (which respects the profile-level aging_reminders_enabled toggle
-  // so the banner disappears when the user turns off reminders in
-  // Settings).
+  // Viewer profile — used for the owner aging banner (which respects
+  // the profile-level aging_reminders_enabled toggle) AND for gating
+  // the Pro care-plan upsell copy on the recommended-cadence strip.
   let viewerIsPro = false;
   let viewerAgingRemindersEnabled = true; // safe default (opt-out UX)
   if (currentUserId) {
@@ -326,23 +324,30 @@ export default async function SlimePage({
         .maybeSingle(),
     ]);
     viewerIsPro = Boolean(publicRes.data?.is_premium);
-    // profiles table isn't nullable on this column (DEFAULT true), but
-    // guard for the "row missing" case just in case.
     viewerAgingRemindersEnabled =
       privateRes.data?.aging_reminders_enabled ?? true;
   }
 
-  let agingInsights: {
-    base: import("@/lib/aging-insights").AgingInsight | null;
-    brand: import("@/lib/aging-insights").AgingInsight | null;
-  } = { base: null, brand: null };
+  // T125 phase 2 (2026-07-20): fetch the recommended check-in cadence
+  // for this base type. Was previously calling `fetchDualAgingInsights`
+  // which returned a "community median" that was actually just our
+  // seed default (no one had customized their intervals). Jenn caught
+  // the dishonesty in smoke-test — the copy claimed community-sourced
+  // data while showing our defaults. Fix: pull the default directly
+  // from `base_type_activator_defaults` and label it honestly as a
+  // "recommended cadence." Real community medians (based on
+  // slime_care_actions history) roll in as V2 once we have data
+  // volume worth aggregating. See computeAgingInsight helper in
+  // lib/aging-insights.ts — kept for future re-use.
+  let recommendedCadenceDays: number | null = null;
   if (log.base_type) {
-    const { fetchDualAgingInsights } = await import("@/lib/aging-insights");
-    agingInsights = await fetchDualAgingInsights(supabase, {
-      base_type: log.base_type as SlimeBaseType,
-      brand_id: log.brand_id ?? null,
-      include_pro: viewerIsPro,
-    });
+    const { data: defaultRow } = await supabase
+      .from("base_type_activator_defaults")
+      .select("default_interval_days")
+      .eq("base_type", log.base_type)
+      .maybeSingle();
+    recommendedCadenceDays =
+      (defaultRow?.default_interval_days as number | undefined) ?? null;
   }
 
   const typeColor = log.base_type
@@ -1021,13 +1026,14 @@ export default async function SlimePage({
             </a>
           )}
 
-          {/* T125 (2026-07-20) — Community aging insights strip.
-              Only renders when we have at least the base-type insight
-              (≥ 10 collectors have logged this base type). Pro users
-              additionally see the brand+base-type median when
-              available. Non-Pro viewers see a subtle "Pro" nudge
-              instead of the brand row. */}
-          {agingInsights.base && (
+          {/* T125 phase 2 (2026-07-20) — Recommended cadence strip.
+              Replaces the earlier "community aging insight" strip
+              which was showing our own defaults labeled as
+              community-sourced. Now honest: shows the recommended
+              check-in interval for the base type, then a Pro CTA
+              (for the log owner only) that deep-links to the care
+              plan editor. Non-owners see just the recommendation. */}
+          {recommendedCadenceDays !== null && (
             <div
               className="flex flex-col gap-2 rounded-2xl p-4"
               style={{
@@ -1055,11 +1061,11 @@ export default async function SlimePage({
                   className="text-[11px] font-black tracking-widest uppercase"
                   style={{ color: "#00F0FF" }}
                 >
-                  Community aging insight
+                  Recommended cadence
                 </p>
               </div>
               <p className="text-sm leading-relaxed text-slime-text/90">
-                Collectors typically check{" "}
+                Check{" "}
                 <span
                   style={{
                     color: "#00F0FF",
@@ -1068,7 +1074,7 @@ export default async function SlimePage({
                 >
                   {baseTypeLabel?.toLowerCase() ?? "this base type"}
                 </span>{" "}
-                slimes every{" "}
+                slimes about every{" "}
                 <span
                   style={{
                     fontFamily: "Montserrat, sans-serif",
@@ -1076,69 +1082,72 @@ export default async function SlimePage({
                     color: "#FFFFFF",
                   }}
                 >
-                  {agingInsights.base.median_days} days
+                  {recommendedCadenceDays} days
                 </span>
-                . Based on {agingInsights.base.sample_size} logs across
-                the community.
+                . This is a starting point — your slime may need more
+                or less depending on storage, humidity, and how often
+                you play with it.
               </p>
-              {agingInsights.brand && brandJoin?.slug && (
-                <p className="text-sm leading-relaxed text-slime-text/90">
-                  For{" "}
-                  <span
-                    style={{
-                      color: "#FF7BEB",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {log.brand_name_raw ?? "this brand"}
-                  </span>
-                  &apos;s {baseTypeLabel?.toLowerCase() ?? "slimes"}
-                  , the median is{" "}
-                  <span
-                    style={{
-                      fontFamily: "Montserrat, sans-serif",
-                      fontWeight: 900,
-                      color: "#FFFFFF",
-                    }}
-                  >
-                    {agingInsights.brand.median_days} days
-                  </span>{" "}
-                  <span style={{ color: "rgba(245,245,245,0.55)" }}>
-                    ({agingInsights.brand.sample_size} logs)
-                  </span>
-                  .
-                </p>
-              )}
-              {!agingInsights.brand && log.brand_id && (
-                <div
-                  className="mt-1 flex items-center justify-between gap-2 rounded-xl px-3 py-2"
-                  style={{
-                    background: "rgba(255,210,74,0.06)",
-                    border: "1px solid rgba(255,210,74,0.35)",
-                  }}
-                >
-                  <p
-                    className="text-xs"
-                    style={{ color: "rgba(255,210,74,0.85)" }}
-                  >
-                    Pro unlocks brand-specific aging data (e.g., how
-                    long this brand&apos;s slimes typically stay
-                    fresh).
-                  </p>
+              {isOwner &&
+                (viewerIsPro ? (
                   <a
-                    href="/settings/subscription"
-                    className="text-[11px] font-bold rounded-full px-3 py-1"
+                    href={`/collection/care?highlight=${log.id}`}
+                    className="mt-1 flex items-center justify-between gap-2 rounded-xl px-3 py-2 transition-all"
                     style={{
-                      color: "#0A0A0A",
                       background:
-                        "linear-gradient(135deg, #FFD24A, #FFAE3B)",
-                      whiteSpace: "nowrap",
+                        "linear-gradient(135deg, rgba(57,255,20,0.10), rgba(0,240,255,0.10))",
+                      border: "1px solid rgba(57,255,20,0.45)",
                     }}
                   >
-                    Go Pro
+                    <p
+                      className="text-xs"
+                      style={{ color: "#39FF14", fontWeight: 700 }}
+                    >
+                      Manage this slime&apos;s care plan →
+                    </p>
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#39FF14"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M9 18l6-6-6-6" />
+                    </svg>
                   </a>
-                </div>
-              )}
+                ) : (
+                  <div
+                    className="mt-1 flex items-center justify-between gap-2 rounded-xl px-3 py-2"
+                    style={{
+                      background: "rgba(255,210,74,0.06)",
+                      border: "1px solid rgba(255,210,74,0.35)",
+                    }}
+                  >
+                    <p
+                      className="text-xs"
+                      style={{ color: "rgba(255,210,74,0.85)" }}
+                    >
+                      Pro unlocks custom care plans — set your own
+                      cadence and notes for this slime.
+                    </p>
+                    <a
+                      href="/settings/subscription"
+                      className="text-[11px] font-bold rounded-full px-3 py-1"
+                      style={{
+                        color: "#0A0A0A",
+                        background:
+                          "linear-gradient(135deg, #FFD24A, #FFAE3B)",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Go Pro
+                    </a>
+                  </div>
+                ))}
             </div>
           )}
 

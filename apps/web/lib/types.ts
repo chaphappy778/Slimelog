@@ -402,6 +402,11 @@ export interface CollectionLog {
   aging_interval_days: number | null;
   last_checked_at: string | null;
   aging_state: AgingState;
+  // T125 phase 2 (2026-07-20) — Pro-only per-slime care plan free-form
+  // notes. Written via `setLogCarePlanNotes` server action which
+  // enforces Pro entitlement server-side. Free users see this
+  // read-only on their own logs; hidden from non-owners.
+  care_plan_notes: string | null;
   created_at: string;
   updated_at: string;
   // Joined relations

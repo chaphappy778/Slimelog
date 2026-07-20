@@ -369,6 +369,7 @@ export default function FeedCardCompact({
             aging_interval_days: null,
             last_checked_at: null,
             aging_state: "fresh",
+            care_plan_notes: null,
             created_at: log.created_at,
             updated_at: log.updated_at,
           }}
