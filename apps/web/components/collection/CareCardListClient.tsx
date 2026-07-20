@@ -21,6 +21,8 @@ import type {
 import {
   setLogAgingInterval,
   setLogCarePlanNotes,
+  markLogChecked,
+  type CareActionInput,
 } from "@/lib/aging-actions";
 import {
   SLIME_BASE_TYPE_LABELS,
@@ -149,6 +151,42 @@ export default function CareCardListClient({
       {/* Aggregate strip */}
       <AggregateStrip aggregate={aggregate} />
 
+      {/* Section divider — small-caps label, hairline, count. Matches
+          the "hairline separator with count" pattern in the Design
+          mockup (Care Tracking.dc.html). */}
+      <div className="flex items-center gap-3 -mb-1">
+        <span
+          style={{
+            fontFamily: "Montserrat, sans-serif",
+            fontWeight: 800,
+            fontSize: 12,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "rgba(245,245,245,0.65)",
+            whiteSpace: "nowrap",
+          }}
+        >
+          On your shelf
+        </span>
+        <span
+          aria-hidden="true"
+          className="flex-1"
+          style={{ height: 1, background: "rgba(45,10,78,0.7)" }}
+        />
+        <span
+          className="tabular-nums"
+          style={{
+            fontFamily: "Montserrat, sans-serif",
+            fontWeight: 900,
+            fontSize: 15,
+            color: "#FFFFFF",
+            lineHeight: 1,
+          }}
+        >
+          {cards.length}
+        </span>
+      </div>
+
       {/* Per-slime cards */}
       <div className="flex flex-col gap-4">
         {cards.map((card) => (
@@ -187,15 +225,7 @@ function AggregateStrip({ aggregate }: { aggregate: CareAggregate }) {
       >
         This month
       </p>
-      <div className="flex flex-wrap gap-6">
-        <Stat
-          value={aggregate.actions_this_month}
-          label={
-            aggregate.actions_this_month === 1
-              ? "care action logged"
-              : "care actions logged"
-          }
-        />
+      <div className="flex gap-6">
         <Stat
           value={aggregate.slimes_cared_for_this_month}
           label={
@@ -204,40 +234,109 @@ function AggregateStrip({ aggregate }: { aggregate: CareAggregate }) {
               : "slimes cared for"
           }
         />
-        {aggregate.top_product && (
-          <div>
-            <p
-              style={{
-                fontFamily: "Montserrat, sans-serif",
-                fontWeight: 900,
-                fontSize: 20,
-                color: "#00F0FF",
-                lineHeight: 1,
-              }}
-            >
-              {aggregate.top_product.display}
-            </p>
-            <p
-              className="text-[11px] mt-1"
-              style={{ color: "rgba(245,245,245,0.55)" }}
-            >
-              Your top product ({aggregate.top_product.count} uses)
-            </p>
-          </div>
-        )}
+        <div
+          aria-hidden="true"
+          style={{ width: 1, background: "rgba(45,10,78,0.7)" }}
+        />
+        <Stat
+          value={aggregate.actions_this_month}
+          label={
+            aggregate.actions_this_month === 1
+              ? "action logged"
+              : "actions logged"
+          }
+          color="#00F0FF"
+        />
       </div>
-      <p
-        className="mt-4 text-[11px]"
-        style={{ color: "rgba(255,210,74,0.85)" }}
-      >
-        Coming soon: auto-refill subscriptions for your most-used
-        products when the SlimeLog shop launches.
-      </p>
+
+      {/* Top 3 actions — horizontal bars, one row per category, bar
+          length proportional to that category's share of the busiest
+          category this month. Replaces the old single top-product
+          line (T188 Part 4). */}
+      {aggregate.top_categories.length > 0 && (
+        <>
+          <p
+            className="text-[11px] font-black tracking-widest uppercase mt-4 mb-2.5"
+            style={{ color: "rgba(245,245,245,0.4)" }}
+          >
+            Top 3 actions
+          </p>
+          <div className="flex flex-col gap-2.5">
+            {aggregate.top_categories.map((row) => {
+              const meta =
+                CATEGORY_META[row.action_type] ?? CATEGORY_META.other;
+              const max = aggregate.top_categories[0]?.count || 1;
+              const pct = Math.max(
+                6,
+                Math.round((row.count / max) * 100),
+              );
+              return (
+                <div
+                  key={row.action_type}
+                  className="flex items-center gap-2.5"
+                >
+                  <span
+                    className="shrink-0"
+                    style={{
+                      width: 78,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      color: "rgba(245,245,245,0.65)",
+                    }}
+                  >
+                    {meta.label}
+                  </span>
+                  <span
+                    className="flex-1 block overflow-hidden"
+                    style={{
+                      height: 8,
+                      borderRadius: 4,
+                      background: "rgba(255,255,255,0.06)",
+                    }}
+                  >
+                    <span
+                      className="block h-full"
+                      style={{
+                        width: `${pct}%`,
+                        borderRadius: 4,
+                        background: meta.color,
+                        boxShadow: `0 0 10px ${meta.color}88`,
+                      }}
+                    />
+                  </span>
+                  <span
+                    className="tabular-nums text-right shrink-0"
+                    style={{
+                      width: 24,
+                      fontFamily: "Montserrat, sans-serif",
+                      fontWeight: 900,
+                      fontSize: 13,
+                      color: "#FFFFFF",
+                    }}
+                  >
+                    {row.count}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
-function Stat({ value, label }: { value: number; label: string }) {
+function Stat({
+  value,
+  label,
+  color = "#FFFFFF",
+}: {
+  value: number;
+  label: string;
+  color?: string;
+}) {
   return (
     <div>
       <p
@@ -245,8 +344,8 @@ function Stat({ value, label }: { value: number; label: string }) {
         style={{
           fontFamily: "Montserrat, sans-serif",
           fontWeight: 900,
-          fontSize: 28,
-          color: "#FFFFFF",
+          fontSize: 34,
+          color,
           lineHeight: 1,
         }}
       >
@@ -311,6 +410,38 @@ function CareCard({
       if (!result.ok) {
         setError(result.error);
         onUpdate({ aging_interval_days: card.aging_interval_days });
+      }
+    });
+  }
+
+  // Tapping a Recent care tile logs a fresh check-in for that category
+  // with no product attached (product_key is nullable on
+  // slime_care_actions — the row just marks the category as performed
+  // again). Optimistic: stamp the tapped action's performed_at to now
+  // so its counter re-renders as 0D immediately. Deliberately does NOT
+  // reorder the strip, so tiles don't jump under the user's finger.
+  function quickCheckin(actionId: string, actionType: string) {
+    setError(null);
+    const previous = card.recent_actions;
+    const nowIso = new Date().toISOString();
+    onUpdate({
+      recent_actions: previous.map((a) =>
+        a.id === actionId ? { ...a, performed_at: nowIso } : a,
+      ),
+    });
+    startSaving(async () => {
+      const result = await markLogChecked(card.id, [
+        {
+          action_type: actionType as CareActionInput["action_type"],
+          product_key: null,
+          quantity_type: null,
+          quantity_amount: null,
+          notes: null,
+        },
+      ]);
+      if (!result.ok) {
+        setError(result.error);
+        onUpdate({ recent_actions: previous });
       }
     });
   }
@@ -579,9 +710,14 @@ function CareCard({
             >
               Recent care
             </p>
-            <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+            <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
               {card.recent_actions.map((a) => (
-                <RecentCareChip key={a.id} action={a} />
+                <RecentCareChip
+                  key={a.id}
+                  action={a}
+                  onQuickCheckin={quickCheckin}
+                  disabled={saving}
+                />
               ))}
             </div>
           </div>
@@ -647,37 +783,90 @@ function CadenceChip({
   );
 }
 
-function relativeTime(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diffMs / 60_000);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
-}
-
 // ─── Recent care icon chip ────────────────────────────────────────────
-// One chip per recent care action. Category-colored circle icon +
-// day-count pill (e.g. "2d"). Hover reveals the product name.
+// One tile per recent care action: rounded-square, category-colored
+// border + faint tint, line SVG icon inside, day-count pill BELOW.
+// Tapping the tile logs a fresh check-in for that category and resets
+// the counter to 0D (T188 Part 4 / Design mockup Care Tracking.dc.html).
 
+// Icon paths copied verbatim from the Design mockup. All 24×24
+// viewBox, 2px stroke, round caps + joins.
 const CATEGORY_META: Record<
   string,
-  { color: string; letter: string }
+  { color: string; label: string; icon: React.ReactNode }
 > = {
-  activator: { color: "#00F0FF", letter: "A" },
-  softener: { color: "#FF00E5", letter: "S" },
-  additive: { color: "#39FF14", letter: "+" },
+  activator: {
+    color: "#00F0FF",
+    label: "Activator",
+    // water droplet
+    icon: <path d="M12 3c3.5 4 6 6.7 6 10a6 6 0 0 1-12 0c0-3.3 2.5-6 6-10z" />,
+  },
+  softener: {
+    color: "#FF00E5",
+    label: "Softener",
+    // wave lines
+    icon: (
+      <>
+        <path d="M3 9c2-2.5 4-2.5 6 0s4 2.5 6 0 4-2.5 6 0" />
+        <path d="M3 15c2-2.5 4-2.5 6 0s4 2.5 6 0 4-2.5 6 0" />
+      </>
+    ),
+  },
+  additive: {
+    color: "#39FF14",
+    label: "Additive",
+    // plus in circle
+    icon: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 8.5v7M8.5 12h7" />
+      </>
+    ),
+  },
   // Orange (same hex as the Aging state pill in AgingListClient) —
   // physical/Handling was previously #3DF2FF, indistinguishable from
-  // activator's #00F0FF when the two chips sat next to each other.
-  physical: { color: "#FFAE3B", letter: "K" },
-  storage: { color: "#CC44FF", letter: "◫" },
-  other: { color: "#B4A9C4", letter: "•" },
+  // activator's #00F0FF when the two tiles sat next to each other.
+  physical: {
+    color: "#FFAE3B",
+    label: "Handling",
+    // refresh / rotate
+    icon: (
+      <>
+        <path d="M20 12a8 8 0 1 1-2.3-5.6" />
+        <path d="M20 4v4h-4" />
+      </>
+    ),
+  },
+  storage: {
+    color: "#CC44FF",
+    label: "Storage",
+    // padlock
+    icon: (
+      <>
+        <path d="M8 8V6a4 4 0 0 1 8 0v2" />
+        <rect x="5" y="8" width="14" height="12" rx="2" />
+      </>
+    ),
+  },
+  other: {
+    color: "#B4A9C4",
+    label: "Other",
+    // small circle
+    icon: <circle cx="12" cy="12" r="4" />,
+  },
 };
+
+function daysSince(iso: string): number {
+  return Math.max(
+    0,
+    Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000),
+  );
+}
 
 function RecentCareChip({
   action,
+  onQuickCheckin,
+  disabled,
 }: {
   action: {
     id: string;
@@ -686,46 +875,60 @@ function RecentCareChip({
     product_key: string | null;
     product_display: string | null;
   };
+  onQuickCheckin: (actionId: string, actionType: string) => void;
+  disabled: boolean;
 }) {
   const meta = CATEGORY_META[action.action_type] ?? CATEGORY_META.other;
-  const daysAgo = Math.max(
-    0,
-    Math.floor((Date.now() - new Date(action.performed_at).getTime()) / 86_400_000),
-  );
-  const label = action.product_display ?? action.action_type;
+  const daysAgo = daysSince(action.performed_at);
+  const label = action.product_display ?? meta.label;
+
   return (
-    <div
-      className="shrink-0 flex items-center gap-1.5"
-      title={`${label} · ${daysAgo === 0 ? "today" : `${daysAgo}d ago`}`}
+    <button
+      type="button"
+      onClick={() => onQuickCheckin(action.id, action.action_type)}
+      disabled={disabled}
+      className="shrink-0 flex flex-col items-center gap-1.5 bg-transparent p-0"
+      style={{ border: "none", cursor: disabled ? "wait" : "pointer" }}
+      title={`${label} · ${daysAgo === 0 ? "today" : `${daysAgo} days ago`}. Tap to log again.`}
+      aria-label={`Log ${meta.label} for this slime again`}
     >
       <span
         aria-hidden="true"
-        className="grid place-items-center rounded-full"
+        className="grid place-items-center rounded-2xl transition-transform active:scale-95"
         style={{
-          width: 26,
-          height: 26,
-          background: `${meta.color}22`,
-          border: `1px solid ${meta.color}88`,
+          width: 44,
+          height: 44,
+          background: `${meta.color}1F`,
+          border: `1px solid ${meta.color}55`,
           color: meta.color,
-          fontFamily: "Montserrat, sans-serif",
-          fontWeight: 900,
-          fontSize: 11,
-          boxShadow: `0 0 8px ${meta.color}44`,
+          opacity: disabled ? 0.6 : 1,
         }}
       >
-        {meta.letter}
+        <svg
+          width={24}
+          height={24}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          {meta.icon}
+        </svg>
       </span>
       <span
         className="tabular-nums"
         style={{
           fontFamily: "Montserrat, sans-serif",
-          fontWeight: 700,
-          fontSize: 11,
+          fontWeight: 800,
+          fontSize: 10,
+          letterSpacing: "0.06em",
           color: meta.color,
         }}
       >
-        {daysAgo === 0 ? "today" : `${daysAgo}d`}
+        {daysAgo}D
       </span>
-    </div>
+    </button>
   );
 }

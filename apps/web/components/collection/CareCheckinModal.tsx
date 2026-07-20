@@ -747,7 +747,12 @@ export default function CareCheckinModal({
           style={{
             borderTop: "1px solid rgba(45,10,78,0.7)",
             background: "rgba(20,5,40,0.98)",
-            paddingBottom: "calc(1rem + env(safe-area-inset-bottom))",
+            // Jennifer 2026-07-20: safe-area alone wasn't enough. The
+            // fixed BottomNav (h-16 = 64px, see BottomNav.tsx) sits
+            // above the inset and was covering the Save button at max
+            // sheet expansion. Clear the nav height too.
+            paddingBottom:
+              "calc(1rem + 64px + env(safe-area-inset-bottom))",
           }}
         >
           <button

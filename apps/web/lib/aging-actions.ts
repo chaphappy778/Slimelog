@@ -83,7 +83,11 @@ export interface CareActionInput {
     | "physical"
     | "storage"
     | "other";
-  product_key: string;
+  // Nullable: a quick category re-log from the /collection/care
+  // "Recent care" strip records that the category was performed
+  // again without naming a product. slime_care_actions.product_key
+  // is nullable in the schema (20260720000082_t125_care_actions.sql).
+  product_key: string | null;
   quantity_type?:
     | "drops"
     | "pumps"

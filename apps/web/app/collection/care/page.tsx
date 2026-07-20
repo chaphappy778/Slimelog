@@ -14,13 +14,11 @@
 //   - Save button (per-card; optimistic)
 //
 // Top-of-page aggregates (Pro insights):
-//   - "You've cared for N slimes with M actions this month"
-//   - "Top product this month: contact solution (12 uses)"
-//   - "Auto-refill subscriptions coming when the shop launches"
-//     (teaser for Phase 2 monetization)
+//   - Slimes cared for + actions logged this month
+//   - Top 3 action categories this month (bar chart)
 //
-// Design polish handled separately (T188 Part 4). Layout here is
-// functional so Design can align to actual code paths.
+// T188 Part 4 (2026-07-20) aligned this page to the Design mockup
+// (Care Tracking.dc.html).
 
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -56,7 +54,10 @@ export type CareCardRow = {
 export type CareAggregate = {
   actions_this_month: number;
   slimes_cared_for_this_month: number;
-  top_product: { key: string; display: string; count: number } | null;
+  // T188 Part 4 (2026-07-20) — replaces the single top_product line
+  // with a per-category breakdown so the top card can render the
+  // "Top 3 actions" bar chart. Sorted desc, already truncated to 3.
+  top_categories: { action_type: string; count: number }[];
 };
 
 interface Props {
@@ -205,29 +206,21 @@ export default async function CarePage({ searchParams }: Props) {
   const thisMonthActions = (recentActionsRes.data ?? []).filter(
     (a) => new Date(a.performed_at as string) >= monthStart,
   );
-  const productCounts = new Map<string, number>();
+  const categoryCounts = new Map<string, number>();
   const distinctSlimes = new Set<string>();
   for (const a of thisMonthActions) {
     distinctSlimes.add(a.log_id as string);
-    const pk = a.product_key as string | null;
-    if (pk) {
-      productCounts.set(pk, (productCounts.get(pk) ?? 0) + 1);
-    }
+    const cat = a.action_type as string;
+    categoryCounts.set(cat, (categoryCounts.get(cat) ?? 0) + 1);
   }
-  let topProduct: CareAggregate["top_product"] = null;
-  for (const [pk, count] of productCounts) {
-    if (!topProduct || count > topProduct.count) {
-      topProduct = {
-        key: pk,
-        display: productDisplay.get(pk) ?? pk,
-        count,
-      };
-    }
-  }
+  const topCategories = [...categoryCounts.entries()]
+    .map(([action_type, count]) => ({ action_type, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3);
   const aggregate: CareAggregate = {
     actions_this_month: thisMonthActions.length,
     slimes_cared_for_this_month: distinctSlimes.size,
-    top_product: topProduct,
+    top_categories: topCategories,
   };
 
   return (
@@ -238,36 +231,50 @@ export default async function CarePage({ searchParams }: Props) {
           <BackLink fallbackHref="/collection" label="Back to collection" />
         </div>
 
+        {/* T188 Part 4 (2026-07-20) — header trimmed to the Design
+            mockup: bare "Care" h1 + holo PRO badge on the same row,
+            one muted sub-line. The old section label and the long
+            explainer paragraph are gone. */}
         <div className="px-4 mb-6">
+          <div className="flex items-center gap-2.5">
+            <h1
+              style={{
+                fontFamily: "Montserrat, sans-serif",
+                fontWeight: 900,
+                fontSize: 36,
+                color: "#FFFFFF",
+                letterSpacing: "-0.02em",
+                lineHeight: 1.05,
+              }}
+            >
+              Care
+            </h1>
+            {/* Decorative Pro badge, not a link. --grad-holo from the
+                Design system tokens. */}
+            <span
+              style={{
+                fontFamily: "Montserrat, sans-serif",
+                fontWeight: 900,
+                fontSize: 10,
+                letterSpacing: "0.1em",
+                color: "#04110A",
+                background:
+                  "linear-gradient(115deg, #00F0FF 0%, #39FF14 25%, #FFAE3B 50%, #CC44FF 75%, #00F0FF 100%)",
+                borderRadius: 999,
+                padding: "3px 9px",
+              }}
+            >
+              PRO
+            </span>
+          </div>
           <p
-            className="section-label mb-2"
-            style={{ color: "rgba(0,240,255,0.85)" }}
-          >
-            Care packages
-          </p>
-          <h1
+            className="mt-1"
             style={{
-              fontFamily: "Montserrat, sans-serif",
-              fontWeight: 900,
-              fontSize: 32,
-              color: "#FFFFFF",
-              letterSpacing: "-0.01em",
-              lineHeight: 1.1,
+              color: "rgba(245,245,245,0.65)",
+              fontSize: 13,
             }}
           >
-            Custom care plans for every slime on your shelf.
-          </h1>
-          <p
-            className="mt-2"
-            style={{
-              color: "rgba(245,245,245,0.55)",
-              fontSize: 14,
-              lineHeight: 1.5,
-            }}
-          >
-            Set your own check-in cadence and care notes per slime.
-            Recommendations from the community are shown as a
-            starting point — override any of them here.
+            Your shelf, on a schedule.
           </p>
         </div>
 
