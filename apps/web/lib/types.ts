@@ -34,7 +34,11 @@ export type NotificationType =
   | "variant_suggestion_rejected"
   // T167 (2026-07-17): brand owner is notified when a user logs a slime
   // tagged to their claimed brand. See migration 0080.
-  | "brand_log_received";
+  | "brand_log_received"
+  // T125 (2026-07-20): nightly aging cron fires this summary
+  // notification when at least one of the user's on-shelf slimes
+  // enters the warning or overdue state. See migration 0081.
+  | "slime_needs_attention";
 
 export type DropStatus =
   | "announced"
@@ -386,6 +390,18 @@ export interface CollectionLog {
   rating_sensory_fit: number | null;
   rating_overall: number | null;
   is_public: boolean;
+  // T125 (2026-07-20) — shelf state gates aging reminders. Only
+  // `on_shelf` slimes fire reminders; `for_sale` ties into future
+  // marketplace listing UI; `archived` is a historical record with
+  // no reminders. See migration 20260720000081.
+  shelf_state: ShelfState;
+  // T125 (2026-07-20) — per-log aging reminder controls. Nightly
+  // cron flips aging_state; UI reads it to bucket into fresh /
+  // warning / overdue sections on /collection/aging.
+  aging_enabled: boolean;
+  aging_interval_days: number | null;
+  last_checked_at: string | null;
+  aging_state: AgingState;
   created_at: string;
   updated_at: string;
   // Joined relations
@@ -398,6 +414,27 @@ export interface CollectionLog {
     avatar_url: string | null;
   } | null;
 }
+
+// T125 (2026-07-20) — where a slime lives in the user's collection.
+export type ShelfState = "on_shelf" | "for_sale" | "archived";
+
+// T125 (2026-07-20) — aging state, maintained by the nightly cron.
+export type AgingState = "fresh" | "warning" | "overdue";
+
+// User-facing labels for shelf state, used across the log wizard
+// chips, feed pill copy, and settings surfaces.
+export const SHELF_STATE_LABELS: Record<ShelfState, string> = {
+  on_shelf: "On my shelf",
+  for_sale: "Listed for sale",
+  archived: "Archived",
+};
+
+// Short badge copy for feed cards + compact UI.
+export const SHELF_STATE_BADGE: Record<ShelfState, string> = {
+  on_shelf: "",
+  for_sale: "For Sale",
+  archived: "Archived",
+};
 
 // ─── Insert payload ───────────────────────────────────────────────────────────
 
@@ -430,6 +467,12 @@ export interface CollectionLogInsert {
   rating_sensory_fit?: number | null;
   rating_overall?: number | null;
   is_public?: boolean;
+  // T125 (2026-07-20) — shelf state + aging controls, optional on
+  // insert (DB defaults kick in for `shelf_state`, `aging_enabled`,
+  // and `aging_state`; user-set values override).
+  shelf_state?: ShelfState;
+  aging_enabled?: boolean;
+  aging_interval_days?: number | null;
 }
 
 // ─── Activity feed ────────────────────────────────────────────────────────────

@@ -47,6 +47,10 @@ export type AuthProfile = {
   subscription_tier: string | null;
   is_premium: boolean | null;
   marketing_consent: boolean | null;
+  // T125 (2026-07-20) — global aging reminders toggle. When false the
+  // nightly cron skips this user entirely. Default true (opt-out UX
+  // per Jenn's decision).
+  aging_reminders_enabled: boolean | null;
 };
 
 type AuthContextValue = {
@@ -62,7 +66,7 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const PROFILE_COLUMNS =
-  "id, username, avatar_url, display_name, role, referral_code, onboarding_completed_at, subscription_tier, is_premium, marketing_consent";
+  "id, username, avatar_url, display_name, role, referral_code, onboarding_completed_at, subscription_tier, is_premium, marketing_consent, aging_reminders_enabled";
 
 async function loadProfile(userId: string): Promise<AuthProfile | null> {
   const { data, error } = await supabase

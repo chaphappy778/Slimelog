@@ -12,6 +12,9 @@ import PageWrapper from "@/components/PageWrapper";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
 import { updateMarketingConsent } from "@/lib/profile-actions";
+// T125 (2026-07-20) — global aging reminders toggle. Server action
+// keeps the write path narrow (only mutates aging_reminders_enabled).
+import { setProfileAgingEnabled } from "@/lib/aging-actions";
 
 const supabase = createClient();
 
@@ -21,6 +24,8 @@ type Profile = {
   display_name: string | null;
   subscription_tier: string;
   marketing_consent: boolean;
+  // T125 (2026-07-20): global aging-reminders toggle
+  aging_reminders_enabled: boolean;
 };
 
 const sectionStyle = {
@@ -125,6 +130,13 @@ export default function SettingsPage() {
   const [marketingConsentError, setMarketingConsentError] = useState<
     string | null
   >(null);
+  // T125 (2026-07-20) — global aging reminders toggle. Same
+  // optimistic-flip + rollback pattern as marketing consent above.
+  const [agingRemindersPending, startAgingRemindersTransition] =
+    useTransition();
+  const [agingRemindersError, setAgingRemindersError] = useState<
+    string | null
+  >(null);
 
   // T104: derive local profile shape from the shared AuthProvider once
   // the initial fetch resolves. Redirect to /login if unauthenticated.
@@ -143,6 +155,10 @@ export default function SettingsPage() {
       display_name: authProfile?.display_name ?? null,
       subscription_tier: authProfile?.subscription_tier ?? "free",
       marketing_consent: Boolean(authProfile?.marketing_consent),
+      // T125 (2026-07-20): default true when the field is missing —
+      // matches the DB column default (opt-out UX).
+      aging_reminders_enabled:
+        authProfile?.aging_reminders_enabled ?? true,
     });
   }, [authLoading, user, authProfile, router]);
   const authChecked = !authLoading;
@@ -161,6 +177,26 @@ export default function SettingsPage() {
           p ? { ...p, marketing_consent: previous } : p,
         );
         setMarketingConsentError(
+          result.error ?? "Couldn't save. Please try again.",
+        );
+      }
+    });
+  }
+
+  // T125 (2026-07-20) — global aging reminders toggle handler.
+  // Same optimistic-flip + rollback pattern as marketing consent.
+  function handleAgingRemindersToggle(next: boolean) {
+    if (!profile) return;
+    const previous = profile.aging_reminders_enabled;
+    setProfile({ ...profile, aging_reminders_enabled: next });
+    setAgingRemindersError(null);
+    startAgingRemindersTransition(async () => {
+      const result = await setProfileAgingEnabled(next);
+      if (!result.ok) {
+        setProfile((p) =>
+          p ? { ...p, aging_reminders_enabled: previous } : p,
+        );
+        setAgingRemindersError(
           result.error ?? "Couldn't save. Please try again.",
         );
       }
@@ -449,6 +485,88 @@ export default function SettingsPage() {
                 style={{ color: "#FF00E5" }}
               >
                 {marketingConsentError}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* T125 (2026-07-20) — NOTIFICATIONS section. Currently one
+            toggle (aging reminders). More rows land here as we build
+            out per-category preferences (drops, likes, comments). */}
+        <div>
+          <SectionHeader label="Notifications" />
+          <div
+            className="rounded-2xl overflow-hidden"
+            style={sectionStyle}
+          >
+            <div className="flex items-center gap-3 px-4 py-3.5">
+              <span
+                className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+                style={rowIconStyle}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width={18}
+                  height={18}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-slime-muted"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 7v5l3 2" />
+                </svg>
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-slime-text">
+                  Aging reminders
+                </p>
+                <p className="text-[11px] text-slime-muted leading-tight mt-0.5">
+                  Get an in-app nudge when a slime on your shelf is
+                  due for a check-in.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={profile?.aging_reminders_enabled ?? false}
+                aria-label="Toggle aging reminders"
+                disabled={agingRemindersPending}
+                onClick={() =>
+                  handleAgingRemindersToggle(
+                    !(profile?.aging_reminders_enabled ?? false),
+                  )
+                }
+                className="relative shrink-0 transition-opacity disabled:opacity-60"
+                style={{
+                  width: "42px",
+                  height: "24px",
+                  borderRadius: "9999px",
+                  background: profile?.aging_reminders_enabled
+                    ? "linear-gradient(135deg, #39FF14, #00F0FF)"
+                    : "rgba(255,255,255,0.15)",
+                }}
+              >
+                <span
+                  className="absolute top-0.5 rounded-full transition-all"
+                  style={{
+                    width: "20px",
+                    height: "20px",
+                    background: "#0A0A0A",
+                    left: profile?.aging_reminders_enabled ? "20px" : "2px",
+                  }}
+                />
+              </button>
+            </div>
+            {agingRemindersError && (
+              <p
+                className="px-4 pb-3 text-[11px]"
+                style={{ color: "#FF00E5" }}
+              >
+                {agingRemindersError}
               </p>
             )}
           </div>

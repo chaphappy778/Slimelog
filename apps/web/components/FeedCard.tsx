@@ -32,6 +32,10 @@ export type FeedCardLog = {
   // [Change 1] in_wishlist and activity_type added to type
   in_wishlist: boolean;
   activity_type: string;
+  // T125 (2026-07-20) — shelf state renders as a pill on the feed
+  // card. Optional because older feed queries didn't return it;
+  // undefined = treat as on_shelf (no pill).
+  shelf_state?: "on_shelf" | "for_sale" | "archived";
 };
 
 interface FeedCardProps {
@@ -331,6 +335,17 @@ function buildCollectionLog(log: FeedCardLog): CollectionLog {
     rating_sensory_fit: null,
     rating_overall: log.rating_overall,
     is_public: true,
+    // T125 (2026-07-20) — feed queries don't currently return shelf
+    // state or aging fields (the feed doesn't visually differentiate
+    // by aging state; that's the /collection/aging surface). Filling
+    // with safe defaults so the CollectionLog shape stays complete.
+    // See FeedCardShelfPill for the future path where the feed query
+    // includes shelf_state and we render the For Sale / Archived pill.
+    shelf_state: (log as { shelf_state?: "on_shelf" | "for_sale" | "archived" }).shelf_state ?? "on_shelf",
+    aging_enabled: true,
+    aging_interval_days: null,
+    last_checked_at: null,
+    aging_state: "fresh",
     created_at: log.created_at,
     updated_at: log.updated_at,
   };
@@ -520,6 +535,53 @@ export default function FeedCard({
               </span>
             )}
           </div>
+
+          {/* T125 (2026-07-20) — shelf state pill. For sale = slime
+              green with matching glow (marketplace-ready signal).
+              Archived = muted purple with "Archived" label (feed also
+              fades the whole card via opacity below). on_shelf =
+              nothing (the default state doesn't need a badge). */}
+          {log.shelf_state === "for_sale" && (
+            <div className="absolute top-3 right-3 z-[3]">
+              <span
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider"
+                style={{
+                  background: "rgba(10,0,20,0.75)",
+                  color: "#39FF14",
+                  border: "1px solid rgba(57,255,20,0.55)",
+                  boxShadow: "0 0 12px rgba(57,255,20,0.45)",
+                  backdropFilter: "blur(6px)",
+                  WebkitBackdropFilter: "blur(6px)",
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  className="inline-block w-1.5 h-1.5 rounded-full"
+                  style={{
+                    background: "#39FF14",
+                    boxShadow: "0 0 6px #39FF14",
+                  }}
+                />
+                For Sale
+              </span>
+            </div>
+          )}
+          {log.shelf_state === "archived" && (
+            <div className="absolute top-3 right-3 z-[3]">
+              <span
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold"
+                style={{
+                  background: "rgba(10,0,20,0.75)",
+                  color: "rgba(245,245,245,0.65)",
+                  border: "1px solid rgba(120,60,180,0.55)",
+                  backdropFilter: "blur(6px)",
+                  WebkitBackdropFilter: "blur(6px)",
+                }}
+              >
+                Archived
+              </span>
+            </div>
+          )}
 
           {/* Floating rating chip (or wishlist chip if wishlist card).
               Non-wishlist cards with no rating render nothing here. */}

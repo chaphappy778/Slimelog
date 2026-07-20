@@ -297,6 +297,36 @@ export default async function SlimePage({
     .map((lt: any) => (lt.tags as { name: string } | null)?.name)
     .filter((n): n is string => Boolean(n));
 
+  // T125 (2026-07-20) — community aging insights. Two tiers:
+  //   Free: base-type-wide median ("collectors typically check
+  //         butter every X days")
+  //   Pro:  brand + base-type median ("Aloe Nightmares butter
+  //         specifically runs Y days")
+  // We fire both in parallel via fetchDualAgingInsights; the Pro
+  // one skips when the viewer isn't a Pro subscriber to avoid
+  // wasted queries.
+  let agingInsights: {
+    base: import("@/lib/aging-insights").AgingInsight | null;
+    brand: import("@/lib/aging-insights").AgingInsight | null;
+  } = { base: null, brand: null };
+  if (log.base_type) {
+    let viewerIsPro = false;
+    if (currentUserId) {
+      const { data: viewerProfile } = await supabase
+        .from("profiles_public")
+        .select("is_premium")
+        .eq("id", currentUserId)
+        .maybeSingle();
+      viewerIsPro = Boolean(viewerProfile?.is_premium);
+    }
+    const { fetchDualAgingInsights } = await import("@/lib/aging-insights");
+    agingInsights = await fetchDualAgingInsights(supabase, {
+      base_type: log.base_type as SlimeBaseType,
+      brand_id: log.brand_id ?? null,
+      include_pro: viewerIsPro,
+    });
+  }
+
   const typeColor = log.base_type
     ? (SLIME_BASE_TYPE_COLORS[log.base_type as SlimeBaseType]?.text ??
       "#39FF14")
@@ -324,6 +354,55 @@ export default async function SlimePage({
     : `/signup?next=${encodeURIComponent(ctaNext)}`;
 
   const isOwner = currentUserId === log.user_id;
+
+  // T125 (2026-07-20) — aging status chip shown to the log owner
+  // only. Non-owners see the community insights strip above but no
+  // per-log status (that's the owner's context). Only rendered when
+  // aging is active for this log (on_shelf + aging_enabled).
+  let ownerAgingBanner: {
+    label: string;
+    accent: string;
+    subtext: string;
+  } | null = null;
+  if (
+    isOwner &&
+    log.shelf_state === "on_shelf" &&
+    log.aging_enabled
+  ) {
+    // Resolve effective interval (same logic as
+    // get_effective_aging_interval helper in the migration).
+    const baseDefault = 45; // hard fallback matches the SQL helper
+    // We don't fetch the base-type default here to save a query —
+    // the cron already resolved aging_state, and this banner only
+    // uses aging_state for its color/label. The precise "X days"
+    // is a nice-to-have; we compute it from anchor + interval below.
+    const interval = log.aging_interval_days ?? baseDefault;
+    const anchorMs = new Date(
+      log.last_checked_at ?? log.created_at,
+    ).getTime();
+    const daysSince = Math.floor((Date.now() - anchorMs) / 86_400_000);
+    const daysDelta = daysSince - interval;
+    if (log.aging_state === "overdue") {
+      ownerAgingBanner = {
+        label: "Overdue",
+        accent: "#FF3D6E",
+        subtext: `Overdue by ${daysDelta} ${daysDelta === 1 ? "day" : "days"}. Tap to check in.`,
+      };
+    } else if (log.aging_state === "warning") {
+      const dueIn = Math.max(0, -daysDelta);
+      ownerAgingBanner = {
+        label: "Coming up",
+        accent: "#FFAE3B",
+        subtext: `Aging in ${dueIn} ${dueIn === 1 ? "day" : "days"}. Tap when you check in.`,
+      };
+    } else {
+      ownerAgingBanner = {
+        label: "Fresh",
+        accent: "#39FF14",
+        subtext: `Checked ${daysSince} ${daysSince === 1 ? "day" : "days"} ago. Next check-in around day ${interval}.`,
+      };
+    }
+  }
 
   return (
     <PageWrapper dots>
@@ -856,6 +935,187 @@ export default async function SlimePage({
             <p className="text-sm italic leading-relaxed text-slime-text/70">
               {log.notes}
             </p>
+          )}
+
+          {/* T125 (2026-07-20) — Owner's per-log aging banner. Only
+              renders for the log's owner + on-shelf slimes. Links to
+              /collection/aging where they can mark checked. */}
+          {ownerAgingBanner && (
+            <a
+              href="/collection/aging"
+              className="flex items-center justify-between gap-3 rounded-2xl px-4 py-3 transition-all"
+              style={{
+                background: `${ownerAgingBanner.accent}12`,
+                border: `1px solid ${ownerAgingBanner.accent}66`,
+                boxShadow:
+                  log.aging_state === "overdue"
+                    ? `0 0 20px ${ownerAgingBanner.accent}22`
+                    : "none",
+              }}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <span
+                  style={{
+                    display: "inline-block",
+                    width: 10,
+                    height: 10,
+                    borderRadius: 5,
+                    background: ownerAgingBanner.accent,
+                    boxShadow: `0 0 10px ${ownerAgingBanner.accent}99`,
+                    flexShrink: 0,
+                  }}
+                />
+                <div className="min-w-0">
+                  <p
+                    className="text-[11px] font-black tracking-widest uppercase"
+                    style={{ color: ownerAgingBanner.accent }}
+                  >
+                    Aging: {ownerAgingBanner.label}
+                  </p>
+                  <p
+                    className="text-xs mt-0.5 truncate"
+                    style={{ color: "rgba(245,245,245,0.75)" }}
+                  >
+                    {ownerAgingBanner.subtext}
+                  </p>
+                </div>
+              </div>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke={ownerAgingBanner.accent}
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                className="shrink-0"
+              >
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </a>
+          )}
+
+          {/* T125 (2026-07-20) — Community aging insights strip.
+              Only renders when we have at least the base-type insight
+              (≥ 10 collectors have logged this base type). Pro users
+              additionally see the brand+base-type median when
+              available. Non-Pro viewers see a subtle "Pro" nudge
+              instead of the brand row. */}
+          {agingInsights.base && (
+            <div
+              className="flex flex-col gap-2 rounded-2xl p-4"
+              style={{
+                background:
+                  "linear-gradient(135deg, rgba(0,240,255,0.06), rgba(255,0,229,0.06))",
+                border: "1px solid rgba(0,240,255,0.35)",
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#00F0FF"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 7v5l3 2" />
+                </svg>
+                <p
+                  className="text-[11px] font-black tracking-widest uppercase"
+                  style={{ color: "#00F0FF" }}
+                >
+                  Community aging insight
+                </p>
+              </div>
+              <p className="text-sm leading-relaxed text-slime-text/90">
+                Collectors typically check{" "}
+                <span
+                  style={{
+                    color: "#00F0FF",
+                    fontWeight: 700,
+                  }}
+                >
+                  {baseTypeLabel?.toLowerCase() ?? "this base type"}
+                </span>{" "}
+                slimes every{" "}
+                <span
+                  style={{
+                    fontFamily: "Montserrat, sans-serif",
+                    fontWeight: 900,
+                    color: "#FFFFFF",
+                  }}
+                >
+                  {agingInsights.base.median_days} days
+                </span>
+                . Based on {agingInsights.base.sample_size} logs across
+                the community.
+              </p>
+              {agingInsights.brand && brandJoin?.slug && (
+                <p className="text-sm leading-relaxed text-slime-text/90">
+                  For{" "}
+                  <span
+                    style={{
+                      color: "#FF7BEB",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {log.brand_name_raw ?? "this brand"}
+                  </span>
+                  &apos;s {baseTypeLabel?.toLowerCase() ?? "slimes"}
+                  , the median is{" "}
+                  <span
+                    style={{
+                      fontFamily: "Montserrat, sans-serif",
+                      fontWeight: 900,
+                      color: "#FFFFFF",
+                    }}
+                  >
+                    {agingInsights.brand.median_days} days
+                  </span>{" "}
+                  <span style={{ color: "rgba(245,245,245,0.55)" }}>
+                    ({agingInsights.brand.sample_size} logs)
+                  </span>
+                  .
+                </p>
+              )}
+              {!agingInsights.brand && log.brand_id && (
+                <div
+                  className="mt-1 flex items-center justify-between gap-2 rounded-xl px-3 py-2"
+                  style={{
+                    background: "rgba(255,210,74,0.06)",
+                    border: "1px solid rgba(255,210,74,0.35)",
+                  }}
+                >
+                  <p
+                    className="text-xs"
+                    style={{ color: "rgba(255,210,74,0.85)" }}
+                  >
+                    Pro unlocks brand-specific aging data (e.g., how
+                    long this brand&apos;s slimes typically stay
+                    fresh).
+                  </p>
+                  <a
+                    href="/settings/subscription"
+                    className="text-[11px] font-bold rounded-full px-3 py-1"
+                    style={{
+                      color: "#0A0A0A",
+                      background:
+                        "linear-gradient(135deg, #FFD24A, #FFAE3B)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Go Pro
+                  </a>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Meta row */}

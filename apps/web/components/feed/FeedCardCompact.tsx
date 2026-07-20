@@ -361,6 +361,14 @@ export default function FeedCardCompact({
             rating_sensory_fit: null,
             rating_overall: log.rating_overall,
             is_public: true,
+            // T125 (2026-07-20) — feed queries don't currently return
+            // shelf/aging fields; safe defaults keep the CollectionLog
+            // shape complete for the SlimeDetailCard child.
+            shelf_state: "on_shelf",
+            aging_enabled: true,
+            aging_interval_days: null,
+            last_checked_at: null,
+            aging_state: "fresh",
             created_at: log.created_at,
             updated_at: log.updated_at,
           }}

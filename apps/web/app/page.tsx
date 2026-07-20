@@ -244,6 +244,29 @@ export default async function HomePage({
     redirect("/landing");
   }
 
+  // T125 (2026-07-20) — count of on-shelf slimes flagged by the
+  // nightly aging cron. Renders as a hero card at the top of the
+  // feed when > 0. Uses a count-only query so we don't pull row
+  // data we don't display here.
+  let agingAttentionCount = 0;
+  if (user) {
+    const { count, error: agingCountErr } = await supabase
+      .from("collection_logs")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("shelf_state", "on_shelf")
+      .eq("aging_enabled", true)
+      .in("aging_state", ["overdue", "warning"]);
+    if (agingCountErr) {
+      console.warn(
+        "[home] aging count query failed:",
+        agingCountErr.message,
+      );
+    } else {
+      agingAttentionCount = count ?? 0;
+    }
+  }
+
   // ─── Feed pages ────────────────────────────────────────────────────────────
   // T177 (2026-07-17): the community + following queries + FeedCardLog
   // assembly live in `lib/feed.ts` now. Both this SSR path and the
@@ -350,6 +373,77 @@ export default async function HomePage({
       <OnboardingGate />
 
       <div className="pt-14">
+        {/* T125 (2026-07-20) — aging attention hero. Only renders when
+            the user has at least one on-shelf slime flagged
+            (overdue or warning). Pulls attention to the aging view
+            without demanding it — small footprint, obvious CTA. */}
+        {agingAttentionCount > 0 && (
+          <div className="px-4 pt-4">
+            <Link
+              href="/collection/aging"
+              className="flex items-center justify-between px-4 py-3 rounded-2xl transition-all"
+              style={{
+                background:
+                  "linear-gradient(135deg, rgba(255,174,59,0.12), rgba(255,0,229,0.10))",
+                border: "1px solid rgba(255,174,59,0.55)",
+                boxShadow: "0 0 20px rgba(255,174,59,0.15)",
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <span
+                  style={{
+                    display: "inline-block",
+                    width: 10,
+                    height: 10,
+                    borderRadius: 5,
+                    background: "#FFAE3B",
+                    boxShadow: "0 0 12px rgba(255,174,59,0.75)",
+                  }}
+                />
+                <div>
+                  <p
+                    style={{
+                      fontFamily: "Montserrat, sans-serif",
+                      fontWeight: 800,
+                      fontSize: 14,
+                      color: "#FFFFFF",
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {agingAttentionCount}{" "}
+                    {agingAttentionCount === 1
+                      ? "slime needs"
+                      : "slimes need"}{" "}
+                    attention
+                  </p>
+                  <p
+                    className="mt-0.5"
+                    style={{
+                      fontSize: 12,
+                      color: "rgba(245,245,245,0.65)",
+                    }}
+                  >
+                    Tap to check your aging shelf
+                  </p>
+                </div>
+              </div>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#FFAE3B"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </Link>
+          </div>
+        )}
+
         {/* Feed rework batch 1 (2026-07-11): community stats hero sits
             above the feed tabs. The previous "Community Feed / What the
             community is logging" section-label block was removed since

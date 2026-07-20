@@ -70,6 +70,13 @@ export interface LogSlimeInput {
   // Free-form notes
   notes?: string;
   purchase_price?: number;
+
+  // T125 (2026-07-20) — where this slime lives in the user's
+  // collection. Drives aging reminders (only `on_shelf` gets pinged)
+  // + feeds the future marketplace listing UI (`for_sale`) +
+  // supports archival record-keeping (`archived`). Defaults to
+  // `on_shelf` via the DB column default when omitted.
+  shelf_state?: "on_shelf" | "for_sale" | "archived";
 }
 
 // ─── Auth guard ───────────────────────────────────────────────────────────────
@@ -326,6 +333,11 @@ async function logSlimeInner(input: LogSlimeInput): Promise<LogSlimeResult> {
       image_url: input.image_url ?? null,
       notes: cleanedNotes,
       purchase_price: input.purchase_price ?? null,
+      // T125 (2026-07-20): shelf state gates aging reminders. When
+      // omitted, DB default (`on_shelf`) applies.
+      ...(input.shelf_state !== undefined && {
+        shelf_state: input.shelf_state,
+      }),
     })
     .select("id")
     .single();
@@ -538,6 +550,11 @@ async function updateSlimeLogInner(
       }),
       ...(input.image_url !== undefined && { image_url: input.image_url }),
       ...(input.colors !== undefined && { colors: input.colors }),
+      // T125 (2026-07-20): shelf state edits from /collection/aging
+      // (Mark as archived) route through updateSlimeLog too.
+      ...(input.shelf_state !== undefined && {
+        shelf_state: input.shelf_state,
+      }),
     })
     .eq("id", logId)
     .eq("user_id", userId)

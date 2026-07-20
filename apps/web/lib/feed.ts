@@ -188,6 +188,7 @@ export async function fetchCommunityFeed(
        rating_overall,
        image_url,
        in_wishlist,
+       shelf_state,
        profiles_public!collection_logs_user_id_fkey ( username, avatar_url )`,
     )
     .eq("is_public", true)
@@ -259,6 +260,11 @@ export async function fetchCommunityFeed(
       like_count: likeCountMap[r.id] ?? 0,
       comment_count: commentCountMap[r.id] ?? 0,
       is_liked_by_current_user: userLikedSet.has(r.id),
+      // T125 (2026-07-20): thread shelf_state so the feed card
+      // can render the For Sale / Archived pill.
+      shelf_state:
+        (r as { shelf_state?: "on_shelf" | "for_sale" | "archived" })
+          .shelf_state ?? "on_shelf",
     };
   });
 

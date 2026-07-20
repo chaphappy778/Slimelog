@@ -89,6 +89,24 @@ function UserPlusIcon() {
   );
 }
 
+function ClockIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="w-4 h-4"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+
 function PlusSquareIcon() {
   return (
     <svg
@@ -242,6 +260,7 @@ const TINT = {
   green: "#39FF14", // approvals, positive
   magenta: "#FF00E5", // drops, live moments
   cyan: "#00F0FF", // discovery, social
+  gold: "#FFAE3B", // warm attention — aging reminders, warning
   slate: "#B4A9C4", // muted / negative / sold out
 } as const;
 
@@ -332,6 +351,24 @@ function renderContent(n: Notification): RenderedContent {
         tint: TINT.green,
         copy: <>{boldSpan(actorLabel)} logged a new slime.</>,
         href: logId ? `/slimes/${logId}` : null,
+      };
+    }
+
+    // T125 (2026-07-20): nightly cron flagged 1+ of this user's
+    // on-shelf slimes as overdue or approaching their aging window.
+    // No actor / no slime — this is a summary notification pointing
+    // to /collection/aging where they can see the full list.
+    case "slime_needs_attention": {
+      return {
+        icon: <ClockIcon />,
+        tint: TINT.gold,
+        copy: (
+          <>
+            {boldSpan("Some of your slimes need attention.")} Check
+            in on your shelf.
+          </>
+        ),
+        href: "/collection/aging",
       };
     }
 
