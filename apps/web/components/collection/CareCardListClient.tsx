@@ -39,13 +39,18 @@ interface Props {
 }
 
 // Preset cadence chip options. "Custom" opens a numeric input.
+// Labels are deliberately short + single-word so every chip in the
+// scroll row renders at the same height on one line (Jennifer
+// 2026-07-20: multi-word labels were wrapping and turning the short
+// chips into circles). "45d" matches the "Nd" idiom already used by
+// the recent-care strip.
 const CADENCE_PRESETS: { label: string; days: number }[] = [
   { label: "Weekly", days: 7 },
   { label: "Bi-weekly", days: 14 },
   { label: "Monthly", days: 30 },
-  { label: "45 days", days: 45 },
-  { label: "60 days", days: 60 },
-  { label: "90 days", days: 90 },
+  { label: "45d", days: 45 },
+  { label: "60d", days: 60 },
+  { label: "90d", days: 90 },
 ];
 
 export default function CareCardListClient({
@@ -615,9 +620,16 @@ function CadenceChip({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="rounded-full transition-all"
+      className="rounded-full transition-all shrink-0 inline-flex items-center justify-center whitespace-nowrap"
       style={{
-        padding: "6px 12px",
+        // flex-shrink:0 + nowrap is the actual fix: inside the
+        // horizontally-scrolling row these were compressing to
+        // min-content and wrapping their labels to 2 lines, which
+        // made the short ones render as circles. minHeight pins
+        // every chip to an identical pill regardless of label.
+        minHeight: 32,
+        padding: "0 14px",
+        lineHeight: 1,
         fontFamily: "Montserrat, sans-serif",
         fontWeight: 700,
         fontSize: 12,
@@ -656,7 +668,10 @@ const CATEGORY_META: Record<
   activator: { color: "#00F0FF", letter: "A" },
   softener: { color: "#FF00E5", letter: "S" },
   additive: { color: "#39FF14", letter: "+" },
-  physical: { color: "#3DF2FF", letter: "K" },
+  // Orange (same hex as the Aging state pill in AgingListClient) —
+  // physical/Handling was previously #3DF2FF, indistinguishable from
+  // activator's #00F0FF when the two chips sat next to each other.
+  physical: { color: "#FFAE3B", letter: "K" },
   storage: { color: "#CC44FF", letter: "◫" },
   other: { color: "#B4A9C4", letter: "•" },
 };

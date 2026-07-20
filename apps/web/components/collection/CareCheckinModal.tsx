@@ -53,6 +53,14 @@ type QuantityUnit =
   | "pinch"
   | "squirt";
 
+// One selected product in the check-in. Self-describing so the save
+// payload can be built from selection state alone.
+interface Selection {
+  action_type: CareActionInput["action_type"];
+  quantity_type: QuantityUnit | null;
+  quantity_amount: number | null;
+}
+
 interface CareProduct {
   key: string;
   category: CategoryKey | "other";
@@ -102,8 +110,10 @@ const CATEGORY_META: Record<
     prompt: "Changed where it's stored?",
   },
   physical: {
+    // Orange (same hex as the Aging state pill in AgingListClient).
+    // Was #3DF2FF, which read as identical to activator's #00F0FF.
     label: "Handling",
-    accent: "#3DF2FF",
+    accent: "#FFAE3B",
     prompt: "How did you handle it?",
   },
 };
@@ -142,14 +152,27 @@ export default function CareCheckinModal({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Selection state — action_type key → array of {product_key, quantity_type?, quantity_amount?}.
-  // Kneaded is auto-added on mount as the default.
+  // Selection state — product_key → selection. Keyed by product key
+  // ONLY, so it is completely independent of which category happens
+  // to be expanded (collapsing a section never touches it).
+  //
+  // Each entry carries its own action_type. That matters: handleSave
+  // used to re-derive action_type by looking the key up in the loaded
+  // `products` catalog and silently `continue`-ing on a miss, so any
+  // selection made before (or without) a successful catalog load was
+  // dropped from the payload. The check-in then "succeeded" while
+  // writing zero slime_care_actions rows, which is why no care icons
+  // ever appeared on /care. Selections are now self-describing and
+  // the save path never consults the catalog.
   const [selections, setSelections] = useState<
-    Record<
-      string,
-      { quantity_type: QuantityUnit | null; quantity_amount: number | null }
-    >
-  >({ knead: { quantity_type: null, quantity_amount: null } });
+    Record<string, Selection>
+  >({
+    knead: {
+      action_type: "physical",
+      quantity_type: null,
+      quantity_amount: null,
+    },
+  });
 
   const [notes, setNotes] = useState("");
   const [saving, startSaving] = useTransition();
@@ -203,13 +226,20 @@ export default function CareCheckinModal({
     if (bucket) bucket.push(p);
   }
 
-  function toggleProduct(productKey: string) {
+  function toggleProduct(
+    productKey: string,
+    actionType: CareActionInput["action_type"],
+  ) {
     setSelections((prev) => {
       const next = { ...prev };
       if (next[productKey]) {
         delete next[productKey];
       } else {
-        next[productKey] = { quantity_type: null, quantity_amount: null };
+        next[productKey] = {
+          action_type: actionType,
+          quantity_type: null,
+          quantity_amount: null,
+        };
       }
       return next;
     });
@@ -220,30 +250,40 @@ export default function CareCheckinModal({
     unit: QuantityUnit | null,
     amount: number | null,
   ) {
-    setSelections((prev) => ({
-      ...prev,
-      [productKey]: { quantity_type: unit, quantity_amount: amount },
-    }));
+    setSelections((prev) => {
+      const existing = prev[productKey];
+      // Quantity inputs only render for already-selected products;
+      // bail rather than resurrect a deselected one. Spread preserves
+      // action_type, which a bare object literal would drop.
+      if (!existing) return prev;
+      return {
+        ...prev,
+        [productKey]: {
+          ...existing,
+          quantity_type: unit,
+          quantity_amount: amount,
+        },
+      };
+    });
   }
 
   function handleSave() {
     setSaveError(null);
-    // Build careActions payload from selections + product catalog
-    // lookups. Simple imperative loop keeps the types happy.
-    const productMap = new Map(products.map((p) => [p.key, p]));
+    // Build the payload straight from selection state — no catalog
+    // lookup, so nothing can be silently dropped (see the note on
+    // `selections`). Shape matches CareActionInput in
+    // lib/aging-actions.ts.
     const careActions: CareActionInput[] = [];
-    for (const [productKey, qty] of Object.entries(selections)) {
-      const p = productMap.get(productKey);
-      if (!p) continue;
+    for (const [productKey, sel] of Object.entries(selections)) {
       const action: CareActionInput = {
-        action_type: p.category as CareActionInput["action_type"],
-        product_key: p.key,
+        action_type: sel.action_type,
+        product_key: productKey,
       };
-      if (qty.quantity_type !== null) {
-        action.quantity_type = qty.quantity_type;
+      if (sel.quantity_type !== null) {
+        action.quantity_type = sel.quantity_type;
       }
-      if (qty.quantity_amount !== null) {
-        action.quantity_amount = qty.quantity_amount;
+      if (sel.quantity_amount !== null) {
+        action.quantity_amount = sel.quantity_amount;
       }
       careActions.push(action);
     }
@@ -451,8 +491,9 @@ export default function CareCheckinModal({
                             <button
                               key={p.key}
                               type="button"
-                              onClick={() => toggleProduct(p.key)}
-                              className="rounded-full transition-all"
+                              aria-pressed={selected}
+                              onClick={() => toggleProduct(p.key, cat)}
+                              className="rounded-full transition-all inline-flex items-center gap-1.5"
                               style={{
                                 padding: "6px 12px",
                                 fontFamily: "Montserrat, sans-serif",
@@ -470,6 +511,29 @@ export default function CareCheckinModal({
                                   : "none",
                               }}
                             >
+                              {/* Explicit check glyph — the fill
+                                  change alone read as ambiguous. */}
+                              <svg
+                                width="11"
+                                height="11"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="3.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                style={{
+                                  opacity: selected ? 1 : 0.35,
+                                  flexShrink: 0,
+                                }}
+                                aria-hidden="true"
+                              >
+                                {selected ? (
+                                  <path d="M20 6 9 17l-5-5" />
+                                ) : (
+                                  <path d="M12 5v14M5 12h14" />
+                                )}
+                              </svg>
                               {p.display_name}
                             </button>
                           );
