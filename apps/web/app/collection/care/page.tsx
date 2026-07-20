@@ -10,7 +10,8 @@
 //     as context
 //   - Editable custom cadence (chip picker + custom N-day input)
 //   - Care plan notes textarea (500 char max)
-//   - Last 3 check-in actions from slime_care_actions history
+//   - Recent care strip: one tile per logged category, each showing
+//     that category's most recent check-in
 //   - Save button (per-card; optimistic)
 //
 // Top-of-page aggregates (Pro insights):
@@ -53,8 +54,8 @@ export type CareCardRow = {
   // sheet shows what was just logged (Jennifer 2026-07-20: "after u
   // select a recent care action close the card then reopen it all ur
   // selections disapear"). Deliberately a SEPARATE field from
-  // recent_actions: that strip shows the last 3 actions over 30 days,
-  // this is every product logged in the last 24h, deduped by
+  // recent_actions: that strip shows one tile per category over 30
+  // days, this is every product logged in the last 24h, deduped by
   // product_key. Rows with a null product_key (quick category re-logs
   // from the strip) are excluded since they map to no pill.
   recent_selections: {
@@ -90,6 +91,80 @@ async function fetchDefaultsMap(
     m.set(row.base_type as string, row.default_interval_days as number);
   }
   return m;
+}
+
+// Fixed display order for the "Recent care" strip. The strip is
+// CATEGORICAL, not chronological: one tile per category the user has
+// actually logged, showing when that category was last performed.
+// T188 (2026-07-20) — it previously took the 3 chronologically newest
+// actions, so logging knead + activator + softener in one session
+// pushed the older additive/storage tiles off the card entirely
+// (Jennifer: "i logged all 5 and only 3 show up").
+//
+// Order is fixed rather than performed_at desc so tiles keep a stable
+// position across renders. That also matches quickCheckin() in
+// CareCardListClient, which deliberately does not reorder the strip
+// when you tap a tile.
+const CARE_CATEGORY_ORDER = [
+  "activator",
+  "softener",
+  "additive",
+  "physical",
+  "storage",
+  "other",
+] as const;
+
+type CareActionRow = {
+  id: string;
+  performed_at: string;
+  action_type: string;
+  product_key: string | null;
+};
+
+function recentByCategory(
+  logActions: readonly CareActionRow[],
+  productDisplay: Map<string, string>,
+): CareCardRow["recent_actions"] {
+  // logActions arrives sorted performed_at desc, so the first row seen
+  // for a category is that category's most recent action.
+  const newestByType = new Map<string, (typeof logActions)[number]>();
+  for (const a of logActions) {
+    const type = a.action_type as string;
+    if (!newestByType.has(type)) newestByType.set(type, a);
+  }
+
+  // Anything with an action_type outside the known list falls into the
+  // "other" tile so it still surfaces rather than vanishing.
+  const known = new Set<string>(CARE_CATEGORY_ORDER);
+  for (const [type, a] of newestByType) {
+    if (known.has(type)) continue;
+    newestByType.delete(type);
+    const existing = newestByType.get("other");
+    if (
+      !existing ||
+      new Date(a.performed_at as string) >
+        new Date(existing.performed_at as string)
+    ) {
+      newestByType.set("other", a);
+    }
+  }
+
+  return CARE_CATEGORY_ORDER.flatMap((type) => {
+    const a = newestByType.get(type);
+    if (!a) return []; // no history in this category, no tile
+    const productKey = a.product_key as string | null;
+    return [
+      {
+        id: a.id as string,
+        performed_at: a.performed_at as string,
+        action_type: type as string,
+        product_key: productKey,
+        product_display: productKey
+          ? (productDisplay.get(productKey) ?? null)
+          : null,
+      },
+    ];
+  });
 }
 
 export default async function CarePage({ searchParams }: Props) {
@@ -233,15 +308,7 @@ export default async function CarePage({ searchParams }: Props) {
         (row.base_type
           ? defaults.get(row.base_type as string)
           : undefined) ?? HARD_FALLBACK,
-      recent_actions: logActions.slice(0, 3).map((a) => ({
-        id: a.id as string,
-        performed_at: a.performed_at as string,
-        action_type: a.action_type as string,
-        product_key: a.product_key as string | null,
-        product_display: a.product_key
-          ? (productDisplay.get(a.product_key as string) ?? null)
-          : null,
-      })),
+      recent_actions: recentByCategory(logActions, productDisplay),
       recent_selections: recentSelections,
     };
   });
