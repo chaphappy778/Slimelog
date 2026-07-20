@@ -49,6 +49,21 @@ export type CareCardRow = {
     product_key: string | null;
     product_display: string | null;
   }[];
+  // Seeds the check-in modal's pre-checked products so reopening the
+  // sheet shows what was just logged (Jennifer 2026-07-20: "after u
+  // select a recent care action close the card then reopen it all ur
+  // selections disapear"). Deliberately a SEPARATE field from
+  // recent_actions: that strip shows the last 3 actions over 30 days,
+  // this is every product logged in the last 24h, deduped by
+  // product_key. Rows with a null product_key (quick category re-logs
+  // from the strip) are excluded since they map to no pill.
+  recent_selections: {
+    action_type: string;
+    product_key: string;
+    quantity_type: string | null;
+    quantity_amount: number | null;
+    performed_at: string;
+  }[];
 };
 
 export type CareAggregate = {
@@ -131,7 +146,9 @@ export default async function CarePage({ searchParams }: Props) {
     // + aggregate top-product stats. Cheap join in JS.
     supabase
       .from("slime_care_actions")
-      .select("id, log_id, performed_at, action_type, product_key")
+      .select(
+        "id, log_id, performed_at, action_type, product_key, quantity_type, quantity_amount",
+      )
       .eq("user_id", user.id)
       .gt(
         "performed_at",
@@ -173,8 +190,37 @@ export default async function CarePage({ searchParams }: Props) {
     actionsByLog.set(a.log_id as string, list);
   }
 
+  // 24h window for modal seeding. Anything older is a check-in the
+  // user has moved on from, so it should not come back pre-checked.
+  const seedCutoff = Date.now() - 86_400_000;
+
   const cards: CareCardRow[] = (logsRes.data ?? []).map((row) => {
     const logActions = actionsByLog.get(row.id as string) ?? [];
+
+    // logActions is already sorted performed_at desc, so the first
+    // row seen for a product_key is its most recent one — that is the
+    // quantity we want to restore.
+    const seenKeys = new Set<string>();
+    const recentSelections: CareCardRow["recent_selections"] = [];
+    for (const a of logActions) {
+      const key = a.product_key as string | null;
+      if (!key) continue;
+      if (new Date(a.performed_at as string).getTime() < seedCutoff) {
+        break; // sorted desc, everything after this is older too
+      }
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      const amount = a.quantity_amount;
+      recentSelections.push({
+        action_type: a.action_type as string,
+        product_key: key,
+        quantity_type: (a.quantity_type as string | null) ?? null,
+        quantity_amount:
+          amount === null || amount === undefined ? null : Number(amount),
+        performed_at: a.performed_at as string,
+      });
+    }
+
     return {
       id: row.id as string,
       slime_name: row.slime_name as string | null,
@@ -196,6 +242,7 @@ export default async function CarePage({ searchParams }: Props) {
           ? (productDisplay.get(a.product_key as string) ?? null)
           : null,
       })),
+      recent_selections: recentSelections,
     };
   });
 

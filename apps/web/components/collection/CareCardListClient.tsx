@@ -135,6 +135,7 @@ export default function CareCardListClient({
         <CareCheckinModal
           logId={modalCard.id}
           slimeName={modalCard.slime_name}
+          initialSelections={modalCard.recent_selections}
           onClose={() => setModalCard(null)}
           onSaved={() => {
             // Force server refresh so the recent care strip picks
@@ -815,12 +816,13 @@ const CATEGORY_META: Record<
   additive: {
     color: "#39FF14",
     label: "Additive",
-    // plus in circle
+    // Sparkle. Single closed <path> on purpose: the previous
+    // circle + path pair rendered as an empty tile in the strip
+    // (Jennifer 2026-07-20). Every icon here is now one <path> so
+    // there is no helper element left to drop. Translated down 3
+    // units from the source art to sit centered in the 24 box.
     icon: (
-      <>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M12 8.5v7M8.5 12h7" />
-      </>
+      <path d="M12 6l1.5 4.5L18 12l-4.5 1.5L12 18l-1.5-4.5L6 12l4.5-1.5L12 6z" />
     ),
   },
   // Orange (same hex as the Aging state pill in AgingListClient) —
@@ -840,19 +842,19 @@ const CATEGORY_META: Record<
   storage: {
     color: "#CC44FF",
     label: "Storage",
-    // padlock
-    icon: (
-      <>
-        <path d="M8 8V6a4 4 0 0 1 8 0v2" />
-        <rect x="5" y="8" width="14" height="12" rx="2" />
-      </>
-    ),
+    // Padlock as a single <path> with two subpaths (body, then
+    // shackle). Was a path + <rect> pair, which rendered empty —
+    // see the note on `additive`.
+    icon: <path d="M6 10h12v10H6z M9 10V7a3 3 0 0 1 6 0v3" />,
   },
   other: {
     color: "#B4A9C4",
     label: "Other",
-    // small circle
-    icon: <circle cx="12" cy="12" r="4" />,
+    // Small ring, drawn as a <path> for the same reason as
+    // `additive` / `storage`. This is the fallback for any
+    // unrecognized action_type, so a blank tile here would be the
+    // most confusing one of the set.
+    icon: <path d="M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8z" />,
   },
 };
 

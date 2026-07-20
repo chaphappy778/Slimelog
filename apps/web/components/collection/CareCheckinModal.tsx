@@ -69,9 +69,25 @@ interface CareProduct {
   sort_order: number;
 }
 
+// A previously-logged action used to pre-check the sheet on open.
+// Loose string types because it crosses the server/client boundary
+// straight out of Postgres; `seedSelections` validates before it
+// reaches selection state.
+export interface InitialSelection {
+  action_type: string;
+  product_key: string;
+  quantity_type: string | null;
+  quantity_amount: number | null;
+  performed_at: string;
+}
+
 interface Props {
   logId: string;
   slimeName: string | null;
+  // Products logged for this slime in the last 24h. Pre-checked on
+  // mount so closing and reopening the sheet shows what was just
+  // saved, rather than resetting to the bare `knead` default.
+  initialSelections?: InitialSelection[];
   onClose: () => void;
   // Fired after a successful save so the parent can update its local
   // state (e.g., move the row from Overdue -> Fresh on
@@ -140,11 +156,60 @@ const QUANTITY_UNITS: QuantityUnit[] = [
   "squirt",
 ];
 
+const ACTION_TYPES = new Set<CareActionInput["action_type"]>([
+  "activator",
+  "softener",
+  "additive",
+  "physical",
+  "storage",
+  "other",
+]);
+
+const QUANTITY_UNIT_SET = new Set<QuantityUnit>(QUANTITY_UNITS);
+
+// The mount-time default when nothing was logged in the last 24h.
+const KNEAD_DEFAULT: Record<string, Selection> = {
+  knead: {
+    action_type: "physical",
+    quantity_type: null,
+    quantity_amount: null,
+  },
+};
+
+// Build selection state from prior actions. Rows with an action_type
+// the client doesn't recognize are dropped rather than coerced: a bad
+// action_type would be written straight back out on the next save.
+function seedSelections(
+  initial: InitialSelection[] | undefined,
+): Record<string, Selection> {
+  if (!initial || initial.length === 0) return { ...KNEAD_DEFAULT };
+
+  const seeded: Record<string, Selection> = {};
+  for (const row of initial) {
+    const actionType = row.action_type as CareActionInput["action_type"];
+    if (!ACTION_TYPES.has(actionType)) continue;
+    const unit = row.quantity_type as QuantityUnit | null;
+    seeded[row.product_key] = {
+      action_type: actionType,
+      quantity_type: unit && QUANTITY_UNIT_SET.has(unit) ? unit : null,
+      quantity_amount:
+        typeof row.quantity_amount === "number" &&
+        Number.isFinite(row.quantity_amount)
+          ? row.quantity_amount
+          : null,
+    };
+  }
+
+  // Everything was unrecognized — fall back rather than open empty.
+  return Object.keys(seeded).length > 0 ? seeded : { ...KNEAD_DEFAULT };
+}
+
 // ─── Modal component ──────────────────────────────────────────────────
 
 export default function CareCheckinModal({
   logId,
   slimeName,
+  initialSelections,
   onClose,
   onSaved,
 }: Props) {
@@ -164,15 +229,14 @@ export default function CareCheckinModal({
   // writing zero slime_care_actions rows, which is why no care icons
   // ever appeared on /care. Selections are now self-describing and
   // the save path never consults the catalog.
-  const [selections, setSelections] = useState<
-    Record<string, Selection>
-  >({
-    knead: {
-      action_type: "physical",
-      quantity_type: null,
-      quantity_amount: null,
-    },
-  });
+  //
+  // Seeded from the last 24h of logged actions when the parent passes
+  // them, so reopening the sheet confirms what was just saved instead
+  // of resetting to `knead`. Lazy initializer: this runs on mount
+  // only, so the user's own toggles are never clobbered by a re-render.
+  const [selections, setSelections] = useState<Record<string, Selection>>(
+    () => seedSelections(initialSelections),
+  );
 
   const [notes, setNotes] = useState("");
   // Has the user actually interacted with the sheet? Gates auto-save
@@ -184,8 +248,25 @@ export default function CareCheckinModal({
   const [touched, setTouched] = useState(false);
   const [saving, startSaving] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [expandedCategory, setExpandedCategory] =
-    useState<CategoryKey | null>("physical");
+  // Open on the first category that has something pre-checked, so a
+  // seeded selection is visible without hunting through the accordion.
+  // Falls back to "physical" (where the `knead` default lives).
+  const [expandedCategory, setExpandedCategory] = useState<
+    CategoryKey | null
+  >(() => {
+    const seededTypes = new Set(
+      Object.values(seedSelections(initialSelections)).map(
+        (s) => s.action_type,
+      ),
+    );
+    return (
+      CATEGORY_ORDER.find((cat) => seededTypes.has(cat)) ?? "physical"
+    );
+  });
+
+  const seededFromRecent = Boolean(
+    initialSelections && initialSelections.length > 0,
+  );
 
   // ─── Load product catalog ──────────────────────────────────────────
   useEffect(() => {
@@ -441,7 +522,9 @@ export default function CareCheckinModal({
             className="mt-1 text-xs"
             style={{ color: "rgba(245,245,245,0.55)" }}
           >
-            Kneaded is on by default. Add anything else you used.
+            {seededFromRecent
+              ? "Your picks from the last day are still checked. Add anything else you used."
+              : "Kneaded is on by default. Add anything else you used."}
           </p>
         </div>
 
