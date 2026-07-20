@@ -20,7 +20,11 @@ import {
   setLogAgingEnabled,
   setLogShelfState,
 } from "@/lib/aging-actions";
-import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
+import {
+  SLIME_BASE_TYPE_LABELS,
+  SLIME_BASE_TYPE_COLORS,
+  type SlimeBaseType,
+} from "@/lib/types";
 // T125 phase 2 (2026-07-20): "Checked" button now opens the
 // structured check-in modal instead of firing markLogChecked
 // directly. Data-collection lane — every check-in yields structured
@@ -275,6 +279,43 @@ export default function AgingListClient({
   );
 }
 
+// ─── Solid-filled state pill (Fresh / Aging / Overdue) ───────────────
+// Per Jennifer 2026-07-20 feedback: replaced the inline colored
+// status text with a solid-filled pill (green/orange/red)
+// borrowed from the Design mockup's category-language row.
+
+function StatePill({
+  state,
+  label,
+}: {
+  state: "fresh" | "warning" | "overdue";
+  label: string;
+}) {
+  const bg =
+    state === "overdue"
+      ? "#FF3D6E"
+      : state === "warning"
+        ? "#FFAE3B"
+        : "#39FF14";
+  return (
+    <span
+      className="inline-flex items-center rounded-full"
+      style={{
+        padding: "3px 10px",
+        background: bg,
+        color: "#0A0A0A",
+        fontFamily: "Montserrat, sans-serif",
+        fontWeight: 800,
+        fontSize: 11,
+        letterSpacing: "0.02em",
+        boxShadow: `0 0 10px ${bg}55`,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
 // ─── Section header ───────────────────────────────────────────────────
 
 function Section({
@@ -331,36 +372,44 @@ function AgingRow({
   accent,
   error,
   onMarkChecked,
-  onSnooze,
   onArchive,
-  onTurnOff,
   disabled,
 }: {
   row: AgingLogRow;
   accent: string;
   error?: string;
   onMarkChecked: () => void;
-  onSnooze: (days: number) => void;
+  onSnooze: (days: number) => void; // retained in signature for parent; not used here anymore
   onArchive: () => void;
-  onTurnOff: () => void;
+  onTurnOff: () => void; // retained in signature for parent; not used here anymore
   disabled: boolean;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
+  // Per Jennifer 2026-07-20 feedback: dropped the sub-line
+  // (brand name · base type — was cluttering the card) and the
+  // three-dot menu (snooze + turn-off now covered by the global
+  // Settings toggle). Photo fallback now uses the slime's
+  // base-type signature gradient so the card visually reads like
+  // other slime surfaces instead of introducing a new accent
+  // gradient per-row. Solid-filled state pill (green/orange/red)
+  // replaces the inline status text.
   const daysDelta = row.days_since_check - row.effective_interval_days;
-  const statusText =
-    row.aging_state === "overdue"
-      ? `Overdue by ${daysDelta} ${daysDelta === 1 ? "day" : "days"}`
-      : row.aging_state === "warning"
-        ? `Aging in ${Math.max(0, -daysDelta)} ${
-            Math.max(0, -daysDelta) === 1 ? "day" : "days"
-          }`
-        : `Checked ${row.days_since_check} ${
-            row.days_since_check === 1 ? "day" : "days"
-          } ago`;
 
-  const baseTypeLabel = row.base_type
-    ? SLIME_BASE_TYPE_LABELS[row.base_type]
-    : null;
+  // State pill copy — short, action-focused.
+  const stateLabel =
+    row.aging_state === "overdue"
+      ? `Overdue · ${daysDelta}d`
+      : row.aging_state === "warning"
+        ? `Aging · ${Math.max(0, -daysDelta)}d`
+        : `Fresh · ${row.days_since_check}d`;
+
+  // Fallback gradient — uses the slime's base-type accent color
+  // pulled from the shared SLIME_BASE_TYPE_COLORS palette. Same
+  // gradient the /discover type carousel uses so cards feel
+  // consistent across surfaces.
+  const baseAccent = row.base_type
+    ? (SLIME_BASE_TYPE_COLORS[row.base_type as SlimeBaseType]?.text ??
+      "#00F0FF")
+    : "#00F0FF";
 
   return (
     <div
@@ -382,7 +431,7 @@ function AgingRow({
             width: 56,
             height: 56,
             background: "rgba(45,10,78,0.5)",
-            border: `1px solid ${accent}66`,
+            border: `1px solid ${baseAccent}55`,
           }}
         >
           {row.image_url ? (
@@ -397,8 +446,9 @@ function AgingRow({
             <div
               className="w-full h-full flex items-center justify-center"
               style={{
-                background: `linear-gradient(135deg, ${accent}44, rgba(45,10,78,0.5))`,
+                background: `linear-gradient(135deg, ${baseAccent}66, rgba(45,10,78,0.5))`,
               }}
+              aria-hidden="true"
             />
           )}
         </Link>
@@ -416,118 +466,58 @@ function AgingRow({
           >
             {row.slime_name || "Unnamed slime"}
           </Link>
-          <p
-            className="text-xs truncate mt-0.5"
-            style={{ color: "rgba(245,245,245,0.55)" }}
-          >
-            {[row.brand_name_raw, baseTypeLabel]
-              .filter(Boolean)
-              .join(" · ")}
-          </p>
-          <p
-            className="text-xs mt-1"
+          <div className="mt-1.5">
+            <StatePill state={row.aging_state} label={stateLabel} />
+          </div>
+        </div>
+
+        {/* Vertical stack: Checked (green filled) + Archive (orange
+            outlined). Snooze + Turn-off dropped per Jennifer's spec
+            — reminders can be turned off globally in Settings. */}
+        <div className="shrink-0 flex flex-col gap-1.5">
+          <button
+            type="button"
+            onClick={onMarkChecked}
+            disabled={disabled}
+            className="rounded-full transition-all"
             style={{
-              color: accent,
+              padding: "6px 14px",
+              fontFamily: "Montserrat, sans-serif",
+              fontWeight: 800,
+              fontSize: 11,
+              background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+              color: "#0A0A0A",
+              border: "none",
+              opacity: disabled ? 0.6 : 1,
+              cursor: disabled ? "not-allowed" : "pointer",
+              whiteSpace: "nowrap",
+              boxShadow: "0 0 10px rgba(57,255,20,0.35)",
+            }}
+          >
+            Checked
+          </button>
+          <button
+            type="button"
+            onClick={onArchive}
+            disabled={disabled}
+            className="rounded-full transition-all"
+            style={{
+              padding: "6px 14px",
               fontFamily: "Montserrat, sans-serif",
               fontWeight: 700,
+              fontSize: 11,
+              background: "transparent",
+              color: "#FFAE3B",
+              border: "1px solid rgba(255,174,59,0.55)",
+              opacity: disabled ? 0.6 : 1,
+              cursor: disabled ? "not-allowed" : "pointer",
+              whiteSpace: "nowrap",
             }}
           >
-            {statusText}
-          </p>
+            Archive
+          </button>
         </div>
-
-        <button
-          type="button"
-          onClick={onMarkChecked}
-          disabled={disabled}
-          className="shrink-0 rounded-xl transition-all"
-          style={{
-            padding: "8px 14px",
-            fontFamily: "Montserrat, sans-serif",
-            fontWeight: 800,
-            fontSize: 12,
-            background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-            color: "#0A0A0A",
-            border: "none",
-            opacity: disabled ? 0.6 : 1,
-            cursor: disabled ? "not-allowed" : "pointer",
-            whiteSpace: "nowrap",
-          }}
-        >
-          Checked
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setMenuOpen((x) => !x)}
-          className="shrink-0 grid place-items-center rounded-full"
-          style={{
-            width: 32,
-            height: 32,
-            background: "rgba(45,10,78,0.5)",
-            border: "1px solid rgba(45,10,78,0.7)",
-            color: "rgba(245,245,245,0.75)",
-          }}
-          aria-label="More actions"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            aria-hidden="true"
-          >
-            <circle cx="5" cy="12" r="1.6" />
-            <circle cx="12" cy="12" r="1.6" />
-            <circle cx="19" cy="12" r="1.6" />
-          </svg>
-        </button>
       </div>
-
-      {menuOpen && (
-        <div
-          className="border-t px-3 py-2 flex flex-wrap gap-2"
-          style={{
-            borderTopColor: "rgba(45,10,78,0.7)",
-            borderTopWidth: 1,
-          }}
-        >
-          <ActionChip
-            label="Snooze 7 days"
-            onClick={() => {
-              setMenuOpen(false);
-              onSnooze(7);
-            }}
-            disabled={disabled}
-          />
-          <ActionChip
-            label="Snooze 30 days"
-            onClick={() => {
-              setMenuOpen(false);
-              onSnooze(30);
-            }}
-            disabled={disabled}
-          />
-          <ActionChip
-            label="Archive"
-            onClick={() => {
-              setMenuOpen(false);
-              onArchive();
-            }}
-            disabled={disabled}
-            variant="warn"
-          />
-          <ActionChip
-            label="Turn off reminders"
-            onClick={() => {
-              setMenuOpen(false);
-              onTurnOff();
-            }}
-            disabled={disabled}
-            variant="muted"
-          />
-        </div>
-      )}
 
       {error && (
         <div

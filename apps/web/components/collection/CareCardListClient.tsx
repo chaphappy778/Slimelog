@@ -22,7 +22,15 @@ import {
   setLogAgingInterval,
   setLogCarePlanNotes,
 } from "@/lib/aging-actions";
-import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
+import {
+  SLIME_BASE_TYPE_LABELS,
+  SLIME_BASE_TYPE_COLORS,
+  type SlimeBaseType,
+} from "@/lib/types";
+// T125 phase 2 (2026-07-20) — tapping the slime photo on a care
+// card opens the same check-in modal used from /collection/aging so
+// users can log a fresh care action without leaving the page.
+import CareCheckinModal from "@/components/collection/CareCheckinModal";
 
 interface Props {
   initialCards: CareCardRow[];
@@ -47,6 +55,9 @@ export default function CareCardListClient({
 }: Props) {
   const [cards, setCards] = useState(initialCards);
   const highlightRef = useRef<HTMLDivElement | null>(null);
+  // Which card's photo has been tapped — opens the CareCheckinModal
+  // for that log. Null = no modal open.
+  const [modalCard, setModalCard] = useState<CareCardRow | null>(null);
 
   // Scroll the highlighted card into view once on mount (from
   // /slimes/[id] deep-links).
@@ -112,6 +123,23 @@ export default function CareCardListClient({
   }
 
   return (
+    <>
+      {modalCard && (
+        <CareCheckinModal
+          logId={modalCard.id}
+          slimeName={modalCard.slime_name}
+          onClose={() => setModalCard(null)}
+          onSaved={() => {
+            // Force server refresh so the recent care strip picks
+            // up the new action. Simpler than threading the new
+            // action into local state.
+            setModalCard(null);
+            if (typeof window !== "undefined") {
+              window.location.reload();
+            }
+          }}
+        />
+      )}
     <div className="px-4 flex flex-col gap-6">
       {/* Aggregate strip */}
       <AggregateStrip aggregate={aggregate} />
@@ -127,10 +155,12 @@ export default function CareCardListClient({
               card.id === highlightId ? highlightRef : undefined
             }
             onUpdate={(updates) => updateCard(card.id, updates)}
+            onLogCare={() => setModalCard(card)}
           />
         ))}
       </div>
     </div>
+    </>
   );
 }
 
@@ -234,17 +264,24 @@ function CareCard({
   highlighted,
   highlightRef,
   onUpdate,
+  onLogCare,
 }: {
   card: CareCardRow;
   highlighted: boolean;
   highlightRef?: React.RefObject<HTMLDivElement | null> | undefined;
   onUpdate: (updates: Partial<CareCardRow>) => void;
+  onLogCare: () => void;
 }) {
   // Cast to work around React 19 ref typing narrowing — RefObject<T|null>
   // is functionally identical to LegacyRef<T> for this use.
   const rowRef = highlightRef as
     | React.LegacyRef<HTMLDivElement>
     | undefined;
+
+  const baseAccent = card.base_type
+    ? (SLIME_BASE_TYPE_COLORS[card.base_type as SlimeBaseType]?.text ??
+      "#00F0FF")
+    : "#00F0FF";
   const [saving, startSaving] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState(card.care_plan_notes ?? "");
@@ -300,17 +337,23 @@ function CareCard({
           : "none",
       }}
     >
-      {/* Header row: photo + name + brand + base type + link out */}
+      {/* Header row: photo (tap opens check-in modal per Jennifer
+          2026-07-20 feedback — the photo is the "log care" action)
+          + name + link out to detail via caret. */}
       <div className="flex items-center gap-3 p-4 border-b border-white/5">
-        <Link
-          href={`/slimes/${card.id}`}
-          className="shrink-0 rounded-lg overflow-hidden"
+        <button
+          type="button"
+          onClick={onLogCare}
+          className="shrink-0 rounded-lg overflow-hidden relative group"
           style={{
             width: 56,
             height: 56,
             background: "rgba(45,10,78,0.5)",
-            border: "1px solid rgba(45,10,78,0.7)",
+            border: `1px solid ${baseAccent}66`,
+            padding: 0,
+            cursor: "pointer",
           }}
+          aria-label={`Log care for ${card.slime_name ?? "this slime"}`}
         >
           {card.image_url ? (
             <Image
@@ -324,12 +367,29 @@ function CareCard({
             <div
               className="w-full h-full"
               style={{
-                background:
-                  "linear-gradient(135deg, rgba(0,240,255,0.35), rgba(255,0,229,0.35))",
+                background: `linear-gradient(135deg, ${baseAccent}66, rgba(45,10,78,0.5))`,
               }}
+              aria-hidden="true"
             />
           )}
-        </Link>
+          {/* Log-care hover hint — hidden by default, visible on
+              hover / focus. Signals the photo is tappable. */}
+          <span
+            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+            style={{
+              background: "rgba(0,0,0,0.55)",
+              color: "#39FF14",
+              fontFamily: "Montserrat, sans-serif",
+              fontWeight: 900,
+              fontSize: 10,
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+            }}
+            aria-hidden="true"
+          >
+            Log
+          </span>
+        </button>
         <div className="flex-1 min-w-0">
           <Link
             href={`/slimes/${card.id}`}
@@ -371,7 +431,16 @@ function CareCard({
             Recommended for {baseTypeLabel?.toLowerCase() ?? "this base"}:
             every {card.default_interval_days} days
           </p>
-          <div className="flex flex-wrap gap-2">
+          {/* T125 phase 2 (2026-07-20) — chips scroll horizontally
+              instead of wrapping. Per Jennifer's feedback: stacked
+              pills for date intervals look cramped; a scrollable
+              row keeps the card compact regardless of how many
+              presets we add later. Hidden scrollbar for cleanliness
+              on desktop. */}
+          <div
+            className="flex gap-2 overflow-x-auto pb-1"
+            style={{ scrollbarWidth: "none" }}
+          >
             <CadenceChip
               label="Default"
               active={currentInterval === null && !showCustom}
@@ -493,7 +562,10 @@ function CareCard({
           </div>
         </div>
 
-        {/* Recent actions */}
+        {/* Recent actions — T125 phase 2 (2026-07-20) icon strip
+            per Design mockup / Jennifer 2026-07-20 feedback. Colored
+            icon per category + day pill. Tighter than the prior
+            text list. */}
         {card.recent_actions.length > 0 && (
           <div>
             <p
@@ -502,18 +574,9 @@ function CareCard({
             >
               Recent care
             </p>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
               {card.recent_actions.map((a) => (
-                <div
-                  key={a.id}
-                  className="flex items-center justify-between text-xs"
-                  style={{ color: "rgba(245,245,245,0.75)" }}
-                >
-                  <span>
-                    {a.product_display ?? a.action_type} —{" "}
-                    {relativeTime(a.performed_at)}
-                  </span>
-                </div>
+                <RecentCareChip key={a.id} action={a} />
               ))}
             </div>
           </div>
@@ -580,4 +643,74 @@ function relativeTime(iso: string): string {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   return `${days}d ago`;
+}
+
+// ─── Recent care icon chip ────────────────────────────────────────────
+// One chip per recent care action. Category-colored circle icon +
+// day-count pill (e.g. "2d"). Hover reveals the product name.
+
+const CATEGORY_META: Record<
+  string,
+  { color: string; letter: string }
+> = {
+  activator: { color: "#00F0FF", letter: "A" },
+  softener: { color: "#FF00E5", letter: "S" },
+  additive: { color: "#39FF14", letter: "+" },
+  physical: { color: "#3DF2FF", letter: "K" },
+  storage: { color: "#CC44FF", letter: "◫" },
+  other: { color: "#B4A9C4", letter: "•" },
+};
+
+function RecentCareChip({
+  action,
+}: {
+  action: {
+    id: string;
+    performed_at: string;
+    action_type: string;
+    product_key: string | null;
+    product_display: string | null;
+  };
+}) {
+  const meta = CATEGORY_META[action.action_type] ?? CATEGORY_META.other;
+  const daysAgo = Math.max(
+    0,
+    Math.floor((Date.now() - new Date(action.performed_at).getTime()) / 86_400_000),
+  );
+  const label = action.product_display ?? action.action_type;
+  return (
+    <div
+      className="shrink-0 flex items-center gap-1.5"
+      title={`${label} · ${daysAgo === 0 ? "today" : `${daysAgo}d ago`}`}
+    >
+      <span
+        aria-hidden="true"
+        className="grid place-items-center rounded-full"
+        style={{
+          width: 26,
+          height: 26,
+          background: `${meta.color}22`,
+          border: `1px solid ${meta.color}88`,
+          color: meta.color,
+          fontFamily: "Montserrat, sans-serif",
+          fontWeight: 900,
+          fontSize: 11,
+          boxShadow: `0 0 8px ${meta.color}44`,
+        }}
+      >
+        {meta.letter}
+      </span>
+      <span
+        className="tabular-nums"
+        style={{
+          fontFamily: "Montserrat, sans-serif",
+          fontWeight: 700,
+          fontSize: 11,
+          color: meta.color,
+        }}
+      >
+        {daysAgo === 0 ? "today" : `${daysAgo}d`}
+      </span>
+    </div>
+  );
 }
