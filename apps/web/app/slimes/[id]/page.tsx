@@ -305,20 +305,38 @@ export default async function SlimePage({
   // We fire both in parallel via fetchDualAgingInsights; the Pro
   // one skips when the viewer isn't a Pro subscriber to avoid
   // wasted queries.
+  // Viewer profile — used for both the community-insights Pro gate
+  // (via is_premium on profiles_public) AND the owner aging banner
+  // (which respects the profile-level aging_reminders_enabled toggle
+  // so the banner disappears when the user turns off reminders in
+  // Settings).
+  let viewerIsPro = false;
+  let viewerAgingRemindersEnabled = true; // safe default (opt-out UX)
+  if (currentUserId) {
+    const [publicRes, privateRes] = await Promise.all([
+      supabase
+        .from("profiles_public")
+        .select("is_premium")
+        .eq("id", currentUserId)
+        .maybeSingle(),
+      supabase
+        .from("profiles")
+        .select("aging_reminders_enabled")
+        .eq("id", currentUserId)
+        .maybeSingle(),
+    ]);
+    viewerIsPro = Boolean(publicRes.data?.is_premium);
+    // profiles table isn't nullable on this column (DEFAULT true), but
+    // guard for the "row missing" case just in case.
+    viewerAgingRemindersEnabled =
+      privateRes.data?.aging_reminders_enabled ?? true;
+  }
+
   let agingInsights: {
     base: import("@/lib/aging-insights").AgingInsight | null;
     brand: import("@/lib/aging-insights").AgingInsight | null;
   } = { base: null, brand: null };
   if (log.base_type) {
-    let viewerIsPro = false;
-    if (currentUserId) {
-      const { data: viewerProfile } = await supabase
-        .from("profiles_public")
-        .select("is_premium")
-        .eq("id", currentUserId)
-        .maybeSingle();
-      viewerIsPro = Boolean(viewerProfile?.is_premium);
-    }
     const { fetchDualAgingInsights } = await import("@/lib/aging-insights");
     agingInsights = await fetchDualAgingInsights(supabase, {
       base_type: log.base_type as SlimeBaseType,
@@ -357,8 +375,13 @@ export default async function SlimePage({
 
   // T125 (2026-07-20) — aging status chip shown to the log owner
   // only. Non-owners see the community insights strip above but no
-  // per-log status (that's the owner's context). Only rendered when
-  // aging is active for this log (on_shelf + aging_enabled).
+  // per-log status (that's the owner's context). Only renders when:
+  //   - viewer is the log owner
+  //   - log is on_shelf (archived + for_sale get no reminders)
+  //   - per-log aging_enabled is true
+  //   - viewer's profile aging_reminders_enabled is true (2026-07-20
+  //     hotfix: was ignoring the global toggle so users who turned
+  //     off reminders in Settings still saw the banner)
   let ownerAgingBanner: {
     label: string;
     accent: string;
@@ -367,7 +390,8 @@ export default async function SlimePage({
   if (
     isOwner &&
     log.shelf_state === "on_shelf" &&
-    log.aging_enabled
+    log.aging_enabled &&
+    viewerAgingRemindersEnabled
   ) {
     // Resolve effective interval (same logic as
     // get_effective_aging_interval helper in the migration).

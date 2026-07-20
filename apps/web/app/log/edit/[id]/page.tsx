@@ -25,12 +25,14 @@ import {
   SLIME_CONDITION_DESCRIPTIONS,
   SLIME_SKILL_LEVEL_LABELS,
   SLIME_SKILL_LEVEL_COLORS,
+  SHELF_STATE_LABELS,
 } from "@/lib/types";
 import type {
   SlimeBaseType,
   ScentStrength,
   SlimeCondition,
   SlimeSkillLevel,
+  ShelfState,
 } from "@/lib/types";
 import { ImageUpload } from "@/components/ImageUpload";
 import PageWrapper from "@/components/PageWrapper";
@@ -95,6 +97,10 @@ interface FormState {
   scent_notes: string;
   // 2026-07-12: condition (personal + future marketplace).
   condition: SlimeCondition | null;
+  // T125 (2026-07-20): shelf state — where this slime lives in the
+  // collection. Drives aging reminders (only on_shelf gets pinged)
+  // and feeds the future marketplace listing UI.
+  shelf_state: ShelfState;
   // T158 (2026-07-16): optional per-log difficulty tag.
   skill_level: SlimeSkillLevel | "";
   keywords: string[];
@@ -157,6 +163,9 @@ function EditLogPageInner() {
     scent_strength: null,
     scent_notes: "",
     condition: null,
+    // T125 (2026-07-20): default on_shelf; will be overwritten by
+    // the DB hydrate below if the log has a different state.
+    shelf_state: "on_shelf",
     skill_level: "",
     keywords: [],
     purchase_price: "",
@@ -220,6 +229,10 @@ function EditLogPageInner() {
         scent_notes: data.scent_notes ?? "",
         // 2026-07-12: hydrate condition from DB when present.
         condition: (data.condition as SlimeCondition) ?? null,
+        // T125 (2026-07-20): hydrate shelf_state; defaults to
+        // on_shelf if the row predates the column (backfilled).
+        shelf_state:
+          (data.shelf_state as ShelfState) ?? "on_shelf",
         // T158 (2026-07-16): hydrate skill_level; "" = unpicked.
         skill_level: (data.skill_level as SlimeSkillLevel) ?? "",
         keywords: [],
@@ -317,6 +330,10 @@ function EditLogPageInner() {
         condition: form.condition,
         // T158 (2026-07-16): null when cleared so users can un-tag.
         skill_level: form.skill_level || null,
+        // T125 (2026-07-20): shelf state edits from the edit wizard.
+        // Always sent — has a default value in FormState so it's
+        // never undefined.
+        shelf_state: form.shelf_state,
         is_public: !isPrivate,
       };
 
@@ -599,6 +616,64 @@ function EditLogPageInner() {
                     }}
                   >
                     {SLIME_CONDITION_DESCRIPTIONS[form.condition]}
+                  </p>
+                )}
+              </div>
+
+              {/* T125 (2026-07-20) — shelf state chip. Same visual +
+                  copy as the create wizard so the two stay in parity.
+                  Users can move a slime between on_shelf / for_sale /
+                  archived from here after logging. */}
+              <div>
+                <FieldLabel>Where does this slime live?</FieldLabel>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    Object.entries(SHELF_STATE_LABELS) as [
+                      ShelfState,
+                      string,
+                    ][]
+                  ).map(([state, label]) => {
+                    const active = form.shelf_state === state;
+                    const tint =
+                      state === "on_shelf"
+                        ? "#00F0FF"
+                        : state === "for_sale"
+                          ? "#39FF14"
+                          : "#CC44FF";
+                    return (
+                      <PickChip
+                        key={state}
+                        selected={active}
+                        selectedTint={tint}
+                        onClick={() => set("shelf_state", state)}
+                      >
+                        {label}
+                      </PickChip>
+                    );
+                  })}
+                </div>
+                {form.shelf_state === "for_sale" && (
+                  <p
+                    className="mt-2"
+                    style={{
+                      color: "rgba(57,255,20,0.85)",
+                      fontSize: 13,
+                    }}
+                  >
+                    Will show a green For Sale pill on your feed. The
+                    marketplace listing flow is coming soon.
+                  </p>
+                )}
+                {form.shelf_state === "archived" && (
+                  <p
+                    className="mt-2"
+                    style={{
+                      color: "rgba(245,245,245,0.55)",
+                      fontSize: 13,
+                    }}
+                  >
+                    Kept as a record; no aging reminders will fire on
+                    this slime.
                   </p>
                 )}
               </div>

@@ -41,13 +41,9 @@ ALTER TABLE public.collection_logs
 COMMENT ON COLUMN public.collection_logs.shelf_state IS
   'Where this slime lives: on_shelf (default, active), for_sale (marketplace-ready), or archived (record-keeping only). Aging reminders only fire when on_shelf.';
 
--- Index for the aging-cron filter path. Partial index — the cron only
--- ever needs to scan on_shelf rows, and this is the far-and-away
--- most-common shelf state, so a partial index keeps write costs low
--- for the storage side.
-CREATE INDEX IF NOT EXISTS collection_logs_aging_scan_idx
-  ON public.collection_logs (user_id, last_checked_at)
-  WHERE shelf_state = 'on_shelf' AND aging_enabled = true;
+-- (Aging-scan partial index moved to Section 2b, after aging_enabled
+-- column is added — a partial index predicate can't reference a
+-- column that doesn't exist yet.)
 
 -- ─── Section 2. Aging state columns on collection_logs ────────────────
 
@@ -84,6 +80,16 @@ CREATE TYPE public.aging_state AS ENUM (
 ALTER TABLE public.collection_logs
   ADD COLUMN IF NOT EXISTS aging_state public.aging_state
     NOT NULL DEFAULT 'fresh';
+
+-- ─── Section 2b. Aging + shelf partial indexes ────────────────────────
+-- Both indexes reference shelf_state AND aging_enabled in their WHERE
+-- clauses, so they must be created AFTER all four columns exist.
+-- Partial index rationale — the aging cron only ever scans on_shelf +
+-- aging_enabled rows (the vast majority), so a partial index keeps
+-- write costs low for archived / for_sale / opted-out logs.
+CREATE INDEX IF NOT EXISTS collection_logs_aging_scan_idx
+  ON public.collection_logs (user_id, last_checked_at)
+  WHERE shelf_state = 'on_shelf' AND aging_enabled = true;
 
 CREATE INDEX IF NOT EXISTS collection_logs_aging_state_idx
   ON public.collection_logs (user_id, aging_state)
