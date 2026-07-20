@@ -82,7 +82,7 @@ export default function ProCarePaywall() {
             quirks
           </PaywallBullet>
           <PaywallBullet>
-            Care history per slime — every activator + additive
+            Care history per slime, every activator + additive
             logged
           </PaywallBullet>
           <PaywallBullet>
@@ -111,7 +111,7 @@ export default function ProCarePaywall() {
             boxShadow: "0 0 20px rgba(255,210,74,0.35)",
           }}
         >
-          Go Pro — $2.99/mo for 6 months
+          Go Pro: $2.99/mo for 6 months
         </Link>
         <p
           className="mt-3 text-[11px]"

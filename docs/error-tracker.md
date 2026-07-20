@@ -31,6 +31,43 @@ Template for new entries:
 
 ## Known potential issues (not-yet-hit, worth watching)
 
+### 2026-07-20 — Care check-in reports success while saving zero rows (UI + DB)
+
+**Symptom:** Jennifer selected care products in the check-in modal on `/collection/care`, hit Save, and got the success path (modal closed, no error, card updated optimistically). The aging state reset correctly, so the check-in *looked* fully logged. But `slime_care_actions` had no rows for it, and the recent-care strip stayed empty across reloads. Nothing in the console.
+
+**Root cause:** `CareCheckinModal.handleSave` rebuilt its save payload by looking each selected `product_key` up in the async product catalog (`care_products`, fetched in a `useEffect`) to recover that product's `action_type`. If the catalog hadn't resolved yet, or its query errored, every lookup returned `undefined`, each item was skipped during assembly, and the payload came back as an empty array. `markLogChecked(logId, careActions)` guards on an empty array (by design, so a bare "mark as checked" with no products still resets aging), inserted zero care rows, and returned `{ ok: true }`. The modal read `ok` and reported success.
+
+Every layer behaved exactly as written. The failure lived in the gap between them: the payload was emptied at assembly time, and `{ok: true}` describes the aging reset, which genuinely did succeed. There was no point in the chain where anything could tell that four selections had gone missing.
+
+The catalog-load failure path made this worse rather than better. It sets a soft `loadError` banner reading "Couldn't load care products. Save works, you'll still get credit for checking." That copy is true about the aging reset and actively misleading about the product rows, which is the part the user cares about.
+
+**Fix:** `apps/web/components/collection/CareCheckinModal.tsx` — the `selections` state now carries its own `action_type` per entry, captured at selection time when the product row is already in hand. `handleSave` builds `CareActionInput[]` directly from `Object.entries(selections)` with no catalog lookup, so there is no longer a step that can silently drop items:
+
+```ts
+// Build the payload straight from selection state — no catalog
+// lookup, so nothing can be silently dropped.
+for (const [productKey, sel] of Object.entries(selections)) {
+  const action: CareActionInput = {
+    action_type: sel.action_type,
+    product_key: productKey,
+  };
+  ...
+}
+```
+
+**Regression check:** open the check-in modal and hit Save before the catalog finishes loading (throttle to Slow 3G in DevTools, or point the `care_products` select at a bad column). Selections should still persist. Verify with `select action_type, product_key from slime_care_actions order by performed_at desc limit 10` — the row count must match what was checked in the modal, not zero.
+
+**Prevention pattern: a result union's `ok` must cover everything the caller thinks it covers.** Two rules that would each have caught this independently:
+
+1. **Never let payload assembly drop items silently.** If a lookup during assembly can fail, it has to do one of three things: throw, return `{ok: false, error}`, or not exist. Preferring the third is what fixed this — keep enough self-describing state at the point of selection that no later lookup is needed. A `.map()` or loop that can yield fewer items than it consumed is the shape to watch for; if `payload.length < selected.length`, that's a bug, not a filter.
+2. **When a guard turns "nothing to do" into success, assert the caller meant it.** `markLogChecked`'s empty-array guard is correct in isolation (bare check-ins are a real flow). The hazard is that it can't distinguish "the user selected nothing" from "the payload got emptied upstream." Either the caller validates non-empty before calling, or the action takes an explicit flag for the intentionally-empty case.
+
+Related smell worth grepping for: any client handler that reads from state hydrated by an async fetch, and treats a missing value as "skip this item" rather than "we are not ready to save yet."
+
+**Related:** T125 phase 2 (structured care actions), T188 Part 4, `apps/web/components/collection/CareCheckinModal.tsx`, `apps/web/lib/aging-actions.ts`. Same family as the 2026-07-12 server-action entry below — both are cases where the failure signal never reached the user.
+
+---
+
 ### 2026-07-17 — Capacitor shell opens Safari on first launch instead of loading the WebView (Ops)
 
 **Symptom:** Newly scaffolded Capacitor iOS shell was expected to render `https://slimelog.com` inside its WKWebView on cold launch. Instead, the SlimeLog app icon on the simulator home screen opened to a black screen, and Safari opened in parallel with slimelog.com in its address bar (URL bar visible at the bottom, "◀ SlimeLog" return-to-app affordance visible at the top). Xcode console showed `WebPageProxy::didFailProvisionalLoadForFrame ... code=102` (`WKErrorFrameLoadInterrupted`) followed by `Error: Frame load interrupted` and `TypeError: undefined is not an object (evaluating 'window.Capacitor.triggerEvent')` — the Capacitor bridge script never ran because the frame load was interrupted before it could inject.

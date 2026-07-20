@@ -281,7 +281,7 @@ export default function CareCheckinModal({
       if (error) {
         console.error("[CareCheckinModal] catalog load failed:", error);
         setLoadError(
-          "Couldn't load care products. Save works — you'll still get credit for checking.",
+          "Couldn't load care products. Save works, you'll still get credit for checking.",
         );
       } else {
         setProducts((data ?? []) as CareProduct[]);
