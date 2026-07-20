@@ -25,7 +25,7 @@
 
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   markLogChecked,
@@ -175,6 +175,13 @@ export default function CareCheckinModal({
   });
 
   const [notes, setNotes] = useState("");
+  // Has the user actually interacted with the sheet? Gates auto-save
+  // on dismiss. `knead` is pre-selected, so without this flag every
+  // stray backdrop tap (the /care modal opens from a photo tap) would
+  // write a phantom "kneaded" row, and the insert is not idempotent.
+  // The explicit Save button ignores this and still saves the default
+  // single-tap check-in.
+  const [touched, setTouched] = useState(false);
   const [saving, startSaving] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [expandedCategory, setExpandedCategory] =
@@ -206,14 +213,20 @@ export default function CareCheckinModal({
     };
   }, []);
 
-  // ─── Escape closes ─────────────────────────────────────────────────
+  // ─── Escape dismisses (which saves first — see `dismiss`) ──────────
+  //
+  // Held in a ref so the listener always calls the CURRENT dismiss,
+  // which closes over live selection/notes/saving state. Binding
+  // dismiss directly would freeze a stale closure from first render
+  // and every Escape would save an empty payload.
+  const dismissRef = useRef<() => void>(() => {});
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") dismissRef.current();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, []);
 
   // ─── Group products by category ────────────────────────────────────
   const productsByCategory = new Map<CategoryKey, CareProduct[]>();
@@ -230,6 +243,7 @@ export default function CareCheckinModal({
     productKey: string,
     actionType: CareActionInput["action_type"],
   ) {
+    setTouched(true);
     setSelections((prev) => {
       const next = { ...prev };
       if (next[productKey]) {
@@ -250,6 +264,7 @@ export default function CareCheckinModal({
     unit: QuantityUnit | null,
     amount: number | null,
   ) {
+    setTouched(true);
     setSelections((prev) => {
       const existing = prev[productKey];
       // Quantity inputs only render for already-selected products;
@@ -314,6 +329,41 @@ export default function CareCheckinModal({
   }
 
   const selectionCount = Object.keys(selections).length;
+  const hasSomethingToSave =
+    selectionCount > 0 || notes.trim().length > 0;
+
+  // ─── Single dismiss path: save-then-close ──────────────────────────
+  //
+  // Jennifer 2026-07-20: "i select the care option pills i want and
+  // then to close out the card i click out of the space and it
+  // minimizes i just assumed it was saving the state there." Dismiss
+  // WAS a pure close, so every selection was silently discarded.
+  // Backdrop click, Escape, and the header X all route here now, so
+  // "click out to close" means what she expects it to mean.
+  //
+  //   - Save in flight  → ignore the dismiss, let it settle. handleSave
+  //                       closes the modal itself on success.
+  //   - Save error up   → close without retrying. The user already saw
+  //                       the failure; silently re-firing a write that
+  //                       may have partially landed would double-log.
+  //   - Nothing picked  → plain close (saving an empty check-in is a
+  //                       no-op the user didn't ask for).
+  //   - Otherwise       → handleSave, which closes on success and
+  //                       keeps the sheet open on failure.
+  function dismiss() {
+    if (saving) return;
+    if (saveError || !touched || !hasSomethingToSave) {
+      onClose();
+      return;
+    }
+    handleSave();
+  }
+
+  // Refresh every render (no dep array) so the Escape listener never
+  // fires a stale dismiss. Assigned in an effect, not during render.
+  useEffect(() => {
+    dismissRef.current = dismiss;
+  });
 
   return (
     <div
@@ -322,7 +372,7 @@ export default function CareCheckinModal({
         background: "rgba(6,0,14,0.75)",
         backdropFilter: "blur(6px)",
       }}
-      onClick={onClose}
+      onClick={dismiss}
     >
       <div
         className="w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col"
@@ -336,7 +386,35 @@ export default function CareCheckinModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-5 pt-5 pb-3 border-b border-white/10">
+        <div className="shrink-0 px-5 pt-5 pb-3 border-b border-white/10 relative">
+          {/* Close routes through dismiss() too, so tapping X after
+              picking pills saves rather than discards. */}
+          <button
+            type="button"
+            onClick={dismiss}
+            aria-label="Close check-in"
+            className="absolute right-3 top-3 flex items-center justify-center rounded-full"
+            style={{
+              width: 36,
+              height: 36,
+              background: "rgba(45,10,78,0.6)",
+              border: "1px solid rgba(45,10,78,0.9)",
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="rgba(245,245,245,0.7)"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
           <p
             className="text-[11px] font-black tracking-widest uppercase mb-1"
             style={{ color: "#00F0FF" }}
@@ -344,6 +422,7 @@ export default function CareCheckinModal({
             Check-in
           </p>
           <h2
+            className="pr-10"
             style={{
               fontFamily: "Montserrat, sans-serif",
               fontWeight: 900,
@@ -368,7 +447,7 @@ export default function CareCheckinModal({
 
         {/* Scrollable body */}
         <div
-          className="flex-1 overflow-y-auto px-5 py-4 space-y-3"
+          className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-3"
           style={{ overscrollBehavior: "contain" }}
         >
           {loading && (
@@ -632,7 +711,10 @@ export default function CareCheckinModal({
               maxLength={500}
               placeholder="Anything else? e.g. 'added a drop of vanilla oil'"
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              onChange={(e) => {
+                setTouched(true);
+                setNotes(e.target.value);
+              }}
               className="w-full rounded-xl bg-transparent text-white text-sm px-3 py-2 outline-none resize-none"
               style={{
                 border: "1px solid rgba(45,10,78,0.7)",
@@ -654,36 +736,31 @@ export default function CareCheckinModal({
           )}
         </div>
 
-        {/* Footer: Save + Cancel */}
+        {/* Footer: sticky full-width Save.
+            The sheet is a flex column with a scrolling body, so this
+            sits outside the scroll area and stays pinned no matter how
+            far the catalog is scrolled. Cancel is gone: the header X
+            (and backdrop, and Escape) all save-then-close now, so a
+            second "discard" control would contradict that. */}
         <div
-          className="px-5 py-4 flex items-center gap-3"
+          className="shrink-0 px-5 pt-4"
           style={{
             borderTop: "1px solid rgba(45,10,78,0.7)",
-            background: "rgba(20,5,40,0.95)",
+            background: "rgba(20,5,40,0.98)",
+            paddingBottom: "calc(1rem + env(safe-area-inset-bottom))",
           }}
         >
           <button
             type="button"
-            onClick={onClose}
-            disabled={saving}
-            className="rounded-full px-4 py-2.5 text-sm font-bold"
-            style={{
-              color: "rgba(245,245,245,0.6)",
-              background: "transparent",
-              border: "1px solid rgba(45,10,78,0.7)",
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 rounded-full py-3 transition-all"
+            className="w-full rounded-full transition-all"
             style={{
+              minHeight: 48,
               fontFamily: "Montserrat, sans-serif",
               fontWeight: 900,
-              fontSize: 14,
+              fontSize: 15,
+              letterSpacing: "0.01em",
               color: "#0A0A0A",
               background: saving
                 ? "rgba(57,255,20,0.5)"
@@ -698,8 +775,14 @@ export default function CareCheckinModal({
           >
             {saving
               ? "Saving…"
-              : `Save (${selectionCount} action${selectionCount === 1 ? "" : "s"})`}
+              : `Save check-in (${selectionCount} action${selectionCount === 1 ? "" : "s"})`}
           </button>
+          <p
+            className="mt-2 text-center text-[11px]"
+            style={{ color: "rgba(245,245,245,0.45)" }}
+          >
+            Closing this sheet saves your picks too.
+          </p>
         </div>
       </div>
     </div>
