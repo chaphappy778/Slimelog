@@ -1,0 +1,643 @@
+// apps/web/components/collection/CareCheckinModal.tsx
+//
+// T125 phase 2 — the structured check-in modal that opens whenever
+// a user taps "Mark as checked" on a slime.
+//
+// Data-collection lane for BOTH free and Pro users. Every check-in
+// yields 1..N rows in slime_care_actions with canonical product
+// keys, powering per-user product profiles + aggregate market intel
+// (see monetization plan Phase 2 shop).
+//
+// UX design:
+//   - Kneaded is auto-checked on open — single-tap "Save" works for
+//     a quick check-in.
+//   - Each category (Activator / Softener / Additive / Storage) is
+//     a collapsible section. User expands the ones they used.
+//   - Selecting a product in a category reveals an optional
+//     quantity input (drops / pumps / tsp / etc).
+//   - Notes textarea at the bottom for anything the catalog misses.
+//   - "Save" fires markLogChecked(logId, careActions) — server logs
+//     actions + resets the log's aging_state to 'fresh'.
+//
+// Design will polish visual language later (T188 Part 4). Layout
+// here is functional: bottom-sheet on mobile, centered on desktop,
+// section-based accordion so the initial view isn't overwhelming.
+
+"use client";
+
+import { useState, useTransition, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
+import {
+  markLogChecked,
+  type CareActionInput,
+} from "@/lib/aging-actions";
+
+const supabase = createClient();
+
+// ─── Types ────────────────────────────────────────────────────────────
+
+type CategoryKey =
+  | "activator"
+  | "softener"
+  | "additive"
+  | "storage"
+  | "physical";
+
+type QuantityUnit =
+  | "drops"
+  | "pumps"
+  | "tsp"
+  | "tbsp"
+  | "ml"
+  | "oz"
+  | "pinch"
+  | "squirt";
+
+interface CareProduct {
+  key: string;
+  category: CategoryKey | "other";
+  display_name: string;
+  description: string | null;
+  sort_order: number;
+}
+
+interface Props {
+  logId: string;
+  slimeName: string | null;
+  onClose: () => void;
+  // Fired after a successful save so the parent can update its local
+  // state (e.g., move the row from Overdue -> Fresh on
+  // /collection/aging).
+  onSaved?: () => void;
+}
+
+// Category display metadata — accent colors match T188 spec so the
+// modal doesn't need to be redesigned when Design lands the pass.
+const CATEGORY_META: Record<
+  CategoryKey,
+  {
+    label: string;
+    accent: string;
+    prompt: string;
+  }
+> = {
+  activator: {
+    label: "Activator",
+    accent: "#00F0FF",
+    prompt: "Add an activator?",
+  },
+  softener: {
+    label: "Softener",
+    accent: "#FF00E5",
+    prompt: "Add a softener?",
+  },
+  additive: {
+    label: "Additive",
+    accent: "#39FF14",
+    prompt: "Add a texture booster?",
+  },
+  storage: {
+    label: "Storage change",
+    accent: "#CC44FF",
+    prompt: "Changed where it's stored?",
+  },
+  physical: {
+    label: "Handling",
+    accent: "#3DF2FF",
+    prompt: "How did you handle it?",
+  },
+};
+
+// Section order in the modal — physical first because Kneaded is
+// auto-checked, then activator / softener / additive / storage as
+// they're the most common product-attached actions.
+const CATEGORY_ORDER: CategoryKey[] = [
+  "physical",
+  "activator",
+  "softener",
+  "additive",
+  "storage",
+];
+
+const QUANTITY_UNITS: QuantityUnit[] = [
+  "drops",
+  "pumps",
+  "tsp",
+  "tbsp",
+  "ml",
+  "oz",
+  "pinch",
+  "squirt",
+];
+
+// ─── Modal component ──────────────────────────────────────────────────
+
+export default function CareCheckinModal({
+  logId,
+  slimeName,
+  onClose,
+  onSaved,
+}: Props) {
+  const [products, setProducts] = useState<CareProduct[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Selection state — action_type key → array of {product_key, quantity_type?, quantity_amount?}.
+  // Kneaded is auto-added on mount as the default.
+  const [selections, setSelections] = useState<
+    Record<
+      string,
+      { quantity_type: QuantityUnit | null; quantity_amount: number | null }
+    >
+  >({ knead: { quantity_type: null, quantity_amount: null } });
+
+  const [notes, setNotes] = useState("");
+  const [saving, startSaving] = useTransition();
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [expandedCategory, setExpandedCategory] =
+    useState<CategoryKey | null>("physical");
+
+  // ─── Load product catalog ──────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    async function loadProducts() {
+      const { data, error } = await supabase
+        .from("care_products")
+        .select("key, category, display_name, description, sort_order")
+        .order("category")
+        .order("sort_order");
+      if (cancelled) return;
+      if (error) {
+        console.error("[CareCheckinModal] catalog load failed:", error);
+        setLoadError(
+          "Couldn't load care products. Save works — you'll still get credit for checking.",
+        );
+      } else {
+        setProducts((data ?? []) as CareProduct[]);
+      }
+      setLoading(false);
+    }
+    loadProducts();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // ─── Escape closes ─────────────────────────────────────────────────
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  // ─── Group products by category ────────────────────────────────────
+  const productsByCategory = new Map<CategoryKey, CareProduct[]>();
+  for (const cat of CATEGORY_ORDER) {
+    productsByCategory.set(cat, []);
+  }
+  for (const p of products) {
+    if (p.category === "other") continue; // handled via notes
+    const bucket = productsByCategory.get(p.category as CategoryKey);
+    if (bucket) bucket.push(p);
+  }
+
+  function toggleProduct(productKey: string) {
+    setSelections((prev) => {
+      const next = { ...prev };
+      if (next[productKey]) {
+        delete next[productKey];
+      } else {
+        next[productKey] = { quantity_type: null, quantity_amount: null };
+      }
+      return next;
+    });
+  }
+
+  function setQty(
+    productKey: string,
+    unit: QuantityUnit | null,
+    amount: number | null,
+  ) {
+    setSelections((prev) => ({
+      ...prev,
+      [productKey]: { quantity_type: unit, quantity_amount: amount },
+    }));
+  }
+
+  function handleSave() {
+    setSaveError(null);
+    // Build careActions payload from selections + product catalog
+    // lookups. Simple imperative loop keeps the types happy.
+    const productMap = new Map(products.map((p) => [p.key, p]));
+    const careActions: CareActionInput[] = [];
+    for (const [productKey, qty] of Object.entries(selections)) {
+      const p = productMap.get(productKey);
+      if (!p) continue;
+      const action: CareActionInput = {
+        action_type: p.category as CareActionInput["action_type"],
+        product_key: p.key,
+      };
+      if (qty.quantity_type !== null) {
+        action.quantity_type = qty.quantity_type;
+      }
+      if (qty.quantity_amount !== null) {
+        action.quantity_amount = qty.quantity_amount;
+      }
+      careActions.push(action);
+    }
+
+    // Notes go on the LAST action if any, or as a lone 'other' row.
+    const trimmedNotes = notes.trim();
+    if (trimmedNotes) {
+      if (careActions.length > 0) {
+        careActions[careActions.length - 1].notes = trimmedNotes;
+      } else {
+        careActions.push({
+          action_type: "other",
+          product_key: "other",
+          notes: trimmedNotes,
+        });
+      }
+    }
+
+    startSaving(async () => {
+      const result = await markLogChecked(logId, careActions);
+      if (result.ok) {
+        onSaved?.();
+        onClose();
+      } else {
+        setSaveError(result.error);
+      }
+    });
+  }
+
+  const selectionCount = Object.keys(selections).length;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center"
+      style={{
+        background: "rgba(6,0,14,0.75)",
+        backdropFilter: "blur(6px)",
+      }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col"
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(45,10,78,0.95), rgba(20,5,40,0.95))",
+          border: "1px solid rgba(0,240,255,0.35)",
+          boxShadow: "0 -20px 60px rgba(0,0,0,0.6)",
+          maxHeight: "90vh",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="px-5 pt-5 pb-3 border-b border-white/10">
+          <p
+            className="text-[11px] font-black tracking-widest uppercase mb-1"
+            style={{ color: "#00F0FF" }}
+          >
+            Check-in
+          </p>
+          <h2
+            style={{
+              fontFamily: "Montserrat, sans-serif",
+              fontWeight: 900,
+              fontSize: 22,
+              color: "#FFFFFF",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            What did you do to{" "}
+            <span style={{ color: "#FF7BEB" }}>
+              {slimeName || "your slime"}
+            </span>
+            ?
+          </h2>
+          <p
+            className="mt-1 text-xs"
+            style={{ color: "rgba(245,245,245,0.55)" }}
+          >
+            Kneaded is on by default. Add anything else you used.
+          </p>
+        </div>
+
+        {/* Scrollable body */}
+        <div
+          className="flex-1 overflow-y-auto px-5 py-4 space-y-3"
+          style={{ overscrollBehavior: "contain" }}
+        >
+          {loading && (
+            <p
+              className="text-sm text-center py-4"
+              style={{ color: "rgba(245,245,245,0.55)" }}
+            >
+              Loading care catalog…
+            </p>
+          )}
+
+          {loadError && (
+            <div
+              className="rounded-xl px-3 py-2 text-xs"
+              style={{
+                background: "rgba(255,174,59,0.08)",
+                border: "1px solid rgba(255,174,59,0.35)",
+                color: "rgba(255,174,59,0.85)",
+              }}
+            >
+              {loadError}
+            </div>
+          )}
+
+          {!loading &&
+            CATEGORY_ORDER.map((cat) => {
+              const meta = CATEGORY_META[cat];
+              const catProducts = productsByCategory.get(cat) ?? [];
+              const isExpanded = expandedCategory === cat;
+              const selectedInCategory = catProducts.filter(
+                (p) => selections[p.key],
+              ).length;
+
+              return (
+                <div
+                  key={cat}
+                  className="rounded-xl overflow-hidden"
+                  style={{
+                    background: "rgba(45,10,78,0.35)",
+                    border: `1px solid ${meta.accent}44`,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedCategory(isExpanded ? null : cat)
+                    }
+                    className="w-full flex items-center justify-between gap-3 px-4 py-3"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        style={{
+                          display: "inline-block",
+                          width: 8,
+                          height: 8,
+                          borderRadius: 4,
+                          background: meta.accent,
+                          boxShadow: `0 0 8px ${meta.accent}88`,
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontFamily: "Montserrat, sans-serif",
+                          fontWeight: 800,
+                          fontSize: 13,
+                          color: meta.accent,
+                          letterSpacing: "0.02em",
+                        }}
+                      >
+                        {meta.label}
+                      </span>
+                      {selectedInCategory > 0 && (
+                        <span
+                          className="text-[11px] tabular-nums"
+                          style={{
+                            color: "#FFFFFF",
+                            background: meta.accent,
+                            borderRadius: 999,
+                            padding: "1px 8px",
+                            fontWeight: 800,
+                          }}
+                        >
+                          {selectedInCategory}
+                        </span>
+                      )}
+                    </div>
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="rgba(245,245,245,0.55)"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{
+                        transform: isExpanded
+                          ? "rotate(180deg)"
+                          : "rotate(0deg)",
+                        transition: "transform 0.15s ease",
+                      }}
+                      aria-hidden="true"
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="px-4 pb-4 pt-1 space-y-2">
+                      <p
+                        className="text-xs mb-2"
+                        style={{ color: "rgba(245,245,245,0.65)" }}
+                      >
+                        {meta.prompt}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {catProducts.map((p) => {
+                          const selected = Boolean(selections[p.key]);
+                          return (
+                            <button
+                              key={p.key}
+                              type="button"
+                              onClick={() => toggleProduct(p.key)}
+                              className="rounded-full transition-all"
+                              style={{
+                                padding: "6px 12px",
+                                fontFamily: "Montserrat, sans-serif",
+                                fontWeight: 700,
+                                fontSize: 12,
+                                color: selected ? "#0A0A0A" : meta.accent,
+                                background: selected
+                                  ? meta.accent
+                                  : "rgba(45,10,78,0.5)",
+                                border: `1px solid ${
+                                  selected ? meta.accent : `${meta.accent}55`
+                                }`,
+                                boxShadow: selected
+                                  ? `0 0 10px ${meta.accent}55`
+                                  : "none",
+                              }}
+                            >
+                              {p.display_name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {/* Quantity row for selected products in this
+                          category. Small inline inputs — Design will
+                          polish. */}
+                      {catProducts
+                        .filter((p) => selections[p.key])
+                        .map((p) => {
+                          const sel = selections[p.key];
+                          // Physical actions don't need quantities —
+                          // skip the input row for them.
+                          if (cat === "physical" || cat === "storage") {
+                            return null;
+                          }
+                          return (
+                            <div
+                              key={`${p.key}-qty`}
+                              className="flex items-center gap-2 pt-1"
+                            >
+                              <span
+                                className="text-[11px] shrink-0"
+                                style={{
+                                  color: "rgba(245,245,245,0.55)",
+                                  minWidth: 80,
+                                }}
+                              >
+                                {p.display_name}
+                              </span>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                min="0"
+                                step="0.5"
+                                placeholder="Amount"
+                                value={sel.quantity_amount ?? ""}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  setQty(
+                                    p.key,
+                                    sel.quantity_type,
+                                    v === "" ? null : parseFloat(v),
+                                  );
+                                }}
+                                className="rounded-lg bg-transparent text-white text-xs px-2 py-1 outline-none"
+                                style={{
+                                  border: "1px solid rgba(45,10,78,0.7)",
+                                  width: 80,
+                                }}
+                              />
+                              <select
+                                value={sel.quantity_type ?? ""}
+                                onChange={(e) => {
+                                  const v = e.target.value as
+                                    | QuantityUnit
+                                    | "";
+                                  setQty(
+                                    p.key,
+                                    v === "" ? null : v,
+                                    sel.quantity_amount,
+                                  );
+                                }}
+                                className="rounded-lg bg-transparent text-white text-xs px-2 py-1 outline-none"
+                                style={{
+                                  border: "1px solid rgba(45,10,78,0.7)",
+                                }}
+                              >
+                                <option value="">unit</option>
+                                {QUANTITY_UNITS.map((u) => (
+                                  <option key={u} value={u}>
+                                    {u}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+          {/* Free-form notes */}
+          <div className="pt-2">
+            <p
+              className="text-[11px] font-black tracking-widest uppercase mb-2"
+              style={{ color: "rgba(180,169,196,0.75)" }}
+            >
+              Notes (optional)
+            </p>
+            <textarea
+              rows={2}
+              maxLength={500}
+              placeholder="Anything else? e.g. 'added a drop of vanilla oil'"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full rounded-xl bg-transparent text-white text-sm px-3 py-2 outline-none resize-none"
+              style={{
+                border: "1px solid rgba(45,10,78,0.7)",
+              }}
+            />
+          </div>
+
+          {saveError && (
+            <div
+              className="rounded-xl px-3 py-2 text-xs"
+              style={{
+                background: "rgba(255,61,110,0.10)",
+                border: "1px solid rgba(255,61,110,0.35)",
+                color: "#FF7BEB",
+              }}
+            >
+              {saveError}
+            </div>
+          )}
+        </div>
+
+        {/* Footer: Save + Cancel */}
+        <div
+          className="px-5 py-4 flex items-center gap-3"
+          style={{
+            borderTop: "1px solid rgba(45,10,78,0.7)",
+            background: "rgba(20,5,40,0.95)",
+          }}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="rounded-full px-4 py-2.5 text-sm font-bold"
+            style={{
+              color: "rgba(245,245,245,0.6)",
+              background: "transparent",
+              border: "1px solid rgba(45,10,78,0.7)",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 rounded-full py-3 transition-all"
+            style={{
+              fontFamily: "Montserrat, sans-serif",
+              fontWeight: 900,
+              fontSize: 14,
+              color: "#0A0A0A",
+              background: saving
+                ? "rgba(57,255,20,0.5)"
+                : "linear-gradient(135deg, #39FF14, #00F0FF)",
+              boxShadow: saving
+                ? "none"
+                : "0 0 20px rgba(57,255,20,0.35)",
+              border: "none",
+              cursor: saving ? "not-allowed" : "pointer",
+              opacity: saving ? 0.7 : 1,
+            }}
+          >
+            {saving
+              ? "Saving…"
+              : `Save (${selectionCount} action${selectionCount === 1 ? "" : "s"})`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

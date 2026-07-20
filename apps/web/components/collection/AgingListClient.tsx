@@ -16,12 +16,16 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { AgingLogRow } from "@/app/collection/aging/page";
 import {
-  markLogChecked,
   snoozeLog,
   setLogAgingEnabled,
   setLogShelfState,
 } from "@/lib/aging-actions";
 import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
+// T125 phase 2 (2026-07-20): "Checked" button now opens the
+// structured check-in modal instead of firing markLogChecked
+// directly. Data-collection lane — every check-in yields structured
+// care action rows.
+import CareCheckinModal from "@/components/collection/CareCheckinModal";
 
 interface Props {
   overdue: AgingLogRow[];
@@ -48,6 +52,10 @@ export default function AgingListClient({
   // lives in a per-row state map keyed by log id.
   const [rowError, setRowError] = useState<Record<string, string>>({});
   const [expandFresh, setExpandFresh] = useState(false);
+  // T125 phase 2 (2026-07-20): which log currently has the check-in
+  // modal open. `null` = no modal open. Set by handleMarkChecked
+  // below (which now opens the modal instead of firing directly).
+  const [modalRow, setModalRow] = useState<AgingLogRow | null>(null);
 
   function bumpError(id: string, msg: string) {
     setRowError((prev) => ({ ...prev, [id]: msg }));
@@ -76,15 +84,18 @@ export default function AgingListClient({
     }));
   }
 
-  async function handleMarkChecked(row: AgingLogRow) {
+  // T125 phase 2 (2026-07-20): "Checked" button now opens the
+  // structured check-in modal. Modal fires markLogChecked with the
+  // full care actions payload on Save. Optimistic move-to-fresh
+  // happens after the modal saves successfully via the `onSaved`
+  // callback wired below.
+  function handleMarkChecked(row: AgingLogRow) {
+    setModalRow(row);
+  }
+
+  function handleModalSaved(row: AgingLogRow) {
     moveToFresh(row);
-    startTransition(async () => {
-      const result = await markLogChecked(row.id);
-      if (!result.ok) {
-        bumpError(row.id, result.error);
-        router.refresh();
-      }
-    });
+    setModalRow(null);
   }
 
   async function handleSnooze(row: AgingLogRow, days: number) {
@@ -134,6 +145,15 @@ export default function AgingListClient({
   }
 
   return (
+    <>
+      {modalRow && (
+        <CareCheckinModal
+          logId={modalRow.id}
+          slimeName={modalRow.slime_name}
+          onClose={() => setModalRow(null)}
+          onSaved={() => handleModalSaved(modalRow)}
+        />
+      )}
     <div className="px-4 flex flex-col gap-8">
       {rows.overdue.length > 0 && (
         <Section
@@ -251,6 +271,7 @@ export default function AgingListClient({
         </section>
       )}
     </div>
+    </>
   );
 }
 

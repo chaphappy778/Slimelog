@@ -1,0 +1,282 @@
+// apps/web/app/collection/care/page.tsx
+//
+// T125 phase 2 — /collection/care: Pro-only per-slime care package
+// editor. Free users hitting the route see a Pro paywall variant
+// that explains the feature and links to /settings/subscription.
+//
+// Per-slime card:
+//   - Photo + name + brand
+//   - Recommended cadence (from base_type_activator_defaults) shown
+//     as context
+//   - Editable custom cadence (chip picker + custom N-day input)
+//   - Care plan notes textarea (500 char max)
+//   - Last 3 check-in actions from slime_care_actions history
+//   - Save button (per-card; optimistic)
+//
+// Top-of-page aggregates (Pro insights):
+//   - "You've cared for N slimes with M actions this month"
+//   - "Top product this month: contact solution (12 uses)"
+//   - "Auto-refill subscriptions coming when the shop launches"
+//     (teaser for Phase 2 monetization)
+//
+// Design polish handled separately (T188 Part 4). Layout here is
+// functional so Design can align to actual code paths.
+
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import Image from "next/image";
+import { createClient } from "@/lib/supabase/server";
+import PageHeader from "@/components/PageHeader";
+import PageWrapper from "@/components/PageWrapper";
+import BackLink from "@/components/BackLink";
+import CareCardListClient from "@/components/collection/CareCardListClient";
+import ProCarePaywall from "@/components/collection/ProCarePaywall";
+import type { SlimeBaseType } from "@/lib/types";
+
+export const dynamic = "force-dynamic";
+
+export type CareCardRow = {
+  id: string;
+  slime_name: string | null;
+  brand_name_raw: string | null;
+  image_url: string | null;
+  base_type: SlimeBaseType | null;
+  aging_interval_days: number | null;
+  care_plan_notes: string | null;
+  default_interval_days: number;
+  recent_actions: {
+    id: string;
+    performed_at: string;
+    action_type: string;
+    product_key: string | null;
+    product_display: string | null;
+  }[];
+};
+
+export type CareAggregate = {
+  actions_this_month: number;
+  slimes_cared_for_this_month: number;
+  top_product: { key: string; display: string; count: number } | null;
+};
+
+interface Props {
+  searchParams: Promise<{ highlight?: string }>;
+}
+
+async function fetchDefaultsMap(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<Map<string, number>> {
+  const { data } = await supabase
+    .from("base_type_activator_defaults")
+    .select("base_type, default_interval_days");
+  const m = new Map<string, number>();
+  for (const row of data ?? []) {
+    m.set(row.base_type as string, row.default_interval_days as number);
+  }
+  return m;
+}
+
+export default async function CarePage({ searchParams }: Props) {
+  const supabase = await createClient();
+  const { highlight } = await searchParams;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login?next=/collection/care");
+  }
+
+  // Pro gate — use profiles_public.is_premium (computed column that
+  // already checks subscription_tier + subscription_status = active).
+  const { data: viewerProfile } = await supabase
+    .from("profiles_public")
+    .select("is_premium")
+    .eq("id", user.id)
+    .maybeSingle();
+  const isPro = Boolean(viewerProfile?.is_premium);
+
+  if (!isPro) {
+    return (
+      <PageWrapper dots glow="cyan" orbs>
+        <PageHeader />
+        <main className="pt-14 pb-24">
+          <div className="px-4 pt-4 mb-3">
+            <BackLink
+              fallbackHref="/collection"
+              label="Back to collection"
+            />
+          </div>
+          <ProCarePaywall />
+        </main>
+      </PageWrapper>
+    );
+  }
+
+  // Fetch on-shelf logs + product catalog for label display
+  const [logsRes, productsRes, recentActionsRes] = await Promise.all([
+    supabase
+      .from("collection_logs")
+      .select(
+        "id, slime_name, brand_name_raw, image_url, base_type, aging_interval_days, care_plan_notes",
+      )
+      .eq("user_id", user.id)
+      .eq("shelf_state", "on_shelf")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("care_products")
+      .select("key, display_name"),
+    // Pull last 30 days of actions to compute recent history per log
+    // + aggregate top-product stats. Cheap join in JS.
+    supabase
+      .from("slime_care_actions")
+      .select("id, log_id, performed_at, action_type, product_key")
+      .eq("user_id", user.id)
+      .gt(
+        "performed_at",
+        new Date(Date.now() - 30 * 86_400_000).toISOString(),
+      )
+      .order("performed_at", { ascending: false }),
+  ]);
+
+  if (logsRes.error) {
+    console.error(
+      "[care] Failed to load on-shelf logs:",
+      logsRes.error.message,
+    );
+  }
+  if (productsRes.error) {
+    console.error(
+      "[care] Failed to load products:",
+      productsRes.error.message,
+    );
+  }
+
+  const defaults = await fetchDefaultsMap(supabase);
+  const HARD_FALLBACK = 45;
+
+  const productDisplay = new Map<string, string>(
+    (productsRes.data ?? []).map(
+      (p) => [p.key as string, p.display_name as string] as const,
+    ),
+  );
+
+  // Group actions by log_id for the per-card "recent history" strip.
+  const actionsByLog = new Map<
+    string,
+    NonNullable<typeof recentActionsRes.data>
+  >();
+  for (const a of recentActionsRes.data ?? []) {
+    const list = actionsByLog.get(a.log_id as string) ?? [];
+    list.push(a);
+    actionsByLog.set(a.log_id as string, list);
+  }
+
+  const cards: CareCardRow[] = (logsRes.data ?? []).map((row) => {
+    const logActions = actionsByLog.get(row.id as string) ?? [];
+    return {
+      id: row.id as string,
+      slime_name: row.slime_name as string | null,
+      brand_name_raw: row.brand_name_raw as string | null,
+      image_url: row.image_url as string | null,
+      base_type: row.base_type as SlimeBaseType | null,
+      aging_interval_days: row.aging_interval_days as number | null,
+      care_plan_notes: row.care_plan_notes as string | null,
+      default_interval_days:
+        (row.base_type
+          ? defaults.get(row.base_type as string)
+          : undefined) ?? HARD_FALLBACK,
+      recent_actions: logActions.slice(0, 3).map((a) => ({
+        id: a.id as string,
+        performed_at: a.performed_at as string,
+        action_type: a.action_type as string,
+        product_key: a.product_key as string | null,
+        product_display: a.product_key
+          ? (productDisplay.get(a.product_key as string) ?? null)
+          : null,
+      })),
+    };
+  });
+
+  // Aggregate: this-month actions, distinct slimes cared for, top product.
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const thisMonthActions = (recentActionsRes.data ?? []).filter(
+    (a) => new Date(a.performed_at as string) >= monthStart,
+  );
+  const productCounts = new Map<string, number>();
+  const distinctSlimes = new Set<string>();
+  for (const a of thisMonthActions) {
+    distinctSlimes.add(a.log_id as string);
+    const pk = a.product_key as string | null;
+    if (pk) {
+      productCounts.set(pk, (productCounts.get(pk) ?? 0) + 1);
+    }
+  }
+  let topProduct: CareAggregate["top_product"] = null;
+  for (const [pk, count] of productCounts) {
+    if (!topProduct || count > topProduct.count) {
+      topProduct = {
+        key: pk,
+        display: productDisplay.get(pk) ?? pk,
+        count,
+      };
+    }
+  }
+  const aggregate: CareAggregate = {
+    actions_this_month: thisMonthActions.length,
+    slimes_cared_for_this_month: distinctSlimes.size,
+    top_product: topProduct,
+  };
+
+  return (
+    <PageWrapper dots glow="cyan" orbs>
+      <PageHeader />
+      <main className="pt-14 pb-24">
+        <div className="px-4 pt-4 mb-3">
+          <BackLink fallbackHref="/collection" label="Back to collection" />
+        </div>
+
+        <div className="px-4 mb-6">
+          <p
+            className="section-label mb-2"
+            style={{ color: "rgba(0,240,255,0.85)" }}
+          >
+            Care packages
+          </p>
+          <h1
+            style={{
+              fontFamily: "Montserrat, sans-serif",
+              fontWeight: 900,
+              fontSize: 32,
+              color: "#FFFFFF",
+              letterSpacing: "-0.01em",
+              lineHeight: 1.1,
+            }}
+          >
+            Custom care plans for every slime on your shelf.
+          </h1>
+          <p
+            className="mt-2"
+            style={{
+              color: "rgba(245,245,245,0.55)",
+              fontSize: 14,
+              lineHeight: 1.5,
+            }}
+          >
+            Set your own check-in cadence and care notes per slime.
+            Recommendations from the community are shown as a
+            starting point — override any of them here.
+          </p>
+        </div>
+
+        <CareCardListClient
+          initialCards={cards}
+          aggregate={aggregate}
+          highlightId={highlight ?? null}
+        />
+      </main>
+    </PageWrapper>
+  );
+}
