@@ -176,15 +176,19 @@ const KNEAD_DEFAULT: Record<string, Selection> = {
   },
 };
 
-// Build selection state from prior actions. Rows with an action_type
+// Parse prior actions into selection state. Rows with an action_type
 // the client doesn't recognize are dropped rather than coerced: a bad
 // action_type would be written straight back out on the next save.
-function seedSelections(
+//
+// Returns ONLY what genuinely came back from the server — no KNEAD
+// fallback. handleSave diffs against this to build its payload, so a
+// fabricated entry here would suppress a real row.
+function parseSeeded(
   initial: InitialSelection[] | undefined,
 ): Record<string, Selection> {
-  if (!initial || initial.length === 0) return { ...KNEAD_DEFAULT };
-
   const seeded: Record<string, Selection> = {};
+  if (!initial) return seeded;
+
   for (const row of initial) {
     const actionType = row.action_type as CareActionInput["action_type"];
     if (!ACTION_TYPES.has(actionType)) continue;
@@ -199,9 +203,27 @@ function seedSelections(
           : null,
     };
   }
+  return seeded;
+}
 
-  // Everything was unrecognized — fall back rather than open empty.
+// What the sheet OPENS with: prior actions if we have any recognized
+// ones, otherwise the `knead` default so a single-tap check-in still
+// has something selected.
+function seedSelections(
+  initial: InitialSelection[] | undefined,
+): Record<string, Selection> {
+  const seeded = parseSeeded(initial);
   return Object.keys(seeded).length > 0 ? seeded : { ...KNEAD_DEFAULT };
+}
+
+// Same product, same action, same quantity — nothing for the user to
+// have changed, so it stays out of the save payload.
+function sameSelection(a: Selection, b: Selection): boolean {
+  return (
+    a.action_type === b.action_type &&
+    a.quantity_type === b.quantity_type &&
+    a.quantity_amount === b.quantity_amount
+  );
 }
 
 // ─── Modal component ──────────────────────────────────────────────────
@@ -236,6 +258,19 @@ export default function CareCheckinModal({
   // only, so the user's own toggles are never clobbered by a re-render.
   const [selections, setSelections] = useState<Record<string, Selection>>(
     () => seedSelections(initialSelections),
+  );
+
+  // Immutable snapshot of what the server already had on record when
+  // this sheet mounted. handleSave subtracts it from `selections` so
+  // the payload is only what the user actually toggled.
+  //
+  // Deliberately parseSeeded, NOT seedSelections: the `knead` default
+  // is a UI convenience, not an existing row. If it were in the
+  // baseline, a plain single-tap check-in would diff to empty and
+  // write nothing, which is exactly the silent-empty-payload bug
+  // described in the `selections` comment above.
+  const [seedBaseline] = useState<Record<string, Selection>>(() =>
+    parseSeeded(initialSelections),
   );
 
   const [notes, setNotes] = useState("");
@@ -369,8 +404,18 @@ export default function CareCheckinModal({
     // lookup, so nothing can be silently dropped (see the note on
     // `selections`). Shape matches CareActionInput in
     // lib/aging-actions.ts.
+    //
+    // Only the DELTA against `seedBaseline` ships. The sheet seeds
+    // from the last 24h, so without this every pre-checked pill would
+    // be re-inserted each time the user reopens it and adds one thing.
+    // A seeded pill whose quantity the user edited counts as changed
+    // and does ship. The DB unique index
+    // (slime_care_actions_hourly_dedupe_idx) backstops races and
+    // double-taps; this keeps the honest cases off the wire entirely.
     const careActions: CareActionInput[] = [];
     for (const [productKey, sel] of Object.entries(selections)) {
+      const prior = seedBaseline[productKey];
+      if (prior && sameSelection(prior, sel)) continue;
       const action: CareActionInput = {
         action_type: sel.action_type,
         product_key: productKey,

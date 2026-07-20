@@ -59,7 +59,7 @@ async function currentUserIsPro(): Promise<boolean> {
 // ─── Result union — matches slime-actions convention ──────────────────
 
 export type AgingActionResult =
-  | { ok: true }
+  | { ok: true; careActionsWritten?: number }
   | { ok: false; error: string };
 
 // ─── Care action shape ────────────────────────────────────────────────
@@ -121,9 +121,22 @@ export interface CareActionInput {
  * "just checked" behavior — callers who don't yet open the modal
  * (e.g. older admin flows) keep working.
  *
- * Idempotent on the log update; the care_actions insert is
- * additive (new rows every call). Callers should NOT retry blindly
- * or they'll double-log actions.
+ * Idempotent on the log update. The care_actions write is deduped at
+ * the DATABASE level (20260720000083_care_action_dedupe.sql): a
+ * unique index on (user_id, log_id, action_type, product_key,
+ * performed_hour) plus ON CONFLICT DO NOTHING collapses identical
+ * actions logged inside the same UTC hour.
+ *
+ * That's the backstop, not the primary defense: CareCheckinModal
+ * already diffs against what it seeded and sends only the delta. The
+ * index covers races, double-taps, and any future caller that hasn't
+ * learned to diff. Both halves are needed — the modal seeds from 24h
+ * and the index only spans an hour, so the client is what keeps a
+ * pill checked yesterday from re-inserting today.
+ *
+ * Returns `careActionsWritten` = the number of rows that ACTUALLY
+ * landed, not the number sent. Zero-with-a-non-empty-input is normal
+ * (everything was already logged this hour), not an error.
  */
 export async function markLogChecked(
   logId: string,
@@ -153,6 +166,7 @@ export async function markLogChecked(
   // action row hiccups (we'd rather report "checked but couldn't
   // save what you did" than "check-in failed"). RLS enforces
   // user_id = auth.uid() on insert so we can pass user_id directly.
+  let careActionsWritten = 0;
   if (careActions.length > 0) {
     const rows = careActions.map((a) => ({
       log_id: logId,
@@ -164,9 +178,19 @@ export async function markLogChecked(
       quantity_amount: a.quantity_amount ?? null,
       notes: a.notes ?? null,
     }));
-    const { error: careErr } = await supabase
+
+    // upsert + ignoreDuplicates emits ON CONFLICT (...) DO NOTHING
+    // against slime_care_actions_hourly_dedupe_idx. `performed_hour`
+    // is GENERATED ALWAYS so it's named in onConflict but never sent
+    // in the payload. .select("id") makes PostgREST return only the
+    // rows that actually landed, which is our real write count.
+    const { data: inserted, error: careErr } = await supabase
       .from("slime_care_actions")
-      .insert(rows);
+      .upsert(rows, {
+        onConflict: "user_id,log_id,action_type,product_key,performed_hour",
+        ignoreDuplicates: true,
+      })
+      .select("id");
     if (careErr) {
       console.error(
         "[markLogChecked] care action insert failed:",
@@ -181,9 +205,19 @@ export async function markLogChecked(
           "Checked, but couldn't save what you did. Try again from the slime page.",
       };
     }
+    careActionsWritten = inserted?.length ?? 0;
+
+    // Everything the client sent was already on record for this hour.
+    // Expected whenever the user reopens the pre-seeded check-in modal
+    // and saves without changing anything — dedupe working, not a bug.
+    if (careActionsWritten === 0) {
+      console.warn(
+        `[markLogChecked] all ${careActions.length} care action(s) deduped for log ${logId} — nothing written`,
+      );
+    }
   }
 
-  return { ok: true };
+  return { ok: true, careActionsWritten };
 }
 
 // ─── snoozeLog: temporarily push out the next reminder ────────────────

@@ -31,6 +31,34 @@ Template for new entries:
 
 ## Known potential issues (not-yet-hit, worth watching)
 
+### 2026-07-20 — Pre-seeded check-in modal re-inserts every pill on every save (UI + DB)
+
+**Symptom:** After the 24h pre-seeding change landed, reopening the care check-in modal and adding a single new product wrote a row for the new product *and* a fresh duplicate row for every pill that was already checked. `actions_this_month` climbed by the full selection count on each save, `/care` showed duplicate tiles, and the day pills on already-logged tiles reset to `0D` even though nothing new had happened to those products.
+
+**Root cause:** Two independent halves, each correct alone. `CareCheckinModal` seeds its selection state from the last 24h of actions so the sheet confirms what you just did (good UX). `markLogChecked` inserted `careActions` unconditionally. Nothing in between distinguished "the user just toggled this" from "the server told us this was already true," so the seed round-tripped straight back into the table on every save.
+
+**Fix:** the standard pair — client sends a delta, database enforces uniqueness.
+
+1. `CareCheckinModal` snapshots the seeded rows at mount (`seedBaseline`, via a new `parseSeeded` that applies **no** `knead` fallback) and `handleSave` subtracts it from current `selections`. A seeded pill whose quantity the user edited counts as changed and still ships.
+2. `20260720000083_care_action_dedupe.sql` adds a unique index on `(user_id, log_id, action_type, product_key, performed_hour)`; `markLogChecked` upserts against it with `ignoreDuplicates: true` and returns `careActionsWritten` (rows that actually landed, not rows sent).
+
+The baseline deliberately excludes the `knead` UI default. Seeding it would make a plain single-tap check-in diff to empty and write nothing, which is the silent-empty-payload bug in the entry below.
+
+**Regression check:** log baby oil, reopen the sheet, add contact solution, save. Exactly one new row: `select product_key, performed_at from slime_care_actions where log_id = '<id>' order by performed_at desc`. The baby oil tile's day pill must not move. Then save the sheet again unchanged — zero new rows, and a `[markLogChecked] all N care action(s) deduped` warn in the server log.
+
+**Prevention pattern: when a UI pre-fills from server state, the save path owes you a diff.** Any "seed the form from what's already there" change silently converts an insert path into an upsert path. If the write side isn't updated in the same commit, every save re-submits the seed. Grep shape to watch: a `useState(() => seedFrom(props))` whose state object is later iterated wholesale into a payload.
+
+**Prevention pattern: PostgREST `on_conflict` cannot name an index expression.** Writing this dedupe index has two traps that both fail *after* you've written the migration:
+
+1. `date_trunc('hour', <timestamptz>)` is **STABLE, not IMMUTABLE** — the result depends on the session `TimeZone` — so Postgres rejects it in an index expression outright. Pin the zone (`performed_at AT TIME ZONE 'UTC'`) to get the `timestamp` overload, which is immutable.
+2. Even with an immutable expression, supabase-js/PostgREST's `onConflict` takes a **comma-separated column list only**. It cannot reference an index expression, and it cannot emit the `WHERE` predicate that a *partial* unique index needs for inference. Either shape fails at runtime with `there is no unique or exclusion constraint matching the ON CONFLICT specification`.
+
+So: expose the expression as a `GENERATED ALWAYS ... STORED` column and index the plain columns. Rely on default `NULLS DISTINCT` for "this column being NULL means never a duplicate" (here, `product_key = NULL` quick re-logs) rather than reaching for a partial index. Also remember a unique index cannot be created over existing duplicates — a backfill `DELETE` has to run in the same migration, ahead of it, or `db push` fails on any table that already has data.
+
+**Related:** T125 phase 2, T188, `apps/web/components/collection/CareCheckinModal.tsx`, `apps/web/lib/aging-actions.ts`, `supabase/migrations/20260720000083_care_action_dedupe.sql`. Direct sequel to the entry below — same modal, and the fix for that one (self-describing `selections`) is what made this delta cheap to compute.
+
+---
+
 ### 2026-07-20 — Care check-in reports success while saving zero rows (UI + DB)
 
 **Symptom:** Jennifer selected care products in the check-in modal on `/collection/care`, hit Save, and got the success path (modal closed, no error, card updated optimistically). The aging state reset correctly, so the check-in *looked* fully logged. But `slime_care_actions` had no rows for it, and the recent-care strip stayed empty across reloads. Nothing in the console.
