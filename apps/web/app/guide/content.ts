@@ -1312,56 +1312,280 @@ export interface ProseSection {
   subsections: ProseSubsection[];
 }
 
-/** Part Six: Care, Storage & Maintenance. */
-export const CARE_STORAGE: ProseSection = {
+/**
+ * T188 (2026-07-20): expandable/accordion section shape, used by Part 6
+ * (Care) and Part 13 (Recipes). Both parts are long-form reference the
+ * reader scans before they read, so each sub-section collapses to a
+ * titled row. Body content stays in the server-rendered HTML (hidden via
+ * the `hidden` attribute, not conditional rendering) so the guide keeps
+ * indexing the whole text.
+ */
+export interface ExpandableTile {
+  name: string;
+  note: string;
+}
+
+export interface ExpandableList {
+  label: string;
+  items: string[];
+}
+
+export interface ExpandableSubsection {
+  /** kebab-case, used for the anchor id. */
+  id: string;
+  title: string;
+  /** Optional group divider label. New value starts a new group header. */
+  group?: string;
+  /** Short uppercase tag on the closed row (difficulty, etc). */
+  tag?: string;
+  /** Lead prose, shown first when expanded. */
+  paragraphs?: string[];
+  /** Bulleted list (ingredients). */
+  bullets?: ExpandableList;
+  /** Numbered list (instructions). */
+  steps?: ExpandableList;
+  /** Always-visible nested tile grid (Care by Texture Type). */
+  tiles?: ExpandableTile[];
+  /** Highlighted tip callout, rendered last. */
+  tip?: string;
+}
+
+export interface ExpandableSection {
+  intro: string[];
+  subsections: ExpandableSubsection[];
+}
+
+/**
+ * Part Six: Care, Storage & Maintenance.
+ * T188 (2026-07-20): expanded from the four-subsection prose block to
+ * Jenn's full source doc (docs/guide-source/SlimeLog Guide - Part Six
+ * Care Storage and Maintenance.pdf). Copy is verbatim from that doc.
+ * Do not rewrite in place, propose changes in the source doc first.
+ */
+export const CARE_STORAGE: ExpandableSection = {
   intro: [
-    "Slime is a living material. Even a perfectly mixed batch will change over time, and how it ages depends largely on how it is stored and handled. This section covers the conditions that preserve a slime, the techniques that revive a tired one, and the issues collectors are most likely to encounter.",
+    "Slime is a living material. Even a perfectly mixed batch changes over time, and how it ages depends largely on how it is stored and handled. This section covers the conditions that preserve a slime, how to receive and handle it well, the techniques that revive a tired one, and the issues collectors are most likely to encounter, followed by a texture-by-texture care guide for every base type.",
   ],
   subsections: [
     {
-      heading: "Storage Conditions",
+      id: "storage-conditions",
+      title: "Storage Conditions",
       paragraphs: [
         "Sealed storage. Keep slime in its original airtight container with the lid fully closed when not in use. PET jars and plastic deli containers both seal effectively. Open-air storage is the leading cause of dried slime.",
         "Temperature. Room temperature, roughly 65 to 75 degrees Fahrenheit, is ideal. Cold storage can stiffen slime and cause condensation when re-warmed. Warm storage accelerates scent loss and can cause clear slimes to yellow.",
-        "Light. Direct sunlight will fade pigments, accelerate scent breakdown, and degrade clear bases. Store slimes away from windows and out of direct light.",
+        "Light. Direct sunlight fades pigments, accelerates scent breakdown, and degrades clear bases. Store slimes away from windows and out of direct light.",
         "Humidity. High-humidity environments may make slime wetter or stickier over time. Air-conditioned or climate-controlled spaces preserve slime best.",
+        "Orientation. Store runny textures such as water, jiggly, and avalanche slimes upright so they do not pool against the lid or leak. Most firmer textures store fine in any orientation.",
+        "Container care. Keep lid threads and rims clean so the seal stays tight, and wipe away interior condensation, which can make slime wet over time. A clean, well-sealing container is as important as the slime inside it.",
       ],
     },
     {
-      heading: "Lifespan Expectations",
+      id: "receiving-new-slime",
+      title: "Receiving & Acclimating New Slime",
+      paragraphs: [
+        "Slime shipped through summer heat or winter cold arrives out of balance. A little patience on arrival prevents most disappointment.",
+        "Let it rest before opening. Let a new package sit unopened at room temperature for at least thirty minutes to an hour before opening, so the slime returns to a stable temperature and any condensation settles.",
+        "Summer arrivals. In hot transit, slime often arrives sweaty, sticky, or melted-looking. This is usually temporary. Let it cool and rest, then mix any pooled liquid back in or add a drop of activator to firm it up.",
+        "Winter arrivals. In cold transit, slime arrives stiff and hard to stretch. Let it warm to room temperature, then knead it thoroughly before playing to restore the stretch. Never microwave slime to warm it.",
+      ],
+    },
+    {
+      id: "handling-play-habits",
+      title: "Handling & Play Habits",
+      paragraphs: [
+        "How a slime is handled matters as much as how it is stored. Good habits extend the life of every texture.",
+        "Clean, dry hands. Always start with clean, dry hands and a clean surface. Oils, food, lotion, and dirt transfer into slime and shorten its life or introduce contamination. Remove rings and take care around charms.",
+        "Warm it up first. Work cold or stiff slime gently in your hands before stretching. A warmed slime stretches; a cold one tears.",
+        "Fold, do not rip. Folding and pressing preserves the body. Repeatedly tearing dry or cold slime breaks it down faster.",
+        "Keep it contained. Return all of the slime to its container after play and seal it right away. Slime left out even briefly begins to dry, and stray bits collect dust and lint.",
+      ],
+    },
+    {
+      id: "the-first-cure",
+      title: "The First Cure",
+      paragraphs: [
+        "New clear, beaded, and jelly slimes often arrive cloudy and full of tiny air bubbles. Sealed and left undisturbed for one to two weeks, the bubbles rise out and the slime clarifies on its own. This curing process is normal and improves the slime; it is not a defect to be fixed.",
+      ],
+    },
+    {
+      id: "lifespan-expectations",
+      title: "Lifespan Expectations",
       paragraphs: [
         "A well-stored slime typically maintains its core texture for one to three months and remains playable for six months or longer with periodic refresh. Specific texture types have different lifespans:",
-        "Floam, Snow Fizz, and Beaded textures have the longest lifespan. Bead-based bodies hold up well over time.",
-        "Butter, Slay, and clay-based textures last several months with light maintenance.",
-        "Cloud, Cloud Cream, and Fluffy textures have a shorter peak window. Airy textures break down faster.",
-        "Wax and Wax Cracking is a relatively new category. Long-term lifespan is still being established.",
+      ],
+      bullets: {
+        label: "By texture family",
+        items: [
+          "Floam, Snow Fizz, Beaded: longest lifespan; bead-based textures hold up well over time.",
+          "Butter, Slay, Clay-based: several months with light maintenance.",
+          "Cloud, Cloud Cream, Fluffy: shorter peak window; airy textures break down faster.",
+          "Water, Jiggly, Icee: shorter lifespan; high-moisture textures shift and separate sooner.",
+          "Wax and Wax Cracking: relatively new category; long-term lifespan is still being established.",
+        ],
+      },
+    },
+    {
+      id: "refresh-techniques",
+      title: "Refresh Techniques",
+      paragraphs: [
+        "Adding activator. For slime that has become wet, sticky, or watery, a small amount of activator (contact solution or borax solution) kneaded back in will firm it up. Add in small increments to avoid over-activation.",
+        "Adding lotion or glycerin. For slime that has become stiff or rubbery, unscented lotion can soften and restore stretch. Glycerin has the same softening effect and is a good fragrance-neutral alternative, since lotion will affect the original scent while glycerin generally will not. Add either a few drops at a time.",
+        "Adding glue. For slime that has dried significantly or become crumbly, a small addition of fresh glue can sometimes restore it. This works best for clay and butter-based textures, and also helps reverse mild over-activation.",
+        "Adding foam or snow. Fluffy and cloud slimes that have deflated may be partially refreshed by adding fresh shaving foam or rehydrated snow powder. Results are mixed; the original peak texture cannot usually be fully restored.",
+        "Warm water. A few drops of warm water and a thorough knead can loosen a slightly stiff or dried slime before you reach for lotion or glue. Use sparingly, since too much water makes slime sticky.",
+        "Scent boosters. Faded scent can be refreshed with a small amount of fragrance oil or a packaged scent booster. Mix in fully to avoid pockets of concentrated scent.",
       ],
     },
     {
-      heading: "Refresh Techniques",
+      id: "activator-balance",
+      title: "Activator Balance",
       paragraphs: [
-        "Adding activator. For slime that has become wet, sticky, or watery, a small amount of activator (contact solution or borax solution) kneaded back into the slime will firm it up. Add in small increments to avoid over-activation.",
-        "Adding lotion. For slime that has become stiff or rubbery, unscented lotion can soften and restore stretch. Adding lotion will affect the original scent.",
-        "Adding glue. For slime that has dried significantly or become crumbly, a small addition of fresh glue can sometimes restore it. This works best for clay and butter-based textures.",
-        "Adding foam or snow. Fluffy and cloud slimes that have deflated may be partially refreshed by adding fresh shaving foam or rehydrated snow powder. Results are mixed; the original peak texture cannot usually be fully restored.",
-        "Scent boosters. Faded scent can be refreshed with a small amount of fragrance oil or a packaged scent booster. Mix in fully to avoid pockets of concentrated scent.",
+        "Sticky means under-activated; rubbery means over-activated. Add activator one drop at a time. You can always add more, and you can never take it back.",
       ],
-      callouts: [
+    },
+    {
+      id: "common-condition-issues",
+      title: "Common Condition Issues",
+      paragraphs: [
+        "Sweating. Liquid pooling on the surface or sides of the container. Usually caused by temperature changes or over-activation. Mix the liquid back in, or drain it off and re-activate.",
+        "Melting. Slime turning runny, glossy, and sticky in heat. Cool it, let it rest, then remix or re-activate. Prevent with cool, stable storage.",
+        "Color bleeding. Pigment migrating between layers in multi-color slimes. Usually permanent.",
+        "Yellowing. Clear slimes turning yellow with age, light exposure, or heat. Cosmetic only and does not affect texture.",
+        "Crumbling. Loss of cohesion, often from drying out or over-activation. Sometimes recoverable with lotion or fresh glue.",
+        "Tearing. Slime snapping instead of stretching, usually because it is cold, stiff, or over-activated. Warm it in the hands and knead; add lotion if it is over-activated.",
+        "Skinning. A dry film forming on the surface when the lid is left off. Peel or knead it back in if minor; prevent by sealing promptly.",
+        "Stringiness. A snotty, stringy pull, usually from under-activation or under-mixing. Add a small amount of activator and knead thoroughly.",
+        "Shrinkage. Gradual loss of volume as the slime loses moisture. Slow it with sealed storage; refresh airy types with foam or snow.",
+        "Bead sinking. In bead-loaded slimes, beads settling toward the bottom of the container. Mix thoroughly to redistribute.",
+        "Mold. Dark, green, pink, or fuzzy growth, or a sour, musty smell. Not recoverable; discard the slime. See Hygiene, Mold & Contamination below.",
+      ],
+    },
+    {
+      id: "hygiene-mold-contamination",
+      title: "Hygiene, Mold & Contamination",
+      paragraphs: [
+        "Why it happens. Slime can grow mold, particularly water-heavy bases, anything edible, and any slime handled with dirty or wet hands or contaminated with food.",
+        "What to look for. Dark, green, pink, or fuzzy spots, or a sour, off, or musty smell that was not there before.",
+        "What to do. Moldy slime cannot be saved and should be discarded, container and all if it is heavily affected. Do not try to mix mold out or mask the smell.",
+        "Prevention. Clean, dry hands every time, sealed storage, no eating during play, and keeping water out of glue-based slime are the best defenses.",
+      ],
+    },
+    {
+      id: "cleaning-up",
+      title: "Cleaning Up: Hands, Surfaces & Fabric",
+      paragraphs: [
+        "Hands. Wash with warm water and soap. Rubbing a little of the leftover slime against itself lifts most residue before washing.",
+        "Hard surfaces. Lift the bulk with a fresh ball of the same slime, then wipe with a warm damp cloth.",
+        "Fabric and carpet. A mix of warm water and white vinegar is the most effective remover for clothes and fabric. Use roughly equal parts, soak or blot the spot, and work it gently until the residue lifts, then rinse with warm soapy water. For stubborn or hardened slime, first harden it with an ice cube and scrape off the brittle pieces before treating the spot with the vinegar and warm water mix.",
+        "Hair. Work in oil or conditioner to loosen the slime, then comb it out gently. Avoid pulling, which spreads it further.",
+      ],
+    },
+    {
+      id: "charms-inclusions-over-time",
+      title: "Charms & Inclusions Over Time",
+      paragraphs: [
+        "Beads sink. In bead-loaded slimes, beads settle toward the bottom during storage. A thorough mix before play redistributes them.",
+        "Remove for long storage. Metal or painted charms can rust or bleed color into slime over time. For long storage, consider removing charms and keeping them in the container\u2019s charm bag.",
+        "Heavy add-ins. Large or heavy charms sink and can loosen the slime around them. Rebalance with a touch of activator if the surrounding slime turns sticky.",
+      ],
+    },
+    {
+      id: "care-by-texture-type",
+      title: "Care by Texture Type",
+      paragraphs: [
+        "Every base texture ages a little differently. The entries below cover all nineteen base types and their common variants, with the storage, refresh, and handling notes most specific to each.",
+      ],
+      tiles: [
         {
-          tone: "info",
-          heading: "Activator balance",
-          body: "Sticky means under-activated, rubbery means over-activated. Add activator one drop at a time. You can always add more, you can never take it back.",
+          name: "Clear",
+          note: "Clear bases are the most sensitive to light and heat, both of which cause yellowing, so store them cool and out of direct light. New clear slime is cloudy and full of bubbles; sealed and left undisturbed for one to two weeks it self-clarifies, which is normal curing. Clear shows every fleck of lint and dust, so handle it with very clean hands and keep the lid on. In heat it sweats and turns sticky; knead in a drop of activator to recover. For thermochromic, avoid prolonged high heat, which shortens pigment life; for glow, charge it under bright light before play.",
+        },
+        {
+          name: "Water (and Jiggly)",
+          note: "Water and jiggly slimes carry the most water and are the quickest to turn overly wet, sticky, or to leak, so keep them tightly sealed and stored upright, ideally in a squeeze tube or a well-sealed jar. They dislike heat, which thins them further. If one turns sticky, add activator a single drop at a time, since this texture over-activates easily. Expect a shorter lifespan, and drain and remix any water that separates.",
+        },
+        {
+          name: "Jelly",
+          note: "Jelly slimes are built on clear glue with a little snow powder for a plush, jiggly body. Sealed storage keeps them supple; left open they stiffen and lose the wobble. Soften a tired jelly with a small amount of unscented lotion or a drop of warm water, and mix any surface sweat back in. Lifespan is moderate.",
+        },
+        {
+          name: "Icee (Slushee)",
+          note: "Icee and slushee slimes hold a high ratio of hydrated snow, which gives them their sizzle but also sheds a little snow residue on the hands during play, which is normal. Their main enemy is drying out, which mutes the sizzle; refresh with a small amount of rehydrated snow or a drop of water. If water pools, drain most of it rather than remixing it all, since too much moisture dulls the crunch balance. Keep sealed.",
+        },
+        {
+          name: "Thick & Glossy",
+          note: "Dense and durable, thick and glossy slimes are among the longer-lived textures. Over months they can stiffen; soften with a little unscented lotion or a small addition of fresh glue. Always warm the slime in your hands before big stretches so it does not tear, and keep the lid sealed to stop a firm skin from forming on top.",
+        },
+        {
+          name: "Slay",
+          note: "Slays are clay-and-lotion hybrids that hold well for several months with light upkeep. Their failure mode is drying and crumbling, which responds to a little unscented lotion and, if needed, a small amount of fresh glue kneaded through. Because clay dries quickly in open air, seal these promptly after play. Any added lotion will shift the original scent.",
+        },
+        {
+          name: "Butter",
+          note: "Butter and clay-based slimes are dense, forgiving, and the most rescuable of all textures. When they dry or crumble, a small addition of fresh glue or unscented lotion kneaded in usually restores the spread. They also dry fastest in open air, so keep the lid firmly closed between plays. Expect several months of life with minimal maintenance.",
+        },
+        {
+          name: "Cloud",
+          note: "Cloud slimes get their drizzle from hydrated snow and sit in the airy, shorter-peak group. Their signature failure is deflation as the airy structure collapses, which is often only partly reversible; adding freshly rehydrated snow can bring some of it back. Handle gently, since rough working breaks down the structure, and keep sealed to hold moisture.",
+        },
+        {
+          name: "Cloud Cream",
+          note: "Cloud creams are soft, creamy, and squelchy, with a shorter peak window like other airy textures. They tend to form a dry skin on top and stiffen; soften with a small amount of unscented lotion and keep tightly sealed. Play with these relatively fresh for the best cream.",
+        },
+        {
+          name: "Fluffy",
+          note: "Fluffy slime is built on shaving foam and has the shortest peak of any texture, since the foam breaks down and the slime deflates within weeks. Enjoy it soon after purchase for peak volume. A little fresh shaving foam kneaded in can partially revive it, though the original loft rarely fully returns. Keep it sealed to slow the process.",
+        },
+        {
+          name: "Floam",
+          note: "Floam and other foam-bead textures are among the longest-lived slimes. The most common issue is beads sinking or shedding from a drying base; remix to redistribute and add a touch of activator or glue if the base loosens. Sealed storage keeps the foam beads from drying and going brittle. These are very durable and travel well.",
+        },
+        {
+          name: "Snow Fizz",
+          note: "Snow fizz relies on plastic snow for a dry, crackly crunch and generally lasts well. It sheds a little snow on the hands, which is expected. If it dries and the crunch goes flat, a tiny drop of water or glue helps; if it turns clumpy and wet, it has too much moisture. Keep sealed and stored at room temperature.",
+        },
+        {
+          name: "Beaded",
+          note: "Beaded slimes pair a clear or glue binder with beads and are long-lived, but they share the clear base\u2019s tendencies to yellow and sweat, so store them cool and out of light. Beads settle toward the bottom over time; a thorough mix redistributes them. Keep sealed so the beads do not dry and lose their crunch, and handle glassy fishbowl types gently.",
+        },
+        {
+          name: "Avalanche",
+          note: "Avalanche slimes are prized for the layered cascade that pours when the container is tipped, so they are a display-and-pour texture more than a hands-in one. The clear component yellows and sweats like any clear base, so store cool, sealed, and upright to protect the layers. Once poked and mixed, the layered effect and any color separation are permanent, so handle gently to preserve the look.",
+        },
+        {
+          name: "Magnetic",
+          note: "Magnetic slime carries iron particles, which can rust and discolor the slime if it gets wet or sweats heavily, so keep it dry and well sealed. Store the magnet separately, keep the slime away from electronics and other magnets that attract stray filings, and wash your hands after play. Treat visible rust as the end of that slime\u2019s life.",
+        },
+        {
+          name: "Sand",
+          note: "Kinetic and silica sand behave differently from glue slime: they mold and crumble rather than stretch, and they do not grow mold the way glue bases can. Their main issue is drying out; a few drops of water worked through revives the moldable feel. Keep sealed to limit sand residue and preserve moisture.",
+        },
+        {
+          name: "Sugar Scrub",
+          note: "Sugar scrubs get their gritty, exfoliating feel from sugar granules, which slowly dissolve as they absorb moisture, so these are best enjoyed relatively fresh. Keep them sealed and dry, since added moisture melts the grit that defines the texture. If used on skin, mind hygiene and avoid double-dipping with dirty hands.",
+        },
+        {
+          name: "Wax & Wax Cracking",
+          note: "Wax and wax-cracking slimes are the newest category and the most temperature-sensitive: the signature crack depends on the wax sitting at a stable, cool room temperature. Too warm and it softens and loses the crack; too cold and it turns brittle. Store at steady room temperature, keep sealed, and if the crack fades, a brief rest in a cooler spot can help restore it. Long-term lifespan for this category is still being established.",
+        },
+        {
+          name: "Hybrid",
+          note: "Hybrid slimes combine two or more textures, such as a beaded butter or a clear slay slushee, so care to the most fragile component. Identify the parts, then follow the guidance for the shortest-lived or most sensitive one; a beaded butter, for example, needs both bead redistribution and butter\u2019s lotion-and-glue refresh.",
         },
       ],
     },
     {
-      heading: "Common Condition Issues",
+      id: "when-to-retire-a-slime",
+      title: "When to Retire a Slime",
       paragraphs: [
-        "Sweating. Liquid pooling on the surface or sides of the container. Usually caused by temperature changes or over-activation. Mix the liquid back in or drain off and re-activate.",
-        "Color bleeding. Pigment migrating between layers in multi-color slimes. Usually permanent.",
-        "Yellowing. Clear slimes turning yellow with age, light exposure, or heat. Cosmetic only and does not affect texture.",
-        "Crumbling. Loss of cohesion, often from drying out or over-activation. Sometimes recoverable with lotion or fresh glue.",
-        "Bead sinking. In bead-loaded slimes, beads settling toward the bottom of the container. Mix thoroughly to redistribute.",
+        "Some conditions are terminal. Retire and discard a slime when it shows mold or a persistent off smell, when it has fully dried and hardened beyond what lotion, glue, or warm water can restore, when a fluffy or cloud slime has completely deflated with no structure left, or when a magnetic slime has visibly rusted. Holding onto a spoiled slime risks contaminating your tools and the rest of your collection.",
+      ],
+    },
+    {
+      id: "your-refresh-toolkit",
+      title: "Your Refresh Toolkit",
+      paragraphs: [
+        "Keep a small kit on hand to maintain a collection: activator (contact solution or borax solution) for sticky or wet slime, unscented lotion or glycerin for stiff or crumbly slime, fresh PVA glue for dried or over-activated slime, rehydrated instant snow and shaving foam for tired cloud and fluffy textures, a scent booster or fragrance oil for faded scent, and warm water for gentle softening. Add any of these in small increments, since every fix is easier to build up than to undo.",
       ],
     },
   ],
@@ -1523,6 +1747,335 @@ export const PRICING_RESALE_NOTE =
 
 // ─── Part meta (used by nav + TOC) ─────────────────────────────────────
 
+/**
+ * Part Thirteen: Slime Recipes.
+ * T188 (2026-07-20): from docs/guide-source/Slime Recipe Collection.pdf.
+ * Copy is verbatim from Jenn's doc. The source PDF holds nine recipes;
+ * its cover subtitle miscounts them, which Jenn confirmed is a mislabel,
+ * not a missing recipe (2026-07-20). All nine are transcribed here. If a
+ * new recipe is added, it goes in the source doc first.
+ */
+export const RECIPES: ExpandableSection = {
+  intro: [
+    "Every glue-based recipe here turns liquid glue into stretchy slime with an activator. You have two great options, and each recipe works with either one, so pick whichever you prefer. The golden rule of slime holds no matter which you choose: add your activator slowly, a little at a time. You can always add more to firm up sticky slime, but you cannot remove it once the slime turns stiff and rubbery.",
+  ],
+  subsections: [
+    {
+      id: "choosing-your-activator",
+      title: "Choosing Your Activator",
+      group: "Before you start",
+      paragraphs: [
+        "Option 1, contact lens solution. The easiest to control and the gentlest on hands, which makes it great for kids. It must contain boric acid and sodium borate to work. Add it straight from the bottle, a little at a time.",
+        "Option 2, borax solution. A classic, budget-friendly activator that many slimers prefer for a firmer, stretchier, longer-lasting finish. You make the solution first: dissolve 1 teaspoon of borax powder into 1 cup of warm water and stir until it is completely dissolved. Add this borax solution to your glue mixture a little at a time, exactly the way you would with contact lens solution. It is strong, so a small amount goes a long way.",
+      ],
+      tip: "Borax solution is for play only. Keep it away from eyes and mouths, wash hands after playing, and supervise young children.",
+    },
+    {
+      id: "two-more-basics",
+      title: "Two More Basics",
+      group: "Before you start",
+      paragraphs: [
+        "A pinch of baking soda controls firmness. More baking soda makes a firmer, less sticky slime; less keeps it soft and stretchy.",
+        "Store every finished slime in an airtight container so it does not dry out, and revive a stiff batch with a drop of warm water and a good knead.",
+      ],
+    },
+    {
+      id: "adding-a-scent",
+      title: "Adding a Scent",
+      group: "Before you start",
+      paragraphs: [
+        "Scenting is optional but popular, and almost every recipe here takes a fragrance beautifully. The most common options are skin-safe fragrance oils (the kind sold for soap and candle making), a small squeeze of a nicely scented lotion, or a few drops of an essential oil such as lavender, peppermint, or sweet orange. Scented body sprays and bakery flavor oils work too.",
+        "Add fragrance while you mix the glue, before you activate, so it blends all the way through. A few drops is plenty, since scent oils are concentrated and too much can irritate skin or leave the slime greasy. Oils can also loosen the slime slightly, so if it turns sticky after scenting, simply knead in a touch more activator to bring it back.",
+      ],
+    },
+    {
+      id: "inclusions-and-charms",
+      title: "Inclusions and Charms",
+      group: "Before you start",
+      paragraphs: [
+        "Inclusions are the add-ins that change how your slime looks, feels, and sounds. Popular choices include glitter, fishbowl beads and glass beads for a glassy crunch, foam beads for a light crackle, faux sprinkles and confetti, sequins, and foam or clay sprinkles. Sprinkle them in a little at a time and fold them through until they are evenly spread. Add them after the slime is fully made and activated, not before, so they distribute nicely instead of clumping.",
+        "Charms are the decorative toppers, usually small polymer clay, plastic, or resin pieces shaped like fruit, sweets, animals, or themed trinkets. Press a charm gently onto the surface or knead it just below the top so it peeks through. Add charms last, once everything else is mixed in.",
+      ],
+      tip: "Heavier beads and charms can loosen slime or make it sticky as they settle. Knead in a little extra activator if needed, and skip small inclusions and charms for young children since they are a choking hazard.",
+    },
+    {
+      id: "basic-glue-slime",
+      title: "1. Basic Glue Slime",
+      group: "The recipes",
+      tag: "Beginner",
+      paragraphs: [
+        "The classic starting point and the base for almost every other slime on this list. Master this one first.",
+      ],
+      bullets: {
+        label: "Ingredients",
+        items: [
+          "1/2 cup white PVA school glue (Elmer\u2019s or similar)",
+          "1/2 tablespoon baking soda",
+          "Liquid food coloring (optional)",
+          "Activator, choose one: 1 to 1.5 tablespoons contact lens solution OR 1 to 2 tablespoons borax solution",
+          "A few drops of skin-safe fragrance oil, or a small squeeze of scented lotion (optional)",
+          "Inclusions or charms of your choice, such as glitter, beads, sequins, or clay charms (optional, see guide)",
+        ],
+      },
+      steps: {
+        label: "Instructions",
+        items: [
+          "Pour the glue into a mixing bowl.",
+          "Stir in the baking soda until fully blended.",
+          "Add a few drops of food coloring now if you want color, and mix it through.",
+          "Add your chosen activator a little at a time (about a teaspoon), stirring constantly after each addition.",
+          "When the slime starts pulling away from the sides of the bowl, take it out and knead it with your hands.",
+          "Keep kneading until it goes from sticky to smooth and stretchy. Add a little more activator if it stays too sticky.",
+        ],
+      },
+      tip: "Add activator slowly whichever type you use. You can always add more, but you cannot take it back out once the slime turns stiff and rubbery.",
+    },
+    {
+      id: "fluffy-slime",
+      title: "2. Fluffy Slime",
+      group: "The recipes",
+      tag: "Beginner",
+      paragraphs: [
+        "Light, airy, and pillowy with a satisfying stretch and lots of poppable bubbles.",
+      ],
+      bullets: {
+        label: "Ingredients",
+        items: [
+          "1/2 cup white glue",
+          "3 cups foaming shaving cream (the foam type, not gel)",
+          "1/4 tablespoon baking soda",
+          "Food coloring (optional)",
+          "Activator, choose one: 1 to 1.5 tablespoons contact lens solution OR 1 to 2 tablespoons borax solution",
+          "A few drops of skin-safe fragrance oil, or a small squeeze of scented lotion (optional)",
+          "Inclusions or charms of your choice, such as glitter, beads, sequins, or clay charms (optional, see guide)",
+        ],
+      },
+      steps: {
+        label: "Instructions",
+        items: [
+          "Combine the glue and shaving cream in a bowl. More shaving cream means a lighter, fluffier result.",
+          "Stir in the baking soda and any food coloring.",
+          "Add your activator slowly while mixing until the slime pulls together.",
+          "Knead until smooth. It will stay airy and cloud-like.",
+        ],
+      },
+      tip: "Fluffy slime deflates a little as it sits over a day or two. That is normal, and a fresh knead brings back some of the volume.",
+    },
+    {
+      id: "clear-slime",
+      title: "3. Clear Slime",
+      group: "The recipes",
+      tag: "Intermediate",
+      paragraphs: [
+        "Glassy and see-through, perfect for suspending glitter, beads, or tiny charms.",
+      ],
+      bullets: {
+        label: "Ingredients",
+        items: [
+          "1/2 cup clear PVA glue",
+          "1/4 tablespoon baking soda",
+          "Activator, choose one: 1 to 1.5 tablespoons contact lens solution OR 1 to 2 tablespoons borax solution",
+          "A few drops of skin-safe fragrance oil, or a small squeeze of scented lotion (optional)",
+          "Inclusions or charms of your choice, such as glitter, beads, sequins, or clay charms (optional, see guide)",
+        ],
+      },
+      steps: {
+        label: "Instructions",
+        items: [
+          "Make it exactly like the Basic Glue Slime, using clear glue in place of white and the activator of your choice.",
+          "Knead until smooth. It will look cloudy and full of tiny bubbles at first.",
+          "Store it in an airtight container and leave it undisturbed for 1 to 2 weeks.",
+          "The trapped bubbles rise out over time and the slime turns glassy and transparent.",
+        ],
+      },
+      tip: "Patience is the whole recipe here. A single drop of translucent coloring gives a beautiful stained-glass jewel tone.",
+    },
+    {
+      id: "butter-slime",
+      title: "4. Butter Slime",
+      group: "The recipes",
+      tag: "Intermediate",
+      paragraphs: [
+        "Smooth, soft, and spreadable, it glides across a surface just like softened butter.",
+      ],
+      bullets: {
+        label: "Ingredients",
+        items: [
+          "1/2 cup white glue",
+          "1/4 tablespoon baking soda",
+          "1/4 cup soft modeling clay (Model Magic or Daiso soft clay)",
+          "A small squeeze of lotion or a few drops of baby oil",
+          "Activator, choose one: 1 tablespoon contact lens solution OR 1 tablespoon borax solution",
+          "A few drops of skin-safe fragrance oil, or a small squeeze of scented lotion (optional)",
+          "Inclusions or charms of your choice, such as glitter, beads, sequins, or clay charms (optional, see guide)",
+        ],
+      },
+      steps: {
+        label: "Instructions",
+        items: [
+          "First make a basic glue slime with your chosen activator and knead it until smooth.",
+          "Separately, soften the modeling clay by stretching and warming it in your hands.",
+          "Work the clay into the slime a small piece at a time until fully blended.",
+          "Add a little lotion or baby oil to reach that signature buttery, spreadable glide.",
+        ],
+      },
+      tip: "Add the clay gradually. Too much at once makes the slime crumbly and hard to bring back together.",
+    },
+    {
+      id: "cloud-slime",
+      title: "5. Cloud Slime",
+      group: "The recipes",
+      tag: "Intermediate",
+      paragraphs: [
+        "Soft and crumbly with a signature drizzle. It rains off your hand in a cloud-like stream.",
+      ],
+      bullets: {
+        label: "Ingredients",
+        items: [
+          "1/2 cup white glue",
+          "1/4 tablespoon baking soda",
+          "About 1 tablespoon instant snow powder, plus water to expand it",
+          "Activator, choose one: 1 tablespoon contact lens solution OR 1 tablespoon borax solution",
+          "A few drops of skin-safe fragrance oil, or a small squeeze of scented lotion (optional)",
+          "Inclusions or charms of your choice, such as glitter, beads, sequins, or clay charms (optional, see guide)",
+        ],
+      },
+      steps: {
+        label: "Instructions",
+        items: [
+          "Mix the instant snow powder with water in a separate cup and let it puff up fully.",
+          "Make a basic glue slime base with your chosen activator and knead until smooth.",
+          "Gradually fold the expanded snow into the slime.",
+          "Keep adding snow until you reach a soft, crumbly, drizzly texture.",
+        ],
+      },
+      tip: "More snow gives a drier, snowier drizzle; less keeps it stretchier. Adjust in small amounts to dial in the feel.",
+    },
+    {
+      id: "jelly-slime",
+      title: "6. Jelly Slime",
+      group: "The recipes",
+      tag: "Intermediate",
+      paragraphs: [
+        "Thick, wobbly, and jiggly with a deep, bubbly poke. It holds a dome shape before slowly settling.",
+      ],
+      bullets: {
+        label: "Ingredients",
+        items: [
+          "1/2 cup clear or white glue",
+          "2 to 3 tablespoons warm water",
+          "1/4 tablespoon baking soda",
+          "Food coloring (optional)",
+          "Activator, choose one: 1 to 1.5 tablespoons contact lens solution OR 1 to 2 tablespoons borax solution",
+          "A few drops of skin-safe fragrance oil, or a small squeeze of scented lotion (optional)",
+          "Inclusions or charms of your choice, such as glitter, beads, sequins, or clay charms (optional, see guide)",
+        ],
+      },
+      steps: {
+        label: "Instructions",
+        items: [
+          "Mix the glue with the warm water until smooth and slightly runny.",
+          "Stir in the baking soda and coloring.",
+          "Add your activator slowly, mixing until it just comes together but stays soft and loose.",
+          "Knead gently. Do not over-activate, or you will lose the wobble.",
+        ],
+      },
+      tip: "The extra water is what creates the jelly jiggle. Stop adding activator the moment it stops sticking to your hands.",
+    },
+    {
+      id: "glossy-slime",
+      title: "7. Glossy Slime",
+      group: "The recipes",
+      tag: "Beginner",
+      paragraphs: [
+        "Shiny, glassy, and thick with a mirror-like sheen and a deep, glossy stretch.",
+      ],
+      bullets: {
+        label: "Ingredients",
+        items: [
+          "1/2 cup clear or white glue",
+          "1 tablespoon baby oil or a squeeze of clear hand lotion",
+          "1/4 tablespoon baking soda",
+          "Activator, choose one: 1 to 1.5 tablespoons contact lens solution OR 1 to 2 tablespoons borax solution",
+          "A few drops of skin-safe fragrance oil, or a small squeeze of scented lotion (optional)",
+          "Inclusions or charms of your choice, such as glitter, beads, sequins, or clay charms (optional, see guide)",
+        ],
+      },
+      steps: {
+        label: "Instructions",
+        items: [
+          "Mix the glue with the baby oil or lotion until fully combined.",
+          "Stir in the baking soda.",
+          "Add your activator slowly and mix until it pulls away from the bowl.",
+          "Knead until smooth. The oil gives it that glassy, high-shine finish.",
+        ],
+      },
+      tip: "A little baby oil on your hands while kneading keeps the gloss high and stops early stickiness.",
+    },
+    {
+      id: "crunchy-floam-slime",
+      title: "8. Crunchy Floam Slime",
+      group: "The recipes",
+      tag: "Beginner",
+      paragraphs: [
+        "Packed with foam beads for a loud, crackly crunch every time you squeeze and poke it.",
+      ],
+      bullets: {
+        label: "Ingredients",
+        items: [
+          "1/2 cup white or clear glue",
+          "1/4 tablespoon baking soda",
+          "1 cup foam beads (small polystyrene balls)",
+          "Food coloring (optional)",
+          "Activator, choose one: 1 to 1.5 tablespoons contact lens solution OR 1 to 2 tablespoons borax solution",
+          "A few drops of skin-safe fragrance oil, or a small squeeze of scented lotion (optional)",
+          "Inclusions or charms of your choice, such as glitter, beads, sequins, or clay charms (optional, see guide)",
+        ],
+      },
+      steps: {
+        label: "Instructions",
+        items: [
+          "Make a basic glue slime with your chosen activator and knead it until smooth.",
+          "Flatten the slime out and sprinkle a handful of foam beads on top.",
+          "Fold and knead the beads in, then repeat until the slime is fully loaded.",
+          "Add more beads for extra crunch, or fewer for a softer crackle.",
+        ],
+      },
+      tip: "Smaller beads give a fine, sandy crunch; larger beads give a louder, chunkier pop. Mix sizes for the best sound.",
+    },
+    {
+      id: "metallic-pearl-slime",
+      title: "9. Metallic Pearl Slime",
+      group: "The recipes",
+      tag: "Intermediate",
+      paragraphs: [
+        "A rich, shimmering, liquid-metal look with a smooth, thick stretch.",
+      ],
+      bullets: {
+        label: "Ingredients",
+        items: [
+          "1/2 cup white glue",
+          "1/4 tablespoon baking soda",
+          "1 to 2 teaspoons metallic or pearlescent mica powder (or metallic acrylic paint)",
+          "Activator, choose one: 1 to 1.5 tablespoons contact lens solution OR 1 to 2 tablespoons borax solution",
+          "A few drops of skin-safe fragrance oil, or a small squeeze of scented lotion (optional)",
+          "Inclusions or charms of your choice, such as glitter, beads, sequins, or clay charms (optional, see guide)",
+        ],
+      },
+      steps: {
+        label: "Instructions",
+        items: [
+          "Stir the mica powder or metallic paint into the glue until the color is even and shimmery.",
+          "Mix in the baking soda.",
+          "Add your activator slowly, stirring until it pulls away from the bowl.",
+          "Knead until smooth. Buff it against your hands to bring out the metallic shine.",
+        ],
+      },
+      tip: "Mica powder gives a truer pearl shimmer than paint. Add it a little at a time until the sheen looks right.",
+    },
+  ],
+};
+
 export interface GuidePart {
   n: number;
   id: string;
@@ -1628,5 +2181,14 @@ export const PARTS: GuidePart[] = [
     shortTitle: "Rating",
     fullTitle: "The SlimeLog Rating Framework",
     tagline: "How every log gets scored. Full breakdown at /how-to-rate.",
+  },
+  {
+    n: 13,
+    id: "part-13",
+    slug: "recipes",
+    shortTitle: "Recipes",
+    fullTitle: "Slime Recipes",
+    tagline:
+      "Nine ways to make it, stretch it, and love it. Beginner-friendly, activator-flexible.",
   },
 ];

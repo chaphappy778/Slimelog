@@ -1,5 +1,5 @@
 // apps/web/app/guide/page.tsx
-// T32 (2026-07-13): The SlimeLog Guide — the full 12-part community
+// T32 (2026-07-13): The SlimeLog Guide — the full 13-part community
 // reference. Server component so the whole guide renders in HTML for
 // SEO. Interactive bits (nav scroll-spy, texture detail sheet, TOC
 // drawer) are isolated to a few small client components.
@@ -17,6 +17,8 @@ import GuideNav from "@/components/guide/GuideNav";
 import TextureExplorer from "@/components/guide/TextureExplorer";
 import GlossaryList from "@/components/guide/GlossaryList";
 import ProseSection from "@/components/guide/ProseSection";
+// T188 (2026-07-20): accordion renderer for the long-form parts (6, 13).
+import ExpandableSection from "@/components/guide/ExpandableSection";
 import BrandGlossary from "@/components/guide/BrandGlossary";
 import PricingBands from "@/components/guide/PricingBands";
 // [T32d 2026-07-13] Part 12 now indexes the six axes from /how-to-rate
@@ -43,6 +45,7 @@ import {
   PRICING_BANDS,
   PRICING_DRIVERS,
   PRICING_RESALE_NOTE,
+  RECIPES,
   SAFETY,
   SCENTS,
   SHIPPING,
@@ -54,7 +57,7 @@ import {
 export const metadata: Metadata = {
   title: "The SlimeLog Guide",
   description:
-    "The community reference for slime terminology, textures, add-ins, scents, brands, care, safety, pricing, sound, and the SlimeLog rating framework.",
+    "The community reference for slime terminology, textures, add-ins, scents, brands, care, safety, pricing, sound, recipes, and the SlimeLog rating framework.",
   openGraph: {
     title: "The SlimeLog Guide",
     description:
@@ -279,7 +282,7 @@ export default async function GuidePage() {
               lineHeight: 1.55,
             }}
           >
-            Your field guide to the language of the shelf. Twelve parts,
+            Your field guide to the language of the shelf. Thirteen parts,
             community-authored, updated as the craft moves.
           </p>
           {/* 2026-07-13: metadata chips ("12 parts", "20 base textures",
@@ -393,7 +396,11 @@ export default async function GuidePage() {
           title="Care, Storage & Maintenance"
           tagline={PARTS[5].tagline}
         >
-          <ProseSection data={CARE_STORAGE} />
+          {/* T188 (2026-07-20): Part 6 expanded from a four-subsection
+              prose block to Jenn's full fourteen-subsection care doc.
+              Accordion so the reader can jump to the one condition they
+              are troubleshooting instead of scrolling 2600 words. */}
+          <ExpandableSection data={CARE_STORAGE} idPrefix="care" accent="cyan" />
         </PartSection>
 
         {/* Part 7: Safety */}
@@ -538,6 +545,18 @@ export default async function GuidePage() {
               </svg>
             </Link>
           </div>
+        </PartSection>
+
+        {/* Part 13: Recipes.
+            T188 (2026-07-20): Jenn's recipe collection. Same accordion
+            component as Part 6 — grouped into the "Before you start"
+            primer and the nine recipes themselves. */}
+        <PartSection n={13} title="Slime Recipes" tagline={PARTS[12].tagline}>
+          <ExpandableSection
+            data={RECIPES}
+            idPrefix="recipe"
+            accent="green"
+          />
         </PartSection>
 
         <div
