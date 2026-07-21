@@ -1,6 +1,8 @@
 // apps/web/app/api/stripe/checkout/route.ts
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { captureServerEvent } from "@/lib/posthog-server";
 import {
   createClient as createSupabaseClient,
   type SupabaseClient,
@@ -296,9 +298,24 @@ export async function POST(req: NextRequest) {
         : {}),
     });
 
+    // Observability push (2026-07-20): checkout_started funnel event.
+    // Fires once we've successfully created a Stripe Checkout Session
+    // (i.e. the user is about to be redirected to pay). The already-active
+    // portal short-circuit above returns earlier and is intentionally not
+    // counted as a checkout start.
+    await captureServerEvent(user.id, "checkout_started", {
+      mode,
+      price_id,
+      brand_id: brand_id ?? undefined,
+      has_intro_coupon: Boolean(introCoupon),
+    });
+
     return NextResponse.json({ url: session.url });
   } catch (err) {
     console.error("Stripe checkout error:", err);
+    // Observability: capture the swallowed 500 so ops sees payment-path
+    // failures immediately instead of only in Vercel logs.
+    Sentry.captureException(err, { tags: { route: "stripe/checkout" } });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

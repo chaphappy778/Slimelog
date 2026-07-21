@@ -18,7 +18,9 @@
 
 "use server";
 
+import * as Sentry from "@sentry/nextjs";
 import { createClient } from "@/lib/supabase/server";
+import { captureServerEvent } from "@/lib/posthog-server";
 
 // ─── Auth guard (same pattern as slime-actions) ───────────────────────
 
@@ -156,6 +158,9 @@ export async function markLogChecked(
     .eq("user_id", userId);
   if (updateErr) {
     console.error("[markLogChecked] update failed:", updateErr.message);
+    // Observability: surface swallowed DB errors to Sentry even though
+    // the user gets a friendly result-union message.
+    Sentry.captureException(updateErr, { tags: { action: "markLogChecked" } });
     return { ok: false, error: "Couldn't mark this slime as checked." };
   }
 
@@ -196,6 +201,9 @@ export async function markLogChecked(
         "[markLogChecked] care action insert failed:",
         careErr.message,
       );
+      Sentry.captureException(careErr, {
+        tags: { action: "markLogChecked", stage: "care_insert" },
+      });
       // Non-fatal — aging update already succeeded. Return a soft
       // error so the client can surface a "checked, but couldn't
       // save care details" toast if it wants.
@@ -216,6 +224,15 @@ export async function markLogChecked(
       );
     }
   }
+
+  // Observability: care check-in landed (log marked fresh). Fires even
+  // when careActionsWritten is 0 (everything was deduped) — the check-in
+  // itself still happened, which is the funnel signal we want.
+  await captureServerEvent(userId, "care_checkin_saved", {
+    log_id: logId,
+    care_actions_written: careActionsWritten,
+    care_actions_reported: careActions.length,
+  });
 
   return { ok: true, careActionsWritten };
 }
@@ -250,6 +267,7 @@ export async function snoozeLog(
     .eq("user_id", userId);
   if (error) {
     console.error("[snoozeLog] update failed:", error.message);
+    Sentry.captureException(error, { tags: { action: "snoozeLog" } });
     return { ok: false, error: "Couldn't snooze this reminder." };
   }
   return { ok: true };
@@ -276,6 +294,7 @@ export async function setLogAgingEnabled(
     .eq("user_id", userId);
   if (error) {
     console.error("[setLogAgingEnabled] update failed:", error.message);
+    Sentry.captureException(error, { tags: { action: "setLogAgingEnabled" } });
     return { ok: false, error: "Couldn't update reminder setting." };
   }
   return { ok: true };
@@ -322,6 +341,7 @@ export async function setLogAgingInterval(
     .eq("user_id", userId);
   if (error) {
     console.error("[setLogAgingInterval] update failed:", error.message);
+    Sentry.captureException(error, { tags: { action: "setLogAgingInterval" } });
     return { ok: false, error: "Couldn't update reminder interval." };
   }
   return { ok: true };
@@ -369,6 +389,7 @@ export async function setLogCarePlanNotes(
     .eq("user_id", userId);
   if (error) {
     console.error("[setLogCarePlanNotes] update failed:", error.message);
+    Sentry.captureException(error, { tags: { action: "setLogCarePlanNotes" } });
     return { ok: false, error: "Couldn't save care plan." };
   }
   return { ok: true };
@@ -396,6 +417,7 @@ export async function setLogShelfState(
     .eq("user_id", userId);
   if (error) {
     console.error("[setLogShelfState] update failed:", error.message);
+    Sentry.captureException(error, { tags: { action: "setLogShelfState" } });
     return { ok: false, error: "Couldn't move this slime." };
   }
   return { ok: true };
@@ -420,6 +442,9 @@ export async function setProfileAgingEnabled(
     .eq("id", userId);
   if (error) {
     console.error("[setProfileAgingEnabled] update failed:", error.message);
+    Sentry.captureException(error, {
+      tags: { action: "setProfileAgingEnabled" },
+    });
     return { ok: false, error: "Couldn't update reminder setting." };
   }
   return { ok: true };

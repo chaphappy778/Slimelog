@@ -25,6 +25,7 @@
 // in the app; monthly Brevo wrap-up carries the aggregate story). The
 // notification row surfaces on the bell + /notifications feed.
 
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import {
   createClient as createSupabaseClient,
@@ -115,6 +116,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   if (fetchErr) {
     console.error("[aging-scan] Failed to load eligible logs:", fetchErr);
+    Sentry.captureException(fetchErr, {
+      tags: { route: "cron/aging-scan", stage: "load_logs" },
+    });
     return NextResponse.json(
       { error: "Failed to load logs" },
       { status: 500 },
@@ -131,6 +135,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       "[aging-scan] Failed to load base_type_activator_defaults:",
       defaultsErr,
     );
+    Sentry.captureException(defaultsErr, {
+      tags: { route: "cron/aging-scan", stage: "load_defaults" },
+    });
     return NextResponse.json(
       { error: "Failed to load defaults" },
       { status: 500 },
@@ -282,6 +289,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
       if (notifErr) {
         console.error("[aging-scan] Failed to insert notifs:", notifErr);
+        // The cron silently failing to notify is exactly the class of
+        // silent bug this observability push targets — surface it.
+        Sentry.captureException(notifErr, {
+          tags: { route: "cron/aging-scan", stage: "insert_notifications" },
+        });
       } else {
         // Log the sends for dedupe
         const sentRows = (insertedNotifs ?? []).map((n) => ({

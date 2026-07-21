@@ -1,4 +1,5 @@
 // apps/web/app/api/report/route.ts
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
@@ -197,6 +198,8 @@ export async function POST(req: NextRequest) {
     } catch (emailErr) {
       // Email failure is non-fatal — report already saved
       console.error("Resend email error:", emailErr);
+      // Observability: surface the swallowed error to Sentry.
+      Sentry.captureException(emailErr, { tags: { route: "report" } });
     }
   }
 

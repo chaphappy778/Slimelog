@@ -1,4 +1,5 @@
 // apps/web/app/api/admin/brand-claims/approve/route.ts
+import * as Sentry from "@sentry/nextjs";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
@@ -234,6 +235,8 @@ export async function POST(req: Request) {
     });
   } catch (e) {
     console.error("[brand-claims/approve] approval email failed:", e);
+    // Observability: surface the swallowed error to Sentry.
+    Sentry.captureException(e, { tags: { route: "admin/brand-claims/approve" } });
   }
 
   for (const row of autoRejectedRows) {
@@ -250,6 +253,8 @@ export async function POST(req: Request) {
         row.id,
         e,
       );
+      // Observability: surface the swallowed error to Sentry.
+      Sentry.captureException(e, { tags: { route: "admin/brand-claims/approve" } });
     }
   }
 

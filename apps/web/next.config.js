@@ -67,7 +67,13 @@ const CSP_DIRECTIVES = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   `img-src 'self' data: blob: ${SUPABASE_ORIGIN} https://lh3.googleusercontent.com`,
   "font-src 'self' https://fonts.gstatic.com",
-  `connect-src 'self' ${SUPABASE_ORIGIN} ${SUPABASE_WS_ORIGIN} https://api.stripe.com https://vitals.vercel-insights.com`,
+  // Observability push (2026-07-20): PostHog ingestion + static-asset
+  // hosts (US cloud). Sentry does NOT need an entry here — it tunnels
+  // through the same-origin /monitoring route (see withSentryConfig
+  // tunnelRoute below), which 'self' already covers. If PostHog is moved
+  // to the EU region, swap these for https://eu.i.posthog.com +
+  // https://eu-assets.i.posthog.com.
+  `connect-src 'self' ${SUPABASE_ORIGIN} ${SUPABASE_WS_ORIGIN} https://api.stripe.com https://vitals.vercel-insights.com https://us.i.posthog.com https://us-assets.i.posthog.com`,
   "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://checkout.stripe.com https://accounts.google.com",
   "frame-ancestors 'none'",
   "form-action 'self'",
@@ -160,4 +166,29 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+// ── Observability push (2026-07-20): wrap with Sentry ────────────────
+// withSentryConfig injects the build-time source-map upload + tunnels
+// the Sentry webpack/turbopack plugin. org/project/authToken all come
+// from env vars (never hardcode). Source maps only upload when
+// SENTRY_AUTH_TOKEN is present, so local builds without it are a no-op.
+const { withSentryConfig } = require("@sentry/nextjs");
+
+module.exports = withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+
+  // Only log Sentry plugin output in CI; keep local builds quiet.
+  silent: !process.env.CI,
+
+  // Upload a wider set of client bundles so stack frames resolve.
+  widenClientFileUpload: true,
+
+  // Strip the Sentry SDK's own logger from the client bundle.
+  disableLogger: true,
+
+  // Route Sentry's browser requests through a same-origin path so ad
+  // blockers / CSP connect-src don't drop them. Matches our strict CSP
+  // (connect-src 'self') without needing a Sentry ingest host allowlist.
+  tunnelRoute: "/monitoring",
+});

@@ -1,4 +1,5 @@
 // apps/web/app/api/age-verify/route.ts
+import * as Sentry from "@sentry/nextjs";
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
@@ -168,6 +169,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("[api/age-verify] unexpected error:", err);
+    // Observability: surface the swallowed error to Sentry.
+    Sentry.captureException(err, { tags: { route: "age-verify" } });
     return NextResponse.json(
       { error: "Internal server error." },
       { status: 500 },

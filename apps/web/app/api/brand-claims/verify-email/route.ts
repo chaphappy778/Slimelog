@@ -1,4 +1,5 @@
 // apps/web/app/api/brand-claims/verify-email/route.ts
+import * as Sentry from "@sentry/nextjs";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
@@ -239,6 +240,10 @@ export async function POST(req: Request) {
           "[brand-claims/verify-email] auto-approve email failed:",
           e,
         );
+        // Observability: surface the swallowed error to Sentry.
+        Sentry.captureException(e, {
+          tags: { route: "brand-claims/verify-email" },
+        });
       }
 
       // 9E. Auto-rejection emails to competing claimants. Best-effort.
@@ -256,6 +261,10 @@ export async function POST(req: Request) {
             "[brand-claims/verify-email] auto-reject email failed:",
             e,
           );
+          // Observability: surface the swallowed error to Sentry.
+          Sentry.captureException(e, {
+            tags: { route: "brand-claims/verify-email" },
+          });
         }
       }
 
@@ -292,8 +301,12 @@ export async function POST(req: Request) {
       subject: "We received your SlimeLog brand claim",
       html: buildClaimantConfirmationEmail(brandName),
     });
-  } catch {
+  } catch (err) {
     // Don't fail the request — claim is already in pending_review.
+    // Observability: surface the swallowed error to Sentry.
+    Sentry.captureException(err, {
+      tags: { route: "brand-claims/verify-email" },
+    });
   }
 
   // 12. Send admin notification.
@@ -314,8 +327,12 @@ export async function POST(req: Request) {
         documentFilename: claim.document_filename,
       }),
     });
-  } catch {
+  } catch (err) {
     // Don't fail the request.
+    // Observability: surface the swallowed error to Sentry.
+    Sentry.captureException(err, {
+      tags: { route: "brand-claims/verify-email" },
+    });
   }
 
   return NextResponse.json({ status: "pending_review" });

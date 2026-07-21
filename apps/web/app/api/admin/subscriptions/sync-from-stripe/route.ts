@@ -25,6 +25,7 @@
 //   6. If NO Stripe subs exist for the customer, downgrade the DB row to
 //      free/null (matches "user cancelled and never resubscribed" shape)
 
+import * as Sentry from "@sentry/nextjs";
 import type Stripe from "stripe";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
@@ -133,6 +134,10 @@ export async function POST(req: NextRequest) {
       "[admin/subscriptions/sync-from-stripe] Stripe list failed:",
       stripeErr,
     );
+    // Observability: surface the swallowed error to Sentry.
+    Sentry.captureException(stripeErr, {
+      tags: { route: "admin/subscriptions/sync-from-stripe" },
+    });
     return NextResponse.json(
       { error: "Stripe unreachable — try again shortly." },
       { status: 502 },

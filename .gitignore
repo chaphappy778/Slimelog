@@ -5,6 +5,10 @@ node_modules
 .next
 .hub/
 
+# Sentry — CLI auth config + build-plugin env (may hold the auth token)
+.sentryclirc
+.env.sentry-build-plugin
+
 # Local-only Word docs (not source of truth — markdown equivalents in repo)
 docs/*.docx
 docs/Project_Summary

@@ -1,4 +1,5 @@
 // apps/web/app/api/stripe/portal/route.ts
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -163,6 +164,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ url: portalSession.url });
   } catch (err) {
     console.error("Stripe portal error:", err);
+    // Observability: surface the swallowed error to Sentry.
+    Sentry.captureException(err, { tags: { route: "stripe/portal" } });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

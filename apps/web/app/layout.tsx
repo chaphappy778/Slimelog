@@ -4,6 +4,7 @@ import "./globals.css";
 import BottomNavWrapper from "@/components/BottomNavWrapper";
 import { ToastProvider } from "@/components/Toast";
 import { AuthProvider } from "@/components/AuthProvider";
+import { PostHogProvider } from "@/components/PostHogProvider";
 import CookieBanner from "@/components/CookieBanner";
 // [Change 2 — T31 v2] Mount the navigation history tracker once globally
 // so every in-app pathname change gets pushed onto the back-button stack.
@@ -48,12 +49,19 @@ export default function RootLayout({
             surface toasts. */}
         <ToastProvider>
           <AuthProvider>
-            {/* [Change 2 — T31 v2] Renders null — pushes pathname changes
-                onto sessionStorage stack for the back button to consume. */}
-            <NavigationHistoryTracker />
-            <main className="page-enter">{children}</main>
-            <BottomNavWrapper />
-            <CookieBanner />
+            {/* Observability push (2026-07-20): PostHog sits inside
+                AuthProvider so it can identify() off the shared useAuth
+                state, and wraps the app so $pageview + captures work
+                everywhere. Dormant (no-op) when NEXT_PUBLIC_POSTHOG_KEY
+                is unset. */}
+            <PostHogProvider>
+              {/* [Change 2 — T31 v2] Renders null — pushes pathname changes
+                  onto sessionStorage stack for the back button to consume. */}
+              <NavigationHistoryTracker />
+              <main className="page-enter">{children}</main>
+              <BottomNavWrapper />
+              <CookieBanner />
+            </PostHogProvider>
           </AuthProvider>
         </ToastProvider>
       </body>

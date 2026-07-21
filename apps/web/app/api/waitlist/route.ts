@@ -26,6 +26,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { addContactToWaitlist, AddContactResult } from "@/lib/brevo";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { captureServerEvent } from "@/lib/posthog-server";
 
 interface WaitlistRow {
   id: string;
@@ -215,6 +216,19 @@ export async function POST(request: NextRequest) {
     // are populated before the response returns; the UX cost is tiny and
     // it keeps behavior deterministic.
     await syncRowToBrevoAndRecord(supabase, insertedRow, marketingOptIn);
+
+    // Observability push (2026-07-20): waitlist funnel event. Only the
+    // net-new path fires it (the duplicate path below is a re-signup, not
+    // a new lead). distinctId is the email so the event ties to the same
+    // person if/when they later create an account and get identified.
+    await captureServerEvent(insertedRow.email, "waitlist_signup", {
+      source: insertedRow.source ?? "landing_page",
+      heard_from: heardFromNormalized ?? undefined,
+      marketing_consent: marketingOptIn,
+      utm_source: utmSourceNormalized ?? undefined,
+      utm_campaign: utmCampaignNormalized ?? undefined,
+    });
+
     return NextResponse.json({ success: true }, { status: 200 });
   }
 

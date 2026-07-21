@@ -1,4 +1,5 @@
 // apps/web/app/api/stripe/webhook/route.ts
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import {
   createClient as createSupabaseClient,
@@ -209,6 +210,8 @@ export async function POST(req: NextRequest) {
     getAdminClient();
   } catch (envErr) {
     console.error("[stripe/webhook] env check failed:", envErr);
+    // Observability: surface the swallowed error to Sentry.
+    Sentry.captureException(envErr, { tags: { route: "stripe/webhook" } });
     return NextResponse.json(
       { error: "Server misconfigured — Supabase env vars missing." },
       { status: 500 },
@@ -242,6 +245,11 @@ export async function POST(req: NextRequest) {
     );
   } catch (err) {
     console.error("Webhook signature verification failed:", err);
+    // Observability: a failed signature check is a silent revenue bug
+    // (broken webhook), so capture it even though we return a 400.
+    Sentry.captureException(err, {
+      tags: { route: "stripe/webhook", reason: "signature_verification" },
+    });
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
@@ -440,6 +448,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ received: true });
   } catch (err) {
     console.error("Webhook handler error:", err);
+    // Observability: surface the swallowed error to Sentry.
+    Sentry.captureException(err, { tags: { route: "stripe/webhook" } });
 
     // Audit hp-10 (2026-07-06): roll back the idempotency claim so
     // Stripe's next retry can reclaim this event. Without this, a

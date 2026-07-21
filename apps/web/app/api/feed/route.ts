@@ -21,6 +21,7 @@
 //   not signed in). Community is public — anon callers get the same
 //   view a signed-out visitor would.
 
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { fetchCommunityFeed, fetchFollowingFeed } from "@/lib/feed";
@@ -116,6 +117,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json(page);
   } catch (err) {
     console.error("[api/feed] fetch failed:", err);
+    // Observability: surface the swallowed error to Sentry.
+    Sentry.captureException(err, { tags: { route: "feed" } });
     return NextResponse.json(
       { error: "Could not load the feed" },
       { status: 500 },

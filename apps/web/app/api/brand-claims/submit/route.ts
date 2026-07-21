@@ -1,4 +1,5 @@
 // apps/web/app/api/brand-claims/submit/route.ts
+import * as Sentry from "@sentry/nextjs";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
@@ -249,8 +250,10 @@ export async function POST(req: Request) {
       subject: "Your SlimeLog brand verification code",
       html: buildCodeEmail(code, brandRow.name),
     });
-  } catch {
+  } catch (err) {
     // Don't roll back the row — user can resend. But surface an error.
+    // Observability: surface the swallowed error to Sentry.
+    Sentry.captureException(err, { tags: { route: "brand-claims/submit" } });
     return NextResponse.json(
       { error: "Could not send verification email. Try resend." },
       { status: 502 },

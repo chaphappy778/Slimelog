@@ -11,6 +11,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import { captureServerEvent } from "@/lib/posthog-server";
 import type {
   SlimeBaseType,
   ScentStrength,
@@ -383,6 +384,19 @@ async function logSlimeInner(input: LogSlimeInput): Promise<LogSlimeResult> {
 
   revalidatePath("/collection");
   revalidatePath("/");
+
+  // Observability push (2026-07-20): log-created funnel event. Fired
+  // server-side so it captures every successful log regardless of which
+  // client surface (wizard, quick-add) triggered it. Best-effort — never
+  // blocks the return.
+  await captureServerEvent(userId, "log_created", {
+    log_id: data.id,
+    base_type: input.base_type,
+    from_catalog: Boolean(input.slime_id),
+    has_brand: Boolean(input.brand_id),
+    is_public: input.is_public ?? true,
+    in_wishlist: input.in_wishlist ?? false,
+  });
 
   return { ok: true, id: data.id };
 }
