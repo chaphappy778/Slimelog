@@ -30,7 +30,10 @@ drop table if exists public.log_reactions cascade;
 --
 -- Only Jennifer's smoke-test rows use this type; remove them so no row
 -- references the now-orphaned enum member.
-delete from public.notifications where type = 'log_reaction_received';
+-- Column is named `notification_type` (not `type`) on the notifications
+-- table (see initial schema 20260324000001). This DELETE was authored
+-- with the wrong column name; corrected 2026-07-21 during the deploy.
+delete from public.notifications where notification_type = 'log_reaction_received';
 
 
 -- ─── 3. notification_type enum member: intentionally LEFT IN PLACE ────────

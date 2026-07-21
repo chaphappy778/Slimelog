@@ -131,6 +131,24 @@ implemented mitigation and the concern is gone.
 
 ---
 
+### 2026-07-21 — Comment reaction batch enrichment (DB Query)
+
+**Query:** `SELECT comment_id, reaction_type, user_id FROM comment_reactions WHERE comment_id = ANY(:threadCommentIds)`. Runs once per comments-thread load on `/slimes/[id]` (single batched call via `getReactionsForComments`, aggregated JS-side into per-comment reaction summaries). T192.
+
+**Current cost:** trivial. A rendered thread is a bounded page of comments (the section shows 2 collapsed, expands to the full list of a single log's comments), and each comment has at most one row per user per reaction type. Indexed on `comment_reactions.comment_id`. Single IN query, no N+1.
+
+**What makes it grow:** linear in (comments in the thread) × (reactions per comment). A viral log with hundreds of comments each heavily reacted is the ceiling. Still one query, but the row count and the JS aggregation grow with it. `viewerReacted` is computed in the same pass off the returned `user_id`, so no extra per-viewer query.
+
+**Mitigation path (order of preference):**
+
+1. **Denorm reaction counts on `comments`** (e.g. a `reaction_counts jsonb` or per-type int columns) kept fresh by an AFTER INSERT/DELETE trigger on `comment_reactions`. Thread reads stop scanning the reaction rows entirely; only the viewer's own reactions need a small `WHERE user_id = :viewer` fetch. Cheapest long-term win, mirrors the T120 `comment_count` denorm pattern.
+2. **Cap enrichment to visible comments** — only fetch reactions for the collapsed/visible slice, lazy-load the rest on expand. Bounds the query to what's on screen.
+3. **RPC `get_comment_reaction_summaries(comment_ids uuid[], viewer uuid)`** returning pre-aggregated `(comment_id, reaction_type, count, viewer_reacted)` rows. Server-side aggregation drops payload size and moves the fold off the client.
+
+**Related:** T192 (comment reactions), T120 (comments), mirrors the `comment_likes` batch-fetch pattern in `CommentSection`.
+
+---
+
 ## Retired / resolved
 
 *(none yet)*

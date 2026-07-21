@@ -29,6 +29,47 @@ Template for new entries:
 
 ---
 
+### 2026-07-21 — Optimistic toggle never rolls back when the network is down (UI)
+
+**Symptom:** Jennifer's T127 smoke test — turn the network off, tap a
+reaction emoji, the count optimistically bumped to +1 and stayed there
+forever. No error, no revert, the button also looked wedged.
+
+**Root cause:** the toggle handler did `const result = await
+toggleReaction(...)` and only handled the `{ ok: false }` branch. When
+the network is down the server action never resolves to a result — the
+promise *rejects* (fetch throws). With no try/catch, the rejection blew
+past the reconcile logic entirely: the optimistic `setState` had already
+applied, `setPending(false)` never ran, and nothing reverted the count.
+A returned validation error was handled; a thrown/offline error was not.
+`startTransition` makes this worse (it can swallow the throw), but the
+plain-await version has the same hole.
+
+**Fix:** wrap the awaited server-action call in try/catch/**finally**
+(`components/ReactionRow.tsx`, T192). BOTH paths now roll the optimistic
+flip back to the captured pre-tap state: the `catch` handles
+throw/offline (revert + a "check your connection" toast, `console.warn`
+not Sentry — this is an expected offline path, not a bug), the
+`{ ok: false }` branch handles server validation (revert + the returned
+error toast). `finally` always clears the per-emoji in-flight guard so
+the button can never wedge, on any path.
+
+**Regression check:** DevTools → Network → Offline, tap a reaction. The
+emoji should bump then snap back within a moment with an error toast, and
+be tappable again immediately. Repeat online: it should stick and show
+the reconciled count.
+
+**Prevention pattern: any optimistic setState that awaits a server
+action MUST catch the rejection, not just the returned-error union.** A
+server action can *reject* (network, timeout, serialization) as well as
+*resolve to `{ ok: false }`*. Handle both, and clear in-flight/loading
+flags in `finally` so a throw can't leave the control disabled.
+
+**Related:** T192 (comment reactions), T127 (the reverted first cut where
+the bug was found).
+
+---
+
 ### 2026-07-21 — Adding a notification enum value: two things break at once (DB + UI)
 
 **Symptom:** N/A yet — prevention note filed while shipping T127 reactions so

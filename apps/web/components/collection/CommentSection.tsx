@@ -7,6 +7,10 @@ import { useToast } from "@/components/Toast";
 import ReportButton from "@/components/ReportButton";
 import CommentLikeButton from "@/components/collection/CommentLikeButton";
 import CommentInputGate from "@/components/collection/CommentInputGate";
+// T192 (2026-07-21): per-comment emoji reactions.
+import ReactionRow from "@/components/ReactionRow";
+import { getReactionsForComments } from "@/lib/reaction-actions";
+import type { ReactionSummary } from "@/lib/reactions";
 // Audit hp-24 (2026-07-09): use the shared browser singleton.
 import { createClient } from "@/lib/supabase/client";
 
@@ -59,6 +63,11 @@ export default function CommentSection({
   const [expanded, setExpanded] = useState(false);
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
   const [likedByUser, setLikedByUser] = useState<Record<string, boolean>>({});
+  // T192: reaction summaries keyed by comment id. Batch-enriched in the
+  // load effect via getReactionsForComments (single IN query, no N+1).
+  const [reactionsByComment, setReactionsByComment] = useState<
+    Record<string, ReactionSummary[]>
+  >({});
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { showToast } = useToast();
   const pathname = usePathname();
@@ -120,9 +129,12 @@ export default function CommentSection({
 
       let countMap: Record<string, number> = {};
       let likedMap: Record<string, boolean> = {};
+      // T192: reaction summaries per comment, enriched in one batched
+      // server-action call alongside the like enrichment.
+      let reactionMap: Record<string, ReactionSummary[]> = {};
 
       if (commentIds.length > 0) {
-        const [likeCountsRes, userLikesRes] = await Promise.all([
+        const [likeCountsRes, userLikesRes, reactionRes] = await Promise.all([
           supabase
             .from("comment_likes")
             .select("comment_id")
@@ -134,6 +146,8 @@ export default function CommentSection({
                 .in("comment_id", commentIds)
                 .eq("user_id", currentUserId)
             : Promise.resolve({ data: [] as { comment_id: string }[] }),
+          // Batched reaction fetch (returns a Map<commentId, summary[]>).
+          getReactionsForComments(commentIds),
         ]);
 
         if (cancelled) return;
@@ -148,11 +162,15 @@ export default function CommentSection({
         }[]) {
           likedMap[row.comment_id] = true;
         }
+        for (const [commentId, summary] of reactionRes) {
+          reactionMap[commentId] = summary;
+        }
       }
 
       setComments(loaded);
       setLikeCounts(countMap);
       setLikedByUser(likedMap);
+      setReactionsByComment(reactionMap);
       onCountChange(loaded.length);
       setLoading(false);
     }
@@ -231,6 +249,9 @@ export default function CommentSection({
       setComments((prev) => [newComment, ...prev]);
       setLikeCounts((prev) => ({ ...prev, [newComment.id]: 0 }));
       setLikedByUser((prev) => ({ ...prev, [newComment.id]: false }));
+      // Seed an empty reaction set — ReactionRow renders every tap
+      // target from the fixed vocabulary, counts all at 0.
+      setReactionsByComment((prev) => ({ ...prev, [newComment.id]: [] }));
       onCountChange(comments.length + 1);
       setBody("");
       showToast("Comment posted", "success");
@@ -258,6 +279,11 @@ export default function CommentSection({
         return next;
       });
       setLikedByUser((prev) => {
+        const next = { ...prev };
+        delete next[commentId];
+        return next;
+      });
+      setReactionsByComment((prev) => {
         const next = { ...prev };
         delete next[commentId];
         return next;
@@ -331,6 +357,9 @@ export default function CommentSection({
             return (
               <div
                 key={c.id}
+                // T192: anchor target for reaction-notification deep
+                // links (/slimes/[id]#comment-<id>).
+                id={`comment-${c.id}`}
                 style={{
                   display: "flex",
                   flexDirection: "column",
@@ -424,6 +453,15 @@ export default function CommentSection({
                 >
                   {c.body}
                 </p>
+                {/* T192: per-comment emoji reactions, inline under the
+                    body. Compact size so it stays dense in the thread. */}
+                <div style={{ marginTop: 4 }}>
+                  <ReactionRow
+                    commentId={c.id}
+                    initialReactions={reactionsByComment[c.id] ?? []}
+                    currentUserId={currentUserId}
+                  />
+                </div>
               </div>
             );
           })

@@ -21,6 +21,7 @@ import type {
   Notification,
   NotificationType,
 } from "@/lib/types";
+import { isReactionType, REACTION_META } from "@/lib/reactions";
 import { formatRelativeTime } from "@/lib/format-time";
 
 interface Props {
@@ -208,6 +209,30 @@ function ZapIcon() {
       aria-hidden="true"
     >
       <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  );
+}
+
+// T192 (2026-07-21): reaction notifications. Line-SVG face keeps the
+// icon puck consistent with the rest of the feed (community-sensitivity
+// rule: no illustrated characters). The specific reacted emoji rides in
+// the copy, not the puck.
+function SmileIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="w-4 h-4"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+      <path d="M9 9h.01" />
+      <path d="M15 9h.01" />
     </svg>
   );
 }
@@ -422,6 +447,41 @@ function renderContent(n: Notification): RenderedContent {
         tint: TINT.magenta,
         copy: <>{boldSpan(actorLabel)} liked your log.</>,
         href: logId ? `/slimes/${logId}` : null,
+      };
+    }
+
+    // T192 (2026-07-21): someone reacted to one of your comments. The
+    // specific emoji comes from metadata.reaction_type and the reacted
+    // comment id from metadata.comment_id (see migration 0086); if the
+    // emoji is missing or unknown we drop the glyph and keep the
+    // sentence readable. "on your <slime> comment" when we have the
+    // slime name, "on your comment" otherwise. Deep-links to the exact
+    // comment anchor. No em-dashes (CLAUDE.md copy rule).
+    case "comment_reaction_received": {
+      const rt = n.metadata?.reaction_type;
+      const emoji = rt && isReactionType(rt) ? REACTION_META[rt].emoji : null;
+      const commentId = n.metadata?.comment_id ?? null;
+      const target = slimeName ? (
+        <>
+          your comment on {boldSpan(slimeName)}
+        </>
+      ) : (
+        <>your comment</>
+      );
+      const href = logId
+        ? commentId
+          ? `/slimes/${logId}#comment-${commentId}`
+          : `/slimes/${logId}`
+        : null;
+      return {
+        icon: <SmileIcon />,
+        tint: TINT.cyan,
+        copy: (
+          <>
+            {boldSpan(actorLabel)} reacted {emoji ? `${emoji} ` : ""}to {target}.
+          </>
+        ),
+        href,
       };
     }
 
