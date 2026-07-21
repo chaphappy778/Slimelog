@@ -5,8 +5,10 @@ import { useState, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import type { CollectionLog, SlimeBaseType } from "@/lib/types";
+import type { ReactionSummary } from "@/lib/reactions";
 import SlimeDetailCard from "@/components/collection/SlimeDetailCard";
 import LikeButton from "@/components/collection/LikeButton";
+import ReactionRow from "@/components/ReactionRow";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,6 +38,10 @@ export type FeedCardLog = {
   // card. Optional because older feed queries didn't return it;
   // undefined = treat as on_shelf (no pill).
   shelf_state?: "on_shelf" | "for_sale" | "archived";
+  // T127 (2026-07-21) — per-log reaction summary, fetched alongside the
+  // log server-side so counts paint on first render. Optional so any
+  // path that doesn't supply it falls back to an empty (all-zero) row.
+  reactions?: ReactionSummary[];
 };
 
 interface FeedCardProps {
@@ -778,6 +784,18 @@ export default function FeedCard({
             </Link>
           )}
         </div>
+
+        {/* T127 (2026-07-21) — reaction row. Wishlist cards don't take
+            reactions (there's no review to react to yet). */}
+        {!isWishlist && (
+          <div className="px-4 pb-4 -mt-1">
+            <ReactionRow
+              logId={log.id}
+              initialReactions={log.reactions ?? []}
+              currentUserId={currentUserId}
+            />
+          </div>
+        )}
       </article>
 
 

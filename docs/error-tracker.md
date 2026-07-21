@@ -29,6 +29,42 @@ Template for new entries:
 
 ---
 
+### 2026-07-21 — Adding a notification enum value: two things break at once (DB + UI)
+
+**Symptom:** N/A yet — prevention note filed while shipping T127 reactions so
+the next person adding a `notification_type` doesn't get bitten.
+
+**Root cause (two traps):**
+1. **The exhaustive switch.** `components/notifications/NotificationRow.tsx`
+   ends its `renderContent` switch with an exhaustiveness guard
+   (`const _exhaustive: never = type`). Add a value to the `NotificationType`
+   union in `lib/types.ts` WITHOUT adding a matching `case`, and `tsc` fails on
+   the `never` assignment. That's the guard working as designed — but it means
+   the enum value, the TS union, and the switch case must all land together.
+2. **No payload column.** `public.notifications` had no per-row payload, so a
+   notification that needs a detail (which emoji was reacted, which word, etc.)
+   has nowhere to put it. T127 added a nullable `metadata jsonb` column
+   (additive, all existing rows stay NULL) and threaded it through the API
+   route `select` + `RawNotificationRow` + `normalize` + the `Notification`
+   type. If you skip any of those four, the field silently reads `undefined`.
+
+**Fix / pattern:** when adding a `notification_type`: (a) `ALTER TYPE ... ADD
+VALUE IF NOT EXISTS` in a migration, (b) add it to the `NotificationType` union
+in `lib/types.ts`, (c) add a `case` to `NotificationRow`'s switch, (d) if it
+carries a detail, write to `notifications.metadata` and read it back through
+the notifications API route. Migration ships first (CLAUDE.md rule) — the enum
+value must exist before `toggleReaction` inserts a row that uses it.
+
+**Regression check:** `npm run type-check` catches the missing switch case
+immediately (the `never` guard). A reaction notification rendering as the
+generic "You have a new notification" fallback means the `case` didn't match —
+usually a typo between the enum string and the union member.
+
+**Related:** T127 (reactions), T167 (`brand_log_received`, same enum-add flow),
+migration `20260721000084_log_reactions.sql`.
+
+---
+
 ### 2026-07-21 — Feed day-buckets throw a hydration error near the date line (UI)
 
 **Symptom:** Sentry issue `81b58fcb` (T191) — hydration mismatch on `/` for a

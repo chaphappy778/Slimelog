@@ -40,6 +40,46 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FeedCardLog } from "@/components/FeedCard";
+import { aggregateReactions } from "@/lib/reactions";
+
+// ─── Reaction enrichment ────────────────────────────────────────────────────
+//
+// T127 (2026-07-21): batch-fetch reactions for a page of logs in one
+// indexed IN query (mirrors the like/comment enrichment). Returns a
+// per-log grouping of the raw { reaction_type, user_id } rows so the
+// caller can hand each group to aggregateReactions with the viewer id.
+async function fetchReactionRowsByLog(
+  supabase: SupabaseClient,
+  ids: string[],
+): Promise<Record<string, { reaction_type: string; user_id: string }[]>> {
+  const byLog: Record<string, { reaction_type: string; user_id: string }[]> =
+    {};
+  if (ids.length === 0) return byLog;
+
+  const { data, error } = await supabase
+    .from("log_reactions")
+    .select("log_id, reaction_type, user_id")
+    .in("log_id", ids);
+
+  if (error) {
+    // Non-fatal — a feed without reaction pills is fine, but log it so a
+    // silent-failing query doesn't hide (CLAUDE.md query rule).
+    console.warn("[feed] reaction enrichment failed:", error.message);
+    return byLog;
+  }
+
+  for (const row of (data ?? []) as {
+    log_id: string;
+    reaction_type: string;
+    user_id: string;
+  }[]) {
+    (byLog[row.log_id] ??= []).push({
+      reaction_type: row.reaction_type,
+      user_id: row.user_id,
+    });
+  }
+  return byLog;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -208,8 +248,9 @@ export async function fetchCommunityFeed(
   const rows = (baseData ?? []) as unknown as CommunityQueryRow[];
   const ids = rows.map((r) => r.id);
 
-  // Enrichment: like counts, comment counts, and the caller's liked-set.
-  const [{ data: likesData }, { data: commentsData }, userLikesRes] =
+  // Enrichment: like counts, comment counts, the caller's liked-set,
+  // and reaction rows (T127).
+  const [{ data: likesData }, { data: commentsData }, userLikesRes, reactionRowsByLog] =
     await Promise.all([
       ids.length > 0
         ? supabase.from("likes").select("log_id").in("log_id", ids)
@@ -224,6 +265,7 @@ export async function fetchCommunityFeed(
             .eq("user_id", userId)
             .in("log_id", ids)
         : Promise.resolve({ data: [] as { log_id: string }[] }),
+      fetchReactionRowsByLog(supabase, ids),
     ]);
 
   const likeCountMap: Record<string, number> = {};
@@ -265,6 +307,9 @@ export async function fetchCommunityFeed(
       shelf_state:
         (r as { shelf_state?: "on_shelf" | "for_sale" | "archived" })
           .shelf_state ?? "on_shelf",
+      // T127 (2026-07-21): reaction summary so the pills paint on first
+      // render. userId scopes viewerReacted to the current viewer.
+      reactions: aggregateReactions(reactionRowsByLog[r.id] ?? [], userId),
     };
   });
 
@@ -331,6 +376,7 @@ export async function fetchFollowingFeed(
     { data: fCommentsData },
     { data: fUserLikesData },
     { data: updatedAtData },
+    fReactionRowsByLog,
   ] = await Promise.all([
     followingLogIds.length > 0
       ? supabase.from("likes").select("log_id").in("log_id", followingLogIds)
@@ -357,6 +403,7 @@ export async function fetchFollowingFeed(
             in_wishlist: boolean | null;
           }[],
         }),
+    fetchReactionRowsByLog(supabase, followingLogIds),
   ]);
 
   const updatedAtMap: Record<string, string> = {};
@@ -407,6 +454,8 @@ export async function fetchFollowingFeed(
       like_count: fLikeCountMap[logId] ?? 0,
       comment_count: fCommentCountMap[logId] ?? 0,
       is_liked_by_current_user: fUserLikedSet.has(logId),
+      // T127 (2026-07-21): reaction summary, viewer-scoped to userId.
+      reactions: aggregateReactions(fReactionRowsByLog[logId] ?? [], userId),
     };
   });
 

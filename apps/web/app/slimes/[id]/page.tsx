@@ -9,11 +9,13 @@ import { cookies } from "next/headers";
 import PageWrapper from "@/components/PageWrapper";
 import PageHeader from "@/components/PageHeader";
 import LikeButton from "@/components/collection/LikeButton";
+import ReactionRow from "@/components/ReactionRow";
 import ReportButton from "@/components/ReportButton";
 import ClientComments from "@/components/collection/ClientComments";
 import DeleteLogButton from "@/components/DeleteLogButton";
 import ShareButton from "@/components/ShareButton";
 import { safeRedirect } from "@/lib/safe-redirect";
+import { aggregateReactions } from "@/lib/reactions";
 import {
   SLIME_BASE_TYPE_COLORS,
   SLIME_BASE_TYPE_LABELS,
@@ -229,6 +231,7 @@ export default async function SlimePage({
     likeCountRes,
     userLikeRes,
     logTagsRes,
+    reactionsRes,
   ] = await Promise.all([
     supabase
       .from("profiles_public")
@@ -267,6 +270,12 @@ export default async function SlimePage({
           .maybeSingle()
       : Promise.resolve({ data: null }),
     supabase.from("log_tags").select("tag_id, tags(name)").eq("log_id", log.id),
+    // T127 (2026-07-21): reaction rows for this log, aggregated below
+    // into the same summary shape the feed cards use.
+    supabase
+      .from("log_reactions")
+      .select("reaction_type, user_id")
+      .eq("log_id", log.id),
   ]);
 
   const owner = (ownerRes.data as OwnerProfile | null) ?? null;
@@ -292,6 +301,20 @@ export default async function SlimePage({
   const { count: likeCount } = likeCountRes;
   const { data: userLikeRow } = userLikeRes;
   const { data: logTagsData } = logTagsRes;
+
+  // T127 (2026-07-21): fold raw reaction rows into the fixed-order
+  // summary, viewer-scoped to the current user. A failed query just
+  // yields an all-zero row rather than 500ing the detail page.
+  if (reactionsRes.error) {
+    console.warn(
+      "[slime detail] reaction query failed:",
+      reactionsRes.error.message,
+    );
+  }
+  const reactionSummary = aggregateReactions(
+    (reactionsRes.data ?? []) as { reaction_type: string; user_id: string }[],
+    currentUserId,
+  );
 
   const keywords = (logTagsData ?? [])
     .map((lt: any) => (lt.tags as { name: string } | null)?.name)
@@ -860,6 +883,16 @@ export default async function SlimePage({
                 </div>
               </>
             )}
+          </div>
+
+          {/* T127 (2026-07-21) — reaction row. Same component + data
+              shape as the feed cards, rendered under the action bar. */}
+          <div style={{ marginTop: 8 }}>
+            <ReactionRow
+              logId={log.id}
+              initialReactions={reactionSummary}
+              currentUserId={currentUserId}
+            />
           </div>
 
           {/* [Change 4 — T98b + scent_notes] Dimension grid — fill bars + toFixed(1) */}

@@ -38,7 +38,10 @@ export type NotificationType =
   // T125 (2026-07-20): nightly aging cron fires this summary
   // notification when at least one of the user's on-shelf slimes
   // enters the warning or overdue state. See migration 0081.
-  | "slime_needs_attention";
+  | "slime_needs_attention"
+  // T127 (2026-07-21): someone reacted to your log. The specific emoji
+  // rides in Notification.metadata.reaction_type. See migration 0084.
+  | "log_reaction_received";
 
 export type DropStatus =
   | "announced"
@@ -683,6 +686,10 @@ export interface Notification {
   brand: NotificationBrand | null;
   drop: NotificationDrop | null;
   log: NotificationLog | null;
+  // T127 (2026-07-21): optional per-notification payload. Only
+  // log_reaction_received populates it today ({ reaction_type }); every
+  // other type leaves it null.
+  metadata: { reaction_type?: string } | null;
 }
 
 export interface NotificationsResponse {

@@ -28,6 +28,7 @@ import type { SlimeBaseType } from "@/lib/types";
 import type { FeedCardLog } from "@/components/FeedCard";
 import SlimeDetailCard from "@/components/collection/SlimeDetailCard";
 import LikeButton from "@/components/collection/LikeButton";
+import ReactionRow from "@/components/ReactionRow";
 
 interface Props {
   log: FeedCardLog;
@@ -325,6 +326,18 @@ export default function FeedCardCompact({
               </Link>
             )}
           </div>
+          {/* T127 (2026-07-21) — compact reaction row. Same component,
+              smaller size so it stays tight in the dense list. */}
+          {!isWishlist && (
+            <div className="mt-1.5">
+              <ReactionRow
+                logId={log.id}
+                initialReactions={log.reactions ?? []}
+                currentUserId={currentUserId}
+                size="compact"
+              />
+            </div>
+          )}
         </div>
       </article>
 
