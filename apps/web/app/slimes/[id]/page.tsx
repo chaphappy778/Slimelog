@@ -13,6 +13,11 @@ import ReportButton from "@/components/ReportButton";
 import ClientComments from "@/components/collection/ClientComments";
 import DeleteLogButton from "@/components/DeleteLogButton";
 import ShareButton from "@/components/ShareButton";
+// T188 Part 2 + Part 5 + T138 (2026-07-21): the redesigned detail page
+// folds care into one collapsible section and moves the rating scale
+// behind a single "See scale" modal.
+import SlimeDetailCareSection from "@/components/collection/SlimeDetailCareSection";
+import RatingScaleModal from "@/components/collection/RatingScaleModal";
 import { safeRedirect } from "@/lib/safe-redirect";
 import {
   SLIME_BASE_TYPE_COLORS,
@@ -186,6 +191,30 @@ const RATING_DIMENSIONS: Array<{ key: keyof CollectionLog; label: string }> = [
   { key: "rating_creativity", label: "Creativity" },
   { key: "rating_sensory_fit", label: "Quality" },
 ];
+
+// Share caption builder — used by both the just-logged CTA and the
+// action-bar Share button so the copy stays identical. 2026-07-17
+// T39-H3/T39-L1: warmer intro, numeric rating surfaced, brand IG tagged
+// when available.
+function buildShareText(
+  slimeName: string | null,
+  ratingOverall: number | null | undefined,
+  brandInstagramHandle: string | null,
+  brandNameRaw: string | null,
+): string {
+  const parts: string[] = [
+    `Just logged this on SlimeLog: ${slimeName ?? "this slime"}`,
+  ];
+  if (typeof ratingOverall === "number") {
+    parts.push(`${ratingOverall.toFixed(1)}/5`);
+  }
+  if (brandInstagramHandle) {
+    parts.push(`@${brandInstagramHandle}`);
+  } else if (brandNameRaw) {
+    parts.push(`by ${brandNameRaw}`);
+  }
+  return parts.join(" · ");
+}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -378,842 +407,735 @@ export default async function SlimePage({
 
   const isOwner = currentUserId === log.user_id;
 
-  // T125 (2026-07-20) — aging status chip shown to the log owner
-  // only. Non-owners see the community insights strip above but no
-  // per-log status (that's the owner's context). Only renders when:
-  //   - viewer is the log owner
-  //   - log is on_shelf (archived + for_sale get no reminders)
-  //   - per-log aging_enabled is true
-  //   - viewer's profile aging_reminders_enabled is true (2026-07-20
-  //     hotfix: was ignoring the global toggle so users who turned
-  //     off reminders in Settings still saw the banner)
-  let ownerAgingBanner: {
-    label: string;
-    accent: string;
-    subtext: string;
-  } | null = null;
-  if (
-    isOwner &&
+  const shareText = buildShareText(
+    log.slime_name,
+    log.rating_overall as number | null | undefined,
+    brandInstagramHandle,
+    log.brand_name_raw,
+  );
+
+  // ─── T188 Part 2 + T138: Care section data ─────────────────────────────
+  // The Care card folds the old owner aging banner + recommended-cadence
+  // strip + Pro care-plan CTA into one collapsible surface. Gate mirrors
+  // the prior aging-banner gate (on-shelf + per-log aging_enabled + the
+  // viewer's own aging_reminders_enabled toggle) minus the owner check,
+  // so visitors also see the aging + cadence context. The owner-only
+  // care-plan CTA lives inside the component and is gated there.
+  const careVisible =
     log.shelf_state === "on_shelf" &&
-    log.aging_enabled &&
-    viewerAgingRemindersEnabled
-  ) {
-    // Resolve effective interval (same logic as
-    // get_effective_aging_interval helper in the migration).
-    const baseDefault = 45; // hard fallback matches the SQL helper
-    // We don't fetch the base-type default here to save a query —
-    // the cron already resolved aging_state, and this banner only
-    // uses aging_state for its color/label. The precise "X days"
-    // is a nice-to-have; we compute it from anchor + interval below.
-    const interval = log.aging_interval_days ?? baseDefault;
-    const anchorMs = new Date(
-      log.last_checked_at ?? log.created_at,
-    ).getTime();
-    const daysSince = Math.floor((Date.now() - anchorMs) / 86_400_000);
-    const daysDelta = daysSince - interval;
-    if (log.aging_state === "overdue") {
-      ownerAgingBanner = {
-        label: "Overdue",
-        accent: "#FF3D6E",
-        subtext: `Overdue by ${daysDelta} ${daysDelta === 1 ? "day" : "days"}. Tap to check in.`,
-      };
-    } else if (log.aging_state === "warning") {
-      const dueIn = Math.max(0, -daysDelta);
-      ownerAgingBanner = {
-        label: "Coming up",
-        accent: "#FFAE3B",
-        subtext: `Aging in ${dueIn} ${dueIn === 1 ? "day" : "days"}. Tap when you check in.`,
-      };
-    } else {
-      ownerAgingBanner = {
-        label: "Fresh",
-        accent: "#39FF14",
-        subtext: `Checked ${daysSince} ${daysSince === 1 ? "day" : "days"} ago. Next check-in around day ${interval}.`,
-      };
-    }
-  }
+    Boolean(log.aging_enabled) &&
+    viewerAgingRemindersEnabled;
+
+  const nowMs = Date.now();
+  const createdMs = log.created_at
+    ? new Date(log.created_at).getTime()
+    : nowMs;
+  const ownedDays = Math.max(0, Math.floor((nowMs - createdMs) / 86_400_000));
+  const hasBeenChecked = Boolean(log.last_checked_at);
+  const checkAnchorMs = hasBeenChecked
+    ? new Date(log.last_checked_at as string).getTime()
+    : createdMs;
+  const daysSinceCheck = Math.max(
+    0,
+    Math.floor((nowMs - checkAnchorMs) / 86_400_000),
+  );
+  // Effective interval: per-log override, else the base-type recommended
+  // cadence, else the SQL helper's hard fallback of 45 days.
+  const careIntervalDays =
+    log.aging_interval_days ?? recommendedCadenceDays ?? 45;
+  const daysToGo = Math.max(0, careIntervalDays - daysSinceCheck);
+  const careProgressPct = Math.min(
+    100,
+    Math.max(0, Math.round((daysSinceCheck / careIntervalDays) * 100)),
+  );
+  const cadenceDays = recommendedCadenceDays ?? careIntervalDays;
+  const careBaseLabel = baseTypeLabel ? baseTypeLabel.toLowerCase() : null;
+  const careHref = `/collection/care?highlight=${log.id}`;
+
+  // Shared props for both Care instances (mobile inline + desktop sidebar).
+  const careProps = {
+    isOwner,
+    isPro: viewerIsPro,
+    ownedDays,
+    daysSinceCheck,
+    hasBeenChecked,
+    intervalDays: careIntervalDays,
+    daysToGo,
+    progressPct: careProgressPct,
+    cadenceDays,
+    baseTypeLabel: careBaseLabel,
+    careHref,
+  };
+
+  const slimeName = log.slime_name ?? "Unnamed Slime";
+
+  // Brand row (logo + linked name) — reused in the hero overlay and the
+  // no-image header fallback.
+  const brandRow = log.brand_name_raw ? (
+    <div className="text-sm flex items-center gap-2 pointer-events-auto">
+      {brandLogoUrl && (
+        <Image
+          src={brandLogoUrl}
+          alt=""
+          width={18}
+          height={18}
+          className="rounded-full shrink-0"
+          style={{
+            objectFit: "cover",
+            border: "1px solid rgba(0,240,255,0.35)",
+          }}
+        />
+      )}
+      {brandSlug ? (
+        <Link
+          href={`/brands/${brandSlug}`}
+          className="font-semibold"
+          style={{ color: "#00F0FF" }}
+        >
+          {log.brand_name_raw}
+        </Link>
+      ) : (
+        <span className="font-medium" style={{ color: "#00F0FF" }}>
+          {log.brand_name_raw}
+        </span>
+      )}
+    </div>
+  ) : null;
 
   return (
     <PageWrapper dots>
       <PageHeader />
 
-      <main className="pt-14 pb-32 max-w-2xl mx-auto">
-        {/* Hero image */}
-        {log.image_url && (
-          <div className="relative w-full aspect-square">
-            <Image
-              src={log.image_url}
-              alt={log.slime_name ?? "Slime photo"}
-              fill
-              sizes="(max-width: 768px) 100vw, 700px"
-              priority
-              className="object-cover"
-            />
-            <div
-              className="absolute inset-0 pointer-events-none"
-              style={{
-                background:
-                  "linear-gradient(to bottom, rgba(0,0,0,0) 60%, rgba(10,10,10,0.85) 100%)",
-              }}
-            />
-          </div>
-        )}
-
-        <div className="px-4 mt-4 flex flex-col gap-4">
-          {/* 2026-07-17 T39-H1: Just-logged share CTA. Fires only when
-              (a) the URL carries ?justLogged=1 (only set by the wizard's
-              post-submit redirect), and (b) the viewer is the owner
-              (isOwner). Placed above the owner row so the first thing
-              on-screen after the hero photo is the invitation to share.
-              This is the point of highest emotional peak — user JUST
-              rated their slime; the reshare rate here dwarfs any other
-              in-app share prompt.
-
-              Deliberately no dismiss control. The banner only appears
-              on the ?justLogged=1 URL, so revisiting /slimes/[id]
-              without the param never shows it. If a user navigates
-              back and forth they'll see it again, which is fine (the
-              share flow is idempotent). */}
-          {justLogged && isOwner && (
-            <div
-              className="rounded-2xl p-4 flex items-start gap-3"
-              style={{
-                background:
-                  "linear-gradient(135deg, rgba(255,0,229,0.14), rgba(0,240,255,0.14))",
-                border: "1px solid rgba(255,0,229,0.45)",
-                boxShadow: "0 0 24px rgba(255,0,229,0.20)",
-              }}
-            >
-              <div className="flex-1 min-w-0">
-                <p
-                  className="text-[11px] font-black uppercase tracking-widest mb-1"
-                  style={{
-                    color: "#FF00E5",
-                    fontFamily: "Montserrat, sans-serif",
-                  }}
-                >
-                  Your slime is logged
-                </p>
-                <p
-                  className="text-sm font-bold text-white leading-snug"
-                  style={{ fontFamily: "Montserrat, sans-serif" }}
-                >
-                  Share it and tag the shop
-                  {brandInstagramHandle ? ` (@${brandInstagramHandle})` : ""}.
-                </p>
-                <p
-                  className="text-[12px] mt-1"
-                  style={{ color: "rgba(245,245,245,0.72)" }}
-                >
-                  Post to Instagram or TikTok. Small shops love seeing
-                  their slime rated, and every reshare brings new
-                  collectors to SlimeLog.
-                </p>
-                <div className="mt-3">
-                  <ShareButton
-                    path={`/slimes/${log.id}?utm_source=share&utm_medium=post_log_cta`}
-                    title={log.slime_name ?? "A slime on SlimeLog"}
-                    text={(() => {
-                      const parts: string[] = [
-                        `Just logged this on SlimeLog: ${log.slime_name ?? "this slime"}`,
-                      ];
-                      if (typeof log.rating_overall === "number") {
-                        parts.push(`${log.rating_overall.toFixed(1)}/5`);
-                      }
-                      if (brandInstagramHandle) {
-                        parts.push(`@${brandInstagramHandle}`);
-                      } else if (log.brand_name_raw) {
-                        parts.push(`by ${log.brand_name_raw}`);
-                      }
-                      return parts.join(" · ");
-                    })()}
-                    label="Share now"
-                    variant="primary"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Owner row */}
-          {owner && (
-            <Link
-              href={`/users/${owner.username}`}
-              className="flex items-center gap-3 group"
-            >
-              <div className="relative w-9 h-9 rounded-full overflow-hidden border border-slime-border shrink-0">
-                {owner.avatar_url ? (
-                  <Image
-                    src={owner.avatar_url}
-                    alt={owner.display_name ?? owner.username ?? "User"}
-                    fill
-                    sizes="36px"
-                    className="object-cover"
-                  />
-                ) : (
-                  <div
-                    className="w-full h-full flex items-center justify-center text-xs font-bold"
-                    style={{
-                      background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-                      color: "#0A0A0A",
-                    }}
-                    aria-hidden="true"
-                  >
-                    {(owner.display_name ?? owner.username ?? "?")
-                      .charAt(0)
-                      .toUpperCase()}
-                  </div>
-                )}
-              </div>
-              <div className="flex flex-col leading-tight">
-                <span className="text-sm font-semibold text-slime-text group-hover:text-slime-magenta transition-colors">
-                  {owner.display_name ?? owner.username}
-                </span>
-                <span className="text-xs text-slime-muted">
-                  @{owner.username}
-                </span>
-              </div>
-            </Link>
-          )}
-
-          {/* Title + brand */}
-          <header className="flex flex-col gap-1.5">
-            <div className="flex items-start justify-between gap-3">
-              <h1
-                className="text-2xl font-black leading-tight flex-1 min-w-0"
-                style={{
-                  color: "#fff",
-                  fontFamily: "Montserrat, Inter, sans-serif",
-                }}
-              >
-                {log.slime_name ?? "Unnamed Slime"}
-              </h1>
-              {/* 2026-07-17 T39-H3: caption rebuilt to tag the brand's
-                  Instagram handle when available, surface the numeric
-                  rating so people scanning IG stories immediately see
-                  the score, and append UTM tracking so we can measure
-                  share-driven signups against organic. Warmer intro
-                  per T39-L1 ("Just logged this on SlimeLog" is more
-                  community than "I rated this on"). Falls back
-                  gracefully when brand/handle/rating are missing. */}
-              <ShareButton
-                path={`/slimes/${log.id}?utm_source=share&utm_medium=slime_log`}
-                title={log.slime_name ?? "A slime on SlimeLog"}
-                text={(() => {
-                  const parts: string[] = [
-                    `Just logged this on SlimeLog: ${log.slime_name ?? "this slime"}`,
-                  ];
-                  if (typeof log.rating_overall === "number") {
-                    parts.push(`${log.rating_overall.toFixed(1)}/5`);
-                  }
-                  if (brandInstagramHandle) {
-                    parts.push(`@${brandInstagramHandle}`);
-                  } else if (log.brand_name_raw) {
-                    parts.push(`by ${log.brand_name_raw}`);
-                  }
-                  return parts.join(" · ");
-                })()}
-              />
-            </div>
-            {log.brand_name_raw && (
-              <div className="text-sm flex items-center gap-2">
-                {/* 2026-07-17 T173: brand logo mark. Same 18px round tile
-                    as the feed card treatment, sized up slightly for
-                    the taller detail-page text. */}
-                {brandLogoUrl && (
-                  <Image
-                    src={brandLogoUrl}
-                    alt=""
-                    width={18}
-                    height={18}
-                    className="rounded-full shrink-0"
-                    style={{
-                      objectFit: "cover",
-                      border: "1px solid rgba(0,240,255,0.35)",
-                    }}
-                  />
-                )}
-                {brandSlug ? (
-                  <Link
-                    href={`/brands/${brandSlug}`}
-                    className="font-semibold"
-                    style={{ color: "#00F0FF" }}
-                  >
-                    {log.brand_name_raw}
-                  </Link>
-                ) : (
-                  <span className="text-slime-muted font-medium">
-                    {log.brand_name_raw}
-                  </span>
-                )}
-              </div>
-            )}
-          </header>
-
-          {/* Type + status badges */}
-          <div className="flex flex-wrap gap-2 items-center">
-            {baseTypeLabel && (
-              <span
-                className="px-3 py-1 rounded-full text-xs font-semibold border"
-                style={{
-                  background: `${typeColor}20`,
-                  color: typeColor,
-                  borderColor: `${typeColor}50`,
-                }}
-              >
-                {baseTypeLabel}
-              </span>
-            )}
-            {/* 2026-07-16 Commit B-display: variant chip. Distinct
-                magenta chip so brand-scoped naming ("Fluffernutter",
-                "Cloud Puff") reads as its own signal rather than an
-                afterthought on the base type badge. */}
-            {variantLabel && (
-              <span
-                className="px-3 py-1 rounded-full text-xs font-semibold border"
-                style={{
-                  background: "rgba(255,0,229,0.14)",
-                  color: "#FF00E5",
-                  borderColor: "rgba(255,0,229,0.45)",
-                }}
-              >
-                {variantLabel}
-              </span>
-            )}
-            {/* T158 (2026-07-16): subtle skill_level chip. Lighter tint
-                than the base-type chip so the difficulty reads as an
-                info tag rather than the primary identifier. */}
-            {log.skill_level && (
-              <span
-                className="px-3 py-1 rounded-full text-[11px] font-semibold border"
-                style={{
-                  background:
-                    SLIME_SKILL_LEVEL_COLORS[
-                      log.skill_level as SlimeSkillLevel
-                    ].bg,
-                  color:
-                    SLIME_SKILL_LEVEL_COLORS[
-                      log.skill_level as SlimeSkillLevel
-                    ].text,
-                  borderColor:
-                    SLIME_SKILL_LEVEL_COLORS[
-                      log.skill_level as SlimeSkillLevel
-                    ].border,
-                }}
-              >
-                {
-                  SLIME_SKILL_LEVEL_LABELS[
-                    log.skill_level as SlimeSkillLevel
-                  ]
-                }
-              </span>
-            )}
-            {log.in_wishlist ? (
-              <span
-                className="px-3 py-1 rounded-full text-xs font-semibold border"
-                style={{
-                  background: "rgba(204,68,255,0.15)",
-                  color: "#CC44FF",
-                  borderColor: "rgba(204,68,255,0.4)",
-                }}
-              >
-                Wishlist
-              </span>
-            ) : log.in_collection ? (
-              <span
-                className="px-3 py-1 rounded-full text-xs font-semibold border"
-                style={{
-                  background: "rgba(57,255,20,0.15)",
-                  color: "#39FF14",
-                  borderColor: "rgba(57,255,20,0.4)",
-                }}
-              >
-                In Collection
-              </span>
-            ) : null}
-          </div>
-
-          {/* [Change 4 — scent_notes] Keywords pills only (scent strength moved to ratings grid) */}
-          {keywords.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {keywords.map((kw) => (
-                <span
-                  key={kw}
-                  className="px-3 py-1 rounded-full text-xs font-medium border"
-                  style={{
-                    background: "rgba(0,240,255,0.08)",
-                    color: "#00F0FF",
-                    borderColor: "rgba(0,240,255,0.2)",
-                  }}
-                >
-                  {kw}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Overall rating */}
-          {typeof log.rating_overall === "number" && (
-            <div className="flex items-center gap-4 mt-1">
-              {/* [Change 2 — T98b] toFixed(1) on large rating number */}
-              <span
-                className="text-5xl font-black leading-none"
-                style={{
-                  color: "#39FF14",
-                  fontFamily: "Montserrat, Inter, sans-serif",
-                }}
-              >
-                {(log.rating_overall as number).toFixed(1)}
-              </span>
-              <div className="flex flex-col gap-1.5">
-                {/* [Change 3 — T98b] Replace star row with gradient fill bar */}
-                <div
-                  style={{
-                    width: 90,
-                    height: 6,
-                    borderRadius: 3,
-                    background: "rgba(45,10,78,0.5)",
-                    position: "relative",
-                    overflow: "hidden",
-                  }}
-                >
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: 0,
-                      top: 0,
-                      bottom: 0,
-                      width: `${((log.rating_overall ?? 0) / 5) * 100}%`,
-                      background: "linear-gradient(90deg, #00F0FF, #39FF14)",
-                      borderRadius: 3,
-                    }}
-                  />
-                </div>
-                <span className="text-xs text-slime-muted uppercase tracking-wider">
-                  overall rating
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* [T67a/b] Owner action row — Edit link + Delete button */}
-          {isOwner && (
-            <div className="flex gap-3 mb-3">
-              <Link
-                href={`/log/edit/${log.id}`}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold"
-                style={{
-                  background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-                  color: "#0A0A0A",
-                }}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                </svg>
-                Edit
-              </Link>
-              <div className="flex-1 flex items-center justify-center">
-                <DeleteLogButton logId={log.id} />
-              </div>
-            </div>
-          )}
-
-          {/* Action bar — Like + Report */}
-          <div
-            className="flex items-stretch border-y"
-            style={{
-              borderColor: "rgba(45,10,78,0.6)",
-              marginTop: 4,
-            }}
-          >
-            <div className="flex-1 flex items-center justify-center py-3">
-              <LikeButton
-                logId={log.id}
-                initialCount={likeCount ?? 0}
-                initialLiked={!!userLikeRow}
-                currentUserId={currentUserId}
-              />
-            </div>
-            {showCTA && (
-              <>
-                <div
-                  className="w-px shrink-0"
-                  style={{ background: "rgba(45,10,78,0.6)" }}
+      <main className="pt-14 pb-32">
+        <div className="max-w-2xl lg:max-w-6xl mx-auto lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-7 lg:px-6 lg:pt-2 lg:items-start">
+          {/* ═══════════════════ MAIN COLUMN ═══════════════════ */}
+          <div className="min-w-0 flex flex-col">
+            {/* Hero */}
+            {log.image_url ? (
+              <div className="relative w-full aspect-square lg:aspect-[16/10] overflow-hidden lg:rounded-3xl">
+                <Image
+                  src={log.image_url}
+                  alt={slimeName}
+                  fill
+                  sizes="(max-width: 1024px) 100vw, 760px"
+                  priority
+                  className="object-cover"
                 />
-                <div className="flex-1 flex items-center justify-center py-3">
-                  <ReportButton
-                    contentType="log"
-                    contentId={log.id}
-                    currentUserId={currentUserId}
-                  />
+                <div
+                  className="absolute inset-0 pointer-events-none"
+                  style={{
+                    background:
+                      "linear-gradient(to top, rgba(10,0,20,0.92) 4%, rgba(10,0,20,0.35) 42%, transparent 68%)",
+                  }}
+                />
+                <div className="absolute left-4 right-4 bottom-4 lg:left-6 lg:right-6 lg:bottom-6 pointer-events-none">
+                  <h1
+                    className="mont text-[34px] lg:text-[52px] font-black leading-[0.98] tracking-tight"
+                    style={{
+                      color: "#fff",
+                      fontFamily: "Montserrat, Inter, sans-serif",
+                      textShadow: "0 4px 24px rgba(0,0,0,0.6)",
+                    }}
+                  >
+                    {slimeName}
+                  </h1>
+                  {brandRow && <div className="mt-2.5">{brandRow}</div>}
                 </div>
-              </>
+              </div>
+            ) : (
+              <header className="px-4 lg:px-0 pt-2 flex flex-col gap-1.5">
+                <h1
+                  className="mont text-3xl font-black leading-tight"
+                  style={{
+                    color: "#fff",
+                    fontFamily: "Montserrat, Inter, sans-serif",
+                  }}
+                >
+                  {slimeName}
+                </h1>
+                {brandRow}
+              </header>
             )}
-          </div>
 
-          {/* [Change 4 — T98b + scent_notes] Dimension grid — fill bars + toFixed(1) */}
-          {(activeDimensions.length > 0 ||
-            log.scent_strength ||
-            log.condition) && (
-            <div
-              className="grid grid-cols-2 gap-x-4 gap-y-2.5 p-4 rounded-xl border"
-              style={{
-                background: "rgba(45,10,78,0.25)",
-                borderColor: "rgba(45,10,78,0.5)",
-              }}
-            >
-              {activeDimensions.map(({ key, label }) => (
-                <div key={key} className="flex flex-col gap-1.5">
-                  <span className="text-[10px] uppercase tracking-wider text-slime-muted font-semibold">
-                    {label}
+            <div className="px-4 lg:px-0 mt-4 flex flex-col gap-4">
+              {/* 2026-07-17 T39-H1: Just-logged share CTA. Fires only when
+                  (a) the URL carries ?justLogged=1 (only set by the wizard's
+                  post-submit redirect), and (b) the viewer is the owner. */}
+              {justLogged && isOwner && (
+                <div
+                  className="rounded-2xl p-4 flex items-start gap-3"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, rgba(255,0,229,0.14), rgba(0,240,255,0.14))",
+                    border: "1px solid rgba(255,0,229,0.45)",
+                    boxShadow: "0 0 24px rgba(255,0,229,0.20)",
+                  }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className="text-[11px] font-black uppercase tracking-widest mb-1"
+                      style={{
+                        color: "#FF00E5",
+                        fontFamily: "Montserrat, sans-serif",
+                      }}
+                    >
+                      Your slime is logged
+                    </p>
+                    <p
+                      className="text-sm font-bold text-white leading-snug"
+                      style={{ fontFamily: "Montserrat, sans-serif" }}
+                    >
+                      Share it and tag the shop
+                      {brandInstagramHandle
+                        ? ` (@${brandInstagramHandle})`
+                        : ""}
+                      .
+                    </p>
+                    <p
+                      className="text-[12px] mt-1"
+                      style={{ color: "rgba(245,245,245,0.72)" }}
+                    >
+                      Post to Instagram or TikTok. Small shops love seeing
+                      their slime rated, and every reshare brings new
+                      collectors to SlimeLog.
+                    </p>
+                    <div className="mt-3">
+                      <ShareButton
+                        path={`/slimes/${log.id}?utm_source=share&utm_medium=post_log_cta`}
+                        title={log.slime_name ?? "A slime on SlimeLog"}
+                        text={shareText}
+                        label="Share now"
+                        variant="primary"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Owner identity row */}
+              {owner && (
+                <Link
+                  href={`/users/${owner.username}`}
+                  className="flex items-center gap-3 group"
+                >
+                  <div className="relative w-9 h-9 rounded-full overflow-hidden border border-slime-border shrink-0">
+                    {owner.avatar_url ? (
+                      <Image
+                        src={owner.avatar_url}
+                        alt={owner.display_name ?? owner.username ?? "User"}
+                        fill
+                        sizes="36px"
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div
+                        className="w-full h-full flex items-center justify-center text-xs font-bold"
+                        style={{
+                          background:
+                            "linear-gradient(135deg, #39FF14, #00F0FF)",
+                          color: "#0A0A0A",
+                        }}
+                        aria-hidden="true"
+                      >
+                        {(owner.display_name ?? owner.username ?? "?")
+                          .charAt(0)
+                          .toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col leading-tight">
+                    <span className="text-sm font-semibold text-slime-text group-hover:text-slime-magenta transition-colors">
+                      {owner.display_name ?? owner.username}
+                    </span>
+                    <span className="text-xs text-slime-muted">
+                      @{owner.username}
+                    </span>
+                  </div>
+                </Link>
+              )}
+
+              {/* Meta chips */}
+              <div className="flex flex-wrap gap-2 items-center">
+                {baseTypeLabel && (
+                  <span
+                    className="px-3 py-1 rounded-full text-xs font-semibold border"
+                    style={{
+                      background: `${typeColor}20`,
+                      color: typeColor,
+                      borderColor: `${typeColor}50`,
+                    }}
+                  >
+                    {baseTypeLabel}
                   </span>
-                  {/* [Change 4 — T98b] Replace dot row with fill bar + toFixed(1) */}
-                  <div className="flex items-center gap-2">
+                )}
+                {variantLabel && (
+                  <span
+                    className="px-3 py-1 rounded-full text-xs font-semibold border"
+                    style={{
+                      background: "rgba(255,0,229,0.14)",
+                      color: "#FF00E5",
+                      borderColor: "rgba(255,0,229,0.45)",
+                    }}
+                  >
+                    {variantLabel}
+                  </span>
+                )}
+                {log.skill_level && (
+                  <span
+                    className="px-3 py-1 rounded-full text-[11px] font-semibold border"
+                    style={{
+                      background:
+                        SLIME_SKILL_LEVEL_COLORS[
+                          log.skill_level as SlimeSkillLevel
+                        ].bg,
+                      color:
+                        SLIME_SKILL_LEVEL_COLORS[
+                          log.skill_level as SlimeSkillLevel
+                        ].text,
+                      borderColor:
+                        SLIME_SKILL_LEVEL_COLORS[
+                          log.skill_level as SlimeSkillLevel
+                        ].border,
+                    }}
+                  >
+                    {
+                      SLIME_SKILL_LEVEL_LABELS[
+                        log.skill_level as SlimeSkillLevel
+                      ]
+                    }
+                  </span>
+                )}
+                {log.in_wishlist ? (
+                  <span
+                    className="px-3 py-1 rounded-full text-xs font-semibold border"
+                    style={{
+                      background: "rgba(204,68,255,0.15)",
+                      color: "#CC44FF",
+                      borderColor: "rgba(204,68,255,0.4)",
+                    }}
+                  >
+                    Wishlist
+                  </span>
+                ) : log.in_collection ? (
+                  <span
+                    className="px-3 py-1 rounded-full text-xs font-semibold border"
+                    style={{
+                      background: "rgba(57,255,20,0.15)",
+                      color: "#39FF14",
+                      borderColor: "rgba(57,255,20,0.4)",
+                    }}
+                  >
+                    In collection
+                  </span>
+                ) : null}
+              </div>
+
+              {/* Keyword pills */}
+              {keywords.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {keywords.map((kw) => (
+                    <span
+                      key={kw}
+                      className="px-3 py-1 rounded-full text-xs font-medium border"
+                      style={{
+                        background: "rgba(0,240,255,0.08)",
+                        color: "#00F0FF",
+                        borderColor: "rgba(0,240,255,0.2)",
+                      }}
+                    >
+                      {kw}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Overall rating */}
+              {typeof log.rating_overall === "number" && (
+                <div className="flex items-center gap-4 mt-1">
+                  <span
+                    className="mont font-black leading-none"
+                    style={{
+                      fontSize: 60,
+                      color: "#39FF14",
+                      fontFamily: "Montserrat, Inter, sans-serif",
+                      textShadow: "0 0 16px rgba(57,255,20,0.45)",
+                    }}
+                  >
+                    {(log.rating_overall as number).toFixed(1)}
+                  </span>
+                  <div className="flex-1 flex flex-col">
+                    <span
+                      className="mont text-xs uppercase font-extrabold"
+                      style={{
+                        letterSpacing: "0.12em",
+                        color: "rgba(245,245,245,0.65)",
+                        fontFamily: "Montserrat, Inter, sans-serif",
+                      }}
+                    >
+                      Overall rating
+                    </span>
                     <div
                       style={{
-                        width: 48,
-                        height: 4,
-                        borderRadius: 2,
+                        marginTop: 8,
+                        height: 8,
+                        borderRadius: 999,
                         background: "rgba(45,10,78,0.5)",
                         position: "relative",
                         overflow: "hidden",
+                        maxWidth: 220,
                       }}
                     >
                       <div
                         style={{
                           position: "absolute",
-                          left: 0,
-                          top: 0,
-                          bottom: 0,
-                          width: `${((log[key] as number) / 5) * 100}%`,
-                          background: "#39FF14",
-                          borderRadius: 2,
+                          inset: 0,
+                          right: "auto",
+                          width: `${((log.rating_overall ?? 0) / 5) * 100}%`,
+                          background:
+                            "linear-gradient(90deg, #00F0FF, #39FF14)",
+                          borderRadius: 999,
+                          boxShadow: "0 0 20px rgba(57,255,20,0.35)",
                         }}
                       />
                     </div>
                     <span
-                      className="text-xs font-bold"
-                      style={{ color: "#39FF14" }}
+                      className="text-xs mt-1.5"
+                      style={{ color: "rgba(245,245,245,0.4)" }}
                     >
-                      {(log[key] as number).toFixed(1)}
+                      out of 5
                     </span>
                   </div>
                 </div>
-              ))}
-              {log.scent_strength && (
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-[10px] uppercase tracking-wider text-slime-muted font-semibold">
-                    Scent
-                  </span>
-                  <span
-                    className="text-xs font-bold"
-                    style={{ color: "#39FF14" }}
-                  >
-                    {SCENT_STRENGTH_LABELS[log.scent_strength as ScentStrength]}
-                  </span>
-                </div>
               )}
-              {log.condition && (
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-[10px] uppercase tracking-wider text-slime-muted font-semibold">
-                    Condition
-                  </span>
-                  <span
-                    className="text-xs font-bold"
-                    style={{ color: "#00F0FF" }}
-                  >
-                    {
-                      SLIME_CONDITION_LABELS[
-                        log.condition as SlimeCondition
-                      ]
-                    }
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
 
-          {/* [Change 5 — scent_notes] Scent notes block between ratings and notes */}
-          {log.scent_notes && (
-            <div className="flex flex-col gap-1.5">
-              <p
-                className="text-[11px] font-black tracking-widest uppercase"
-                style={{ color: "#00F0FF" }}
-              >
-                Scent
-              </p>
-              <p className="text-sm leading-relaxed text-slime-text/80">
-                {log.scent_notes}
-              </p>
-            </div>
-          )}
-
-          {/* Notes */}
-          {log.notes && (
-            <p className="text-sm italic leading-relaxed text-slime-text/70">
-              {log.notes}
-            </p>
-          )}
-
-          {/* T125 (2026-07-20) — Owner's per-log aging banner. Only
-              renders for the log's owner + on-shelf slimes. Links to
-              /collection/aging where they can mark checked. */}
-          {ownerAgingBanner && (
-            <a
-              href="/collection/aging"
-              className="flex items-center justify-between gap-3 rounded-2xl px-4 py-3 transition-all"
-              style={{
-                background: `${ownerAgingBanner.accent}12`,
-                border: `1px solid ${ownerAgingBanner.accent}66`,
-                boxShadow:
-                  log.aging_state === "overdue"
-                    ? `0 0 20px ${ownerAgingBanner.accent}22`
-                    : "none",
-              }}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <span
-                  style={{
-                    display: "inline-block",
-                    width: 10,
-                    height: 10,
-                    borderRadius: 5,
-                    background: ownerAgingBanner.accent,
-                    boxShadow: `0 0 10px ${ownerAgingBanner.accent}99`,
-                    flexShrink: 0,
-                  }}
-                />
-                <div className="min-w-0">
-                  <p
-                    className="text-[11px] font-black tracking-widest uppercase"
-                    style={{ color: ownerAgingBanner.accent }}
-                  >
-                    Aging: {ownerAgingBanner.label}
-                  </p>
-                  <p
-                    className="text-xs mt-0.5 truncate"
-                    style={{ color: "rgba(245,245,245,0.75)" }}
-                  >
-                    {ownerAgingBanner.subtext}
-                  </p>
-                </div>
-              </div>
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke={ownerAgingBanner.accent}
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-                className="shrink-0"
-              >
-                <path d="M9 18l6-6-6-6" />
-              </svg>
-            </a>
-          )}
-
-          {/* T125 phase 2 (2026-07-20) — Recommended cadence strip.
-              Replaces the earlier "community aging insight" strip
-              which was showing our own defaults labeled as
-              community-sourced. Now honest: shows the recommended
-              check-in interval for the base type, then a Pro CTA
-              (for the log owner only) that deep-links to the care
-              plan editor. Non-owners see just the recommendation. */}
-          {recommendedCadenceDays !== null && (
-            <div
-              className="flex flex-col gap-2 rounded-2xl p-4"
-              style={{
-                background:
-                  "linear-gradient(135deg, rgba(0,240,255,0.06), rgba(255,0,229,0.06))",
-                border: "1px solid rgba(0,240,255,0.35)",
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#00F0FF"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M12 7v5l3 2" />
-                </svg>
-                <p
-                  className="text-[11px] font-black tracking-widest uppercase"
-                  style={{ color: "#00F0FF" }}
-                >
-                  Recommended cadence
-                </p>
-              </div>
-              <p className="text-sm leading-relaxed text-slime-text/90">
-                Check{" "}
-                <span
-                  style={{
-                    color: "#00F0FF",
-                    fontWeight: 700,
-                  }}
-                >
-                  {baseTypeLabel?.toLowerCase() ?? "this base type"}
-                </span>{" "}
-                slimes about every{" "}
-                <span
-                  style={{
-                    fontFamily: "Montserrat, sans-serif",
-                    fontWeight: 900,
-                    color: "#FFFFFF",
-                  }}
-                >
-                  {recommendedCadenceDays} days
-                </span>
-                . This is a starting point — your slime may need more
-                or less depending on storage, humidity, and how often
-                you play with it.
-              </p>
-              {isOwner &&
-                (viewerIsPro ? (
-                  <a
-                    href={`/collection/care?highlight=${log.id}`}
-                    className="mt-1 flex items-center justify-between gap-2 rounded-xl px-3 py-2 transition-all"
+              {/* Owner action row — Edit (glow) + Delete (red) */}
+              {isOwner && (
+                <div className="flex gap-3 items-stretch">
+                  <Link
+                    href={`/log/edit/${log.id}`}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold"
                     style={{
-                      background:
-                        "linear-gradient(135deg, rgba(57,255,20,0.10), rgba(0,240,255,0.10))",
-                      border: "1px solid rgba(57,255,20,0.45)",
+                      background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                      color: "#0A0A0A",
+                      boxShadow: "0 0 12px rgba(0,240,255,0.35)",
                     }}
                   >
-                    <p
-                      className="text-xs"
-                      style={{ color: "#39FF14", fontWeight: 700 }}
-                    >
-                      Manage this slime&apos;s care plan →
-                    </p>
                     <svg
                       width="14"
                       height="14"
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#39FF14"
-                      strokeWidth="2"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       aria-hidden="true"
                     >
-                      <path d="M9 18l6-6-6-6" />
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                     </svg>
-                  </a>
-                ) : (
-                  <div
-                    className="mt-1 flex items-center justify-between gap-2 rounded-xl px-3 py-2"
-                    style={{
-                      background: "rgba(255,210,74,0.06)",
-                      border: "1px solid rgba(255,210,74,0.35)",
-                    }}
-                  >
-                    <p
-                      className="text-xs"
-                      style={{ color: "rgba(255,210,74,0.85)" }}
-                    >
-                      Pro unlocks custom care plans — set your own
-                      cadence and notes for this slime.
-                    </p>
-                    <a
-                      href="/settings/subscription"
-                      className="text-[11px] font-bold rounded-full px-3 py-1"
+                    Edit
+                  </Link>
+                  <div className="flex items-center justify-center px-4 rounded-xl">
+                    <DeleteLogButton logId={log.id} accent="#FF3D6E" />
+                  </div>
+                </div>
+              )}
+
+              {/* Action bar — Like + Report + Share */}
+              <div
+                className="flex items-stretch border-y"
+                style={{ borderColor: "rgba(45,10,78,0.6)" }}
+              >
+                <div className="flex-1 flex items-center justify-center py-3">
+                  <LikeButton
+                    logId={log.id}
+                    initialCount={likeCount ?? 0}
+                    initialLiked={!!userLikeRow}
+                    currentUserId={currentUserId}
+                  />
+                </div>
+                {showCTA && (
+                  <>
+                    <div
+                      className="w-px shrink-0"
+                      style={{ background: "rgba(45,10,78,0.6)" }}
+                    />
+                    <div className="flex-1 flex items-center justify-center py-3">
+                      <ReportButton
+                        contentType="log"
+                        contentId={log.id}
+                        currentUserId={currentUserId}
+                      />
+                    </div>
+                  </>
+                )}
+                <div
+                  className="w-px shrink-0"
+                  style={{ background: "rgba(45,10,78,0.6)" }}
+                />
+                <div className="flex-1 flex items-center justify-center py-2">
+                  <ShareButton
+                    path={`/slimes/${log.id}?utm_source=share&utm_medium=slime_log`}
+                    title={log.slime_name ?? "A slime on SlimeLog"}
+                    text={shareText}
+                  />
+                </div>
+              </div>
+
+              {/* RATINGS */}
+              {(activeDimensions.length > 0 ||
+                log.scent_strength ||
+                log.condition) && (
+                <section className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <h2
+                      className="mont font-black text-lg"
                       style={{
-                        color: "#0A0A0A",
-                        background:
-                          "linear-gradient(135deg, #FFD24A, #FFAE3B)",
-                        whiteSpace: "nowrap",
+                        letterSpacing: "0.02em",
+                        color: "#fff",
+                        fontFamily: "Montserrat, Inter, sans-serif",
                       }}
                     >
-                      Go Pro
-                    </a>
+                      RATINGS
+                    </h2>
+                    <RatingScaleModal />
                   </div>
-                ))}
-            </div>
-          )}
 
-          {/* Meta row */}
-          <div className="flex flex-wrap gap-1.5">
-            {log.created_at && (
-              <span
-                className="px-2.5 py-1 rounded-full text-[11px]"
-                style={{
-                  background: "rgba(45,10,78,0.4)",
-                  color: "rgba(255,255,255,0.4)",
-                }}
-              >
-                Logged{" "}
-                {new Intl.DateTimeFormat("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                }).format(new Date(log.created_at))}
-              </span>
-            )}
-            {/* [Change 3 — T64] Fix: use purchase_price not cost_paid */}
-            {typeof log.purchase_price === "number" && (
-              <span
-                className="px-2.5 py-1 rounded-full text-[11px]"
-                style={{
-                  background: "rgba(45,10,78,0.4)",
-                  color: "rgba(255,255,255,0.5)",
-                }}
-              >
-                {new Intl.NumberFormat("en-US", {
-                  style: "currency",
-                  currency: "USD",
-                }).format(log.purchase_price)}
-              </span>
-            )}
-            {log.purchased_from && (
-              <span
-                className="px-2.5 py-1 rounded-full text-[11px]"
-                style={{
-                  background: "rgba(45,10,78,0.4)",
-                  color: "rgba(255,255,255,0.5)",
-                }}
-              >
-                {log.purchased_from}
-              </span>
-            )}
+                  {activeDimensions.length > 0 && (
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
+                      {activeDimensions.map(({ key, label }) => {
+                        const value = log[key] as number;
+                        return (
+                          <div
+                            key={key}
+                            style={{
+                              background: "rgba(45,10,78,0.25)",
+                              border: "1px solid rgba(45,10,78,0.7)",
+                              borderRadius: 14,
+                              padding: 12,
+                            }}
+                          >
+                            <span
+                              className="mont uppercase font-extrabold"
+                              style={{
+                                fontSize: 10.5,
+                                letterSpacing: "0.08em",
+                                color: "rgba(245,245,245,0.65)",
+                                fontFamily: "Montserrat, Inter, sans-serif",
+                              }}
+                            >
+                              {label}
+                            </span>
+                            <div
+                              className="mont font-black"
+                              style={{
+                                fontSize: 26,
+                                lineHeight: 1.1,
+                                marginTop: 4,
+                                color: "#39FF14",
+                                fontFamily: "Montserrat, Inter, sans-serif",
+                                textShadow: "0 0 12px rgba(57,255,20,0.45)",
+                              }}
+                            >
+                              {value.toFixed(1)}
+                            </div>
+                            <div
+                              style={{
+                                height: 6,
+                                borderRadius: 999,
+                                background: "rgba(45,10,78,0.6)",
+                                overflow: "hidden",
+                                marginTop: 7,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: `${(value / 5) * 100}%`,
+                                  height: "100%",
+                                  borderRadius: 999,
+                                  background: "#39FF14",
+                                  boxShadow: "0 0 10px rgba(57,255,20,0.5)",
+                                }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Condition + Scent status pills */}
+                  {(log.condition || log.scent_strength) && (
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-0.5">
+                      {log.condition && (
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="mont uppercase font-extrabold"
+                            style={{
+                              fontSize: 10.5,
+                              letterSpacing: "0.08em",
+                              color: "rgba(245,245,245,0.4)",
+                              fontFamily: "Montserrat, Inter, sans-serif",
+                            }}
+                          >
+                            Condition
+                          </span>
+                          <span
+                            className="px-2.5 py-1 rounded-full text-xs font-semibold"
+                            style={{
+                              background: "rgba(0,240,255,0.1)",
+                              border: "1px solid rgba(0,240,255,0.3)",
+                              color: "#00F0FF",
+                            }}
+                          >
+                            {
+                              SLIME_CONDITION_LABELS[
+                                log.condition as SlimeCondition
+                              ]
+                            }
+                          </span>
+                        </div>
+                      )}
+                      {log.scent_strength && (
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="mont uppercase font-extrabold"
+                            style={{
+                              fontSize: 10.5,
+                              letterSpacing: "0.08em",
+                              color: "rgba(245,245,245,0.4)",
+                              fontFamily: "Montserrat, Inter, sans-serif",
+                            }}
+                          >
+                            Scent
+                          </span>
+                          <span
+                            className="px-2.5 py-1 rounded-full text-xs font-semibold"
+                            style={{
+                              background: "rgba(57,255,20,0.1)",
+                              border: "1px solid rgba(57,255,20,0.3)",
+                              color: "#39FF14",
+                            }}
+                          >
+                            {
+                              SCENT_STRENGTH_LABELS[
+                                log.scent_strength as ScentStrength
+                              ]
+                            }
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {/* Scent notes */}
+              {log.scent_notes && (
+                <div className="flex flex-col gap-1.5">
+                  <p
+                    className="text-[11px] font-black tracking-widest uppercase"
+                    style={{ color: "#00F0FF" }}
+                  >
+                    Scent notes
+                  </p>
+                  <p className="text-sm leading-relaxed text-slime-text/80">
+                    {log.scent_notes}
+                  </p>
+                </div>
+              )}
+
+              {/* Review notes */}
+              {log.notes && (
+                <p className="text-sm italic leading-relaxed text-slime-text/70">
+                  {log.notes}
+                </p>
+              )}
+
+              {/* CARE — mobile inline (collapsed by default) */}
+              {careVisible && (
+                <div className="lg:hidden">
+                  <SlimeDetailCareSection defaultOpen={false} {...careProps} />
+                </div>
+              )}
+
+              {/* Meta pills — logged date + purchase info */}
+              <div className="flex flex-wrap gap-1.5">
+                {log.created_at && (
+                  <span
+                    className="px-2.5 py-1 rounded-full text-[11px]"
+                    style={{
+                      background: "rgba(45,10,78,0.4)",
+                      color: "rgba(255,255,255,0.4)",
+                    }}
+                  >
+                    Logged{" "}
+                    {new Intl.DateTimeFormat("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    }).format(new Date(log.created_at))}
+                  </span>
+                )}
+                {typeof log.purchase_price === "number" && (
+                  <span
+                    className="px-2.5 py-1 rounded-full text-[11px]"
+                    style={{
+                      background: "rgba(45,10,78,0.4)",
+                      color: "rgba(255,255,255,0.5)",
+                    }}
+                  >
+                    {new Intl.NumberFormat("en-US", {
+                      style: "currency",
+                      currency: "USD",
+                    }).format(log.purchase_price)}
+                  </span>
+                )}
+                {log.purchased_from && (
+                  <span
+                    className="px-2.5 py-1 rounded-full text-[11px]"
+                    style={{
+                      background: "rgba(45,10,78,0.4)",
+                      color: "rgba(255,255,255,0.5)",
+                    }}
+                  >
+                    {log.purchased_from}
+                  </span>
+                )}
+              </div>
+
+              {/* "Log this slime" CTA — non-owners only */}
+              {showCTA && (
+                <Link
+                  href={ctaHref}
+                  className="block w-full text-center py-3.5 rounded-xl text-sm font-bold mt-1"
+                  style={{
+                    background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                    color: "#0A0A0A",
+                    fontFamily: "Montserrat, Inter, sans-serif",
+                  }}
+                >
+                  {currentUserId
+                    ? "Log this slime"
+                    : "Sign up to log this slime"}
+                </Link>
+              )}
+            </div>
+
+            {/* Comments */}
+            <ClientComments logId={log.id} />
           </div>
 
-          {/* "Log this slime" CTA — non-owners only */}
-          {showCTA && (
-            <Link
-              href={ctaHref}
-              className="block w-full text-center py-3.5 rounded-xl text-sm font-bold mt-2"
-              style={{
-                background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-                color: "#0A0A0A",
-                fontFamily: "Montserrat, Inter, sans-serif",
-              }}
-            >
-              {currentUserId ? "Log this slime" : "Sign up to log this slime"}
-            </Link>
+          {/* ═══════════════ STICKY CARE SIDEBAR (desktop) ═══════════════ */}
+          {careVisible && (
+            <aside className="hidden lg:block">
+              <div className="sticky top-20">
+                <SlimeDetailCareSection defaultOpen={true} {...careProps} />
+              </div>
+            </aside>
           )}
         </div>
-
-        <ClientComments logId={log.id} />
       </main>
     </PageWrapper>
   );

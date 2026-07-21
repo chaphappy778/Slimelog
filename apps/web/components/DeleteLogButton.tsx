@@ -10,7 +10,16 @@ import { deleteSlimeLog } from "@/lib/slime-actions";
 // and components/collection/SlimeDetailCard.tsx.
 // Named export alias preserved for any existing call sites.
 
-export default function DeleteLogButton({ logId }: { logId: string }) {
+// T188 (2026-07-21): optional `accent` so the /slimes/[id] redesign can
+// flip Delete from the legacy purple to palette red (#FF3D6E) without
+// touching the other call site (SlimeDetailCard), which keeps the default.
+export default function DeleteLogButton({
+  logId,
+  accent = "#CC44FF",
+}: {
+  logId: string;
+  accent?: string;
+}) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -35,7 +44,7 @@ export default function DeleteLogButton({ logId }: { logId: string }) {
         onClick={() => setShowConfirm(true)}
         className="flex items-center gap-2 text-sm font-semibold transition-colors"
         style={{
-          color: "#CC44FF",
+          color: accent,
           background: "none",
           border: "none",
           cursor: "pointer",
@@ -95,7 +104,7 @@ export default function DeleteLogButton({ logId }: { logId: string }) {
               overflowY: "auto",
               background: "#0F0018",
               borderRadius: 20,
-              border: "1px solid rgba(204,68,255,0.3)",
+              border: `1px solid ${accent}4D`,
               padding: "24px 20px",
               display: "flex",
               flexDirection: "column",
@@ -153,8 +162,8 @@ export default function DeleteLogButton({ logId }: { logId: string }) {
                   borderRadius: 12,
                   fontSize: 14,
                   fontWeight: 700,
-                  background: isPending ? "rgba(204,68,255,0.15)" : "#CC44FF",
-                  color: isPending ? "#CC44FF" : "#0A0A0A",
+                  background: isPending ? `${accent}26` : accent,
+                  color: isPending ? accent : "#0A0A0A",
                   border: "none",
                   cursor: isPending ? "default" : "pointer",
                   fontFamily: "Montserrat, Inter, sans-serif",
