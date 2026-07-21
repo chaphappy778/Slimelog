@@ -28,6 +28,7 @@ import type { SlimeBaseType } from "@/lib/types";
 import type { FeedCardLog } from "@/components/FeedCard";
 import SlimeDetailCard from "@/components/collection/SlimeDetailCard";
 import LikeButton from "@/components/collection/LikeButton";
+import FeedShareButton from "@/components/feed/FeedShareButton";
 
 interface Props {
   log: FeedCardLog;
@@ -311,6 +312,18 @@ export default function FeedCardCompact({
               </svg>
               {log.comment_count}
             </span>
+            {/* Standalone add-on (2026-07-21): native-share affordance,
+                12px glyph to match the compact comment icon. Negative
+                margin keeps the 44px tap target from stretching the row. */}
+            <FeedShareButton
+              logId={log.id}
+              slimeName={slimeName}
+              brandName={brandName}
+              brandSlug={brandSlug}
+              ratingOverall={log.rating_overall}
+              iconSize={12}
+              className="-my-3 -mx-2"
+            />
             <span className="truncate">
               @{log.username ?? "anonymous"} · {timeAgo}
             </span>

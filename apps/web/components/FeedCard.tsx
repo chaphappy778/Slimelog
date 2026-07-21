@@ -7,6 +7,7 @@ import Image from "next/image";
 import type { CollectionLog, SlimeBaseType } from "@/lib/types";
 import SlimeDetailCard from "@/components/collection/SlimeDetailCard";
 import LikeButton from "@/components/collection/LikeButton";
+import FeedShareButton from "@/components/feed/FeedShareButton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -759,6 +760,18 @@ export default function FeedCard({
             </svg>
             {log.comment_count}
           </div>
+          {/* Standalone add-on (2026-07-21): native-share affordance.
+              Negative margin keeps the 44px tap target from inflating the
+              footer height. Not part of the T127 reactions rebuild. */}
+          <FeedShareButton
+            logId={log.id}
+            slimeName={slimeName}
+            brandName={brandName}
+            brandSlug={brandSlug}
+            ratingOverall={log.rating_overall}
+            iconSize={17}
+            className="-my-2 -ml-2"
+          />
           {!isWishlist && (
             // "Open review →" routes to the full review page at
             // /slimes/[id] (same destination as the old "View Full
