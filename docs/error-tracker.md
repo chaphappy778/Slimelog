@@ -174,6 +174,22 @@ shows its friendly "request a new link" state rather than a raw auth error.
 
 ## Known potential issues (not-yet-hit, worth watching)
 
+### 2026-07-21 — `"use server"` files may only export async functions (Ops)
+
+**Symptom:** `ReferenceError: <TypeName> is not defined` at runtime, pointing at a line in a `"use server"` file where the type is used in a function signature, despite `npm run type-check` passing clean and Vercel build succeeding.
+
+**Root cause:** Next.js is strict that `"use server"` files may only export async functions. Any other export — including `export type { ... }`, `export const`, `export interface`, or `export class` — corrupts the server-actions loader's introspection pass at bundle time. The loader emits a broken module manifest, and the runtime symptom happens to point at the function signature where the type is *used* (not where it's exported), so the error looks like an import problem when it's actually an export problem.
+
+**Fix:** Remove every non-async-function export from every `"use server"` file. If a consumer needs a type or constant defined in a server-actions file, either (a) move the type/constant to a separate non-"use server" module, or (b) redefine it inline in the consumer.
+
+**Regression check:** grep every `"use server"` file for `^export (?!async function)` — if it matches anything other than an async function declaration, that's a latent version of this bug.
+
+**Prevention pattern:** When authoring a server-actions file, treat exports as a strict allowlist: async functions only. Types used in the function's parameters or return value can be imported (`import type { ... }`) or defined locally, but never exported.
+
+**Related:** the T192 rebuild (2026-07-21) hit this after being reverted from T127. Four failed deploy attempts patched the import syntax before we spotted the extra `export type` line at the bottom of the file. Sibling patterns: server-action files also can't export the client-only types they use for props (mount inline in the client component that consumes them).
+
+---
+
 ### 2026-07-20 — Pre-seeded check-in modal re-inserts every pill on every save (UI + DB)
 
 **Symptom:** After the 24h pre-seeding change landed, reopening the care check-in modal and adding a single new product wrote a row for the new product *and* a fresh duplicate row for every pill that was already checked. `actions_this_month` climbed by the full selection count on each save, `/care` showed duplicate tiles, and the day pills on already-logged tiles reset to `0D` even though nothing new had happened to those products.
