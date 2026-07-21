@@ -68,8 +68,6 @@ interface RawNotificationRow {
   notification_type: NotificationType;
   created_at: string;
   is_read: boolean;
-  // T127: nullable jsonb payload — { reaction_type } for reaction rows.
-  metadata: { reaction_type?: string } | null;
   actor: JoinedProfile;
   brand: JoinedBrand;
   drop: JoinedDrop;
@@ -82,7 +80,6 @@ function normalize(raw: RawNotificationRow): Notification {
     type: raw.notification_type,
     created_at: raw.created_at,
     is_read: raw.is_read,
-    metadata: raw.metadata ?? null,
     actor: raw.actor && raw.actor.username
       ? { username: raw.actor.username, avatar_url: raw.actor.avatar_url }
       : null,
@@ -149,7 +146,6 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       notification_type,
       created_at,
       is_read,
-      metadata,
       actor:profiles_public!notifications_actor_id_fkey (
         username,
         avatar_url
