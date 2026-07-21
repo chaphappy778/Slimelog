@@ -29,6 +29,72 @@ Template for new entries:
 
 ---
 
+### 2026-07-21 — Feed day-buckets throw a hydration error near the date line (UI)
+
+**Symptom:** Sentry issue `81b58fcb` (T191) — hydration mismatch on `/` for a
+production user (Chrome Mobile, Android 15). The diff pointed at the feed card
+region: the server HTML and the client render disagreed on the Today / This
+week / Earlier divider structure.
+
+**Root cause:** `FeedListClient` is a `"use client"` component, so it renders
+on the server during SSR *and* on the client during hydration. `bucketLogsByDay`
+calls `new Date()` at render to find "local midnight." On the server that is the
+Vercel box's timezone (UTC); in the browser it is the viewer's. For a viewer
+whose evening is already the next UTC day, a log buckets as "Today" on the client
+but "This week" on the server. Different bucket counts means a different number
+of `DayDivider` blocks, which is a **structural** mismatch, and React throws
+(text mismatches it silently recovers, structural ones it does not).
+
+**Fix:** gate the time-based bucketing behind a `mounted` flag
+(`apps/web/components/feed/FeedListClient.tsx`). The server and first client
+render both use a deterministic single-bucket fallback (all logs under "Today",
+no `new Date()`), so the markup matches. `useEffect` flips `mounted` and the real
+timezone-aware buckets appear on the post-mount re-render. Reused the existing
+mount effect that already hydrates the localStorage density preference.
+
+**Regression check:** set the browser timezone to something west of UTC (e.g.
+America/Los_Angeles), seed a log timestamped in the current local evening, load
+`/`. No hydration error in the console; the log shows under "Today."
+
+**Prevention pattern: any `Date.now()` / `new Date()` / `Math.random()` /
+`localStorage` read *during render* of a `"use client"` component is a hydration
+mismatch waiting to happen**, because that component still SSRs. If the value can
+differ between the server process and the browser (timezone, clock, storage),
+compute a deterministic value for the first render and move the real value into a
+`useEffect` + state. The tell is a client component whose JSX branches on
+wall-clock time or device state. (Sibling smell still live but lower-severity:
+the `formatRelativeTime` "2h ago" text in `FeedCard` / `FeedCardCompact` has the
+same root cause but only produces recoverable *text* mismatches, so it was left
+alone here.)
+
+**Related:** T191, T177 (added the bucketing), Sentry `81b58fcb`.
+
+### 2026-07-21 — Password reset link dead-ends on /login (Auth)
+
+**Symptom:** clicking "Set a new password" in the recovery email verified the
+token but dropped the user on `/login` instead of the reset form.
+
+**Root cause:** `/auth/callback` is a server route. It only acts when it finds a
+`code` in the query string. Recovery tokens can instead arrive in the URL **hash**
+(implicit flow), which the server never sees, or a cross-device PKCE click can
+land with no code-verifier cookie so the exchange fails. In both cases the handler
+fell through to its default `/login?error=auth_callback_failed` redirect, even
+though `next` clearly asked for `/reset-password?flow=recovery`.
+
+**Fix:** before the final `/login` fallback in `apps/web/app/auth/callback/route.ts`,
+forward any recovery hand-off (`next.startsWith("/reset-password")`) to the client
+reset page. The browser carries the `#hash` fragment across the 302 (the target
+has no fragment of its own), so `/reset-password`'s `PASSWORD_RECOVERY` listener
+can read an implicit-flow token, and if there is genuinely no valid token the page
+shows its friendly "request a new link" state rather than a raw auth error.
+
+**Regression check:** run the full forgot-password -> email -> click flow. Land on
+`/reset-password?flow=recovery` with the "Set a new password" form, not `/login`.
+
+**Related:** #33, T140, `docs/supabase-email-templates.md` (bug 1, same sweep).
+
+---
+
 ## Known potential issues (not-yet-hit, worth watching)
 
 ### 2026-07-20 — Pre-seeded check-in modal re-inserts every pill on every save (UI + DB)

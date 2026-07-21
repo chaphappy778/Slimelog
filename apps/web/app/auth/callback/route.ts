@@ -326,6 +326,22 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // Password-recovery hand-off that reached here without a completed code
+  // exchange. Two ways that happens: (1) no `code` in the query string at
+  // all, because the recovery token arrived in the URL hash (implicit
+  // flow), which a server route cannot read; (2) a `code` was present but
+  // the exchange failed, e.g. a cross-device click with no PKCE
+  // code-verifier cookie. In both cases /login is the wrong destination.
+  // Forward to the client reset page instead: its onAuthStateChange
+  // PASSWORD_RECOVERY listener reads the #hash token and unlocks the form,
+  // and if there is genuinely no valid token it shows the friendly
+  // "request a new link" state rather than a raw auth error. The browser
+  // carries any #fragment across this 302 because the destination has none
+  // of its own.
+  if (next.startsWith("/reset-password")) {
+    return NextResponse.redirect(`${origin}${next}`);
+  }
+
   return NextResponse.redirect(
     `${origin}/login?error=auth_callback_failed&next=${encodeURIComponent(next)}`,
   );

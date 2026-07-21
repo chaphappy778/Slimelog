@@ -309,7 +309,19 @@ export default function FeedListClient({
   // the default, and if the user's saved choice is C we swap on mount.
   const [density, setDensityState] = useState<Density>("a");
 
+  // Hydration guard for the day-bucketing below. bucketLogsByDay depends
+  // on the viewer's "now", which resolves to the SERVER's timezone during
+  // SSR (UTC on Vercel) and the BROWSER's timezone on the client. When
+  // those disagree — e.g. evening in the Americas is already "tomorrow" in
+  // UTC — a log lands in a different bucket on the server than on the
+  // client, so the number of day-divider blocks differs and React throws a
+  // hydration error (Sentry 81b58fcb, T191). We keep the first client
+  // render identical to the server by using a deterministic single-bucket
+  // fallback until mount, then switch to the real timezone-aware buckets.
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
+    setMounted(true);
     try {
       const saved = window.localStorage.getItem(FEED_DENSITY_KEY);
       if (saved === "c") setDensityState("c");
@@ -401,7 +413,16 @@ export default function FeedListClient({
     }
   };
 
-  const buckets = bucketLogsByDay(allLogs);
+  // Before mount, render every log under a single deterministic bucket so
+  // the server HTML and the first client render match exactly (see the
+  // `mounted` note above). The real Today / This week / Earlier split
+  // appears on the post-mount re-render, once we can trust the browser's
+  // local time.
+  const buckets = mounted
+    ? bucketLogsByDay(allLogs)
+    : allLogs.length > 0
+      ? [{ key: "today" as BucketKey, logs: allLogs }]
+      : [];
   const toggle = <DensityToggle density={density} setDensity={setDensity} />;
 
   return (

@@ -858,10 +858,28 @@ const CATEGORY_META: Record<
   },
 };
 
-function daysSince(iso: string): number {
+// Calendar-day difference in the viewer's local timezone, NOT a rolling
+// 24-hour window. An action performed at 3pm yesterday should read "1D"
+// this morning even though only ~18 hours have elapsed — that matches how
+// people think about "days ago" (Jennifer 2026-07-21). Both timestamps
+// are floored to local midnight before differencing, so same-day = 0D,
+// yesterday = 1D, regardless of the hour either happened.
+function calendarDaysAgo(iso: string): number {
+  const then = new Date(iso);
+  const now = new Date();
+  const thenMidnight = new Date(
+    then.getFullYear(),
+    then.getMonth(),
+    then.getDate(),
+  );
+  const nowMidnight = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  );
   return Math.max(
     0,
-    Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000),
+    Math.round((nowMidnight.getTime() - thenMidnight.getTime()) / 86_400_000),
   );
 }
 
@@ -881,7 +899,7 @@ function RecentCareChip({
   disabled: boolean;
 }) {
   const meta = CATEGORY_META[action.action_type] ?? CATEGORY_META.other;
-  const daysAgo = daysSince(action.performed_at);
+  const daysAgo = calendarDaysAgo(action.performed_at);
   const label = action.product_display ?? meta.label;
 
   return (
@@ -891,7 +909,7 @@ function RecentCareChip({
       disabled={disabled}
       className="shrink-0 flex flex-col items-center gap-1.5 bg-transparent p-0"
       style={{ border: "none", cursor: disabled ? "wait" : "pointer" }}
-      title={`${label} · ${daysAgo === 0 ? "today" : `${daysAgo} days ago`}. Tap to log again.`}
+      title={`${label} · ${daysAgo === 0 ? "today" : `${daysAgo} day${daysAgo === 1 ? "" : "s"} ago`}. Tap to log again.`}
       aria-label={`Log ${meta.label} for this slime again`}
     >
       <span
