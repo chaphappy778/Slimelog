@@ -57,7 +57,7 @@ function RatingBar({ label, value }: { label: string; value: number | null }) {
         <span
           className="text-xs"
           style={{
-            color: "rgba(245,245,245,0.5)",
+            color: "#8f83b0",
             fontFamily: "Inter, sans-serif",
           }}
         >
@@ -66,7 +66,7 @@ function RatingBar({ label, value }: { label: string; value: number | null }) {
         <span
           className="text-xs font-semibold"
           style={{
-            color: value ? "#39FF14" : "rgba(245,245,245,0.2)",
+            color: value ? "#34e89e" : "rgba(245,245,245,0.2)",
             fontFamily: "Inter, sans-serif",
           }}
         >
@@ -75,13 +75,13 @@ function RatingBar({ label, value }: { label: string; value: number | null }) {
       </div>
       <div
         className="h-1.5 rounded-full overflow-hidden"
-        style={{ background: "rgba(45,10,78,0.6)" }}
+        style={{ background: "rgba(255,255,255,0.06)" }}
       >
         <div
           className="h-full rounded-full transition-all duration-500"
           style={{
             width: `${pct}%`,
-            background: "linear-gradient(90deg, #39FF14, #00F0FF)",
+            background: "linear-gradient(90deg, #34e89e, #22d3ee)",
           }}
         />
       </div>
@@ -103,23 +103,28 @@ function FormInput({
       <label
         className="block text-xs font-bold uppercase tracking-widest mb-1.5"
         style={{
-          color: "rgba(245,245,245,0.4)",
+          color: "#8f83b0",
           fontFamily: "Montserrat, sans-serif",
         }}
       >
         {label}
-        {required && <span style={{ color: "#FF00E5" }}>*</span>}
+        {required && <span style={{ color: "#ff2bd6" }}>*</span>}
       </label>
       {children}
     </div>
   );
 }
 
+// [T137 Batch 2a] Soft-violet dashboard tokens — match DashboardLayout + mockup.
+// Magenta is the primary/selected accent across the redesigned dashboard; cyan
+// is reserved for small-caps section labels.
+const MAGENTA_GRADIENT = "linear-gradient(135deg, #ff2bd6, #a855f7)";
+
 const inputClass =
-  "w-full rounded-lg px-3 py-2.5 text-sm text-white outline-none transition-colors focus:ring-1 focus:ring-[#39FF14]/30";
+  "w-full rounded-xl px-3.5 py-2.5 text-sm text-white outline-none transition-colors focus:ring-1 focus:ring-[#ff2bd6]/40";
 const inputStyle = {
-  background: "rgba(45,10,78,0.35)",
-  border: "1px solid rgba(45,10,78,0.8)",
+  background: "rgba(255,255,255,0.04)",
+  border: "1px solid rgba(150,110,240,0.24)",
   fontFamily: "Inter, sans-serif",
 };
 
@@ -262,10 +267,10 @@ export default function SlimesSplitPanel({
 
   return (
     <div
-      className="rounded-xl overflow-hidden flex"
+      className="rounded-2xl overflow-hidden flex"
       style={{
-        background: "rgba(45,10,78,0.15)",
-        border: "1px solid rgba(45,10,78,0.7)",
+        background: "rgba(255,255,255,0.02)",
+        border: "1px solid rgba(150,110,240,0.18)",
         height: "calc(100vh - 200px)",
         minHeight: "520px",
       }}
@@ -273,17 +278,17 @@ export default function SlimesSplitPanel({
       {/* ── Left Panel: List ── */}
       <div
         className="flex flex-col flex-shrink-0 w-full md:w-80"
-        style={{ borderRight: "1px solid rgba(45,10,78,0.6)" }}
+        style={{ borderRight: "1px solid rgba(150,110,240,0.14)" }}
       >
         {/* Search */}
         <div
           className="p-3"
-          style={{ borderBottom: "1px solid rgba(45,10,78,0.5)" }}
+          style={{ borderBottom: "1px solid rgba(150,110,240,0.14)" }}
         >
           <div className="relative">
             <svg
               className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
-              style={{ color: "rgba(245,245,245,0.3)" }}
+              style={{ color: "#6b6180" }}
               viewBox="0 0 16 16"
               fill="none"
             >
@@ -306,10 +311,10 @@ export default function SlimesSplitPanel({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search slimes..."
-              className="w-full pl-8 pr-3 py-2 text-sm rounded-lg outline-none text-white"
+              className="w-full pl-9 pr-3 py-3 text-sm rounded-xl outline-none text-white placeholder:text-[#6b6180]"
               style={{
-                background: "rgba(45,10,78,0.3)",
-                border: "1px solid rgba(45,10,78,0.7)",
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(150,110,240,0.24)",
                 fontFamily: "Inter, sans-serif",
               }}
             />
@@ -320,18 +325,24 @@ export default function SlimesSplitPanel({
         {/* [Change 10] — type="button" on all filter tab buttons */}
         <div
           className="flex overflow-x-auto scrollbar-none px-3 py-2 gap-1.5"
-          style={{ borderBottom: "1px solid rgba(45,10,78,0.5)" }}
+          style={{ borderBottom: "1px solid rgba(150,110,240,0.14)" }}
         >
           {filterTabs.map((tab) => (
             <button
               key={tab.key}
               type="button"
               onClick={() => setFilter(tab.key)}
-              className="flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-md transition-all"
+              className="flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full transition-all"
               style={{
                 background:
-                  filter === tab.key ? "rgba(57,255,20,0.12)" : "transparent",
-                color: filter === tab.key ? "#39FF14" : "rgba(245,245,245,0.4)",
+                  filter === tab.key
+                    ? "rgba(255,43,214,0.12)"
+                    : "rgba(255,255,255,0.03)",
+                color: filter === tab.key ? "#ff2bd6" : "#8f83b0",
+                border:
+                  filter === tab.key
+                    ? "1px solid rgba(255,43,214,0.35)"
+                    : "1px solid rgba(150,110,240,0.14)",
                 fontFamily: "Inter, sans-serif",
               }}
             >
@@ -341,13 +352,13 @@ export default function SlimesSplitPanel({
         </div>
 
         {/* Slime list */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {filtered.length === 0 ? (
             <div className="p-6 text-center">
               <p
                 className="text-sm"
                 style={{
-                  color: "rgba(245,245,245,0.3)",
+                  color: "#8f83b0",
                   fontFamily: "Inter, sans-serif",
                 }}
               >
@@ -355,93 +366,87 @@ export default function SlimesSplitPanel({
               </p>
             </div>
           ) : (
-            filtered.map((slime) => (
-              // [Change 10] — type="button" on list item buttons
-              <button
-                key={slime.id}
-                type="button"
-                onClick={() => {
-                  setSelectedId(slime.id);
-                  setMode("detail");
-                }}
-                className="w-full text-left px-4 py-3 transition-all"
-                style={{
-                  background:
-                    selectedId === slime.id
-                      ? "rgba(57,255,20,0.06)"
-                      : "transparent",
-                  borderLeft:
-                    selectedId === slime.id
-                      ? "3px solid #39FF14"
-                      : "3px solid transparent",
-                  borderBottom: "1px solid rgba(45,10,78,0.4)",
-                }}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p
-                      className="text-sm font-medium text-white truncate"
-                      style={{ fontFamily: "Inter, sans-serif" }}
-                    >
-                      {slime.name}
-                    </p>
-                    {/* [Change 6] — use SLIME_BASE_TYPE_LABELS */}
-                    <p
-                      className="text-xs mt-0.5"
+            filtered.map((slime) => {
+              const isSel = selectedId === slime.id;
+              return (
+                // [Change 10] — type="button" on list item buttons
+                <button
+                  key={slime.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedId(slime.id);
+                    setMode("detail");
+                  }}
+                  className="w-full text-left rounded-[14px] px-4 py-3 transition-all"
+                  style={{
+                    background: isSel
+                      ? "linear-gradient(90deg, rgba(255,43,214,0.10), rgba(255,43,214,0.02))"
+                      : "rgba(255,255,255,0.03)",
+                    border: `1px solid ${
+                      isSel ? "rgba(255,43,214,0.35)" : "rgba(150,110,240,0.14)"
+                    }`,
+                    borderLeft: `3px solid ${isSel ? "#ff2bd6" : "transparent"}`,
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p
+                        className="text-base font-black text-white truncate"
+                        style={{ fontFamily: "Montserrat, sans-serif" }}
+                      >
+                        {slime.name}
+                      </p>
+                      {/* [Change 6] — use SLIME_BASE_TYPE_LABELS */}
+                      <p
+                        className="text-xs mt-0.5"
+                        style={{
+                          color: "#8f83b0",
+                          fontFamily: "Inter, sans-serif",
+                        }}
+                      >
+                        {SLIME_BASE_TYPE_LABELS[slime.base_type] ??
+                          slime.base_type}
+                      </p>
+                      {(slime.is_limited || slime.is_discontinued) && (
+                        <div className="flex gap-1.5 mt-2">
+                          {slime.is_limited && (
+                            <span
+                              className="text-[9px] font-black px-2 py-0.5 rounded-[5px] tracking-widest"
+                              style={{
+                                color: "#ff2bd6",
+                                border: "1px solid rgba(255,43,214,0.5)",
+                              }}
+                            >
+                              LIMITED
+                            </span>
+                          )}
+                          {slime.is_discontinued && (
+                            <span
+                              className="text-[9px] font-black px-2 py-0.5 rounded-[5px] tracking-widest"
+                              style={{
+                                color: "#8f83b0",
+                                border: "1px solid rgba(150,110,240,0.3)",
+                              }}
+                            >
+                              DISC
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <span
+                      className="flex-none text-[11px] font-bold"
                       style={{
-                        color: "rgba(245,245,245,0.4)",
+                        color: "#6b6180",
                         fontFamily: "Inter, sans-serif",
                       }}
                     >
-                      {SLIME_BASE_TYPE_LABELS[slime.base_type] ??
-                        slime.base_type}
-                    </p>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p
-                      className="text-xs font-bold"
-                      style={{
-                        color: slime.avg_overall
-                          ? "#39FF14"
-                          : "rgba(245,245,245,0.2)",
-                      }}
-                    >
-                      {slime.avg_overall ? slime.avg_overall.toFixed(1) : "—"}
-                    </p>
-                    <p
-                      className="text-[10px]"
-                      style={{ color: "rgba(245,245,245,0.3)" }}
-                    >
                       {slime.total_ratings ?? 0} rated
-                    </p>
+                    </span>
                   </div>
-                </div>
-                <div className="flex gap-1 mt-1.5">
-                  {slime.is_limited && (
-                    <span
-                      className="text-[9px] font-bold px-1.5 py-0.5 rounded tracking-widest"
-                      style={{
-                        color: "#FF00E5",
-                        background: "rgba(255,0,229,0.1)",
-                      }}
-                    >
-                      LIMITED
-                    </span>
-                  )}
-                  {slime.is_discontinued && (
-                    <span
-                      className="text-[9px] font-bold px-1.5 py-0.5 rounded tracking-widest"
-                      style={{
-                        color: "rgba(245,245,245,0.3)",
-                        background: "rgba(45,10,78,0.4)",
-                      }}
-                    >
-                      DISC
-                    </span>
-                  )}
-                </div>
-              </button>
-            ))
+                </button>
+              );
+            })
           )}
         </div>
 
@@ -449,14 +454,15 @@ export default function SlimesSplitPanel({
         {/* [Change 10] — type="button" */}
         <div
           className="p-3"
-          style={{ borderTop: "1px solid rgba(45,10,78,0.5)" }}
+          style={{ borderTop: "1px solid rgba(150,110,240,0.14)" }}
         >
           <button
             type="button"
             onClick={startAdd}
-            className="w-full py-2.5 rounded-lg text-sm font-bold text-[#0A0A0A] transition-opacity hover:opacity-90"
+            className="w-full py-3 rounded-xl text-sm font-black text-white transition-opacity hover:opacity-90"
             style={{
-              background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+              background: MAGENTA_GRADIENT,
+              boxShadow: "0 8px 24px -6px rgba(255,43,214,0.5)",
               fontFamily: "Montserrat, sans-serif",
             }}
           >
@@ -485,8 +491,8 @@ export default function SlimesSplitPanel({
             className="rounded-2xl overflow-y-auto w-full"
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: "#0A0A0A",
-              border: "1px solid rgba(45,10,78,0.8)",
+              background: "#0d0817",
+              border: "1px solid rgba(150,110,240,0.2)",
               maxWidth: 480,
               maxHeight: "calc(100dvh - 32px)",
               boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
@@ -496,8 +502,8 @@ export default function SlimesSplitPanel({
             <div
               className="sticky top-0 z-10 flex items-center justify-between px-5 pt-4 pb-3"
               style={{
-                background: "#0A0A0A",
-                borderBottom: "1px solid rgba(45,10,78,0.4)",
+                background: "#0d0817",
+                borderBottom: "1px solid rgba(150,110,240,0.14)",
               }}
             >
               {/* 2026-07-09: drag handle removed — no longer a bottom
@@ -519,8 +525,8 @@ export default function SlimesSplitPanel({
                 onClick={() => setMode("empty")}
                 className="mt-2 p-1.5 rounded-lg"
                 style={{
-                  color: "rgba(245,245,245,0.4)",
-                  background: "rgba(45,10,78,0.3)",
+                  color: "#8f83b0",
+                  background: "rgba(255,255,255,0.04)",
                 }}
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -542,7 +548,7 @@ export default function SlimesSplitPanel({
                       {
                         label: "Overall",
                         value: selected.avg_overall?.toFixed(1) ?? "—",
-                        accent: "#39FF14",
+                        accent: "#34e89e",
                       },
                       {
                         label: "Ratings",
@@ -559,16 +565,16 @@ export default function SlimesSplitPanel({
                     ].map((s) => (
                       <div
                         key={s.label}
-                        className="rounded-lg p-3 text-center"
+                        className="rounded-xl p-3 text-center"
                         style={{
-                          background: "rgba(45,10,78,0.3)",
-                          border: "1px solid rgba(45,10,78,0.6)",
+                          background: "rgba(255,255,255,0.03)",
+                          border: "1px solid rgba(150,110,240,0.14)",
                         }}
                       >
                         <p
                           className="text-[10px] mb-1"
                           style={{
-                            color: "rgba(245,245,245,0.4)",
+                            color: "#8f83b0",
                             fontFamily: "Inter, sans-serif",
                           }}
                         >
@@ -615,9 +621,10 @@ export default function SlimesSplitPanel({
                   <button
                     type="button"
                     onClick={() => startEdit(selected)}
-                    className="w-full py-2.5 rounded-lg text-sm font-bold text-[#0A0A0A]"
+                    className="w-full py-3 rounded-xl text-sm font-black text-white"
                     style={{
-                      background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                      background: MAGENTA_GRADIENT,
+                      boxShadow: "0 8px 24px -6px rgba(255,43,214,0.5)",
                       fontFamily: "Montserrat, sans-serif",
                     }}
                   >
@@ -729,8 +736,8 @@ export default function SlimesSplitPanel({
                             background: (form as Record<string, unknown>)[
                               tog.key
                             ]
-                              ? "#39FF14"
-                              : "rgba(45,10,78,0.6)",
+                              ? "#ff2bd6"
+                              : "rgba(255,255,255,0.12)",
                           }}
                           aria-pressed={
                             !!(form as Record<string, unknown>)[tog.key]
@@ -764,9 +771,10 @@ export default function SlimesSplitPanel({
                     type="button"
                     onClick={handleSave}
                     disabled={saving}
-                    className="w-full py-3 rounded-lg text-sm font-bold text-[#0A0A0A] disabled:opacity-50"
+                    className="w-full py-3 rounded-xl text-sm font-black text-white disabled:opacity-50"
                     style={{
-                      background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                      background: MAGENTA_GRADIENT,
+                      boxShadow: "0 8px 24px -6px rgba(255,43,214,0.5)",
                       fontFamily: "Montserrat, sans-serif",
                     }}
                   >
@@ -789,10 +797,10 @@ export default function SlimesSplitPanel({
           <div className="flex-1 flex items-center justify-center p-8">
             <div className="text-center">
               <div
-                className="w-16 h-16 rounded-xl mx-auto mb-4 flex items-center justify-center"
+                className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
                 style={{
-                  background: "rgba(45,10,78,0.4)",
-                  border: "1px solid rgba(45,10,78,0.7)",
+                  background: "rgba(150,110,240,0.1)",
+                  border: "1px solid rgba(150,110,240,0.2)",
                 }}
               >
                 <svg
@@ -800,7 +808,7 @@ export default function SlimesSplitPanel({
                   height="24"
                   viewBox="0 0 24 24"
                   fill="none"
-                  style={{ color: "rgba(245,245,245,0.2)" }}
+                  style={{ color: "#6b6180" }}
                 >
                   <circle
                     cx="12"
@@ -820,7 +828,7 @@ export default function SlimesSplitPanel({
               <p
                 className="text-sm"
                 style={{
-                  color: "rgba(245,245,245,0.3)",
+                  color: "#8f83b0",
                   fontFamily: "Inter, sans-serif",
                 }}
               >
@@ -844,7 +852,7 @@ export default function SlimesSplitPanel({
                 <p
                   className="text-sm mt-1"
                   style={{
-                    color: "rgba(245,245,245,0.5)",
+                    color: "#8f83b0",
                     fontFamily: "Inter, sans-serif",
                   }}
                 >
@@ -857,11 +865,11 @@ export default function SlimesSplitPanel({
               <button
                 type="button"
                 onClick={() => startEdit(selected)}
-                className="px-4 py-2 rounded-lg text-xs font-bold transition-all"
+                className="px-4 py-2 rounded-full text-xs font-black transition-all"
                 style={{
-                  background: "rgba(57,255,20,0.08)",
-                  border: "1px solid rgba(57,255,20,0.2)",
-                  color: "#39FF14",
+                  background: "rgba(255,43,214,0.08)",
+                  border: "1px solid rgba(255,43,214,0.25)",
+                  color: "#ff2bd6",
                   fontFamily: "Montserrat, sans-serif",
                 }}
               >
@@ -888,7 +896,7 @@ export default function SlimesSplitPanel({
                 {
                   label: "Overall",
                   value: selected.avg_overall?.toFixed(1) ?? "—",
-                  accent: "#39FF14",
+                  accent: "#34e89e",
                 },
                 {
                   label: "Total Ratings",
@@ -905,16 +913,16 @@ export default function SlimesSplitPanel({
               ].map((s) => (
                 <div
                   key={s.label}
-                  className="rounded-lg p-3 text-center"
+                  className="rounded-xl p-3 text-center"
                   style={{
-                    background: "rgba(45,10,78,0.3)",
-                    border: "1px solid rgba(45,10,78,0.6)",
+                    background: "rgba(255,255,255,0.03)",
+                    border: "1px solid rgba(150,110,240,0.14)",
                   }}
                 >
                   <p
                     className="text-xs mb-1"
                     style={{
-                      color: "rgba(245,245,245,0.4)",
+                      color: "#8f83b0",
                       fontFamily: "Inter, sans-serif",
                     }}
                   >
@@ -938,7 +946,7 @@ export default function SlimesSplitPanel({
               <p
                 className="text-xs font-bold uppercase tracking-widest"
                 style={{
-                  color: "#00F0FF",
+                  color: "#22d3ee",
                   fontFamily: "Montserrat, sans-serif",
                 }}
               >
@@ -965,7 +973,7 @@ export default function SlimesSplitPanel({
                     <p
                       className="text-xs font-bold uppercase tracking-widest mb-2"
                       style={{
-                        color: "#00F0FF",
+                        color: "#22d3ee",
                         fontFamily: "Montserrat, sans-serif",
                       }}
                     >
@@ -977,9 +985,9 @@ export default function SlimesSplitPanel({
                           key={c}
                           className="text-xs px-2.5 py-1 rounded-full"
                           style={{
-                            background: "rgba(45,10,78,0.4)",
-                            color: "rgba(245,245,245,0.7)",
-                            border: "1px solid rgba(45,10,78,0.7)",
+                            background: "rgba(150,110,240,0.14)",
+                            color: "#cdbdf2",
+                            border: "1px solid rgba(150,110,240,0.3)",
                             fontFamily: "Inter, sans-serif",
                           }}
                         >
@@ -994,7 +1002,7 @@ export default function SlimesSplitPanel({
                     <p
                       className="text-xs font-bold uppercase tracking-widest mb-1"
                       style={{
-                        color: "#00F0FF",
+                        color: "#22d3ee",
                         fontFamily: "Montserrat, sans-serif",
                       }}
                     >
@@ -1031,8 +1039,9 @@ export default function SlimesSplitPanel({
                 onClick={() => setMode(selectedId ? "detail" : "empty")}
                 className="text-xs px-3 py-1.5 rounded-lg"
                 style={{
-                  color: "rgba(245,245,245,0.4)",
-                  background: "rgba(45,10,78,0.3)",
+                  color: "#8f83b0",
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(150,110,240,0.18)",
                   fontFamily: "Inter, sans-serif",
                 }}
               >
@@ -1040,7 +1049,24 @@ export default function SlimesSplitPanel({
               </button>
             </div>
 
-            <div className="space-y-4 max-w-xl">
+            <div className="space-y-5 max-w-xl">
+              {/* [T137 Batch 2a] Soft-violet field-group card — Basics */}
+              <div
+                className="rounded-2xl p-5 space-y-4"
+                style={{
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(150,110,240,0.18)",
+                }}
+              >
+                <p
+                  className="text-xs font-black uppercase tracking-widest mb-1"
+                  style={{
+                    color: "#22d3ee",
+                    fontFamily: "Montserrat, sans-serif",
+                  }}
+                >
+                  Basics
+                </p>
               <FormInput label="Slime Name" required>
                 <input
                   type="text"
@@ -1091,7 +1117,25 @@ export default function SlimesSplitPanel({
                   placeholder="Describe this slime..."
                 />
               </FormInput>
+              </div>
 
+              {/* [T137 Batch 2a] Soft-violet field-group card — Catalog details */}
+              <div
+                className="rounded-2xl p-5 space-y-4"
+                style={{
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(150,110,240,0.18)",
+                }}
+              >
+                <p
+                  className="text-xs font-black uppercase tracking-widest mb-1"
+                  style={{
+                    color: "#22d3ee",
+                    fontFamily: "Montserrat, sans-serif",
+                  }}
+                >
+                  Catalog details
+                </p>
               <FormInput label="Colors (Enter to add)">
                 <input
                   type="text"
@@ -1116,9 +1160,9 @@ export default function SlimesSplitPanel({
                         key={c}
                         className="text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5"
                         style={{
-                          background: "rgba(57,255,20,0.08)",
-                          color: "#39FF14",
-                          border: "1px solid rgba(57,255,20,0.2)",
+                          background: "rgba(150,110,240,0.14)",
+                          color: "#cdbdf2",
+                          border: "1px solid rgba(150,110,240,0.3)",
                           fontFamily: "Inter, sans-serif",
                         }}
                       >
@@ -1204,8 +1248,8 @@ export default function SlimesSplitPanel({
                       className="w-9 h-5 rounded-full relative transition-all"
                       style={{
                         background: (form as Record<string, unknown>)[tog.key]
-                          ? "#39FF14"
-                          : "rgba(45,10,78,0.6)",
+                          ? "#ff2bd6"
+                          : "rgba(255,255,255,0.12)",
                       }}
                       aria-pressed={
                         !!(form as Record<string, unknown>)[tog.key]
@@ -1233,6 +1277,7 @@ export default function SlimesSplitPanel({
                   </label>
                 ))}
               </div>
+              </div>
 
               {error && (
                 <p
@@ -1248,9 +1293,10 @@ export default function SlimesSplitPanel({
                 type="button"
                 onClick={handleSave}
                 disabled={saving}
-                className="px-6 py-2.5 rounded-lg text-sm font-bold text-[#0A0A0A] disabled:opacity-50 transition-opacity hover:opacity-90"
+                className="px-6 py-3 rounded-xl text-sm font-black text-white disabled:opacity-50 transition-opacity hover:opacity-90"
                 style={{
-                  background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                  background: MAGENTA_GRADIENT,
+                  boxShadow: "0 8px 24px -6px rgba(255,43,214,0.5)",
                   fontFamily: "Montserrat, sans-serif",
                 }}
               >
