@@ -405,6 +405,26 @@ export default async function AdminPage() {
             }
           />
           <ActionCard
+            href="/admin/brands"
+            title="Brand Ownership"
+            description="Claim, unclaim, or transfer brand ownership. Admin testing only."
+            icon={
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#39FF14"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            }
+          />
+          <ActionCard
             href="/admin/waitlist"
             title="Waitlist"
             description="View and export signup waitlist"
