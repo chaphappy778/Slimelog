@@ -45,10 +45,15 @@ export default function DeleteLogButton({
         className="flex items-center gap-2 text-sm font-semibold transition-colors"
         style={{
           color: accent,
-          background: "none",
-          border: "none",
+          // T188 (2026-07-22): framed "action pill" so Delete reads with
+          // the same visual weight as the green Edit pill beside it.
+          // 10px 20px + radius 12 mirror the Edit button; border + subtle
+          // tint use the passed accent (red #FF3D6E on /slimes/[id]).
+          background: `${accent}0F`,
+          border: `1px solid ${accent}`,
+          borderRadius: 12,
           cursor: "pointer",
-          padding: 0,
+          padding: "10px 20px",
         }}
       >
         <svg

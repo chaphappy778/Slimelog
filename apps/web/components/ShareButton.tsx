@@ -30,8 +30,14 @@ type ShareButtonProps = {
   text: string;
   /** Optional custom label; defaults to "Share". */
   label?: string;
-  /** Optional visual variant. */
-  variant?: "primary" | "ghost";
+  /**
+   * Optional visual variant.
+   * - "primary": gradient fill (post-log CTA)
+   * - "ghost": violet card + cyan text/border (default action bar)
+   * - "icon": circular glass icon-only button, no label. Added T188
+   *   (2026-07-22) for the /slimes/[id] hero top-right corner.
+   */
+  variant?: "primary" | "ghost" | "icon";
   /** Optional className to extend layout. */
   className?: string;
 };
@@ -96,8 +102,13 @@ export default function ShareButton({
     }
   }, [path, referralCode, title, text]);
 
-  const baseClasses =
-    "inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-bold transition-opacity active:opacity-80";
+  const isIcon = variant === "icon";
+
+  // Icon variant is a fixed 44x44 circular glass button (no gap/padding
+  // for a label); the other two keep the pill layout.
+  const baseClasses = isIcon
+    ? "inline-flex items-center justify-center rounded-full transition-opacity active:opacity-80"
+    : "inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-bold transition-opacity active:opacity-80";
 
   const style =
     variant === "primary"
@@ -105,11 +116,26 @@ export default function ShareButton({
           background: "linear-gradient(135deg, #39FF14, #00F0FF)",
           color: "#0A0A0A",
         }
-      : {
-          background: "rgba(45,10,78,0.5)",
-          border: "1px solid rgba(0,240,255,0.35)",
-          color: "#00F0FF",
-        };
+      : variant === "icon"
+        ? {
+            width: 44,
+            height: 44,
+            background: "rgba(10,0,20,0.55)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            border: "1px solid rgba(0,240,255,0.35)",
+            boxShadow: "0 0 12px rgba(0,240,255,0.20)",
+            color: "#00F0FF",
+          }
+        : {
+            background: "rgba(45,10,78,0.5)",
+            border: "1px solid rgba(0,240,255,0.35)",
+            color: "#00F0FF",
+          };
+
+  // Icon-only variant swaps to a checkmark on copy so the tap still gives
+  // feedback without adding a text label.
+  const glyphSize = isIcon ? 20 : 16;
 
   return (
     <button
@@ -117,25 +143,43 @@ export default function ShareButton({
       onClick={handleShare}
       className={`${baseClasses}${className ? ` ${className}` : ""}`}
       style={style}
-      aria-label={label}
+      aria-label={copied ? "Copied" : label}
+      title={label}
     >
-      {/* Share glyph */}
-      <svg
-        viewBox="0 0 24 24"
-        width="16"
-        height="16"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-        <polyline points="16 6 12 2 8 6" />
-        <line x1="12" y1="2" x2="12" y2="15" />
-      </svg>
-      {copied ? "Copied!" : label}
+      {isIcon && copied ? (
+        // Copied checkmark (icon variant only)
+        <svg
+          viewBox="0 0 24 24"
+          width={glyphSize}
+          height={glyphSize}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      ) : (
+        // Share glyph
+        <svg
+          viewBox="0 0 24 24"
+          width={glyphSize}
+          height={glyphSize}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+          <polyline points="16 6 12 2 8 6" />
+          <line x1="12" y1="2" x2="12" y2="15" />
+        </svg>
+      )}
+      {!isIcon && (copied ? "Copied!" : label)}
     </button>
   );
 }

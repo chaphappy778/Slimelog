@@ -19,6 +19,10 @@ import ShareButton from "@/components/ShareButton";
 import SlimeDetailCareSection from "@/components/collection/SlimeDetailCareSection";
 import RatingScaleModal from "@/components/collection/RatingScaleModal";
 import { safeRedirect } from "@/lib/safe-redirect";
+// T188 (2026-07-22): SCALE_BANDS is the single source of truth for the
+// See-scale band colors, shared with /how-to-rate + the scale modal. We
+// reuse it to color-code the rating numbers + progress bars by band.
+import { SCALE_BANDS } from "@/app/how-to-rate/content";
 import {
   SLIME_BASE_TYPE_COLORS,
   SLIME_BASE_TYPE_LABELS,
@@ -183,6 +187,19 @@ export async function generateMetadata({
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// T188 (2026-07-22): map a rating value to its See-scale band color so a
+// 4.x number reads "Great" green and a 2.x reads "Under" orange at a
+// glance. Bands: 1.x Skip (red), 2.x Under (orange), 3.x Solid (cyan),
+// 4.x Great (light green), 5.0 Elite (slime green). Sourced from
+// SCALE_BANDS to keep the color mapping in one place.
+function ratingBandColor(value: number): string {
+  const idx = Math.min(
+    SCALE_BANDS.length - 1,
+    Math.max(0, Math.floor(value) - 1),
+  );
+  return SCALE_BANDS[idx].accentColor;
+}
 
 const RATING_DIMENSIONS: Array<{ key: keyof CollectionLog; label: string }> = [
   { key: "rating_texture", label: "Texture" },
@@ -502,6 +519,18 @@ export default async function SlimePage({
     </div>
   ) : null;
 
+  // T188 (2026-07-22): Share moved out of the action bar to the hero's
+  // top-right corner (Instagram-style prominence). Icon-only circular
+  // glass button; same share payload as before.
+  const heroShareButton = (
+    <ShareButton
+      path={`/slimes/${log.id}?utm_source=share&utm_medium=slime_log`}
+      title={log.slime_name ?? "A slime on SlimeLog"}
+      text={shareText}
+      variant="icon"
+    />
+  );
+
   return (
     <PageWrapper dots>
       <PageHeader />
@@ -528,6 +557,11 @@ export default async function SlimePage({
                       "linear-gradient(to top, rgba(10,0,20,0.92) 4%, rgba(10,0,20,0.35) 42%, transparent 68%)",
                   }}
                 />
+                {/* Share — top-right corner. pointer-events-auto opts back
+                    in over the pointer-events-none gradient overlay. */}
+                <div className="absolute top-4 right-4 lg:top-6 lg:right-6 z-10 pointer-events-auto">
+                  {heroShareButton}
+                </div>
                 <div className="absolute left-4 right-4 bottom-4 lg:left-6 lg:right-6 lg:bottom-6 pointer-events-none">
                   <h1
                     className="mont text-[34px] lg:text-[52px] font-black leading-[0.98] tracking-tight"
@@ -543,17 +577,22 @@ export default async function SlimePage({
                 </div>
               </div>
             ) : (
-              <header className="px-4 lg:px-0 pt-2 flex flex-col gap-1.5">
-                <h1
-                  className="mont text-3xl font-black leading-tight"
-                  style={{
-                    color: "#fff",
-                    fontFamily: "Montserrat, Inter, sans-serif",
-                  }}
-                >
-                  {slimeName}
-                </h1>
-                {brandRow}
+              <header className="px-4 lg:px-0 pt-2 flex items-start justify-between gap-3">
+                <div className="flex flex-col gap-1.5 min-w-0">
+                  <h1
+                    className="mont text-3xl font-black leading-tight"
+                    style={{
+                      color: "#fff",
+                      fontFamily: "Montserrat, Inter, sans-serif",
+                    }}
+                  >
+                    {slimeName}
+                  </h1>
+                  {brandRow}
+                </div>
+                {/* Share — top-right of the no-image header (flex-positioned
+                    rather than absolute). */}
+                <div className="shrink-0">{heroShareButton}</div>
               </header>
             )}
 
@@ -756,9 +795,10 @@ export default async function SlimePage({
                     className="mont font-black leading-none"
                     style={{
                       fontSize: 60,
-                      color: "#39FF14",
+                      // T188: overall number carries its See-scale band color.
+                      color: ratingBandColor(log.rating_overall as number),
                       fontFamily: "Montserrat, Inter, sans-serif",
-                      textShadow: "0 0 16px rgba(57,255,20,0.45)",
+                      textShadow: `0 0 16px ${ratingBandColor(log.rating_overall as number)}73`,
                     }}
                   >
                     {(log.rating_overall as number).toFixed(1)}
@@ -842,7 +882,7 @@ export default async function SlimePage({
                 </div>
               )}
 
-              {/* Action bar — Like + Report + Share */}
+              {/* Action bar — Like + Report (Share moved to hero corner) */}
               <div
                 className="flex items-stretch border-y"
                 style={{ borderColor: "rgba(45,10,78,0.6)" }}
@@ -870,17 +910,6 @@ export default async function SlimePage({
                     </div>
                   </>
                 )}
-                <div
-                  className="w-px shrink-0"
-                  style={{ background: "rgba(45,10,78,0.6)" }}
-                />
-                <div className="flex-1 flex items-center justify-center py-2">
-                  <ShareButton
-                    path={`/slimes/${log.id}?utm_source=share&utm_medium=slime_log`}
-                    title={log.slime_name ?? "A slime on SlimeLog"}
-                    text={shareText}
-                  />
-                </div>
               </div>
 
               {/* RATINGS */}
@@ -902,20 +931,88 @@ export default async function SlimePage({
                     <RatingScaleModal />
                   </div>
 
-                  {activeDimensions.length > 0 && (
-                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
-                      {activeDimensions.map(({ key, label }) => {
-                        const value = log[key] as number;
-                        return (
-                          <div
-                            key={key}
+                  {/* Grid — 5 rating cards + a 6th stacked Condition/Scent
+                      cell that fills the otherwise-empty last slot. */}
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    {activeDimensions.map(({ key, label }) => {
+                      const value = log[key] as number;
+                      // T188: color the number + bar by See-scale band.
+                      const color = ratingBandColor(value);
+                      return (
+                        <div
+                          key={key}
+                          style={{
+                            background: "rgba(45,10,78,0.25)",
+                            border: "1px solid rgba(45,10,78,0.7)",
+                            borderRadius: 14,
+                            padding: 12,
+                          }}
+                        >
+                          <span
+                            className="mont uppercase font-extrabold"
                             style={{
-                              background: "rgba(45,10,78,0.25)",
-                              border: "1px solid rgba(45,10,78,0.7)",
-                              borderRadius: 14,
-                              padding: 12,
+                              fontSize: 10.5,
+                              letterSpacing: "0.08em",
+                              color: "rgba(245,245,245,0.65)",
+                              fontFamily: "Montserrat, Inter, sans-serif",
                             }}
                           >
+                            {label}
+                          </span>
+                          <div
+                            className="mont font-black"
+                            style={{
+                              fontSize: 26,
+                              lineHeight: 1.1,
+                              marginTop: 4,
+                              color,
+                              fontFamily: "Montserrat, Inter, sans-serif",
+                              textShadow: `0 0 12px ${color}73`,
+                            }}
+                          >
+                            {value.toFixed(1)}
+                          </div>
+                          <div
+                            style={{
+                              height: 6,
+                              borderRadius: 999,
+                              background: "rgba(45,10,78,0.6)",
+                              overflow: "hidden",
+                              marginTop: 7,
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: `${(value / 5) * 100}%`,
+                                height: "100%",
+                                borderRadius: 999,
+                                background: color,
+                                boxShadow: `0 0 10px ${color}80`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* 6th cell — Condition + Scent stacked. Renders only the
+                        row(s) that are set; when just one is present the card
+                        is simply shorter. Omitted entirely when both null. */}
+                    {(log.condition || log.scent_strength) && (
+                      <div
+                        style={{
+                          background: "rgba(45,10,78,0.25)",
+                          border: "1px solid rgba(45,10,78,0.7)",
+                          borderRadius: 14,
+                          padding: 12,
+                          display: "flex",
+                          flexDirection: "column",
+                          justifyContent: "center",
+                          gap: 8,
+                        }}
+                      >
+                        {log.condition && (
+                          <div className="flex items-center justify-between gap-2">
                             <span
                               className="mont uppercase font-extrabold"
                               style={{
@@ -925,109 +1022,56 @@ export default async function SlimePage({
                                 fontFamily: "Montserrat, Inter, sans-serif",
                               }}
                             >
-                              {label}
+                              Condition
                             </span>
-                            <div
-                              className="mont font-black"
+                            <span
+                              className="px-2.5 py-1 rounded-full text-xs font-semibold shrink-0"
                               style={{
-                                fontSize: 26,
-                                lineHeight: 1.1,
-                                marginTop: 4,
-                                color: "#39FF14",
-                                fontFamily: "Montserrat, Inter, sans-serif",
-                                textShadow: "0 0 12px rgba(57,255,20,0.45)",
+                                background: "rgba(0,240,255,0.1)",
+                                border: "1px solid rgba(0,240,255,0.3)",
+                                color: "#00F0FF",
                               }}
                             >
-                              {value.toFixed(1)}
-                            </div>
-                            <div
-                              style={{
-                                height: 6,
-                                borderRadius: 999,
-                                background: "rgba(45,10,78,0.6)",
-                                overflow: "hidden",
-                                marginTop: 7,
-                              }}
-                            >
-                              <div
-                                style={{
-                                  width: `${(value / 5) * 100}%`,
-                                  height: "100%",
-                                  borderRadius: 999,
-                                  background: "#39FF14",
-                                  boxShadow: "0 0 10px rgba(57,255,20,0.5)",
-                                }}
-                              />
-                            </div>
+                              {
+                                SLIME_CONDITION_LABELS[
+                                  log.condition as SlimeCondition
+                                ]
+                              }
+                            </span>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Condition + Scent status pills */}
-                  {(log.condition || log.scent_strength) && (
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-0.5">
-                      {log.condition && (
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="mont uppercase font-extrabold"
-                            style={{
-                              fontSize: 10.5,
-                              letterSpacing: "0.08em",
-                              color: "rgba(245,245,245,0.4)",
-                              fontFamily: "Montserrat, Inter, sans-serif",
-                            }}
-                          >
-                            Condition
-                          </span>
-                          <span
-                            className="px-2.5 py-1 rounded-full text-xs font-semibold"
-                            style={{
-                              background: "rgba(0,240,255,0.1)",
-                              border: "1px solid rgba(0,240,255,0.3)",
-                              color: "#00F0FF",
-                            }}
-                          >
-                            {
-                              SLIME_CONDITION_LABELS[
-                                log.condition as SlimeCondition
-                              ]
-                            }
-                          </span>
-                        </div>
-                      )}
-                      {log.scent_strength && (
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="mont uppercase font-extrabold"
-                            style={{
-                              fontSize: 10.5,
-                              letterSpacing: "0.08em",
-                              color: "rgba(245,245,245,0.4)",
-                              fontFamily: "Montserrat, Inter, sans-serif",
-                            }}
-                          >
-                            Scent
-                          </span>
-                          <span
-                            className="px-2.5 py-1 rounded-full text-xs font-semibold"
-                            style={{
-                              background: "rgba(57,255,20,0.1)",
-                              border: "1px solid rgba(57,255,20,0.3)",
-                              color: "#39FF14",
-                            }}
-                          >
-                            {
-                              SCENT_STRENGTH_LABELS[
-                                log.scent_strength as ScentStrength
-                              ]
-                            }
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                        )}
+                        {log.scent_strength && (
+                          <div className="flex items-center justify-between gap-2">
+                            <span
+                              className="mont uppercase font-extrabold"
+                              style={{
+                                fontSize: 10.5,
+                                letterSpacing: "0.08em",
+                                color: "rgba(245,245,245,0.65)",
+                                fontFamily: "Montserrat, Inter, sans-serif",
+                              }}
+                            >
+                              Scent
+                            </span>
+                            <span
+                              className="px-2.5 py-1 rounded-full text-xs font-semibold shrink-0"
+                              style={{
+                                background: "rgba(57,255,20,0.1)",
+                                border: "1px solid rgba(57,255,20,0.3)",
+                                color: "#39FF14",
+                              }}
+                            >
+                              {
+                                SCENT_STRENGTH_LABELS[
+                                  log.scent_strength as ScentStrength
+                                ]
+                              }
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </section>
               )}
 
