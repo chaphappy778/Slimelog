@@ -50,19 +50,18 @@ export default async function DropsPage({ params }: PageProps) {
 
   return (
     <DashboardLayout brand={layoutBrand} active="drops">
-      <div className="mb-6">
-        <h1
-          className="text-2xl font-bold text-white"
-          style={{ fontFamily: "Montserrat, sans-serif" }}
+      {/* [T137 Batch 2b] Small-caps cyan section label — the app bar carries
+          brand identity, so no large page h1 here. */}
+      <div className="mb-5">
+        <p
+          className="text-xs font-black uppercase tracking-widest"
+          style={{ color: "#22d3ee", fontFamily: "Montserrat, sans-serif" }}
         >
           Drops
-        </h1>
+        </p>
         <p
           className="text-sm mt-1"
-          style={{
-            color: "rgba(245,245,245,0.4)",
-            fontFamily: "Inter, sans-serif",
-          }}
+          style={{ color: "#8f83b0", fontFamily: "Inter, sans-serif" }}
         >
           Schedule and manage your product drops
         </p>

@@ -67,9 +67,9 @@ const STATUS_STYLES: Record<
   { color: string; bg: string; border: string; label: string }
 > = {
   announced: {
-    color: "#00F0FF",
-    bg: "rgba(0,240,255,0.1)",
-    border: "rgba(0,240,255,0.25)",
+    color: "#22d3ee",
+    bg: "rgba(34,211,238,0.1)",
+    border: "rgba(34,211,238,0.25)",
     label: "Announced",
   },
   live: {
@@ -79,9 +79,9 @@ const STATUS_STYLES: Record<
     label: "Live",
   },
   sold_out: {
-    color: "rgba(245,245,245,0.35)",
-    bg: "rgba(45,10,78,0.4)",
-    border: "rgba(45,10,78,0.7)",
+    color: "#8f83b0",
+    bg: "rgba(255,255,255,0.03)",
+    border: "rgba(150,110,240,0.18)",
     label: "Sold Out",
   },
   restocked: {
@@ -91,9 +91,9 @@ const STATUS_STYLES: Record<
     label: "Restocked",
   },
   cancelled: {
-    color: "#FF4444",
-    bg: "rgba(255,68,68,0.1)",
-    border: "rgba(255,68,68,0.25)",
+    color: "#FF3D6E",
+    bg: "rgba(255,61,110,0.1)",
+    border: "rgba(255,61,110,0.25)",
     label: "Cancelled",
   },
 };
@@ -148,10 +148,10 @@ const DEFAULT_RECURRENCE: RecurrencePattern = {
 // ─── Shared style helpers ─────────────────────────────────────────────────────
 
 const inputClass =
-  "w-full rounded-lg px-3 py-2.5 text-sm text-white outline-none transition-colors";
+  "w-full rounded-xl px-3.5 py-2.5 text-sm text-white outline-none transition-colors focus:ring-1 focus:ring-[#ff2bd6]/40 placeholder:text-[#6b6180]";
 const inputStyle = {
-  background: "rgba(45,10,78,0.35)",
-  border: "1px solid rgba(45,10,78,0.8)",
+  background: "rgba(255,255,255,0.04)",
+  border: "1px solid rgba(150,110,240,0.24)",
   fontFamily: "Inter, sans-serif",
 };
 const selectStyle = { ...inputStyle, appearance: "none" as const };
@@ -161,7 +161,7 @@ function FormLabel({ children }: { children: React.ReactNode }) {
     <label
       className="block text-xs font-bold uppercase tracking-widest mb-1.5"
       style={{
-        color: "rgba(245,245,245,0.4)",
+        color: "#8f83b0",
         fontFamily: "Montserrat, sans-serif",
       }}
     >
@@ -364,19 +364,19 @@ function RecurrenceBuilder({
   return (
     <div
       className="rounded-xl overflow-hidden"
-      style={{ border: "1px solid rgba(45,10,78,0.7)" }}
+      style={{ border: "1px solid rgba(150,110,240,0.18)" }}
     >
       <button
         type="button"
         onClick={() => onToggle(!enabled)}
         className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold transition-all"
         style={{
-          background: enabled ? "rgba(57,255,20,0.08)" : "rgba(45,10,78,0.25)",
+          background: enabled ? "rgba(255,43,214,0.08)" : "rgba(255,255,255,0.03)",
         }}
       >
         <span
           style={{
-            color: enabled ? "#39FF14" : "rgba(245,245,245,0.5)",
+            color: enabled ? "#ff2bd6" : "rgba(245,245,245,0.5)",
             fontFamily: "Montserrat, sans-serif",
           }}
         >
@@ -384,7 +384,7 @@ function RecurrenceBuilder({
         </span>
         <div
           className="w-10 h-5 rounded-full relative transition-all"
-          style={{ background: enabled ? "#39FF14" : "rgba(45,10,78,0.6)" }}
+          style={{ background: enabled ? "#ff2bd6" : "rgba(150,110,240,0.18)" }}
         >
           <div
             className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all"
@@ -395,7 +395,7 @@ function RecurrenceBuilder({
       {enabled && (
         <div
           className="px-4 py-4 space-y-4"
-          style={{ background: "rgba(45,10,78,0.15)" }}
+          style={{ background: "rgba(255,255,255,0.02)" }}
         >
           <div>
             <FormLabel>Frequency</FormLabel>
@@ -409,12 +409,12 @@ function RecurrenceBuilder({
                   style={{
                     background:
                       pattern.frequency === f
-                        ? "rgba(57,255,20,0.15)"
-                        : "rgba(45,10,78,0.3)",
-                    border: `1px solid ${pattern.frequency === f ? "rgba(57,255,20,0.4)" : "rgba(45,10,78,0.6)"}`,
+                        ? "rgba(255,43,214,0.15)"
+                        : "rgba(255,255,255,0.03)",
+                    border: `1px solid ${pattern.frequency === f ? "rgba(255,43,214,0.4)" : "rgba(150,110,240,0.18)"}`,
                     color:
                       pattern.frequency === f
-                        ? "#39FF14"
+                        ? "#ff2bd6"
                         : "rgba(245,245,245,0.5)",
                     fontFamily: "Montserrat, sans-serif",
                   }}
@@ -471,12 +471,12 @@ function RecurrenceBuilder({
                   style={{
                     background:
                       pattern.end_type === e
-                        ? "rgba(0,240,255,0.12)"
-                        : "rgba(45,10,78,0.3)",
-                    border: `1px solid ${pattern.end_type === e ? "rgba(0,240,255,0.35)" : "rgba(45,10,78,0.6)"}`,
+                        ? "rgba(34,211,238,0.12)"
+                        : "rgba(255,255,255,0.03)",
+                    border: `1px solid ${pattern.end_type === e ? "rgba(34,211,238,0.35)" : "rgba(150,110,240,0.18)"}`,
                     color:
                       pattern.end_type === e
-                        ? "#00F0FF"
+                        ? "#22d3ee"
                         : "rgba(245,245,245,0.5)",
                     fontFamily: "Montserrat, sans-serif",
                   }}
@@ -597,18 +597,18 @@ function CatalogPanel({
       className="flex flex-col h-full transition-opacity duration-200"
       style={{
         opacity: panelOpacity,
-        borderLeft: "1px solid rgba(45,10,78,0.6)",
+        borderLeft: "1px solid rgba(150,110,240,0.18)",
         pointerEvents: isActive ? "auto" : "none",
       }}
     >
       {/* Header */}
       <div
         className="px-4 pt-4 pb-3 flex-shrink-0"
-        style={{ borderBottom: "1px solid rgba(45,10,78,0.5)" }}
+        style={{ borderBottom: "1px solid rgba(150,110,240,0.14)" }}
       >
         <p
           className="text-xs font-bold uppercase tracking-widest mb-3"
-          style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
+          style={{ color: "#22d3ee", fontFamily: "Montserrat, sans-serif" }}
         >
           {dropType === "restock"
             ? "Select Slimes to Restock"
@@ -630,11 +630,11 @@ function CatalogPanel({
               style={{
                 background:
                   typeFilter === "all"
-                    ? "rgba(0,240,255,0.15)"
-                    : "rgba(45,10,78,0.3)",
-                border: `1px solid ${typeFilter === "all" ? "rgba(0,240,255,0.4)" : "rgba(45,10,78,0.5)"}`,
+                    ? "rgba(34,211,238,0.15)"
+                    : "rgba(255,255,255,0.03)",
+                border: `1px solid ${typeFilter === "all" ? "rgba(34,211,238,0.4)" : "rgba(150,110,240,0.14)"}`,
                 color:
-                  typeFilter === "all" ? "#00F0FF" : "rgba(245,245,245,0.4)",
+                  typeFilter === "all" ? "#22d3ee" : "#8f83b0",
                 fontFamily: "Montserrat, sans-serif",
               }}
             >
@@ -649,10 +649,10 @@ function CatalogPanel({
                 style={{
                   background:
                     typeFilter === t
-                      ? "rgba(0,240,255,0.15)"
-                      : "rgba(45,10,78,0.3)",
-                  border: `1px solid ${typeFilter === t ? "rgba(0,240,255,0.4)" : "rgba(45,10,78,0.5)"}`,
-                  color: typeFilter === t ? "#00F0FF" : "rgba(245,245,245,0.4)",
+                      ? "rgba(34,211,238,0.15)"
+                      : "rgba(255,255,255,0.03)",
+                  border: `1px solid ${typeFilter === t ? "rgba(34,211,238,0.4)" : "rgba(150,110,240,0.14)"}`,
+                  color: typeFilter === t ? "#22d3ee" : "#8f83b0",
                   fontFamily: "Montserrat, sans-serif",
                 }}
               >
@@ -669,7 +669,7 @@ function CatalogPanel({
           <p
             className="text-xs text-center py-6"
             style={{
-              color: "rgba(245,245,245,0.25)",
+              color: "#6b6180",
               fontFamily: "Inter, sans-serif",
             }}
           >
@@ -685,8 +685,8 @@ function CatalogPanel({
             key={slime.id}
             className="flex items-center justify-between px-3 py-2.5 rounded-lg transition-all group"
             style={{
-              background: "rgba(45,10,78,0.25)",
-              border: "1px solid rgba(45,10,78,0.55)",
+              background: "rgba(255,255,255,0.03)",
+              border: "1px solid rgba(150,110,240,0.16)",
             }}
           >
             <div className="min-w-0 mr-2">
@@ -698,7 +698,7 @@ function CatalogPanel({
               </p>
               <p
                 className="text-[11px]"
-                style={{ color: "rgba(245,245,245,0.35)" }}
+                style={{ color: "#8f83b0" }}
               >
                 {SLIME_BASE_TYPE_LABELS[slime.base_type]}
               </p>
@@ -708,9 +708,9 @@ function CatalogPanel({
               onClick={() => onAttach(slime)}
               className="flex-shrink-0 text-xs px-2.5 py-1 rounded-md transition-all"
               style={{
-                color: "#39FF14",
-                background: "rgba(57,255,20,0.08)",
-                border: "1px solid rgba(57,255,20,0.25)",
+                color: "#ff2bd6",
+                background: "rgba(255,43,214,0.08)",
+                border: "1px solid rgba(255,43,214,0.25)",
                 fontFamily: "Montserrat, sans-serif",
                 fontWeight: 700,
               }}
@@ -724,7 +724,7 @@ function CatalogPanel({
       {/* Create New Slime */}
       <div
         className="px-3 pb-4 pt-2 flex-shrink-0"
-        style={{ borderTop: "1px solid rgba(45,10,78,0.5)" }}
+        style={{ borderTop: "1px solid rgba(150,110,240,0.14)" }}
       >
         {!showAddNew ? (
           <button
@@ -732,9 +732,9 @@ function CatalogPanel({
             onClick={() => setShowAddNew(true)}
             className="w-full py-2.5 rounded-lg text-xs font-bold transition-all"
             style={{
-              color: "#FF00E5",
-              background: "rgba(255,0,229,0.06)",
-              border: "1px solid rgba(255,0,229,0.2)",
+              color: "#ff2bd6",
+              background: "rgba(255,43,214,0.06)",
+              border: "1px solid rgba(255,43,214,0.2)",
               fontFamily: "Montserrat, sans-serif",
             }}
           >
@@ -744,13 +744,13 @@ function CatalogPanel({
           <div
             className="rounded-xl p-3 space-y-3"
             style={{
-              background: "rgba(255,0,229,0.05)",
-              border: "1px solid rgba(255,0,229,0.2)",
+              background: "rgba(255,43,214,0.05)",
+              border: "1px solid rgba(255,43,214,0.2)",
             }}
           >
             <p
               className="text-xs font-bold uppercase tracking-widest"
-              style={{ color: "#FF00E5", fontFamily: "Montserrat, sans-serif" }}
+              style={{ color: "#ff2bd6", fontFamily: "Montserrat, sans-serif" }}
             >
               New Slime
             </p>
@@ -787,9 +787,9 @@ function CatalogPanel({
                 }}
                 className="flex-1 py-2 rounded-lg text-xs font-semibold"
                 style={{
-                  color: "rgba(245,245,245,0.4)",
-                  background: "rgba(45,10,78,0.3)",
-                  border: "1px solid rgba(45,10,78,0.6)",
+                  color: "#8f83b0",
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(150,110,240,0.18)",
                 }}
               >
                 Cancel
@@ -800,8 +800,9 @@ function CatalogPanel({
                 disabled={addingNew || !newName.trim()}
                 className="flex-1 py-2 rounded-lg text-xs font-bold disabled:opacity-50 transition-all"
                 style={{
-                  background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-                  color: "#0A0A0A",
+                  background: "linear-gradient(135deg, #ff2bd6, #a855f7)",
+                  boxShadow: "0 8px 24px -6px rgba(255,43,214,0.5)",
+                  color: "#fff",
                   fontFamily: "Montserrat, sans-serif",
                 }}
               >
@@ -902,8 +903,8 @@ function SlimeRows({
           key={idx}
           className="rounded-lg overflow-hidden"
           style={{
-            background: "rgba(57,255,20,0.07)",
-            border: "1px solid rgba(57,255,20,0.18)",
+            background: "rgba(255,43,214,0.07)",
+            border: "1px solid rgba(255,43,214,0.18)",
           }}
         >
           <div className="flex items-center justify-between px-3 py-2">
@@ -922,7 +923,7 @@ function SlimeRows({
               </p>
               <p
                 className="text-[11px]"
-                style={{ color: "rgba(245,245,245,0.35)" }}
+                style={{ color: "#8f83b0" }}
               >
                 {slime.base_type
                   ? SLIME_BASE_TYPE_LABELS[slime.base_type as SlimeBaseType]
@@ -937,7 +938,7 @@ function SlimeRows({
                   setExpandedSlimeIdx(expandedSlimeIdx === idx ? null : idx)
                 }
                 className="w-6 h-6 flex items-center justify-center rounded"
-                style={{ color: "rgba(245,245,245,0.4)" }}
+                style={{ color: "#8f83b0" }}
               >
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                   <path
@@ -956,9 +957,9 @@ function SlimeRows({
                 onClick={() => onDetach(slime.slime_id, idx)}
                 className="w-6 h-6 flex items-center justify-center rounded-md flex-shrink-0"
                 style={{
-                  color: "#FF4444",
-                  background: "rgba(255,68,68,0.08)",
-                  border: "1px solid rgba(255,68,68,0.2)",
+                  color: "#FF3D6E",
+                  background: "rgba(255,61,110,0.08)",
+                  border: "1px solid rgba(255,61,110,0.2)",
                 }}
                 title="Remove"
               >
@@ -977,7 +978,7 @@ function SlimeRows({
           {expandedSlimeIdx === idx && (
             <div
               className="px-3 pb-3 space-y-2"
-              style={{ borderTop: "1px solid rgba(57,255,20,0.15)" }}
+              style={{ borderTop: "1px solid rgba(255,43,214,0.15)" }}
             >
               <div className="pt-2">
                 <FormLabel>Name</FormLabel>
@@ -1026,7 +1027,7 @@ function SlimeRows({
                 <div className="flex items-center gap-2">
                   <span
                     className="text-sm"
-                    style={{ color: "rgba(245,245,245,0.4)" }}
+                    style={{ color: "#8f83b0" }}
                   >
                     $
                   </span>
@@ -1090,20 +1091,20 @@ function WizardStepIndicator({ step }: WizardStepIndicatorProps) {
                   r="5"
                   fill={
                     isCompleted
-                      ? "#39FF14"
+                      ? "#ff2bd6"
                       : isCurrent
-                        ? "rgba(57,255,20,0.2)"
-                        : "rgba(45,10,78,0.6)"
+                        ? "rgba(255,43,214,0.2)"
+                        : "rgba(150,110,240,0.18)"
                   }
                   stroke={
-                    isCompleted || isCurrent ? "#39FF14" : "rgba(45,10,78,0.8)"
+                    isCompleted || isCurrent ? "#ff2bd6" : "rgba(150,110,240,0.24)"
                   }
                   strokeWidth="1.5"
                 />
                 {isCompleted && (
                   <path
                     d="M3.5 6l1.5 1.5 3-3"
-                    stroke="#0A0A0A"
+                    stroke="#fff"
                     strokeWidth="1.2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -1115,10 +1116,10 @@ function WizardStepIndicator({ step }: WizardStepIndicatorProps) {
                 className="text-[10px] mt-1 font-semibold"
                 style={{
                   color: isCurrent
-                    ? "#39FF14"
+                    ? "#ff2bd6"
                     : isCompleted
-                      ? "rgba(57,255,20,0.6)"
-                      : "rgba(245,245,245,0.25)",
+                      ? "rgba(255,43,214,0.6)"
+                      : "#6b6180",
                   fontFamily: "Montserrat, sans-serif",
                 }}
               >
@@ -1133,8 +1134,8 @@ function WizardStepIndicator({ step }: WizardStepIndicatorProps) {
                   height: 1,
                   background:
                     stepNum < step
-                      ? "rgba(57,255,20,0.5)"
-                      : "rgba(45,10,78,0.7)",
+                      ? "rgba(255,43,214,0.5)"
+                      : "rgba(150,110,240,0.18)",
                 }}
               />
             )}
@@ -1163,8 +1164,9 @@ function WizardNextButton({
       disabled={disabled}
       className="px-5 py-2.5 rounded-lg text-sm font-bold disabled:opacity-40 transition-opacity hover:opacity-90"
       style={{
-        background: "linear-gradient(135deg, #39FF14, #00F0FF)",
-        color: "#0A0A0A",
+        background: "linear-gradient(135deg, #ff2bd6, #a855f7)",
+        boxShadow: "0 8px 24px -6px rgba(255,43,214,0.5)",
+        color: "#fff",
         fontFamily: "Montserrat, sans-serif",
         fontWeight: 700,
       }}
@@ -1187,9 +1189,9 @@ function WizardBackButton({
       onClick={onClick}
       className="px-5 py-2.5 rounded-lg text-sm font-bold transition-all"
       style={{
-        color: "rgba(245,245,245,0.4)",
-        background: "rgba(45,10,78,0.3)",
-        border: "1px solid rgba(45,10,78,0.6)",
+        color: "#8f83b0",
+        background: "rgba(255,255,255,0.03)",
+        border: "1px solid rgba(150,110,240,0.18)",
         fontFamily: "Montserrat, sans-serif",
         fontWeight: 700,
       }}
@@ -1259,7 +1261,7 @@ function CreateWizard({
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       {/* Step indicator */}
-      <div style={{ borderBottom: "1px solid rgba(45,10,78,0.5)" }}>
+      <div style={{ borderBottom: "1px solid rgba(150,110,240,0.14)" }}>
         <WizardStepIndicator step={step} />
       </div>
 
@@ -1270,7 +1272,7 @@ function CreateWizard({
           <div className="p-6 space-y-4 max-w-xl">
             <p
               className="text-xs font-bold uppercase tracking-widest"
-              style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
+              style={{ color: "#22d3ee", fontFamily: "Montserrat, sans-serif" }}
             >
               Cover Photo
             </p>
@@ -1288,7 +1290,7 @@ function CreateWizard({
             <p
               className="text-xs"
               style={{
-                color: "rgba(245,245,245,0.35)",
+                color: "#8f83b0",
                 fontFamily: "Inter, sans-serif",
               }}
             >
@@ -1308,7 +1310,7 @@ function CreateWizard({
           <div className="p-6 space-y-4 max-w-xl">
             <p
               className="text-xs font-bold uppercase tracking-widest"
-              style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
+              style={{ color: "#22d3ee", fontFamily: "Montserrat, sans-serif" }}
             >
               Drop Details
             </p>
@@ -1326,13 +1328,13 @@ function CreateWizard({
                   style={{
                     background:
                       form.drop_type === "new_drop"
-                        ? "rgba(0,240,255,0.12)"
-                        : "rgba(45,10,78,0.3)",
-                    border: `1px solid ${form.drop_type === "new_drop" ? "rgba(0,240,255,0.35)" : "rgba(45,10,78,0.6)"}`,
+                        ? "rgba(34,211,238,0.12)"
+                        : "rgba(255,255,255,0.03)",
+                    border: `1px solid ${form.drop_type === "new_drop" ? "rgba(34,211,238,0.35)" : "rgba(150,110,240,0.18)"}`,
                     color:
                       form.drop_type === "new_drop"
-                        ? "#00F0FF"
-                        : "rgba(245,245,245,0.4)",
+                        ? "#22d3ee"
+                        : "#8f83b0",
                     fontFamily: "Montserrat, sans-serif",
                   }}
                 >
@@ -1348,12 +1350,12 @@ function CreateWizard({
                     background:
                       form.drop_type === "restock"
                         ? "rgba(255,184,0,0.12)"
-                        : "rgba(45,10,78,0.3)",
-                    border: `1px solid ${form.drop_type === "restock" ? "rgba(255,184,0,0.3)" : "rgba(45,10,78,0.6)"}`,
+                        : "rgba(255,255,255,0.03)",
+                    border: `1px solid ${form.drop_type === "restock" ? "rgba(255,184,0,0.3)" : "rgba(150,110,240,0.18)"}`,
                     color:
                       form.drop_type === "restock"
                         ? "#FFB800"
-                        : "rgba(245,245,245,0.4)",
+                        : "#8f83b0",
                     fontFamily: "Montserrat, sans-serif",
                   }}
                 >
@@ -1469,7 +1471,7 @@ function CreateWizard({
               <div className="flex items-center gap-2">
                 <span
                   className="text-sm"
-                  style={{ color: "rgba(245,245,245,0.4)" }}
+                  style={{ color: "#8f83b0" }}
                 >
                   $
                 </span>
@@ -1517,24 +1519,24 @@ function CreateWizard({
           <div className="p-6 space-y-4 max-w-xl">
             <p
               className="text-xs font-bold uppercase tracking-widest"
-              style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
+              style={{ color: "#22d3ee", fontFamily: "Montserrat, sans-serif" }}
             >
               Slimes
             </p>
             <p
               className="text-xs"
               style={{
-                color: "rgba(245,245,245,0.35)",
+                color: "#8f83b0",
                 fontFamily: "Inter, sans-serif",
               }}
             >
-              Optional — you can add slimes after creating the drop.
+              Optional. You can add slimes after creating the drop.
             </p>
             {attachedSlimes.length === 0 ? (
               <p
                 className="text-xs py-4"
                 style={{
-                  color: "rgba(245,245,245,0.25)",
+                  color: "#6b6180",
                   fontFamily: "Inter, sans-serif",
                 }}
               >
@@ -1565,7 +1567,7 @@ function CreateWizard({
           <div className="p-6 space-y-5 max-w-xl">
             <p
               className="text-xs font-bold uppercase tracking-widest"
-              style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
+              style={{ color: "#22d3ee", fontFamily: "Montserrat, sans-serif" }}
             >
               Preview &amp; Create
             </p>
@@ -1574,7 +1576,7 @@ function CreateWizard({
             {form.cover_image_url && (
               <div
                 className="rounded-xl overflow-hidden"
-                style={{ border: "1px solid rgba(45,10,78,0.6)" }}
+                style={{ border: "1px solid rgba(150,110,240,0.18)" }}
               >
                 <img
                   src={form.cover_image_url}
@@ -1593,7 +1595,7 @@ function CreateWizard({
                   <p
                     className="text-[10px] font-bold uppercase tracking-widest mb-1"
                     style={{
-                      color: "rgba(245,245,245,0.3)",
+                      color: "#6b6180",
                       fontFamily: "Montserrat, sans-serif",
                     }}
                   >
@@ -1603,12 +1605,12 @@ function CreateWizard({
                     className="text-xs font-bold px-3 py-1 rounded-full"
                     style={{
                       color:
-                        form.drop_type === "restock" ? "#FFB800" : "#00F0FF",
+                        form.drop_type === "restock" ? "#FFB800" : "#22d3ee",
                       background:
                         form.drop_type === "restock"
                           ? "rgba(255,184,0,0.12)"
-                          : "rgba(0,240,255,0.12)",
-                      border: `1px solid ${form.drop_type === "restock" ? "rgba(255,184,0,0.3)" : "rgba(0,240,255,0.3)"}`,
+                          : "rgba(34,211,238,0.12)",
+                      border: `1px solid ${form.drop_type === "restock" ? "rgba(255,184,0,0.3)" : "rgba(34,211,238,0.3)"}`,
                       fontFamily: "Montserrat, sans-serif",
                     }}
                   >
@@ -1622,7 +1624,7 @@ function CreateWizard({
                 <p
                   className="text-[10px] font-bold uppercase tracking-widest mb-1"
                   style={{
-                    color: "rgba(245,245,245,0.3)",
+                    color: "#6b6180",
                     fontFamily: "Montserrat, sans-serif",
                   }}
                 >
@@ -1647,7 +1649,7 @@ function CreateWizard({
                   <p
                     className="text-[10px] font-bold uppercase tracking-widest mb-1"
                     style={{
-                      color: "rgba(245,245,245,0.3)",
+                      color: "#6b6180",
                       fontFamily: "Montserrat, sans-serif",
                     }}
                   >
@@ -1668,7 +1670,7 @@ function CreateWizard({
                   <p
                     className="text-[10px] font-bold uppercase tracking-widest mb-1"
                     style={{
-                      color: "rgba(245,245,245,0.3)",
+                      color: "#6b6180",
                       fontFamily: "Montserrat, sans-serif",
                     }}
                   >
@@ -1689,7 +1691,7 @@ function CreateWizard({
                   <p
                     className="text-[10px] font-bold uppercase tracking-widest mb-1"
                     style={{
-                      color: "rgba(245,245,245,0.3)",
+                      color: "#6b6180",
                       fontFamily: "Montserrat, sans-serif",
                     }}
                   >
@@ -1709,7 +1711,7 @@ function CreateWizard({
                 <p
                   className="text-[10px] font-bold uppercase tracking-widest mb-1"
                   style={{
-                    color: "rgba(245,245,245,0.3)",
+                    color: "#6b6180",
                     fontFamily: "Montserrat, sans-serif",
                   }}
                 >
@@ -1720,8 +1722,8 @@ function CreateWizard({
                   style={{
                     color:
                       attachedSlimes.length > 0
-                        ? "#FF00E5"
-                        : "rgba(245,245,245,0.3)",
+                        ? "#ff2bd6"
+                        : "#6b6180",
                     fontFamily: "Inter, sans-serif",
                   }}
                 >
@@ -1737,7 +1739,7 @@ function CreateWizard({
               <p
                 className="text-[10px] font-bold uppercase tracking-widest mb-1"
                 style={{
-                  color: "rgba(245,245,245,0.3)",
+                  color: "#6b6180",
                   fontFamily: "Montserrat, sans-serif",
                 }}
               >
@@ -1757,7 +1759,7 @@ function CreateWizard({
                 <p
                   className="text-[10px] font-bold uppercase tracking-widest mb-1"
                   style={{
-                    color: "rgba(245,245,245,0.3)",
+                    color: "#6b6180",
                     fontFamily: "Montserrat, sans-serif",
                   }}
                 >
@@ -1782,7 +1784,7 @@ function CreateWizard({
                 <p
                   className="text-[10px] font-bold uppercase tracking-widest mb-1"
                   style={{
-                    color: "rgba(245,245,245,0.3)",
+                    color: "#6b6180",
                     fontFamily: "Montserrat, sans-serif",
                   }}
                 >
@@ -1793,7 +1795,7 @@ function CreateWizard({
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm hover:opacity-80 transition-opacity"
-                  style={{ color: "#00F0FF", fontFamily: "Inter, sans-serif" }}
+                  style={{ color: "#22d3ee", fontFamily: "Inter, sans-serif" }}
                 >
                   {form.shop_url}
                 </a>
@@ -1805,9 +1807,9 @@ function CreateWizard({
               <div
                 className="px-3 py-2 rounded-lg text-xs"
                 style={{
-                  background: "rgba(57,255,20,0.07)",
-                  border: "1px solid rgba(57,255,20,0.2)",
-                  color: "#39FF14",
+                  background: "rgba(255,43,214,0.07)",
+                  border: "1px solid rgba(255,43,214,0.2)",
+                  color: "#ff2bd6",
                   fontFamily: "Inter, sans-serif",
                 }}
               >
@@ -1834,9 +1836,10 @@ function CreateWizard({
                 type="button"
                 onClick={onSubmit}
                 disabled={saving}
-                className="px-6 py-2.5 rounded-lg text-sm font-bold text-[#0A0A0A] disabled:opacity-50 hover:opacity-90 transition-opacity"
+                className="px-6 py-2.5 rounded-lg text-sm font-bold text-white disabled:opacity-50 hover:opacity-90 transition-opacity"
                 style={{
-                  background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+                  background: "linear-gradient(135deg, #ff2bd6, #a855f7)",
+                  boxShadow: "0 8px 24px -6px rgba(255,43,214,0.5)",
                   fontFamily: "Montserrat, sans-serif",
                 }}
               >
@@ -1909,7 +1912,7 @@ function DetailPanel({
       <p
         className="text-sm"
         style={{
-          color: "rgba(245,245,245,0.4)",
+          color: "#8f83b0",
           fontFamily: "Inter, sans-serif",
         }}
       >
@@ -1919,9 +1922,9 @@ function DetailPanel({
         <div
           className="px-3 py-2 rounded-lg text-xs"
           style={{
-            background: "rgba(57,255,20,0.07)",
-            border: "1px solid rgba(57,255,20,0.2)",
-            color: "#39FF14",
+            background: "rgba(255,43,214,0.07)",
+            border: "1px solid rgba(255,43,214,0.2)",
+            color: "#ff2bd6",
           }}
         >
           Recurring ·{" "}
@@ -1947,7 +1950,7 @@ function DetailPanel({
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 text-sm font-medium hover:opacity-80 transition-opacity"
-          style={{ color: "#00F0FF" }}
+          style={{ color: "#22d3ee" }}
         >
           View Shop Link
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -1965,12 +1968,12 @@ function DetailPanel({
           <span
             className="text-xs font-bold px-3 py-1 rounded-full"
             style={{
-              color: selected.drop_type === "restock" ? "#FFB800" : "#00F0FF",
+              color: selected.drop_type === "restock" ? "#FFB800" : "#22d3ee",
               background:
                 selected.drop_type === "restock"
                   ? "rgba(255,184,0,0.12)"
-                  : "rgba(0,240,255,0.12)",
-              border: `1px solid ${selected.drop_type === "restock" ? "rgba(255,184,0,0.3)" : "rgba(0,240,255,0.3)"}`,
+                  : "rgba(34,211,238,0.12)",
+              border: `1px solid ${selected.drop_type === "restock" ? "rgba(255,184,0,0.3)" : "rgba(34,211,238,0.3)"}`,
               fontFamily: "Montserrat, sans-serif",
             }}
           >
@@ -1980,7 +1983,7 @@ function DetailPanel({
       )}
       {selected.discount_code && (
         <p className="text-sm" style={{ color: "rgba(245,245,245,0.6)" }}>
-          <span style={{ color: "rgba(245,245,245,0.35)" }}>Code: </span>
+          <span style={{ color: "#8f83b0" }}>Code: </span>
           {selected.discount_code}
         </p>
       )}
@@ -1996,7 +1999,7 @@ function DetailPanel({
         <div>
           <p
             className="text-xs font-bold uppercase tracking-widest mb-3"
-            style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
+            style={{ color: "#22d3ee", fontFamily: "Montserrat, sans-serif" }}
           >
             Update Status
           </p>
@@ -2010,15 +2013,15 @@ function DetailPanel({
                 style={{
                   background:
                     action.status === "live"
-                      ? "linear-gradient(135deg, #39FF14, #00F0FF)"
-                      : "rgba(45,10,78,0.4)",
+                      ? "linear-gradient(135deg, #ff2bd6, #a855f7)"
+                      : "rgba(255,255,255,0.03)",
                   color:
                     action.status === "live"
-                      ? "#0A0A0A"
+                      ? "#fff"
                       : "rgba(245,245,245,0.7)",
                   border:
                     action.status !== "live"
-                      ? "1px solid rgba(45,10,78,0.7)"
+                      ? "1px solid rgba(150,110,240,0.18)"
                       : "none",
                   fontFamily: "Montserrat, sans-serif",
                 }}
@@ -2030,17 +2033,17 @@ function DetailPanel({
         </div>
       )}
       <div
-        style={{ borderTop: "1px solid rgba(45,10,78,0.4)", paddingTop: 16 }}
+        style={{ borderTop: "1px solid rgba(255,255,255,0.03)", paddingTop: 16 }}
       >
         <p
           className="text-xs font-bold uppercase tracking-widest mb-3"
-          style={{ color: "#FF00E5", fontFamily: "Montserrat, sans-serif" }}
+          style={{ color: "#ff2bd6", fontFamily: "Montserrat, sans-serif" }}
         >
           Slimes in Drop{" "}
           {attachedSlimes.length > 0 && `(${attachedSlimes.length})`}
         </p>
         {attachedSlimes.length === 0 ? (
-          <p className="text-xs" style={{ color: "rgba(245,245,245,0.25)" }}>
+          <p className="text-xs" style={{ color: "#6b6180" }}>
             No slimes added yet. Use the catalog panel to add slimes.
           </p>
         ) : (
@@ -2054,7 +2057,7 @@ function DetailPanel({
         )}
       </div>
       <div
-        style={{ borderTop: "1px solid rgba(45,10,78,0.4)", paddingTop: 16 }}
+        style={{ borderTop: "1px solid rgba(255,255,255,0.03)", paddingTop: 16 }}
       >
         {!confirmDelete ? (
           <button
@@ -2062,9 +2065,9 @@ function DetailPanel({
             onClick={() => setConfirmDelete(true)}
             className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-all"
             style={{
-              color: "#FF4444",
-              background: "rgba(255,68,68,0.08)",
-              border: "1px solid rgba(255,68,68,0.2)",
+              color: "#FF3D6E",
+              background: "rgba(255,61,110,0.08)",
+              border: "1px solid rgba(255,61,110,0.2)",
               fontFamily: "Inter, sans-serif",
             }}
           >
@@ -2080,9 +2083,9 @@ function DetailPanel({
               onClick={onDelete}
               className="text-xs font-semibold px-3 py-1.5 rounded-lg"
               style={{
-                color: "#FF4444",
-                background: "rgba(255,68,68,0.15)",
-                border: "1px solid rgba(255,68,68,0.3)",
+                color: "#FF3D6E",
+                background: "rgba(255,61,110,0.15)",
+                border: "1px solid rgba(255,61,110,0.3)",
               }}
             >
               Confirm Delete
@@ -2091,7 +2094,7 @@ function DetailPanel({
               type="button"
               onClick={() => setConfirmDelete(false)}
               className="text-xs"
-              style={{ color: "rgba(245,245,245,0.4)" }}
+              style={{ color: "#8f83b0" }}
             >
               Cancel
             </button>
@@ -2358,10 +2361,10 @@ export default function DropsSplitPanel({
 
   return (
     <div
-      className="rounded-xl overflow-hidden flex"
+      className="rounded-2xl overflow-hidden flex"
       style={{
-        background: "rgba(45,10,78,0.15)",
-        border: "1px solid rgba(45,10,78,0.7)",
+        background: "rgba(255,255,255,0.02)",
+        border: "1px solid rgba(150,110,240,0.18)",
         height: "calc(100vh - 200px)",
         minHeight: "520px",
       }}
@@ -2369,11 +2372,11 @@ export default function DropsSplitPanel({
       {/* ── LEFT PANEL: Drop list ── */}
       <div
         className="flex flex-col flex-shrink-0"
-        style={{ width: 280, borderRight: "1px solid rgba(45,10,78,0.6)" }}
+        style={{ width: 280, borderRight: "1px solid rgba(150,110,240,0.18)" }}
       >
         <div
           className="flex gap-1 p-3"
-          style={{ borderBottom: "1px solid rgba(45,10,78,0.5)" }}
+          style={{ borderBottom: "1px solid rgba(150,110,240,0.14)" }}
         >
           {(["upcoming", "past"] as const).map((t) => (
             <button
@@ -2382,8 +2385,8 @@ export default function DropsSplitPanel({
               onClick={() => setTab(t)}
               className="flex-1 text-xs font-semibold py-1.5 rounded-md capitalize transition-all"
               style={{
-                background: tab === t ? "rgba(57,255,20,0.1)" : "transparent",
-                color: tab === t ? "#39FF14" : "rgba(245,245,245,0.4)",
+                background: tab === t ? "rgba(255,43,214,0.1)" : "transparent",
+                color: tab === t ? "#ff2bd6" : "#8f83b0",
                 fontFamily: "Inter, sans-serif",
               }}
             >
@@ -2397,7 +2400,7 @@ export default function DropsSplitPanel({
               <p
                 className="text-sm"
                 style={{
-                  color: "rgba(245,245,245,0.3)",
+                  color: "#6b6180",
                   fontFamily: "Inter, sans-serif",
                 }}
               >
@@ -2422,13 +2425,13 @@ export default function DropsSplitPanel({
                   style={{
                     background:
                       selectedId === drop.id
-                        ? "rgba(57,255,20,0.05)"
+                        ? "rgba(255,43,214,0.05)"
                         : "transparent",
                     borderLeft:
                       selectedId === drop.id
-                        ? "3px solid #39FF14"
+                        ? "3px solid #ff2bd6"
                         : "3px solid transparent",
-                    borderBottom: "1px solid rgba(45,10,78,0.4)",
+                    borderBottom: "1px solid rgba(255,255,255,0.03)",
                   }}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -2456,7 +2459,7 @@ export default function DropsSplitPanel({
                   <p
                     className="text-xs mt-1"
                     style={{
-                      color: "rgba(245,245,245,0.35)",
+                      color: "#8f83b0",
                       fontFamily: "Inter, sans-serif",
                     }}
                   >
@@ -2465,7 +2468,7 @@ export default function DropsSplitPanel({
                   {drop.recurrence_pattern && (
                     <p
                       className="text-[10px] mt-0.5"
-                      style={{ color: "rgba(57,255,20,0.5)" }}
+                      style={{ color: "rgba(255,43,214,0.5)" }}
                     >
                       Recurring
                     </p>
@@ -2477,14 +2480,15 @@ export default function DropsSplitPanel({
         </div>
         <div
           className="p-3"
-          style={{ borderTop: "1px solid rgba(45,10,78,0.5)" }}
+          style={{ borderTop: "1px solid rgba(150,110,240,0.14)" }}
         >
           <button
             type="button"
             onClick={startCreate}
-            className="w-full py-2.5 rounded-lg text-sm font-bold text-[#0A0A0A] hover:opacity-90 transition-opacity"
+            className="w-full py-2.5 rounded-lg text-sm font-bold text-white hover:opacity-90 transition-opacity"
             style={{
-              background: "linear-gradient(135deg, #39FF14, #00F0FF)",
+              background: "linear-gradient(135deg, #ff2bd6, #a855f7)",
+              boxShadow: "0 8px 24px -6px rgba(255,43,214,0.5)",
               fontFamily: "Montserrat, sans-serif",
             }}
           >
@@ -2501,8 +2505,8 @@ export default function DropsSplitPanel({
               <div
                 className="w-16 h-16 rounded-xl mx-auto mb-4 flex items-center justify-center"
                 style={{
-                  background: "rgba(45,10,78,0.4)",
-                  border: "1px solid rgba(45,10,78,0.7)",
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(150,110,240,0.18)",
                 }}
               >
                 <svg
@@ -2510,7 +2514,7 @@ export default function DropsSplitPanel({
                   height="24"
                   viewBox="0 0 24 24"
                   fill="none"
-                  style={{ color: "rgba(245,245,245,0.2)" }}
+                  style={{ color: "#6b6180" }}
                 >
                   <path
                     d="M12 3L15.5 10.5H20.5L16.5 15L18 21L12 17.5L6 21L7.5 15L3.5 10.5H8.5L12 3Z"
@@ -2523,7 +2527,7 @@ export default function DropsSplitPanel({
               <p
                 className="text-sm"
                 style={{
-                  color: "rgba(245,245,245,0.3)",
+                  color: "#6b6180",
                   fontFamily: "Inter, sans-serif",
                 }}
               >
@@ -2599,7 +2603,7 @@ export default function DropsSplitPanel({
             className="absolute bottom-0 left-0 right-0 rounded-t-2xl flex flex-col"
             style={{
               background: "#0A0A0A",
-              border: "1px solid rgba(45,10,78,0.8)",
+              border: "1px solid rgba(150,110,240,0.24)",
               maxHeight: "90vh",
             }}
           >
@@ -2607,12 +2611,12 @@ export default function DropsSplitPanel({
               className="sticky top-0 z-10 flex items-center justify-between px-5 pt-4 pb-3 flex-shrink-0"
               style={{
                 background: "#0A0A0A",
-                borderBottom: "1px solid rgba(45,10,78,0.4)",
+                borderBottom: "1px solid rgba(255,255,255,0.03)",
               }}
             >
               <div
                 className="w-8 h-1 rounded-full absolute left-1/2 -translate-x-1/2 top-2"
-                style={{ background: "rgba(45,10,78,0.8)" }}
+                style={{ background: "rgba(150,110,240,0.24)" }}
               />
               <p
                 className="text-sm font-bold text-white mt-2"
@@ -2628,8 +2632,8 @@ export default function DropsSplitPanel({
                 }}
                 className="mt-2 p-1.5 rounded-lg"
                 style={{
-                  color: "rgba(245,245,245,0.4)",
-                  background: "rgba(45,10,78,0.3)",
+                  color: "#8f83b0",
+                  background: "rgba(255,255,255,0.03)",
                 }}
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -2684,12 +2688,12 @@ export default function DropsSplitPanel({
                 (mode === "create" && wizardStep === 3)) && (
                 <div
                   className="px-5 pb-4 pt-2"
-                  style={{ borderTop: "1px solid rgba(45,10,78,0.4)" }}
+                  style={{ borderTop: "1px solid rgba(255,255,255,0.03)" }}
                 >
                   <p
                     className="text-xs font-bold uppercase tracking-widest mb-3"
                     style={{
-                      color: "#00F0FF",
+                      color: "#22d3ee",
                       fontFamily: "Montserrat, sans-serif",
                     }}
                   >
