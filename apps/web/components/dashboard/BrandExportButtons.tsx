@@ -85,7 +85,7 @@ export default function BrandExportButtons({
     setExportingRatings(true);
     try {
       const now = new Date();
-      const headerComment = `# SlimeLog Analytics Export — ${brandName} — ${formatDateForHeader(now)}`;
+      const headerComment = `# SlimeLog Analytics Export: ${brandName} (${formatDateForHeader(now)})`;
       const columns = [
         "Slime Name",
         "Slime Type",
@@ -130,7 +130,7 @@ export default function BrandExportButtons({
     setExportingLogs(true);
     try {
       const now = new Date();
-      const headerComment = `# SlimeLog Analytics Export — ${brandName} — ${formatDateForHeader(now)}`;
+      const headerComment = `# SlimeLog Analytics Export: ${brandName} (${formatDateForHeader(now)})`;
       const columns = [
         "Slime Name",
         "Slime Type",
@@ -183,14 +183,13 @@ export default function BrandExportButtons({
       <button
         onClick={handleExportRatings}
         disabled={exportingRatings}
-        className="px-4 py-2 rounded-full text-sm font-bold transition-opacity"
+        className="px-5 py-3 rounded-xl text-sm font-black transition-opacity"
         style={{
-          background: exportingRatings
-            ? "rgba(57,255,20,0.4)"
-            : "linear-gradient(135deg, #39FF14, #00F0FF)",
-          color: "#0A0A0A",
+          background: "linear-gradient(135deg, #34e89e, #22d3ee)",
+          color: "#07130d",
           opacity: exportingRatings ? 0.7 : 1,
           cursor: exportingRatings ? "not-allowed" : "pointer",
+          fontFamily: "Montserrat, sans-serif",
         }}
       >
         {exportingRatings ? "Exporting..." : "Export Slime Ratings CSV"}
@@ -198,14 +197,14 @@ export default function BrandExportButtons({
       <button
         onClick={handleExportLogs}
         disabled={exportingLogs}
-        className="px-4 py-2 rounded-full text-sm font-bold transition-opacity"
+        className="px-5 py-3 rounded-xl text-sm font-bold transition-opacity"
         style={{
-          background: "rgba(45,10,78,0.4)",
-          border: "1px solid rgba(45,10,78,0.8)",
-          color: exportingLogs
-            ? "rgba(245,245,245,0.4)"
-            : "rgba(245,245,245,0.7)",
+          background: "rgba(255,255,255,0.03)",
+          border: "1px solid rgba(150,110,240,0.25)",
+          color: exportingLogs ? "#6b6180" : "#cdbdf2",
+          opacity: exportingLogs ? 0.7 : 1,
           cursor: exportingLogs ? "not-allowed" : "pointer",
+          fontFamily: "Montserrat, sans-serif",
         }}
       >
         {exportingLogs ? "Exporting..." : "Export Community Logs CSV"}

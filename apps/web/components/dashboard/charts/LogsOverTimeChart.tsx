@@ -37,13 +37,13 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     <div
       className="px-3 py-2 rounded-lg text-xs"
       style={{
-        background: "#0A0A0A",
-        border: "1px solid rgba(57,255,20,0.3)",
+        background: "#100a1c",
+        border: "1px solid rgba(34,211,238,0.3)",
         fontFamily: "Inter, sans-serif",
       }}
     >
-      <p style={{ color: "rgba(245,245,245,0.5)" }}>{label}</p>
-      <p className="font-bold mt-0.5" style={{ color: "#39FF14" }}>
+      <p style={{ color: "#8f83b0" }}>{label}</p>
+      <p className="font-bold mt-0.5" style={{ color: "#22d3ee" }}>
         {payload[0].value} {payload[0].value === 1 ? "log" : "logs"}
       </p>
     </div>
@@ -70,19 +70,19 @@ export default function LogsOverTimeChart({ data }: LogsOverTimeChartProps) {
       <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div>
           <p
-            className="text-xs font-bold uppercase tracking-widest"
-            style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
+            className="text-xs font-black uppercase tracking-widest"
+            style={{ color: "#22d3ee", fontFamily: "Montserrat, sans-serif" }}
           >
             Logs Over Time
           </p>
           <p
-            className="text-2xl font-bold text-white mt-0.5"
+            className="text-2xl font-black text-white mt-0.5"
             style={{ fontFamily: "Montserrat, sans-serif" }}
           >
             {totalInRange.toLocaleString()}
             <span
               className="text-sm font-normal ml-1.5"
-              style={{ color: "rgba(245,245,245,0.4)" }}
+              style={{ color: "#8f83b0" }}
             >
               in {range} days
             </span>
@@ -90,7 +90,7 @@ export default function LogsOverTimeChart({ data }: LogsOverTimeChartProps) {
         </div>
         <div
           className="flex rounded-lg overflow-hidden"
-          style={{ border: "1px solid rgba(45,10,78,0.8)" }}
+          style={{ border: "1px solid rgba(150,110,240,0.24)" }}
         >
           {RANGES.map((r) => (
             <button
@@ -100,9 +100,9 @@ export default function LogsOverTimeChart({ data }: LogsOverTimeChartProps) {
               style={{
                 background:
                   range === r.days
-                    ? "rgba(57,255,20,0.12)"
-                    : "rgba(45,10,78,0.25)",
-                color: range === r.days ? "#39FF14" : "rgba(245,245,245,0.4)",
+                    ? "rgba(255,43,214,0.14)"
+                    : "rgba(255,255,255,0.04)",
+                color: range === r.days ? "#ff2bd6" : "#8f83b0",
                 fontFamily: "Inter, sans-serif",
               }}
             >
@@ -118,11 +118,11 @@ export default function LogsOverTimeChart({ data }: LogsOverTimeChartProps) {
           <p
             className="text-sm text-center"
             style={{
-              color: "rgba(245,245,245,0.3)",
+              color: "#8f83b0",
               fontFamily: "Inter, sans-serif",
             }}
           >
-            No log data yet — share your brand page to get started
+            No log data yet. Share your brand page to get started.
           </p>
         </div>
       ) : (
@@ -136,19 +136,19 @@ export default function LogsOverTimeChart({ data }: LogsOverTimeChartProps) {
             >
               <defs>
                 <linearGradient id="logsGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#39FF14" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="#39FF14" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="#22d3ee" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid
                 strokeDasharray="3 3"
-                stroke="rgba(45,10,78,0.5)"
+                stroke="rgba(150,110,240,0.14)"
                 vertical={false}
               />
               <XAxis
                 dataKey="week"
                 tick={{
-                  fill: "rgba(245,245,245,0.3)",
+                  fill: "#8f83b0",
                   fontSize: 10,
                   fontFamily: "Inter, sans-serif",
                 }}
@@ -158,7 +158,7 @@ export default function LogsOverTimeChart({ data }: LogsOverTimeChartProps) {
               />
               <YAxis
                 tick={{
-                  fill: "rgba(245,245,245,0.3)",
+                  fill: "#8f83b0",
                   fontSize: 10,
                   fontFamily: "Inter, sans-serif",
                 }}
@@ -168,18 +168,18 @@ export default function LogsOverTimeChart({ data }: LogsOverTimeChartProps) {
               />
               <Tooltip
                 content={<CustomTooltip />}
-                cursor={{ stroke: "rgba(57,255,20,0.2)", strokeWidth: 1 }}
+                cursor={{ stroke: "rgba(34,211,238,0.25)", strokeWidth: 1 }}
               />
               <Area
                 type="monotone"
                 dataKey="logs"
-                stroke="#39FF14"
+                stroke="#22d3ee"
                 strokeWidth={2}
                 fill="url(#logsGradient)"
                 dot={false}
                 activeDot={{
                   r: 4,
-                  fill: "#39FF14",
+                  fill: "#22d3ee",
                   stroke: "#0A0A0A",
                   strokeWidth: 2,
                 }}

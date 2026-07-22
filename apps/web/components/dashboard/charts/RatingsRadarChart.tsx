@@ -38,15 +38,13 @@ const CustomTooltip = ({ active, payload }: any) => {
     <div
       className="px-3 py-2 rounded-lg text-xs"
       style={{
-        background: "#0A0A0A",
-        border: "1px solid rgba(57,255,20,0.3)",
+        background: "#100a1c",
+        border: "1px solid rgba(34,211,238,0.3)",
         fontFamily: "Inter, sans-serif",
       }}
     >
-      <p style={{ color: "rgba(245,245,245,0.5)" }}>
-        {payload[0]?.payload?.dimension}
-      </p>
-      <p className="font-bold mt-0.5" style={{ color: "#39FF14" }}>
+      <p style={{ color: "#8f83b0" }}>{payload[0]?.payload?.dimension}</p>
+      <p className="font-bold mt-0.5" style={{ color: "#22d3ee" }}>
         {payload[0]?.value?.toFixed(1)} / 5
       </p>
     </div>
@@ -70,15 +68,15 @@ export default function RatingsRadarChart({ data }: RatingsRadarChartProps) {
     <div className="h-full flex flex-col">
       <div className="mb-4 flex-shrink-0">
         <p
-          className="text-xs font-bold uppercase tracking-widest"
-          style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
+          className="text-xs font-black uppercase tracking-widest"
+          style={{ color: "#22d3ee", fontFamily: "Montserrat, sans-serif" }}
         >
           Community Ratings
         </p>
         <p
           className="text-sm mt-0.5"
           style={{
-            color: "rgba(245,245,245,0.4)",
+            color: "#8f83b0",
             fontFamily: "Inter, sans-serif",
           }}
         >
@@ -91,7 +89,7 @@ export default function RatingsRadarChart({ data }: RatingsRadarChartProps) {
           <p
             className="text-sm text-center px-4"
             style={{
-              color: "rgba(245,245,245,0.3)",
+              color: "#8f83b0",
               fontFamily: "Inter, sans-serif",
             }}
           >
@@ -106,11 +104,11 @@ export default function RatingsRadarChart({ data }: RatingsRadarChartProps) {
               data={chartData}
               margin={{ top: 10, right: 30, bottom: 10, left: 30 }}
             >
-              <PolarGrid stroke="rgba(45,10,78,0.8)" />
+              <PolarGrid stroke="rgba(150,110,240,0.18)" />
               <PolarAngleAxis
                 dataKey="dimension"
                 tick={{
-                  fill: "rgba(245,245,245,0.5)",
+                  fill: "#8f83b0",
                   fontSize: 11,
                   fontFamily: "Inter, sans-serif",
                 }}
@@ -118,10 +116,10 @@ export default function RatingsRadarChart({ data }: RatingsRadarChartProps) {
               <Radar
                 name="Rating"
                 dataKey="value"
-                stroke="#39FF14"
-                fill="rgba(57,255,20,0.2)"
+                stroke="#22d3ee"
+                fill="rgba(34,211,238,0.18)"
                 strokeWidth={2}
-                dot={{ fill: "#39FF14", r: 3 }}
+                dot={{ fill: "#22d3ee", r: 3 }}
               />
               <Tooltip content={<CustomTooltip />} />
             </RadarChart>

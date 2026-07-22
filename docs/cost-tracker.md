@@ -41,6 +41,24 @@ implemented mitigation and the concern is gone.
 
 ---
 
+### 2026-07-22 — Brand analytics Drop Performance log counts (DB Query)
+
+**Query set (T137 Batch 3a):** three brand-scoped reads on the Analytics page. `drops` (limit 6) → `drop_slimes WHERE drop_id IN (...)` → `collection_logs.slime_id WHERE slime_id IN (involved) AND in_wishlist = false` (capped `.limit(10000)`), then counted per drop in JS. Replaces the old hardcoded `log_count: 0`.
+
+**Current cost:** trivial. A single brand's 6 most recent drops reference a bounded set of slimes; the log pull is one indexed `IN` scan per Analytics view.
+
+**What makes it grow:** logs-per-slime for a popular brand. The `.limit(10000)` guard means a brand whose recent drop slimes collectively exceed 10k community logs would undercount. That is a big brand well past pre-launch scale.
+
+**Mitigation path (order of preference):**
+
+1. **Materialized view / RPC** `brand_drop_log_counts(drop_id, log_count)` doing the GROUP BY server-side — removes the row pull and the cap entirely. Preferred once any brand nears the cap.
+2. **Per-brand cache** at the page layer (60s TTL) — the Analytics page is owner-only and low-traffic, so this mostly matters if a brand refreshes constantly.
+3. **Raise the cap** as a stopgap; only buys headroom, does not fix the O(N) pull.
+
+**Related:** T137 Batch 3b will add real Rating Trend + Follower Growth series; watch for the same "pull rows, count in JS" shape there and prefer a view if the row counts are unbounded.
+
+---
+
 ### 2026-07-12 — Marketplace waitlist position calc (DB Query)
 
 **Query:** `SELECT COUNT(*) FROM marketplace_waitlist WHERE created_at <= (my_row.created_at)` plus a bare `COUNT(*)` for the community total. Runs on every POST to `/api/marketplace/waitlist` and every GET to `/api/marketplace/waitlist/position` (mount of `/marketplace`).

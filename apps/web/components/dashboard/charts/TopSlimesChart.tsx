@@ -25,17 +25,17 @@ const CustomTooltip = ({ active, payload }: any) => {
     <div
       className="px-3 py-2 rounded-lg text-xs"
       style={{
-        background: "#0A0A0A",
-        border: "1px solid rgba(0,240,255,0.3)",
+        background: "#100a1c",
+        border: "1px solid rgba(34,211,238,0.3)",
         fontFamily: "Inter, sans-serif",
       }}
     >
       <p className="font-semibold text-white mb-0.5">
         {payload[0]?.payload?.name}
       </p>
-      <p style={{ color: "#39FF14" }}>{payload[0]?.value} logs</p>
+      <p style={{ color: "#22d3ee" }}>{payload[0]?.value} logs</p>
       {payload[0]?.payload?.avg_overall && (
-        <p style={{ color: "rgba(245,245,245,0.5)" }}>
+        <p style={{ color: "#8f83b0" }}>
           {payload[0].payload.avg_overall.toFixed(1)} avg rating
         </p>
       )}
@@ -52,8 +52,8 @@ const CustomBar = (props: any) => {
     <g>
       <defs>
         <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#39FF14" />
-          <stop offset="100%" stopColor="#00F0FF" />
+          <stop offset="0%" stopColor="#22d3ee" />
+          <stop offset="100%" stopColor="#ff2bd6" />
         </linearGradient>
       </defs>
       <rect
@@ -75,15 +75,15 @@ export default function TopSlimesChart({ data }: TopSlimesChartProps) {
     <div className="h-full flex flex-col">
       <div className="mb-4 flex-shrink-0">
         <p
-          className="text-xs font-bold uppercase tracking-widest"
-          style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
+          className="text-xs font-black uppercase tracking-widest"
+          style={{ color: "#22d3ee", fontFamily: "Montserrat, sans-serif" }}
         >
           Top Slimes by Logs
         </p>
         <p
           className="text-sm mt-0.5"
           style={{
-            color: "rgba(245,245,245,0.4)",
+            color: "#8f83b0",
             fontFamily: "Inter, sans-serif",
           }}
         >
@@ -96,7 +96,7 @@ export default function TopSlimesChart({ data }: TopSlimesChartProps) {
           <p
             className="text-sm text-center px-4"
             style={{
-              color: "rgba(245,245,245,0.3)",
+              color: "#8f83b0",
               fontFamily: "Inter, sans-serif",
             }}
           >
@@ -115,7 +115,7 @@ export default function TopSlimesChart({ data }: TopSlimesChartProps) {
               <XAxis
                 type="number"
                 tick={{
-                  fill: "rgba(245,245,245,0.3)",
+                  fill: "#8f83b0",
                   fontSize: 10,
                   fontFamily: "Inter, sans-serif",
                 }}
@@ -128,7 +128,7 @@ export default function TopSlimesChart({ data }: TopSlimesChartProps) {
                 dataKey="name"
                 width={100}
                 tick={{
-                  fill: "rgba(245,245,245,0.6)",
+                  fill: "#b3a7d0",
                   fontSize: 11,
                   fontFamily: "Inter, sans-serif",
                 }}
@@ -140,7 +140,7 @@ export default function TopSlimesChart({ data }: TopSlimesChartProps) {
               />
               <Tooltip
                 content={<CustomTooltip />}
-                cursor={{ fill: "rgba(57,255,20,0.05)" }}
+                cursor={{ fill: "rgba(255,43,214,0.06)" }}
               />
               <Bar dataKey="total_logs" shape={<CustomBar />} maxBarSize={20} />
             </BarChart>

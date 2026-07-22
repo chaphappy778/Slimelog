@@ -30,20 +30,20 @@ export default function ProGate({
         <div
           className="rounded-2xl p-6 text-center max-w-xs mx-auto border"
           style={{
-            background: "rgba(45,10,78,0.92)",
-            borderColor: "rgba(0,240,255,0.3)",
-            boxShadow: "0 0 40px rgba(0,240,255,0.1)",
+            background: "rgba(20,10,40,0.92)",
+            borderColor: "rgba(34,211,238,0.3)",
+            boxShadow: "0 0 40px rgba(34,211,238,0.1)",
           }}
         >
-          <p className="text-xs font-bold uppercase tracking-widest text-[#00F0FF] mb-2">
+          <p className="text-xs font-black uppercase tracking-widest text-[#22d3ee] mb-2">
             Brand Pro Feature
           </p>
-          <p className="text-sm text-[#9B8AAE] mb-4 leading-relaxed">
+          <p className="text-sm text-[#8f83b0] mb-4 leading-relaxed">
             Upgrade to Brand Pro to unlock full analytics and export tools.
           </p>
           <UpgradeButton
             priceId={process.env.NEXT_PUBLIC_STRIPE_BRAND_PRO_PRICE_ID!}
-            label="Upgrade to Brand Pro — $19/mo"
+            label="Upgrade to Brand Pro · $19/mo"
             mode="brand"
             brandId={brandId}
             currentPath={

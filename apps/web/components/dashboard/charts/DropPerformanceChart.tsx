@@ -26,15 +26,15 @@ const CustomTooltip = ({ active, payload }: any) => {
     <div
       className="px-3 py-2 rounded-lg text-xs"
       style={{
-        background: "#0A0A0A",
-        border: "1px solid rgba(0,240,255,0.3)",
+        background: "#100a1c",
+        border: "1px solid rgba(255,43,214,0.3)",
         fontFamily: "Inter, sans-serif",
       }}
     >
       <p className="font-semibold text-white mb-0.5">
         {payload[0]?.payload?.name}
       </p>
-      <p style={{ color: "#00F0FF" }}>{payload[0]?.value} logs</p>
+      <p style={{ color: "#ff2bd6" }}>{payload[0]?.value} logs</p>
     </div>
   );
 };
@@ -47,15 +47,15 @@ export default function DropPerformanceChart({
     <div className="h-full flex flex-col">
       <div className="mb-4 flex-shrink-0">
         <p
-          className="text-xs font-bold uppercase tracking-widest"
-          style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
+          className="text-xs font-black uppercase tracking-widest"
+          style={{ color: "#22d3ee", fontFamily: "Montserrat, sans-serif" }}
         >
           Drop Performance
         </p>
         <p
           className="text-sm mt-0.5"
           style={{
-            color: "rgba(245,245,245,0.4)",
+            color: "#8f83b0",
             fontFamily: "Inter, sans-serif",
           }}
         >
@@ -68,7 +68,7 @@ export default function DropPerformanceChart({
           <p
             className="text-sm text-center px-4"
             style={{
-              color: "rgba(245,245,245,0.3)",
+              color: "#8f83b0",
               fontFamily: "Inter, sans-serif",
             }}
           >
@@ -85,13 +85,13 @@ export default function DropPerformanceChart({
             >
               <CartesianGrid
                 strokeDasharray="3 3"
-                stroke="rgba(45,10,78,0.5)"
+                stroke="rgba(150,110,240,0.14)"
                 vertical={false}
               />
               <XAxis
                 dataKey="name"
                 tick={{
-                  fill: "rgba(245,245,245,0.3)",
+                  fill: "#8f83b0",
                   fontSize: 10,
                   fontFamily: "Inter, sans-serif",
                 }}
@@ -103,7 +103,7 @@ export default function DropPerformanceChart({
               />
               <YAxis
                 tick={{
-                  fill: "rgba(245,245,245,0.3)",
+                  fill: "#8f83b0",
                   fontSize: 10,
                   fontFamily: "Inter, sans-serif",
                 }}
@@ -113,11 +113,11 @@ export default function DropPerformanceChart({
               />
               <Tooltip
                 content={<CustomTooltip />}
-                cursor={{ fill: "rgba(0,240,255,0.05)" }}
+                cursor={{ fill: "rgba(255,43,214,0.06)" }}
               />
               <Bar
                 dataKey="log_count"
-                fill="#00F0FF"
+                fill="#ff2bd6"
                 maxBarSize={40}
                 radius={[3, 3, 0, 0]}
               />
