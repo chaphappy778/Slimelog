@@ -3,11 +3,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import Link from "next/link";
-import {
-  ValidationError,
-  optionalHttpUrl,
-  optionalSupabaseUrl,
-} from "@/lib/api-validation";
+import { ValidationError, optionalHttpUrl } from "@/lib/api-validation";
 // Audit hp-24 (2026-07-09): use the shared browser singleton.
 import { createClient } from "@/lib/supabase/client";
 
@@ -42,57 +38,13 @@ interface BrandSettingsFormProps {
   userId: string;
 }
 
-// compressImage helper — canvas → WebP at 0.85 quality
-async function compressImage(file: File, maxDimension: number): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      let { width, height } = img;
-      if (width > maxDimension || height > maxDimension) {
-        if (width > height) {
-          height = Math.round((height * maxDimension) / width);
-          width = maxDimension;
-        } else {
-          width = Math.round((width * maxDimension) / height);
-          height = maxDimension;
-        }
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        reject(new Error("Canvas context unavailable"));
-        return;
-      }
-      ctx.drawImage(img, 0, 0, width, height);
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) {
-            reject(new Error("Canvas toBlob failed"));
-            return;
-          }
-          resolve(blob);
-        },
-        "image/webp",
-        0.85,
-      );
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error("Image load failed"));
-    };
-    img.src = objectUrl;
-  });
-}
-
-// generateFilePath helper
-function generateFilePath(userId: string, prefix: string): string {
-  const random = Math.random().toString(36).slice(2, 8);
-  return `brands/${userId}/${prefix}-${Date.now()}-${random}.webp`;
-}
+// T137 Batch 5 (2026-07-23): the banner + logo upload flow (compressImage,
+// generateFilePath, the storage upload handlers and the hero) moved to
+// components/dashboard/BrandImageryEditor.tsx. This form no longer reads or
+// writes brands.logo_url / brands.banner_url. Do not add them back to the
+// update payload below: this component holds the values from its server
+// render, so saving them here would clobber whatever the imagery editor
+// wrote after that render.
 
 // RowDivider component
 function RowDivider() {
@@ -208,14 +160,6 @@ export default function BrandSettingsForm({
     restock_schedule: brand.restock_schedule ?? "",
   });
 
-  const [logoUrl, setLogoUrl] = useState<string | null>(brand.logo_url ?? null);
-  const [bannerUrl, setBannerUrl] = useState<string | null>(
-    brand.banner_url ?? null,
-  );
-
-  const [bannerUploading, setBannerUploading] = useState(false);
-  const [logoUploading, setLogoUploading] = useState(false);
-
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -239,18 +183,11 @@ export default function BrandSettingsForm({
       founded_year: brand.founded_year?.toString() ?? "",
       restock_schedule: brand.restock_schedule ?? "",
     },
-    logoUrl: brand.logo_url ?? null,
-    bannerUrl: brand.banner_url ?? null,
   });
 
   // hasChanges uses JSON.stringify — all new fields covered automatically
   const hasChanges =
-    JSON.stringify(form) !== JSON.stringify(original.current.form) ||
-    logoUrl !== original.current.logoUrl ||
-    bannerUrl !== original.current.bannerUrl;
-
-  const bannerInputRef = useRef<HTMLInputElement>(null);
-  const logoInputRef = useRef<HTMLInputElement>(null);
+    JSON.stringify(form) !== JSON.stringify(original.current.form);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -260,54 +197,6 @@ export default function BrandSettingsForm({
   const toggleRow = useCallback((key: string) => {
     setOpenRow((prev) => (prev === key ? null : key));
   }, []);
-
-  // Banner upload handler
-  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setBannerUploading(true);
-    try {
-      const blob = await compressImage(file, 1600);
-      const path = generateFilePath(userId, "banner");
-      const { error: uploadError } = await supabase.storage
-        .from("slime-photos")
-        .upload(path, blob, { contentType: "image/webp", upsert: false });
-      if (uploadError) throw uploadError;
-      const { data: urlData } = supabase.storage
-        .from("slime-photos")
-        .getPublicUrl(path);
-      setBannerUrl(urlData.publicUrl);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Banner upload failed");
-    } finally {
-      setBannerUploading(false);
-      if (bannerInputRef.current) bannerInputRef.current.value = "";
-    }
-  };
-
-  // Logo upload handler
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setLogoUploading(true);
-    try {
-      const blob = await compressImage(file, 400);
-      const path = generateFilePath(userId, "logo");
-      const { error: uploadError } = await supabase.storage
-        .from("slime-photos")
-        .upload(path, blob, { contentType: "image/webp", upsert: false });
-      if (uploadError) throw uploadError;
-      const { data: urlData } = supabase.storage
-        .from("slime-photos")
-        .getPublicUrl(path);
-      setLogoUrl(urlData.publicUrl);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Logo upload failed");
-    } finally {
-      setLogoUploading(false);
-      if (logoInputRef.current) logoInputRef.current.value = "";
-    }
-  };
 
   // [Change 3] handleSave — added youtube_handle, pinterest_handle, twitter_handle to payload
   const handleSave = async () => {
@@ -320,19 +209,14 @@ export default function BrandSettingsForm({
     // update lands in Postgres. The DB CHECK constraints (mig 57) are
     // the last line of defense; catching bad values here surfaces a
     // legible error to the brand owner instead of a raw Postgres
-    // constraint-violation string. logo_url + banner_url must live on
-    // our Supabase Storage (uploaded via handleLogoUpload / bannerUrl
-    // upload); website_url + shop_url may be any external http(s).
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    // constraint-violation string. website_url + shop_url may be any
+    // external http(s). logo_url + banner_url are validated in
+    // BrandImageryEditor, which owns them now.
     let websiteUrl: string | null;
     let shopUrl: string | null;
-    let checkedLogoUrl: string | null;
-    let checkedBannerUrl: string | null;
     try {
       websiteUrl = optionalHttpUrl(form.website_url, "Website URL");
       shopUrl = optionalHttpUrl(form.shop_url, "Shop URL");
-      checkedLogoUrl = optionalSupabaseUrl(logoUrl, "Logo", supabaseUrl);
-      checkedBannerUrl = optionalSupabaseUrl(bannerUrl, "Banner", supabaseUrl);
     } catch (validationErr) {
       if (validationErr instanceof ValidationError) {
         setError(validationErr.message);
@@ -362,8 +246,6 @@ export default function BrandSettingsForm({
           ? parseInt(form.founded_year, 10)
           : null,
         restock_schedule: form.restock_schedule || null,
-        logo_url: checkedLogoUrl,
-        banner_url: checkedBannerUrl,
       })
       .eq("id", brand.id)
       .eq("owner_id", userId);
@@ -374,8 +256,6 @@ export default function BrandSettingsForm({
     } else {
       original.current = {
         form: { ...form },
-        logoUrl,
-        bannerUrl,
       };
       showToast("Brand profile saved");
     }
@@ -387,265 +267,10 @@ export default function BrandSettingsForm({
 
   return (
     // [Change 1] Removed max-w-xl — dashboard layout constrains width on desktop
-    <div className="pb-20 w-full overflow-hidden">
-      {/* Page header */}
-      <div className="flex items-center gap-3 px-4 pt-5 pb-4">
-        <Link
-          href={`/brand-dashboard/${brand.slug}`}
-          className="flex items-center justify-center rounded-lg"
-          style={{ color: "rgba(245,245,245,0.5)" }}
-          aria-label="Back to dashboard"
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 20 20"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M12.5 15l-5-5 5-5"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </Link>
-        <div>
-          <h1
-            className="text-xl font-bold leading-tight"
-            style={{ color: "#00F0FF", fontFamily: "Montserrat, sans-serif" }}
-          >
-            Brand Profile
-          </h1>
-          <p
-            className="text-xs mt-0.5"
-            style={{ color: "rgba(245,245,245,0.4)" }}
-          >
-            Manage your brand&apos;s public presence
-          </p>
-        </div>
-      </div>
-
-      {/* Brand hero */}
-      <div className="relative mb-10">
-        {/* Banner */}
-        <button
-          type="button"
-          onClick={() => bannerInputRef.current?.click()}
-          disabled={bannerUploading}
-          className="relative w-full overflow-hidden block"
-          style={{ height: 120, background: "rgba(45,10,78,0.5)" }}
-          aria-label="Upload banner image"
-        >
-          {bannerUrl ? (
-            <img
-              src={bannerUrl}
-              alt="Brand banner"
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div
-              className="w-full h-full flex items-center justify-center"
-              style={{ background: "rgba(45,10,78,0.35)" }}
-            >
-              <span
-                className="text-xs"
-                style={{ color: "rgba(245,245,245,0.3)" }}
-              >
-                No banner
-              </span>
-            </div>
-          )}
-          {/* Camera overlay */}
-          <div
-            className="absolute inset-0 flex items-center justify-center"
-            style={{ background: "rgba(10,10,10,0.35)" }}
-          >
-            {bannerUploading ? (
-              <svg
-                className="animate-spin"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <circle
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="rgba(245,245,245,0.2)"
-                  strokeWidth="2"
-                />
-                <path
-                  d="M12 2a10 10 0 0 1 10 10"
-                  stroke="#39FF14"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
-            ) : (
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
-                  stroke="rgba(245,245,245,0.7)"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <circle
-                  cx="12"
-                  cy="13"
-                  r="4"
-                  stroke="rgba(245,245,245,0.7)"
-                  strokeWidth="1.5"
-                />
-              </svg>
-            )}
-          </div>
-        </button>
-
-        {/* Hidden banner file input */}
-        <input
-          ref={bannerInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleBannerUpload}
-          aria-hidden="true"
-        />
-
-        {/* Logo circle overlapping banner */}
-        <div className="absolute -bottom-8 left-4">
-          <button
-            type="button"
-            onClick={() => logoInputRef.current?.click()}
-            disabled={logoUploading}
-            className="relative rounded-full overflow-hidden flex items-center justify-center"
-            style={{
-              width: 64,
-              height: 64,
-              background: "rgba(45,10,78,0.8)",
-              border: "2px solid rgba(45,10,78,0.9)",
-              boxShadow: "0 0 0 2px #0A0A0A",
-            }}
-            aria-label="Upload logo image"
-          >
-            {logoUrl ? (
-              <img
-                src={logoUrl}
-                alt="Brand logo"
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
-                  stroke="rgba(245,245,245,0.4)"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <circle
-                  cx="12"
-                  cy="13"
-                  r="4"
-                  stroke="rgba(245,245,245,0.4)"
-                  strokeWidth="1.5"
-                />
-              </svg>
-            )}
-            {/* Camera badge */}
-            <div
-              className="absolute inset-0 flex items-center justify-center rounded-full"
-              style={{ background: "rgba(10,10,10,0.45)" }}
-            >
-              {logoUploading ? (
-                <svg
-                  className="animate-spin"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <circle
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="rgba(245,245,245,0.2)"
-                    strokeWidth="2"
-                  />
-                  <path
-                    d="M12 2a10 10 0 0 1 10 10"
-                    stroke="#39FF14"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              ) : (
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
-                    stroke="rgba(245,245,245,0.8)"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <circle
-                    cx="12"
-                    cy="13"
-                    r="4"
-                    stroke="rgba(245,245,245,0.8)"
-                    strokeWidth="1.5"
-                  />
-                </svg>
-              )}
-            </div>
-          </button>
-        </div>
-
-        {/* Hidden logo file input */}
-        <input
-          ref={logoInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleLogoUpload}
-          aria-hidden="true"
-        />
-      </div>
-
-      {/* Brand name below hero */}
-      <div className="px-4 mb-6">
-        <p
-          className="text-base font-bold text-white"
-          style={{ fontFamily: "Montserrat, sans-serif" }}
-        >
-          {brand.name}
-        </p>
-      </div>
-
+    <div className="w-full overflow-hidden">
+      {/* T137 Batch 5: the banner + logo hero moved to BrandImageryEditor,
+          which the settings page renders above this form. The page header
+          moved to the page shell so both sections sit under one heading. */}
       {/* [Change 2] BRAND IDENTITY — section label outside card */}
       <p
         className="text-[11px] font-black tracking-widest uppercase mb-2 px-1"

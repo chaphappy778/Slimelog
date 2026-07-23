@@ -29,6 +29,20 @@ Template for new entries:
 
 ---
 
+### 2026-07-23 — Splitting a form into two components: the last-write-wins clobber (UI)
+
+**Symptom:** none in production — caught during the T137 Batch 5 imagery extract, but this is the exact shape of a silent data-loss bug, so it's logged as a prevention pattern.
+
+**Root cause:** when one big form is split into two sibling client components that each own their own Save, both components hold a snapshot of the row taken at the SAME server render. If both keep the shared columns in their update payload, saving in component B writes B's stale copy of the columns that A just changed. The user sees their change land, then vanish the moment they save the other section. Nothing errors, nothing logs. `router.refresh()` does not save you either: the sibling that already mounted keeps its `useState` initial value, because a refresh re-renders but does not remount.
+
+**Fix:** after a split, each column belongs to exactly ONE component's update payload. `BrandImageryEditor` owns `brands.logo_url` + `brands.banner_url`; `BrandSettingsForm` no longer selects them into state, no longer validates them, and no longer includes them in its `.update()`. There's a comment at the top of each file saying so.
+
+**Regression check:** for any table written from more than one component on the same screen, diff the `.update({...})` key sets. They must be disjoint. If two components list the same column, one of them is going to lose a write.
+
+**Related:** T137 Batch 5, T133. Same family as the "global providers gating on the slowest thing" entry: both are about two pieces of UI disagreeing on who owns a piece of state.
+
+---
+
 ### 2026-07-23 — ON CONFLICT against a partial unique index needs the predicate repeated (DB)
 
 **Symptom:** `db push` fails on a migration that uses `INSERT ... ON CONFLICT (col_a, col_b) DO NOTHING`. Postgres raises "there is no unique or exclusion constraint matching the ON CONFLICT specification" and the entire transaction rolls back. Confusing because the unique index clearly exists and covers those columns.
