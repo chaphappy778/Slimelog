@@ -111,9 +111,13 @@ async function compressImage(file: File, maxDimension: number): Promise<Blob> {
   });
 }
 
+// slime-photos RLS requires the FIRST path segment to be the uploader's UUID
+// (split_part(name, '/', 1) = auth.uid()::text). A `brands/` prefix folder fails
+// the INSERT check. The `brand-` filename prefix keeps these grouped when
+// browsing storage. See 20260329000012_storage_buckets.sql.
 function generateFilePath(userId: string, prefix: string): string {
   const random = Math.random().toString(36).slice(2, 8);
-  return `brands/${userId}/${prefix}-${Date.now()}-${random}.webp`;
+  return `${userId}/brand-${prefix}-${Date.now()}-${random}.webp`;
 }
 
 // ─── Icons (line SVG, 1.5–2px stroke) ─────────────────────────────────────────
