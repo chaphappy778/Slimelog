@@ -24,7 +24,7 @@
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { logSlime } from "@/lib/slime-actions";
-import type { LogSlimeInput } from "@/lib/slime-actions";
+import type { LogSlimeInput } from "@/lib/slime-actions-types";
 import {
   SLIME_BASE_TYPE_LABELS,
   SCENT_STRENGTH_LABELS,

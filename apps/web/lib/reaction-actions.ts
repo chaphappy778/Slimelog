@@ -49,8 +49,11 @@ interface ReactionSummary {
 }
 
 // ─── Result unions ────────────────────────────────────────────────────────
-
-export type ToggleReactionResult =
+//
+// Local (not exported): "use server" files may only export async
+// functions. Callers infer this shape from toggleCommentReaction's
+// return type.
+type ToggleReactionResult =
   | { ok: true; added: boolean; newCount: number }
   | { ok: false; error: string };
 

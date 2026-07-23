@@ -21,6 +21,11 @@
 import * as Sentry from "@sentry/nextjs";
 import { createClient } from "@/lib/supabase/server";
 import { captureServerEvent } from "@/lib/posthog-server";
+// CareActionInput lives in a non-"use server" module so this file can
+// export only async functions (see lib/aging-actions-types.ts + the
+// error-tracker "use server export trap" entry). Imported back for the
+// markLogChecked signature — `import type` is erased, never re-exported.
+import type { CareActionInput } from "@/lib/aging-actions-types";
 
 // ─── Auth guard (same pattern as slime-actions) ───────────────────────
 
@@ -59,50 +64,15 @@ async function currentUserIsPro(): Promise<boolean> {
 }
 
 // ─── Result union — matches slime-actions convention ──────────────────
+//
+// Local (not exported): a "use server" file may only export async
+// functions. Client callers get this shape via return-type inference on
+// the action functions. See lib/aging-actions-types.ts for the shared
+// input type that consumers import directly.
 
-export type AgingActionResult =
+type AgingActionResult =
   | { ok: true; careActionsWritten?: number }
   | { ok: false; error: string };
-
-// ─── Care action shape ────────────────────────────────────────────────
-
-/**
- * One care action reported during a check-in. Matches the shape of
- * slime_care_actions rows minus the auto-set id/user_id/log_id.
- * Callers construct these client-side from the check-in modal
- * selections; the server inserts them alongside the aging update.
- *
- * `product_key` must be a valid key from `care_products`. Server
- * doesn't currently validate the FK before insert — Postgres does
- * that atomically via the FK constraint (bad keys just fail the
- * insert, which we surface as the whole markLogChecked failing).
- */
-export interface CareActionInput {
-  action_type:
-    | "activator"
-    | "softener"
-    | "additive"
-    | "physical"
-    | "storage"
-    | "other";
-  // Nullable: a quick category re-log from the /collection/care
-  // "Recent care" strip records that the category was performed
-  // again without naming a product. slime_care_actions.product_key
-  // is nullable in the schema (20260720000082_t125_care_actions.sql).
-  product_key: string | null;
-  quantity_type?:
-    | "drops"
-    | "pumps"
-    | "tsp"
-    | "tbsp"
-    | "ml"
-    | "oz"
-    | "pinch"
-    | "squirt"
-    | null;
-  quantity_amount?: number | null;
-  notes?: string | null;
-}
 
 // ─── markLogChecked: user says "I checked this slime, reset the clock" ─
 

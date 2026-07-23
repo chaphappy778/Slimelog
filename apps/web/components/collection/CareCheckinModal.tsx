@@ -27,10 +27,8 @@
 
 import { useState, useTransition, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
-import {
-  markLogChecked,
-  type CareActionInput,
-} from "@/lib/aging-actions";
+import { markLogChecked } from "@/lib/aging-actions";
+import type { CareActionInput } from "@/lib/aging-actions-types";
 
 const supabase = createClient();
 

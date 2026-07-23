@@ -22,8 +22,8 @@ import {
   setLogAgingInterval,
   setLogCarePlanNotes,
   markLogChecked,
-  type CareActionInput,
 } from "@/lib/aging-actions";
+import type { CareActionInput } from "@/lib/aging-actions-types";
 import {
   SLIME_BASE_TYPE_LABELS,
   SLIME_BASE_TYPE_COLORS,

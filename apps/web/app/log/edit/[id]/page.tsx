@@ -10,7 +10,7 @@ import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useParams } from "next/navigation";
 // Audit hp-24 (2026-07-09): use the shared browser singleton.
 import { createClient } from "@/lib/supabase/client";
-import type { LogSlimeInput } from "@/lib/slime-actions";
+import type { LogSlimeInput } from "@/lib/slime-actions-types";
 // 2026-07-17 T167 hotfix: edit UI was writing directly to Supabase and
 // bypassing the server action, which meant (a) T167 brand-owner
 // notifications never fired on brand-tag or public-visibility
