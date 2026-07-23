@@ -407,16 +407,16 @@ export default function DashboardLayout({
           ) : (
             <Link
               href={`/brand-dashboard/${brand.slug}/subscription`}
-              className="flex-none text-[10px] font-black tracking-wider px-2.5 py-1 rounded-full"
+              className="flex-none text-[10px] font-black tracking-wider px-2.5 py-1 rounded-full whitespace-nowrap"
               style={{
-                color: "#ff86e6",
-                background:
-                  "linear-gradient(135deg, rgba(255,43,214,0.14), rgba(168,85,247,0.08))",
-                border: "1px solid rgba(255,43,214,0.35)",
+                color: "#fff",
+                background: "linear-gradient(135deg, #ff2bd6, #a855f7)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                boxShadow: "0 0 12px rgba(255,43,214,0.4)",
                 fontFamily: "Montserrat, sans-serif",
               }}
             >
-              Upgrade
+              Get Pro →
             </Link>
           )}
         </header>

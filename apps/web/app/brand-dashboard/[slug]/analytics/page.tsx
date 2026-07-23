@@ -41,6 +41,22 @@ const PLACEHOLDER_STYLE = {
 const SECTION_LABEL =
   "text-xs font-black uppercase tracking-widest" as const;
 
+// [T137 Batch B] Round a date down to the Monday that starts its ISO week,
+// returned as a YYYY-MM-DD string. Mirrors Postgres date_trunc('week', ...).
+// We hand this parseable ISO date to LogsOverTimeChart as `week`: the chart's
+// own formatWeek() renders the "Aug 5" label and its range filter needs a real
+// date, so we must NOT pre-format the label here (a pre-formatted string like
+// "Aug 5" parses as year 2001 and the range filter would drop every point).
+function isoWeekStart(d: Date): string {
+  const utc = new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()),
+  );
+  const dow = utc.getUTCDay(); // 0 = Sunday .. 6 = Saturday
+  const delta = dow === 0 ? -6 : 1 - dow; // shift back to Monday
+  utc.setUTCDate(utc.getUTCDate() + delta);
+  return utc.toISOString().slice(0, 10);
+}
+
 export default async function AnalyticsPage({ params }: PageProps) {
   const { slug } = await params;
   const supabase = await createClient();
@@ -84,11 +100,20 @@ export default async function AnalyticsPage({ params }: PageProps) {
     { data: cl },
     { data: sa },
   ] = await Promise.all([
+    // [T137 Batch B] Logs Over Time goes through slime_id -> slimes.brand_id
+    // instead of the brand_weekly_logs view, which filtered on
+    // collection_logs.brand_id (often NULL when the log wizard sets only
+    // slime_id, which zeroed the whole chart). We fetch logged_at for every
+    // non-wishlist community log of this brand's slimes and bucket by ISO week
+    // in JS below. Ordered newest-first and capped so a very large brand keeps
+    // the recent weeks the chart actually shows. See docs/cost-tracker.md.
     supabase
-      .from("brand_weekly_logs")
-      .select("week, log_count")
-      .eq("brand_id", brand.id)
-      .order("week", { ascending: true }),
+      .from("collection_logs")
+      .select("logged_at, slimes!inner(brand_id)")
+      .eq("slimes.brand_id", brand.id)
+      .eq("in_wishlist", false)
+      .order("logged_at", { ascending: false })
+      .limit(10000),
     supabase
       .from("slimes")
       .select(
@@ -137,13 +162,21 @@ export default async function AnalyticsPage({ params }: PageProps) {
       .not("avg_overall", "is", null),
   ]);
 
-  const weeklyLogs = (wl ?? []).map((r) => ({
-    week: new Date(r.week).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    }),
-    log_count: r.log_count,
-  }));
+  // Bucket community logs by ISO week start (Monday), matching the old
+  // date_trunc('week', ...) behavior. `week` stays a parseable ISO date; the
+  // chart formats the "Aug 5" label itself and its 7/30/90 day range filter
+  // reads the real date. The hero "in N days" stat is derived by the chart from
+  // this same data, so the top number and the bars always agree.
+  const weekBuckets = new Map<string, number>();
+  for (const row of wl ?? []) {
+    const loggedAt = (row as { logged_at: string | null }).logged_at;
+    if (!loggedAt) continue;
+    const key = isoWeekStart(new Date(loggedAt));
+    weekBuckets.set(key, (weekBuckets.get(key) ?? 0) + 1);
+  }
+  const weeklyLogs = Array.from(weekBuckets.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([week, log_count]) => ({ week, log_count }));
   const dimensionData: DimensionData[] = (dd ?? []).map((d) => ({
     avg_texture: d.avg_texture,
     avg_scent: d.avg_scent,
