@@ -23,6 +23,7 @@ import {
   type ModerationField,
   type ModerationResult,
 } from "@/lib/moderation";
+import { normalizeSlimeName } from "@/lib/normalize";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -223,6 +224,132 @@ async function notifyBrandOwnerOfNewLog(args: {
   }
 }
 
+// ─── Track 1b: unofficial catalog auto-creation (2026-07-23) ────────────────
+//
+// slimes.slime_type (legacy NOT NULL enum) and slimes.base_type (the
+// slime_base_type enum) have DIVERGED — they are two different enums. Three
+// base_type values have NO slime_type twin: `basic`, `snowbutter`, and
+// `wax_and_wax_cracking`. Inserting slime_type = input.base_type verbatim
+// would raise `invalid input value for enum slime_type` for those three and
+// fail the whole log create. slime_type is a legacy column that analytics
+// never reads (Top Slimes / Community Ratings key off base_type + slime_id),
+// so the value only needs to be a VALID enum member. This map guarantees
+// that; the `?? "hybrid"` fallback in the caller covers any future base_type
+// added before this map is updated.
+const SLIME_TYPE_FOR_BASE_TYPE: Record<SlimeBaseType, string> = {
+  avalanche: "avalanche",
+  basic: "hybrid", // no slime_type twin → generic catch-all
+  beaded: "beaded",
+  butter: "butter",
+  clear: "clear",
+  cloud: "cloud",
+  floam: "floam",
+  fluffy: "fluffy",
+  hybrid: "hybrid",
+  icee: "icee",
+  jelly: "jelly",
+  magnetic: "magnetic",
+  sand: "sand",
+  slay: "slay",
+  snow_fizz: "snow_fizz",
+  snowbutter: "cloud_cream", // snowbutter was renamed FROM cloud_cream (mig 077)
+  sugar_scrub: "sugar_scrub",
+  thick_and_glossy: "thick_and_glossy",
+  water: "water",
+  wax_and_wax_cracking: "wax_cracking", // closest surviving slime_type twin
+};
+
+// Resolve a slime_id for a (brand_id, name) pair, auto-creating an unofficial
+// catalog row when nothing matches. Returns the resolved slime_id, or null
+// when we deliberately don't link (ambiguous / base_type mismatch) or can't
+// create one (insert failed). Every failure is NON-FATAL — the caller still
+// saves the log with slime_id = null; a missed link only leaves that one row
+// out of the brand analytics path, it never blocks the log.
+async function resolveOrCreateSlimeId(args: {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  brandId: string;
+  cleanedSlimeName: string;
+  baseType: SlimeBaseType;
+  userId: string;
+}): Promise<string | null> {
+  const { supabase, brandId, cleanedSlimeName, baseType, userId } = args;
+
+  // 1. Try an existing catalog match first — official OR unofficial. This is
+  //    widened from Fix W's official-only filter so that once an unofficial
+  //    row exists, later logs of the same name link to it instead of piling
+  //    up duplicates.
+  const { data: candidates } = await supabase
+    .from("slimes")
+    .select("id, base_type")
+    .eq("brand_id", brandId)
+    .ilike("name", cleanedSlimeName)
+    .limit(2);
+
+  if (candidates && candidates.length === 1) {
+    const c = candidates[0] as { id: string; base_type: string | null };
+    // Base-type sanity check: only link when the picked + catalog base_type
+    // agree (or the catalog row has none). Prevents a Butter "Blue Razz"
+    // log from linking to a Basic "Blue Razz" catalog row.
+    if (!c.base_type || c.base_type === baseType) {
+      return c.id;
+    }
+    // Single match but base_type disagrees → don't guess, and don't
+    // auto-create either (a same-name row already exists; a new insert would
+    // just 23505 onto it and mis-link). Leave the log unlinked.
+    return null;
+  }
+  if (candidates && candidates.length >= 2) {
+    // Ambiguous — two same-name catalog rows. Don't guess, don't create.
+    return null;
+  }
+
+  // 2. No match → auto-create an unofficial row. The admin (service_role)
+  //    client bypasses the is_brand_official=true INSERT RLS policy — which
+  //    correctly gates user creation of OFFICIAL catalog rows — and lets the
+  //    23505 fallback below read a row another user created.
+  const nameNormalized = normalizeSlimeName(cleanedSlimeName);
+  const admin = createAdminClient();
+  const { data: created, error: createErr } = await admin
+    .from("slimes")
+    .insert({
+      brand_id: brandId,
+      name: cleanedSlimeName,
+      name_normalized: nameNormalized,
+      slime_type: SLIME_TYPE_FOR_BASE_TYPE[baseType] ?? "hybrid", // legacy NOT NULL enum
+      base_type: baseType,
+      is_brand_official: false,
+      created_by: userId,
+    })
+    .select("id")
+    .single();
+
+  if (!createErr && created) {
+    return (created as { id: string }).id;
+  }
+
+  // 3. Race: another request created the same (brand_id, name_normalized)
+  //    row between our match check and this insert → unique-violation 23505.
+  //    Read back and link to the winning row. Deliberately a plain SELECT,
+  //    NOT an upsert/ON CONFLICT DO UPDATE — the admin client bypasses the
+  //    HP-11 attribution trigger, so an update-on-conflict would clobber a
+  //    brand's later curation (reset is_brand_official, overwrite the name)
+  //    every time a new user logs the same slime. We never overwrite.
+  if (createErr && createErr.code === "23505") {
+    const { data: existing } = await admin
+      .from("slimes")
+      .select("id")
+      .eq("brand_id", brandId)
+      .eq("name_normalized", nameNormalized)
+      .maybeSingle();
+    if (existing) return (existing as { id: string }).id;
+  }
+
+  if (createErr) {
+    console.warn("[Track 1b] auto-catalog insert failed:", createErr.message);
+  }
+  return null;
+}
+
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
 // 2026-07-12: return a result union so moderation failures don't get
@@ -302,35 +429,24 @@ async function logSlimeInner(input: LogSlimeInput): Promise<LogSlimeResult> {
       : null;
   const cleanedKeywords = moderateKeywords(input.keywords);
 
-  // [Fix W 2026-07-22] Auto-match slime_id from name+brand when the wizard
-  // didn't send one. The wizard collects brand_id via BrandSearchInput but
-  // has no catalog-slime picker — users just type slime_name as text. When
-  // brand_id + slime_name are both set, look up the catalog for exactly one
-  // matching slime and link the log to it. Populates the slime_id → brand
-  // analytics path (Top Slimes, Community Ratings, Drop Performance) that
-  // was dead before this fix.
+  // [Fix W 2026-07-22 → Track 1b 2026-07-23] Resolve slime_id from name+brand
+  // when the wizard didn't send one. The wizard collects brand_id via
+  // BrandSearchInput but has no catalog-slime picker — users just type
+  // slime_name as text. Fix W linked only to an existing OFFICIAL catalog
+  // match; Track 1b widens the match to unofficial rows too AND auto-creates
+  // an unofficial (is_brand_official=false) row when nothing matches, so the
+  // slime_id → brand analytics path (Top Slimes, Community Ratings, Drop
+  // Performance) populates day 1 even for brands with no seeded catalog. See
+  // resolveOrCreateSlimeId for the match / create / race / non-fatal logic.
   let matchedSlimeId: string | null = input.slime_id ?? null;
   if (!matchedSlimeId && input.brand_id && cleanedSlimeName) {
-    const { data: candidates } = await supabase
-      .from("slimes")
-      .select("id, base_type")
-      .eq("brand_id", input.brand_id)
-      .eq("is_brand_official", true)
-      .ilike("name", cleanedSlimeName)
-      .limit(2);
-    // Only auto-link on an unambiguous match. If two catalog slimes have
-    // the same name (rare but possible with brand duplicates), leave
-    // slime_id null so we don't guess wrong.
-    if (candidates && candidates.length === 1) {
-      const c = candidates[0] as { id: string; base_type: string | null };
-      // Base-type sanity check: if the user picked a base_type AND the
-      // catalog slime has one, only link when they agree. Prevents
-      // "Blue Raspberry" logs (Butter base) from auto-linking to
-      // "Blue Raspberry" (Basic base) if a brand has both.
-      if (!c.base_type || !input.base_type || c.base_type === input.base_type) {
-        matchedSlimeId = c.id;
-      }
-    }
+    matchedSlimeId = await resolveOrCreateSlimeId({
+      supabase,
+      brandId: input.brand_id,
+      cleanedSlimeName,
+      baseType: input.base_type,
+      userId,
+    });
   }
 
   const { data, error } = await supabase
@@ -513,9 +629,12 @@ async function updateSlimeLogInner(
   // log across that line. Cheap single-row read on the primary key.
   // Best-effort — a lookup error only skips the notification path, it
   // does NOT block the edit.
+  // Track 1b (2026-07-23): also pull base_type so the auto-catalog path can
+  // run on an edit that changes only the slime_name (base_type absent from
+  // the patch) — the new/matched row still needs a base_type to fill.
   const { data: preUpdate, error: preUpdateErr } = await supabase
     .from("collection_logs")
-    .select("brand_id, is_public")
+    .select("brand_id, is_public, base_type")
     .eq("id", logId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -529,6 +648,8 @@ async function updateSlimeLogInner(
 
   const prevBrandId = (preUpdate?.brand_id as string | null | undefined) ?? null;
   const prevIsPublic = (preUpdate?.is_public as boolean | undefined) ?? false;
+  const prevBaseType =
+    (preUpdate?.base_type as SlimeBaseType | null | undefined) ?? null;
 
   // [Fix W 2026-07-22] Same auto-match as the create path, for edits. When
   // the caller sends brand_id + slime_name but NO slime_id (the wizard has
@@ -544,23 +665,22 @@ async function updateSlimeLogInner(
   if (input.slime_id !== undefined) {
     slimeIdPatch = { slime_id: input.slime_id };
   } else if (input.brand_id && cleanedSlimeName) {
-    let matchedSlimeId: string | null = null;
-    const { data: candidates } = await supabase
-      .from("slimes")
-      .select("id, base_type")
-      .eq("brand_id", input.brand_id)
-      .eq("is_brand_official", true)
-      .ilike("name", cleanedSlimeName)
-      .limit(2);
-    if (candidates && candidates.length === 1) {
-      const c = candidates[0] as { id: string; base_type: string | null };
-      // Base-type sanity check: only link when the picked + catalog
-      // base_type agree (or either is absent). See create-path note.
-      if (!c.base_type || !input.base_type || c.base_type === input.base_type) {
-        matchedSlimeId = c.id;
-      }
+    // Track 1b (2026-07-23): same resolve-or-create flow as the create path.
+    // base_type may be absent from a partial edit, so fall back to the log's
+    // existing base_type (snapshotted above) — the auto-created row needs
+    // one. If neither is present we skip resolution entirely and leave the
+    // existing slime_id untouched rather than clearing it.
+    const effectiveBaseType = input.base_type ?? prevBaseType;
+    if (effectiveBaseType) {
+      const resolved = await resolveOrCreateSlimeId({
+        supabase,
+        brandId: input.brand_id,
+        cleanedSlimeName,
+        baseType: effectiveBaseType,
+        userId,
+      });
+      slimeIdPatch = { slime_id: resolved };
     }
-    slimeIdPatch = { slime_id: matchedSlimeId };
   }
 
   // Audit hp-19 (2026-07-07): add `.select("id")` and throw when the
