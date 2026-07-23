@@ -17,6 +17,17 @@
 // longer touches it) and the featured variants stub was removed until it
 // lands on the Slimes page.
 //
+// T137 Batch 6c (2026-07-23): "Custom display location" is back, but as an
+// override rather than as the source of truth. It writes
+// `brands.display_location_override` (migration 20260723000092), which the
+// public pill prefers over `brands.location`. The structured parts stay
+// authoritative: `location` is still derived from city + state on every save,
+// exactly as in 6b, and the override never feeds it.
+//
+// Not in 6c: moderation. Neither `city` nor the override runs through
+// lib/moderation.ts, and neither does anything else this form writes. Tracked
+// as T196 in docs/SlimeLog_Tracker.md.
+//
 // ── Clobber guard (docs/error-tracker.md 2026-07-23) ─────────────────────────
 // BrandImageryEditor owns the two brand imagery columns (the logo and banner
 // URLs). This component owns every OTHER column on the row, and the regression
@@ -62,6 +73,12 @@ interface BrandProps {
   contact_email: string | null;
   /** Derived display value. Read-only here; recomputed from the parts on save. */
   location: string | null;
+  /**
+   * Batch 6c. Free-text label that wins over `location` on the public pill.
+   * Optional on the prop so a migration-lagged read (settings page falls back
+   * to the legacy column list) still type-checks.
+   */
+  display_location_override?: string | null;
   country_code: string | null;
   state: string | null;
   city: string | null;
@@ -106,6 +123,7 @@ type FormState = {
   country_code: string;
   state: string;
   city: string;
+  display_location_override: string;
   founded_year: string;
 };
 
@@ -610,6 +628,7 @@ export default function BrandSettingsForm({
     country_code: brand.country_code ?? "US",
     state: brand.state ?? "",
     city: brand.city ?? "",
+    display_location_override: brand.display_location_override ?? "",
     founded_year: brand.founded_year?.toString() ?? "",
   });
 
@@ -634,6 +653,7 @@ export default function BrandSettingsForm({
       country_code: brand.country_code ?? "US",
       state: brand.state ?? "",
       city: brand.city ?? "",
+      display_location_override: brand.display_location_override ?? "",
       founded_year: brand.founded_year?.toString() ?? "",
     } as FormState,
   });
@@ -675,16 +695,26 @@ export default function BrandSettingsForm({
     setError(null);
   }, []);
 
-  // What `brands.location` becomes on save, and what the preview pill shows.
-  // One derivation, used by both, so the preview cannot drift from the write.
+  // What `brands.location` becomes on save. Unchanged by 6c: the override is a
+  // separate column and never feeds this derivation.
   const derivedLocation = deriveLocation(form.city, form.state);
   const regions = regionsFor(form.country_code);
   const stateLabel = regionLabel(form.country_code);
-  // Set once the owner has saved structured parts. Until then the pill on the
-  // public page is still showing the old free-text value, so we say so.
-  const storedLocation = (brand.location ?? "").trim();
+
+  // Batch 6c: what the public pill will render after this save. Same
+  // `override || derived` precedence the public page uses, written once here so
+  // the preview, the helper copy and the stale-value note cannot drift apart
+  // from each other or from app/brands/[slug]/page.tsx.
+  const overrideLocation = form.display_location_override.trim();
+  const previewLocation = overrideLocation || derivedLocation;
+
+  // What the public pill shows RIGHT NOW, before this save lands. Same
+  // precedence again, against the values that came off the server render.
+  const storedLocation =
+    (brand.display_location_override ?? "").trim() ||
+    (brand.location ?? "").trim();
   const showsStaleLocation =
-    storedLocation.length > 0 && storedLocation !== derivedLocation;
+    storedLocation.length > 0 && storedLocation !== previewLocation;
   const restockSchedule = (brand.restock_schedule ?? "").trim();
 
   const handleSave = async () => {
@@ -735,6 +765,10 @@ export default function BrandSettingsForm({
         state: form.state || null,
         city: form.city.trim() || null,
         location: derivedLocation || null,
+        // Batch 6c. Display-only, and deliberately NOT part of the derivation
+        // above: clearing it must fall the pill back to "City, ST", which only
+        // works if `location` was written from the parts every time.
+        display_location_override: overrideLocation || null,
         founded_year: form.founded_year
           ? parseInt(form.founded_year, 10)
           : null,
@@ -876,18 +910,20 @@ export default function BrandSettingsForm({
               </TierPill>
             </div>
 
-            {/* Meta row, mirrors the public page. Location is the derived
-                string, the same value the save writes to `brands.location`.
+            {/* Meta row, mirrors the public page. Location is the custom
+                override when the owner has typed one, otherwise the derived
+                "City, ST" the save writes to `brands.location`, which is the
+                same precedence app/brands/[slug]/page.tsx renders.
                 Restock cadence is read only here: the Drops page owns it. */}
-            {(derivedLocation || restockSchedule) && (
+            {(previewLocation || restockSchedule) && (
               <div
                 className="mt-2 flex flex-wrap gap-x-3.5 gap-y-1.5 text-[11px]"
                 style={{ color: "rgba(245,245,245,0.55)" }}
               >
-                {derivedLocation && (
+                {previewLocation && (
                   <span className="inline-flex items-center gap-1.5 min-w-0">
                     <PinIcon size={12} />
-                    <span className="truncate">{derivedLocation}</span>
+                    <span className="truncate">{previewLocation}</span>
                   </span>
                 )}
                 {restockSchedule && (
@@ -1160,7 +1196,11 @@ export default function BrandSettingsForm({
           {/* ══ LOCATION ══ */}
           {/* Batch 6b: structured country / state / city. `brands.location`
               is derived from these on save (lib/geo.ts, deriveLocation) and
-              stays the one value the public page reads. */}
+              stays the one value the public page reads.
+              Batch 6c: plus an optional free-text override that the public
+              pill prefers. The structured parts stay authoritative for
+              filtering, analytics and marketplace shipping, so the override
+              never changes what `location` is derived from. */}
           <section>
             <SectionLabel>Location</SectionLabel>
             <div className="rounded-2xl p-4 sm:p-5" style={cardStyle}>
@@ -1224,16 +1264,53 @@ export default function BrandSettingsForm({
               </div>
 
               <HelperText>
-                {derivedLocation ? (
+                {derivedLocation
+                  ? `Your city and ${stateLabel.toLowerCase()} give you "${derivedLocation}".`
+                  : `Pick a ${stateLabel.toLowerCase()} and add a city to show a location on your brand page.`}
+              </HelperText>
+
+              {/* Batch 6c: the override. Separate column, separate row, below
+                  the structured parts so it reads as a layer on top of them
+                  rather than as an alternative to filling them in. */}
+              <div
+                className="mt-4 pt-4"
+                style={{ borderTop: HAIRLINE }}
+              >
+                <FieldLabel>Custom display location</FieldLabel>
+                <input
+                  type="text"
+                  value={form.display_location_override}
+                  onChange={(e) =>
+                    setField(
+                      "display_location_override",
+                      e.target.value.slice(0, 60),
+                    )
+                  }
+                  placeholder="SlimeLog HQ"
+                  className={inputClass}
+                  style={inputStyle}
+                />
+                <HelperText>
+                  Optional. Overrides the auto-generated &quot;City,
+                  State&quot; pill on your public page. Leave blank to use your
+                  city and state.
+                </HelperText>
+              </div>
+
+              <p
+                className="text-[11px] mt-4 leading-relaxed"
+                style={{ color: TEXT_FAINT }}
+              >
+                {previewLocation ? (
                   <>
                     Your brand page will show{" "}
-                    <span style={{ color: TEXT_STRONG }}>{derivedLocation}</span>{" "}
+                    <span style={{ color: TEXT_STRONG }}>{previewLocation}</span>{" "}
                     next to a pin icon.
                   </>
                 ) : (
-                  `Pick a ${stateLabel.toLowerCase()} and add a city to show a location on your brand page.`
+                  "No location pill shows on your brand page yet."
                 )}
-              </HelperText>
+              </p>
 
               {showsStaleLocation && (
                 <p

@@ -457,6 +457,17 @@ export default async function BrandPage({
     };
   }
 
+  // T137 Batch 6c: the location pill prefers the owner's free-text override
+  // (`brands.display_location_override`, migration 20260723000092) and falls
+  // back to the derived "City, ST" in `brands.location`. Display only. Nothing
+  // that filters or ships by geography may read either one: country_code /
+  // state / city are the authoritative parts.
+  //
+  // fetchBrand selects "*", so before the migration lands the key is simply
+  // absent and this collapses to `brand.location`. No migration-lag guard
+  // needed here.
+  const displayLocation = brand.display_location_override || brand.location;
+
   return (
     <PageWrapper dots orbs>
       <PageHeader />
@@ -663,7 +674,7 @@ export default async function BrandPage({
           </div>
 
           {/* Meta row: location + restock schedule */}
-          {(brand.location || brand.restock_schedule) && (
+          {(displayLocation || brand.restock_schedule) && (
             <div
               className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5"
               style={{
@@ -671,7 +682,7 @@ export default async function BrandPage({
                 color: "rgba(245,245,245,0.55)",
               }}
             >
-              {brand.location && (
+              {displayLocation && (
                 <span className="inline-flex items-center gap-1.5">
                   <svg
                     width={13}
@@ -687,7 +698,7 @@ export default async function BrandPage({
                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
                     <circle cx="12" cy="10" r="3" />
                   </svg>
-                  {brand.location}
+                  {displayLocation}
                 </span>
               )}
               {brand.restock_schedule && (

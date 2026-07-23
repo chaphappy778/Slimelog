@@ -29,6 +29,22 @@ Template for new entries:
 
 ---
 
+### 2026-07-23 — BrandSettingsForm writes user text with no moderation gate (UI + Ops)
+
+**Symptom:** none reported yet. Logged as a known gap while T137 Batch 6c added the free-text `display_location_override` field, which made it the second unmoderated free-text column on this form to reach a public page.
+
+**Root cause:** `components/dashboard/BrandSettingsForm.tsx` calls `supabase.from("brands").update({...})` directly from the client with raw form values. CLAUDE.md says all user-authored text runs through `lib/moderation.ts`; /log, /register and brand suggestions do. This form never did, and the gap was easy to miss because the form predates the rule and because each batch only reviewed the fields it touched. Live today: brand `name`, `bio`, `description`, `city` and `display_location_override`, plus `restock_schedule` via `RestockCadenceRow`. All of them render on the public brand page.
+
+**Fix:** NOT fixed. Tracked as **T196** (Post-Launch Nice-to-Have) with scope, backfill audit and test cases. Batch 6c deliberately shipped the new field without moderation rather than wire a half-version of the gate into one field and leave the other five open.
+
+**Regression check:** before adding any new free-text column to `brands` that renders publicly, grep the writing component for `moderateText`. Zero hits means the field joins T196's scope rather than shipping on its own. When T196 lands, the check inverts: every write path into `brands` from a non-admin surface should have a `moderateText` call, and the result-union rule applies (Next.js strips thrown Error messages in production, see the 2026-07-12 server-action entry).
+
+**Prevention pattern (the valuable read):** a moderation rule that lives only in CLAUDE.md gets applied per-surface by whoever remembers it. It held on the surfaces built after the rule and silently missed the one built before. The durable fix is not "remember harder" but a single choke point: one server action that owns writes to `brands` for owners, with moderation inside it, so a new column cannot be added without passing through the gate. Until that exists, treat "which component writes this column?" as the first question when adding user-authored text, not the last.
+
+**Related:** tracker T196, T137 Batch 6c. Migration `20260723000092_brands_display_location_override.sql`. The 2026-07-12 obscenity false-positive entry (`PROFANITY_WHITELIST`) and the 2026-07-12 server-action-throw entry both constrain how T196 must be implemented.
+
+---
+
 ### 2026-07-23 — Structured fields behind a derived display column (DB)
 
 **Symptom:** none in production. Logged as a prevention pattern while T137 Batch 6b split the brand's free-text `brands.location` into structured `country_code` / `state` / `city`, because the obvious version of that change silently blanks a field on three public surfaces.

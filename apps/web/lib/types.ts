@@ -310,6 +310,14 @@ export interface Brand {
   owner_id: string | null;
   owner_name: string | null;
   location: string | null;
+  /**
+   * T137 Batch 6c: optional free-text label the public location pill prefers
+   * over `location`. Display only. Structured country_code / state / city stay
+   * authoritative for filtering, analytics and marketplace shipping.
+   * Optional on the type because rows read before migration 20260723000092
+   * lands simply will not have the key.
+   */
+  display_location_override?: string | null;
   restock_schedule: string | null;
   follower_count: number;
   total_logs: number;

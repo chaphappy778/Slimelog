@@ -47,14 +47,20 @@ export default async function SettingsPage({ params, searchParams }: PageProps) 
   // columns. `location` stays in the select because it is the derived display
   // value the form shows while the structured parts are still empty.
   //
+  // T137 Batch 6c: display_location_override joins them. Display-only column,
+  // read here so the form can prefill it and so the live preview can show the
+  // same `override || location` the public pill renders.
+  //
   // Migration-lag fallback (CLAUDE.md gotcha 1, docs/error-tracker.md): if this
-  // code reaches production before 20260723000091 does, selecting the three new
-  // columns errors and the whole Settings page would bounce to /brands. Retry
-  // once without them so the page still renders; the Location section just
-  // comes up empty until the migration lands.
+  // code reaches production before 20260723000091 / 20260723000092 do,
+  // selecting the new columns errors and the whole Settings page would bounce
+  // to /brands. Retry once without them so the page still renders; the Location
+  // section just comes up empty until the migrations land. One fallback covers
+  // both batches: it drops back to the columns that predate 6b, so pushing 6c
+  // code without its migration also costs the 6b fields until `db push` runs.
   const LEGACY_COLUMNS =
     "id, name, bio, description, website_url, shop_url, instagram_handle, tiktok_handle, youtube_handle, pinterest_handle, twitter_handle, contact_email, location, founded_year, restock_schedule, logo_url, banner_url, slug, verification_tier";
-  const STRUCTURED_COLUMNS = `${LEGACY_COLUMNS}, country_code, state, city`;
+  const STRUCTURED_COLUMNS = `${LEGACY_COLUMNS}, country_code, state, city, display_location_override`;
 
   let { data: brand, error: brandError } = await supabase
     .from("brands")
@@ -78,7 +84,13 @@ export default async function SettingsPage({ params, searchParams }: PageProps) 
       console.error("[settings] brand load failed", fallback.error.message);
     }
     brand = fallback.data
-      ? { ...fallback.data, country_code: null, state: null, city: null }
+      ? {
+          ...fallback.data,
+          country_code: null,
+          state: null,
+          city: null,
+          display_location_override: null,
+        }
       : null;
   }
 
@@ -121,6 +133,7 @@ export default async function SettingsPage({ params, searchParams }: PageProps) 
     twitter_handle: brand.twitter_handle,
     contact_email: brand.contact_email,
     location: brand.location,
+    display_location_override: brand.display_location_override,
     country_code: brand.country_code,
     state: brand.state,
     city: brand.city,
