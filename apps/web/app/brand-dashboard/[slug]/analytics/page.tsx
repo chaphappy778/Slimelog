@@ -126,15 +126,22 @@ export default async function AnalyticsPage({ params }: PageProps) {
     // OR filter above: brand_id.eq OR slime_id.in.(brand's slimes). Fix B used
     // only the slime_id -> slimes.brand_id embed, which missed brand_id-only
     // logs and left the chart at 0 while Overview showed the real total. We
-    // fetch logged_at for every matching non-wishlist log and bucket by ISO
-    // week in JS below. Ordered newest-first and capped so a very large brand
-    // keeps the recent weeks the chart actually shows. See docs/cost-tracker.md.
+    // fetch the timestamp for every matching non-wishlist log and bucket by
+    // ISO week in JS below.
+    //
+    // 2026-07-22 (Fix B-2 follow-up): the schema column is `created_at`, NOT
+    // `logged_at` (checked against 20260324000001_slimelog_initial_schema.sql,
+    // grep confirms no migration adds a `logged_at` column). Aliasing on the
+    // server (`logged_at:created_at`) so the response shape stays what the
+    // rest of the page + `BrandExportButtons` expect, without a wider rename.
+    // Ordered newest-first and capped so a very large brand keeps the recent
+    // weeks the chart actually shows. See docs/cost-tracker.md.
     supabase
       .from("collection_logs")
-      .select("logged_at")
+      .select("logged_at:created_at")
       .or(logOrFilter)
       .eq("in_wishlist", false)
-      .order("logged_at", { ascending: false })
+      .order("created_at", { ascending: false })
       .limit(10000),
     supabase
       .from("slimes")
@@ -175,13 +182,13 @@ export default async function AnalyticsPage({ params }: PageProps) {
          rating_drizzle,
          rating_creativity,
          rating_sensory_fit,
-         logged_at,
+         logged_at:created_at,
          slimes(name, slime_type),
          profiles!collection_logs_user_id_fkey(username)`,
       )
       .or(logOrFilter)
       .eq("in_wishlist", false)
-      .order("logged_at", { ascending: false })
+      .order("created_at", { ascending: false })
       .limit(500),
     supabase
       .from("slimes")
