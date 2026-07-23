@@ -29,6 +29,45 @@ Template for new entries:
 
 ---
 
+### 2026-07-23 — Column dropped by migration, still referenced by code (DB)
+
+**Symptom:** silent read failure, empty query result, or a PostgREST 400/500
+pointing at a column name that used to exist. The failure mode varies by
+caller: a nested embed silently returns the field as `undefined`, a top-level
+SELECT can 400, and a graceful fallback path just shows "Unlisted"/empty.
+
+**Root cause:** a migration DROPped or RENAMEd a column, but the codebase still
+references the old name in SELECT strings, interface types, or field accesses.
+This session: `slimes.slime_type` was dropped by
+`20260509000037_t71_base_type_taxonomy.sql` (base_type taxonomy), but the brand
+analytics page and CSV export still read `slime_type` in an embed
+(`slimes(name, slime_type)`), a top-level SELECT, two mapped output fields, a
+table cell, and two `BrandExportButtons` interfaces. Reads to the dead column
+degraded the analytics "Type" column and export to blank/"Unlisted".
+
+**Fix:** swapped every read `slime_type` → `base_type` across
+`app/brand-dashboard/[slug]/analytics/page.tsx` and
+`components/dashboard/BrandExportButtons.tsx`. The auto-catalog WRITE to the
+same dead column was fixed separately (hotfix a4e3691).
+
+**Prevention pattern:** when a migration DROPs or RENAMEs a column, immediately
+grep the ENTIRE `apps/web/` for the old column name (reads AND writes, `select`
+strings AND field accesses AND interface definitions) and fix them in the SAME
+PR as the migration. If you catch them in a follow-up PR, file a ticket to
+backfill the grep so it doesn't recur. This is the SECOND time this class bit
+us — first was Fix W's `logged_at` vs `created_at` (the schema column is
+`created_at`; `logged_at` was aliased server-side).
+
+**Regression check:** `grep -rn "<old_column>" apps/web/ --include="*.ts*"`
+should return only comments and the migration file, never a live SELECT string,
+field access, or interface field. Open a brand's `/analytics` page and confirm
+the Community Logging Activity "Type" column and both CSV exports populate.
+
+**Related:** T71 (base_type taxonomy, mig 037), Track 1b auto-catalog hotfix
+(a4e3691), Fix W (`logged_at` vs `created_at`)
+
+---
+
 ### 2026-07-21 — Optimistic toggle never rolls back when the network is down (UI)
 
 **Symptom:** Jennifer's T127 smoke test — turn the network off, tap a

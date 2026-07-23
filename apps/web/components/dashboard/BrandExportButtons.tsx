@@ -4,7 +4,7 @@ import { useState } from "react";
 
 interface CommunityLog {
   slime_name: string;
-  slime_type: string | null;
+  base_type: string | null;
   overall: number | null;
   texture: number | null;
   scent: number | null;
@@ -18,7 +18,7 @@ interface CommunityLog {
 
 interface SlimeAggregate {
   name: string;
-  slime_type: string | null;
+  base_type: string | null;
   avg_overall: number | null;
   avg_texture: number | null;
   avg_scent: number | null;
@@ -104,7 +104,7 @@ export default function BrandExportButtons({
       const rows = slimeAggregates.map((s) =>
         [
           s.name,
-          s.slime_type,
+          s.base_type,
           s.avg_overall?.toFixed(2) ?? null,
           s.avg_texture?.toFixed(2) ?? null,
           s.avg_scent?.toFixed(2) ?? null,
@@ -155,7 +155,7 @@ export default function BrandExportButtons({
         }).format(new Date(l.logged_at));
         return [
           l.slime_name,
-          l.slime_type,
+          l.base_type,
           l.overall,
           l.texture,
           l.scent,

@@ -168,7 +168,7 @@ export default async function AnalyticsPage({ params }: PageProps) {
     // embed is now a LEFT join (no `!inner`), so logs with no catalog slime are
     // kept: those display collection_logs.slime_name (always set) and base_type
     // instead of a joined slime name. Catalog logs still prefer the canonical
-    // slime.name / slimes.slime_type for enrichment (see mapping below).
+    // slime.name / slimes.base_type for enrichment (see mapping below).
     supabase
       .from("collection_logs")
       .select(
@@ -183,7 +183,7 @@ export default async function AnalyticsPage({ params }: PageProps) {
          rating_creativity,
          rating_sensory_fit,
          logged_at:created_at,
-         slimes(name, slime_type),
+         slimes(name, base_type),
          profiles!collection_logs_user_id_fkey(username)`,
       )
       .or(logOrFilter)
@@ -193,7 +193,7 @@ export default async function AnalyticsPage({ params }: PageProps) {
     supabase
       .from("slimes")
       .select(
-        "name, slime_type, avg_overall, avg_texture, avg_scent, avg_sound, avg_drizzle, avg_creativity, avg_sensory_fit, total_ratings",
+        "name, base_type, avg_overall, avg_texture, avg_scent, avg_sound, avg_drizzle, avg_creativity, avg_sensory_fit, total_ratings",
       )
       .eq("brand_id", brand.id)
       .eq("is_brand_official", true)
@@ -289,8 +289,8 @@ export default async function AnalyticsPage({ params }: PageProps) {
     return {
       slime_name:
         (slime?.name as string) || (row.slime_name as string) || "",
-      slime_type:
-        (slime?.slime_type as string) ?? (row.base_type as string) ?? null,
+      base_type:
+        (slime?.base_type as string) ?? (row.base_type as string) ?? null,
       overall: (row.rating_overall as number) ?? null,
       texture: (row.rating_texture as number) ?? null,
       scent: (row.rating_scent as number) ?? null,
@@ -304,7 +304,7 @@ export default async function AnalyticsPage({ params }: PageProps) {
   });
   const slimeAggregates = (sa ?? []).map((s) => ({
     name: s.name,
-    slime_type: s.slime_type ?? null,
+    base_type: s.base_type ?? null,
     avg_overall: s.avg_overall ?? null,
     avg_texture: s.avg_texture ?? null,
     avg_scent: s.avg_scent ?? null,
@@ -478,7 +478,7 @@ export default async function AnalyticsPage({ params }: PageProps) {
                             fontFamily: "Inter, sans-serif",
                           }}
                         >
-                          {log.slime_type ?? "Unlisted"}
+                          {log.base_type ?? "Unlisted"}
                         </td>
                         <td
                           className="px-3 py-2.5 text-xs whitespace-nowrap"
