@@ -29,6 +29,31 @@ Template for new entries:
 
 ---
 
+### 2026-07-23 — ON CONFLICT against a partial unique index needs the predicate repeated (DB)
+
+**Symptom:** `db push` fails on a migration that uses `INSERT ... ON CONFLICT (col_a, col_b) DO NOTHING`. Postgres raises "there is no unique or exclusion constraint matching the ON CONFLICT specification" and the entire transaction rolls back. Confusing because the unique index clearly exists and covers those columns.
+
+**Root cause:** the target unique index is PARTIAL — created with a `WHERE` predicate (e.g., `WHERE name_normalized IS NOT NULL`). Postgres treats a partial index as a distinct constraint from a full one. Inference against it requires REPEATING the predicate in the ON CONFLICT clause, otherwise the planner can't match the constraint and the statement fails to parse.
+
+**Fix:** repeat the partial index's WHERE predicate in ON CONFLICT:
+
+```sql
+INSERT INTO slimes (brand_id, name, name_normalized, ...)
+VALUES (...)
+ON CONFLICT (brand_id, name_normalized) WHERE name_normalized IS NOT NULL
+DO NOTHING;
+```
+
+The runtime code in `apps/web/lib/slime-actions.ts` (Track 1b) sidesteps this by catching PostgreSQL error code 23505 and doing a follow-up SELECT — no ON CONFLICT clause, no inference required. Migrations that need bulk upsert semantics need the predicate.
+
+**Regression check:** grep migrations for `ON CONFLICT (` and cross-reference every target with `CREATE UNIQUE INDEX ... WHERE` predicates. If the index is partial and the ON CONFLICT doesn't repeat the WHERE, `db push` will fail on that migration.
+
+**Prevention pattern:** when a migration creates a partial unique index, document the predicate near it AND any later migration that inserts against the same columns must include the predicate in its ON CONFLICT clause. Alternative: use the runtime pattern (catch 23505, fallback SELECT) instead of ON CONFLICT DO NOTHING — works for either full or partial indexes.
+
+**Related:** Fix W-2 backfill migration (`20260723000089_backfill_orphaned_log_slime_ids.sql`). The unique index it targets is `slimes_brand_name_normalized_uidx` (migration 88, `WHERE name_normalized IS NOT NULL`). Naive `ON CONFLICT (brand_id, name_normalized) DO NOTHING` would have failed the push.
+
+---
+
 ### 2026-07-23 — Column dropped by migration, still referenced by code (DB)
 
 **Symptom:** silent read failure, empty query result, or a PostgREST 400/500
