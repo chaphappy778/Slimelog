@@ -42,14 +42,45 @@ export default async function SettingsPage({ params, searchParams }: PageProps) 
   }
 
   // [Change 1] Added youtube_handle, pinterest_handle, twitter_handle to select
-  const { data: brand } = await supabase
+  //
+  // T137 Batch 6b: country_code / state / city are the structured location
+  // columns. `location` stays in the select because it is the derived display
+  // value the form shows while the structured parts are still empty.
+  //
+  // Migration-lag fallback (CLAUDE.md gotcha 1, docs/error-tracker.md): if this
+  // code reaches production before 20260723000091 does, selecting the three new
+  // columns errors and the whole Settings page would bounce to /brands. Retry
+  // once without them so the page still renders; the Location section just
+  // comes up empty until the migration lands.
+  const LEGACY_COLUMNS =
+    "id, name, bio, description, website_url, shop_url, instagram_handle, tiktok_handle, youtube_handle, pinterest_handle, twitter_handle, contact_email, location, founded_year, restock_schedule, logo_url, banner_url, slug, verification_tier";
+  const STRUCTURED_COLUMNS = `${LEGACY_COLUMNS}, country_code, state, city`;
+
+  let { data: brand, error: brandError } = await supabase
     .from("brands")
-    .select(
-      "id, name, bio, description, website_url, shop_url, instagram_handle, tiktok_handle, youtube_handle, pinterest_handle, twitter_handle, contact_email, location, founded_year, restock_schedule, logo_url, banner_url, slug, verification_tier",
-    )
+    .select(STRUCTURED_COLUMNS)
     .eq("slug", slug)
     .eq("owner_id", user.id)
     .single();
+
+  if (brandError) {
+    console.warn(
+      "[settings] structured location select failed, falling back",
+      brandError.message,
+    );
+    const fallback = await supabase
+      .from("brands")
+      .select(LEGACY_COLUMNS)
+      .eq("slug", slug)
+      .eq("owner_id", user.id)
+      .single();
+    if (fallback.error) {
+      console.error("[settings] brand load failed", fallback.error.message);
+    }
+    brand = fallback.data
+      ? { ...fallback.data, country_code: null, state: null, city: null }
+      : null;
+  }
 
   if (!brand) redirect("/brands");
 
@@ -90,7 +121,12 @@ export default async function SettingsPage({ params, searchParams }: PageProps) 
     twitter_handle: brand.twitter_handle,
     contact_email: brand.contact_email,
     location: brand.location,
+    country_code: brand.country_code,
+    state: brand.state,
+    city: brand.city,
     founded_year: brand.founded_year,
+    // Read only in the form since Batch 6b (the Drops page owns the write).
+    // It still feeds the live preview meta row.
     restock_schedule: brand.restock_schedule,
     slug: brand.slug,
     verification_tier: brand.verification_tier,

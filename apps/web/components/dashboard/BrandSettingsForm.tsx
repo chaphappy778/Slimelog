@@ -5,6 +5,18 @@
 // the `.update()` payload are carried over unchanged from Batch 5. Only the
 // JSX and the toast plumbing changed.
 //
+// T137 Batch 6b (2026-07-23): Location is structured now (country / state /
+// city writing `country_code`, `state`, `city`) and the free-text "display
+// location" input is gone. `brands.location` is still written on every save,
+// derived from the parts by deriveLocation() so the public page pill and the
+// brand directory keep reading one column. See the migration
+// 20260723000091_brands_structured_location.sql for the contract.
+//
+// Also in 6b: the restock and availability section moved to the Drops page
+// (RestockCadenceRow owns the `restock_schedule` write now, this form no
+// longer touches it) and the featured variants stub was removed until it
+// lands on the Slimes page.
+//
 // ── Clobber guard (docs/error-tracker.md 2026-07-23) ─────────────────────────
 // BrandImageryEditor owns the two brand imagery columns (the logo and banner
 // URLs). This component owns every OTHER column on the row, and the regression
@@ -21,6 +33,12 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ValidationError, optionalHttpUrl } from "@/lib/api-validation";
+import {
+  COUNTRIES,
+  deriveLocation,
+  regionLabel,
+  regionsFor,
+} from "@/lib/geo";
 // Audit hp-24 (2026-07-09): use the shared browser singleton.
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/Toast";
@@ -42,8 +60,16 @@ interface BrandProps {
   pinterest_handle: string | null;
   twitter_handle: string | null;
   contact_email: string | null;
+  /** Derived display value. Read-only here; recomputed from the parts on save. */
   location: string | null;
+  country_code: string | null;
+  state: string | null;
+  city: string | null;
   founded_year: number | null;
+  /**
+   * Read-only in this form since Batch 6b. The Drops page owns the write.
+   * Kept on the prop so the live preview meta row stays accurate.
+   */
   restock_schedule: string | null;
   slug: string;
   verification_tier: string | null;
@@ -77,9 +103,10 @@ type FormState = {
   pinterest_handle: string;
   twitter_handle: string;
   contact_email: string;
-  location: string;
+  country_code: string;
+  state: string;
+  city: string;
   founded_year: string;
-  restock_schedule: string;
 };
 
 type FormKey = keyof FormState;
@@ -110,16 +137,6 @@ const inputStyle: React.CSSProperties = {
 // The public brand page renders the banner 200px tall in a 440px column, so
 // the visible slice is roughly 2.2:1. Same constant the imagery editor uses.
 const PUBLIC_BANNER_ASPECT = "440 / 200";
-
-// Batch 6b wires this to a real column. Rendered disabled until then.
-const FOLLOWER_TIERS = [
-  "0 to 1k",
-  "1k to 10k",
-  "10k to 50k",
-  "50k to 250k",
-  "250k to 1M",
-  "1M+",
-];
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -185,24 +202,6 @@ function CalendarIcon({ size = 13 }: { size?: number }) {
     >
       <rect x="3" y="4" width="18" height="18" rx="2" />
       <path d="M16 2v4M8 2v4M3 10h18" />
-    </svg>
-  );
-}
-
-function PlusIcon({ size = 22 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 5v14M5 12h14" />
     </svg>
   );
 }
@@ -381,19 +380,24 @@ function HelperText({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ComingSoonNote({ children }: { children: React.ReactNode }) {
+/**
+ * Stub badge. Batch 6b pulled it out of the Team card's absolute corner: it
+ * sits in the header flex row now so it can never overlap the headline at a
+ * narrow width. Same violet language the other stub pills use.
+ */
+function ComingSoonPill() {
   return (
-    <p
-      className="text-[11px] mt-2 inline-flex items-center gap-1.5"
-      style={{ color: "rgba(201,182,255,0.65)" }}
+    <span
+      className="flex-shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black tracking-[0.1em] whitespace-nowrap"
+      style={{
+        background: "rgba(124,77,255,0.16)",
+        border: "1px solid rgba(124,77,255,0.4)",
+        color: "#C9B6FF",
+        fontFamily: "Montserrat, sans-serif",
+      }}
     >
-      <span
-        className="inline-block rounded-full"
-        style={{ width: 5, height: 5, background: "rgba(201,182,255,0.65)" }}
-        aria-hidden="true"
-      />
-      {children}
-    </p>
+      COMING SOON
+    </span>
   );
 }
 
@@ -601,9 +605,12 @@ export default function BrandSettingsForm({
     pinterest_handle: brand.pinterest_handle ?? "",
     twitter_handle: brand.twitter_handle ?? "",
     contact_email: brand.contact_email ?? "",
-    location: brand.location ?? "",
+    // Every brand row was seeded country_code 'US', so an empty value only
+    // shows up on a row that predates that default. Fall back to US.
+    country_code: brand.country_code ?? "US",
+    state: brand.state ?? "",
+    city: brand.city ?? "",
     founded_year: brand.founded_year?.toString() ?? "",
-    restock_schedule: brand.restock_schedule ?? "",
   });
 
   const [saving, setSaving] = useState(false);
@@ -624,9 +631,10 @@ export default function BrandSettingsForm({
       pinterest_handle: brand.pinterest_handle ?? "",
       twitter_handle: brand.twitter_handle ?? "",
       contact_email: brand.contact_email ?? "",
-      location: brand.location ?? "",
+      country_code: brand.country_code ?? "US",
+      state: brand.state ?? "",
+      city: brand.city ?? "",
       founded_year: brand.founded_year?.toString() ?? "",
-      restock_schedule: brand.restock_schedule ?? "",
     } as FormState,
   });
 
@@ -642,6 +650,19 @@ export default function BrandSettingsForm({
     setForm((prev) => ({ ...prev, [key]: value }));
   }, []);
 
+  /**
+   * Country and state are coupled: "CA" means California under US and is not
+   * a province code under Canada. Switching country clears the region so the
+   * two can never disagree.
+   */
+  const setCountry = useCallback((value: string) => {
+    setForm((prev) =>
+      prev.country_code === value
+        ? prev
+        : { ...prev, country_code: value, state: "" },
+    );
+  }, []);
+
   /** Cancel on a row reverts just that field, then collapses it. */
   const cancelRow = useCallback((key: FormKey) => {
     setForm((prev) => ({ ...prev, [key]: original.current.form[key] }));
@@ -653,6 +674,18 @@ export default function BrandSettingsForm({
     setOpenRow(null);
     setError(null);
   }, []);
+
+  // What `brands.location` becomes on save, and what the preview pill shows.
+  // One derivation, used by both, so the preview cannot drift from the write.
+  const derivedLocation = deriveLocation(form.city, form.state);
+  const regions = regionsFor(form.country_code);
+  const stateLabel = regionLabel(form.country_code);
+  // Set once the owner has saved structured parts. Until then the pill on the
+  // public page is still showing the old free-text value, so we say so.
+  const storedLocation = (brand.location ?? "").trim();
+  const showsStaleLocation =
+    storedLocation.length > 0 && storedLocation !== derivedLocation;
+  const restockSchedule = (brand.restock_schedule ?? "").trim();
 
   const handleSave = async () => {
     if (!form.name.trim()) {
@@ -694,11 +727,17 @@ export default function BrandSettingsForm({
         pinterest_handle: form.pinterest_handle.replace(/^@/, "") || null,
         twitter_handle: form.twitter_handle.replace(/^@/, "") || null,
         contact_email: form.contact_email || null,
-        location: form.location || null,
+        // Structured location plus the derived display string, written
+        // together. See lib/geo.ts and the Batch 6b migration: `location` is
+        // what the public page and the brand directory read, so it can never
+        // be left behind when the parts change.
+        country_code: form.country_code || null,
+        state: form.state || null,
+        city: form.city.trim() || null,
+        location: derivedLocation || null,
         founded_year: form.founded_year
           ? parseInt(form.founded_year, 10)
           : null,
-        restock_schedule: form.restock_schedule || null,
       })
       .eq("id", brand.id)
       .eq("owner_id", userId);
@@ -837,22 +876,24 @@ export default function BrandSettingsForm({
               </TierPill>
             </div>
 
-            {/* Meta row, mirrors the public page */}
-            {(form.location.trim() || form.restock_schedule.trim()) && (
+            {/* Meta row, mirrors the public page. Location is the derived
+                string, the same value the save writes to `brands.location`.
+                Restock cadence is read only here: the Drops page owns it. */}
+            {(derivedLocation || restockSchedule) && (
               <div
                 className="mt-2 flex flex-wrap gap-x-3.5 gap-y-1.5 text-[11px]"
                 style={{ color: "rgba(245,245,245,0.55)" }}
               >
-                {form.location.trim() && (
+                {derivedLocation && (
                   <span className="inline-flex items-center gap-1.5 min-w-0">
                     <PinIcon size={12} />
-                    <span className="truncate">{form.location}</span>
+                    <span className="truncate">{derivedLocation}</span>
                   </span>
                 )}
-                {form.restock_schedule.trim() && (
+                {restockSchedule && (
                   <span className="inline-flex items-center gap-1.5 min-w-0">
                     <CalendarIcon size={12} />
-                    <span className="truncate">{form.restock_schedule}</span>
+                    <span className="truncate">{restockSchedule}</span>
                   </span>
                 )}
               </div>
@@ -1117,187 +1158,93 @@ export default function BrandSettingsForm({
           </section>
 
           {/* ══ LOCATION ══ */}
-          {/* City, state and country have no columns on `brands` yet. They are
-              rendered disabled so the shape matches the mockup without
-              pretending to persist. Display location is the live one. */}
+          {/* Batch 6b: structured country / state / city. `brands.location`
+              is derived from these on save (lib/geo.ts, deriveLocation) and
+              stays the one value the public page reads. */}
           <section>
             <SectionLabel>Location</SectionLabel>
             <div className="rounded-2xl p-4 sm:p-5" style={cardStyle}>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mb-4">
-                {["City", "State / region", "Country"].map((label) => (
-                  <div key={label}>
-                    <FieldLabel>{label}</FieldLabel>
-                    <input
-                      type="text"
-                      disabled
-                      value=""
-                      placeholder="Coming soon"
-                      className="w-full rounded-xl px-3.5 py-2.5 text-sm outline-none cursor-not-allowed"
-                      style={{
-                        ...inputStyle,
-                        color: TEXT_FAINT,
-                        opacity: 0.55,
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
-              <ComingSoonNote>
-                Separate city, state and country fields land in a later update.
-              </ComingSoonNote>
-
-              <div className="mt-5">
-                <FieldLabel>Display location</FieldLabel>
-                <input
-                  type="text"
-                  value={form.location}
-                  onChange={(e) => setField("location", e.target.value)}
-                  placeholder="Brooklyn, NY (ships worldwide)"
-                  className={inputClass}
-                  style={inputStyle}
-                />
-                <HelperText>
-                  Free text shown on your public brand page, next to a pin icon.
-                </HelperText>
-              </div>
-            </div>
-          </section>
-
-          {/* ══ RESTOCKS + AVAILABILITY ══ */}
-          <section>
-            <SectionLabel>Restocks and availability</SectionLabel>
-            <div
-              className="rounded-2xl p-4 sm:p-5 flex flex-col gap-5"
-              style={cardStyle}
-            >
-              <div>
-                <FieldLabel>Restock schedule</FieldLabel>
-                <input
-                  type="text"
-                  value={form.restock_schedule}
-                  onChange={(e) => setField("restock_schedule", e.target.value)}
-                  placeholder="Every other Friday, 6pm PST"
-                  className={inputClass}
-                  style={inputStyle}
-                />
-                <HelperText>
-                  Shown on your brand page so collectors know when to check
-                  back.
-                </HelperText>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-[200px_minmax(0,1fr)] gap-5 items-start">
-                {/* Batch 6b: brands has no default-tubs column yet. `drops.tubs_available`
-                    is per drop. Disabled until the brand-level default ships. */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                 <div>
-                  <FieldLabel>Default tubs available</FieldLabel>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    disabled
-                    value=""
-                    placeholder="40"
-                    className="w-full rounded-xl px-4 py-3 outline-none cursor-not-allowed"
-                    style={{
-                      ...inputStyle,
-                      color: TEXT_FAINT,
-                      opacity: 0.55,
-                      fontFamily: "Montserrat, sans-serif",
-                      fontWeight: 800,
-                      fontSize: 17,
-                    }}
-                  />
-                  <HelperText>Prefilled when you start a new drop.</HelperText>
-                  <ComingSoonNote>Coming soon</ComingSoonNote>
-                </div>
-
-                {/* Batch 6b wires this to a real column. Disabled for now. */}
-                <div>
-                  <FieldLabel>Instagram follower tier</FieldLabel>
+                  <FieldLabel>Country</FieldLabel>
                   <select
-                    disabled
-                    defaultValue=""
-                    className="w-full rounded-xl px-4 py-3 text-sm outline-none cursor-not-allowed appearance-none"
-                    style={{
-                      ...inputStyle,
-                      color: TEXT_FAINT,
-                      opacity: 0.55,
-                    }}
-                    aria-label="Instagram follower tier"
+                    value={form.country_code}
+                    onChange={(e) => setCountry(e.target.value)}
+                    className={`${inputClass} appearance-none`}
+                    style={inputStyle}
+                    aria-label="Country"
                   >
-                    <option value="">Not set</option>
-                    {FOLLOWER_TIERS.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
+                    {COUNTRIES.map((c) => (
+                      <option
+                        key={c.code}
+                        value={c.code}
+                        style={{ background: "#0F0A1A" }}
+                      >
+                        {c.name}
                       </option>
                     ))}
                   </select>
-                  <HelperText>
-                    Buckets your brand for peer comparisons on the Analytics
-                    page. Private, never shown publicly.
-                  </HelperText>
-                  <ComingSoonNote>Coming soon</ComingSoonNote>
                 </div>
-              </div>
-            </div>
-          </section>
 
-          {/* ══ FEATURED VARIANTS (stub, Batch 6c) ══ */}
-          <section>
-            <SectionLabel meta="0 of 3 selected">Featured variants</SectionLabel>
-            <div className="rounded-2xl p-4 sm:p-5" style={cardStyle}>
-              <p
-                className="text-[13px] leading-relaxed mb-4"
-                style={{ color: TEXT_MUTED }}
-              >
-                Promote up to 3 variants from your catalog to filter tabs on
-                your public brand page.
-              </p>
-              <div
-                className="rounded-2xl px-5 py-8 text-center"
-                style={{ border: "1.5px dashed rgba(45,10,78,0.9)" }}
-              >
-                <div
-                  className="grid place-items-center rounded-xl mx-auto mb-3.5"
-                  style={{
-                    width: 44,
-                    height: 44,
-                    background: "rgba(255,0,229,0.1)",
-                    border: "1px solid rgba(255,0,229,0.3)",
-                    color: MAGENTA,
-                  }}
-                >
-                  <PlusIcon />
+                <div>
+                  <FieldLabel>{stateLabel}</FieldLabel>
+                  <select
+                    value={form.state}
+                    onChange={(e) => setField("state", e.target.value)}
+                    className={`${inputClass} appearance-none`}
+                    style={inputStyle}
+                    aria-label={stateLabel}
+                  >
+                    <option value="" style={{ background: "#0F0A1A" }}>
+                      Not set
+                    </option>
+                    {regions.map((r) => (
+                      <option
+                        key={r.code}
+                        value={r.code}
+                        style={{ background: "#0F0A1A" }}
+                      >
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <p
-                  className="text-[15px] font-extrabold text-white mb-1.5"
-                  style={{ fontFamily: "Montserrat, sans-serif" }}
-                >
-                  Add your first featured variant
-                </p>
-                <p
-                  className="text-[13px] leading-relaxed mx-auto"
-                  style={{ color: TEXT_MUTED, maxWidth: 320 }}
-                >
-                  Search your catalog to promote a variant. It becomes a filter
-                  tab on your brand page.
-                </p>
-                <button
-                  type="button"
-                  disabled
-                  className="mt-4 rounded-xl px-4 py-2.5 text-xs font-bold cursor-not-allowed"
-                  style={{
-                    background: "rgba(45,10,78,0.55)",
-                    border: "1px solid rgba(245,245,245,0.14)",
-                    color: TEXT_MUTED,
-                    opacity: 0.55,
-                    fontFamily: "Montserrat, sans-serif",
-                  }}
-                >
-                  Search your catalog
-                </button>
-                <ComingSoonNote>Coming soon</ComingSoonNote>
+
+                <div>
+                  <FieldLabel>City</FieldLabel>
+                  <input
+                    type="text"
+                    value={form.city}
+                    onChange={(e) => setField("city", e.target.value.slice(0, 60))}
+                    placeholder="Los Angeles"
+                    className={inputClass}
+                    style={inputStyle}
+                  />
+                </div>
               </div>
+
+              <HelperText>
+                {derivedLocation ? (
+                  <>
+                    Your brand page will show{" "}
+                    <span style={{ color: TEXT_STRONG }}>{derivedLocation}</span>{" "}
+                    next to a pin icon.
+                  </>
+                ) : (
+                  `Pick a ${stateLabel.toLowerCase()} and add a city to show a location on your brand page.`
+                )}
+              </HelperText>
+
+              {showsStaleLocation && (
+                <p
+                  className="text-[11px] mt-2 leading-relaxed"
+                  style={{ color: "rgba(201,182,255,0.7)" }}
+                >
+                  Your brand page currently shows{" "}
+                  <span style={{ color: TEXT_STRONG }}>{storedLocation}</span>.
+                  Saving replaces it with the value above.
+                </p>
+              )}
             </div>
           </section>
 
@@ -1305,41 +1252,38 @@ export default function BrandSettingsForm({
           <section>
             <SectionLabel>Team access</SectionLabel>
             <div
-              className="relative rounded-2xl p-5 overflow-hidden"
+              className="rounded-2xl p-5 overflow-hidden"
               style={{
                 background: "rgba(45,10,78,0.18)",
                 border: "1px solid rgba(45,10,78,0.55)",
               }}
             >
-              <span
-                className="absolute top-4 right-4 rounded-full px-2.5 py-1 text-[10px] font-black tracking-[0.1em]"
-                style={{
-                  background: "rgba(124,77,255,0.16)",
-                  border: "1px solid rgba(124,77,255,0.4)",
-                  color: "#C9B6FF",
-                }}
-              >
-                COMING SOON
-              </span>
-              <div className="flex items-center gap-3 mb-2 pr-24">
-                <span
-                  className="grid place-items-center rounded-xl flex-shrink-0"
-                  style={{
-                    width: 38,
-                    height: 38,
-                    background: "rgba(124,77,255,0.14)",
-                    border: "1px solid rgba(124,77,255,0.3)",
-                    color: "#C9B6FF",
-                  }}
-                >
-                  <TeamIcon />
-                </span>
-                <span
-                  className="text-base font-extrabold text-white"
-                  style={{ fontFamily: "Montserrat, sans-serif" }}
-                >
-                  Invite teammates
-                </span>
+              {/* Batch 6b: the pill used to be absolutely positioned in the
+                  corner and collided with the headline once the card narrowed.
+                  It is a flex sibling now, so the headline truncates or wraps
+                  and the two can never overlap. */}
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span
+                    className="grid place-items-center rounded-xl flex-shrink-0"
+                    style={{
+                      width: 38,
+                      height: 38,
+                      background: "rgba(124,77,255,0.14)",
+                      border: "1px solid rgba(124,77,255,0.3)",
+                      color: "#C9B6FF",
+                    }}
+                  >
+                    <TeamIcon />
+                  </span>
+                  <span
+                    className="text-base font-extrabold text-white min-w-0"
+                    style={{ fontFamily: "Montserrat, sans-serif" }}
+                  >
+                    Invite teammates
+                  </span>
+                </div>
+                <ComingSoonPill />
               </div>
               <p
                 className="text-[13px] leading-relaxed mb-4"

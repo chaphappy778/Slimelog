@@ -29,6 +29,29 @@ Template for new entries:
 
 ---
 
+### 2026-07-23 — Structured fields behind a derived display column (DB)
+
+**Symptom:** none in production. Logged as a prevention pattern while T137 Batch 6b split the brand's free-text `brands.location` into structured `country_code` / `state` / `city`, because the obvious version of that change silently blanks a field on three public surfaces.
+
+**Root cause (the one we avoided):** `brands.location` is read in at least three places (`app/brands/[slug]/page.tsx` location pill, `app/brands/page.tsx` directory select, `components/FeaturedBrandCard.tsx`). The tempting move when adding structured parts is to stop writing the old column and have each reader re-assemble `city, state` itself. That is three edits, three chances to miss one, and every row whose owner has not yet re-saved goes blank because state/city are NULL and the display string was never parsed into them.
+
+**Fix:** kept `brands.location` as a *derived* column. `deriveLocation(city, state)` in `apps/web/lib/geo.ts` is the only derivation, and `BrandSettingsForm.handleSave` writes the parts and the derived string in the same `.update()`. Zero reader changes. Migration `20260723000091_brands_structured_location.sql` states the contract in a header comment and in `COMMENT ON COLUMN` so it is visible from `\d+ brands`. No backfill: parsing free text like "Brooklyn, NY (ships worldwide)" into a state code is guesswork, so old rows keep showing their existing string until the owner saves the structured form.
+
+**Prevention pattern (the valuable read):**
+
+1. When normalizing a display column into parts, keep the display column and derive it on write. Migrating readers is the expensive, error-prone half; migrating one writer is cheap.
+2. The derivation lives in exactly one exported function, next to the write. If it is inlined at two call sites they will drift.
+3. Any future writer that touches the parts MUST recompute the derived column in the same statement. Say this in the migration and in a `COMMENT ON COLUMN`, not only in a code comment, because the next writer may be a SQL script or an admin action rather than this form.
+4. Don't backfill a derived column from unparseable free text. Leave the parts NULL and let the display value ride until a human confirms it.
+
+**Regression check:** save the brand settings form with a city and a state, then load `/brands/<slug>` and confirm the pill reads "City, ST". Then `select id, city, state, location from public.brands where city is not null and location is distinct from (city || ', ' || state);` should return no rows for brands saved through the form.
+
+**Also in this batch (migration lag):** the Settings page select now names `country_code, state, city`. If that code reaches production before the migration does, the select errors, `brand` is null and the page redirects to `/brands` — the whole screen, not just the new section. `app/brand-dashboard/[slug]/settings/page.tsx` retries once with the legacy column list and nulls the three fields, per CLAUDE.md gotcha 1. The save path has no such fallback; it surfaces the error toast. **Ship the migration first.**
+
+**Related:** T137 Batch 6b. Same family as the "last-write-wins clobber" entry below: both are about who is allowed to write which columns on `brands`.
+
+---
+
 ### 2026-07-23 — `CREATE OR REPLACE VIEW` silently resets `security_invoker` (DB)
 
 **Symptom:** Supabase advisor raised a CRITICAL `security_definer_view` on `public.upcoming_drops`. The view had been explicitly fixed to invoker mode months earlier and nobody touched security since. No user-visible symptom, which is the dangerous part: a definer view keeps returning rows either way, so the only signal is the advisor.

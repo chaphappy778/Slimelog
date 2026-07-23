@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import DropsSplitPanel from "@/components/dashboard/DropsSplitPanel";
+import RestockCadenceRow from "@/components/dashboard/RestockCadenceRow";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -24,7 +25,10 @@ export default async function DropsPage({ params }: PageProps) {
 
   const { data: brand } = await supabase
     .from("brands")
-    .select("id, name, slug, verification_tier, logo_url")
+    // T137 Batch 6b: restock_schedule moved here from the Settings page. The
+    // Drops page is the only writer now; Settings and the public brand page
+    // still read the same column.
+    .select("id, name, slug, verification_tier, logo_url, restock_schedule")
     .eq("slug", slug)
     .eq("owner_id", user.id)
     .single();
@@ -66,6 +70,11 @@ export default async function DropsPage({ params }: PageProps) {
           Schedule and manage your product drops
         </p>
       </div>
+      <RestockCadenceRow
+        brandId={brand.id}
+        userId={user.id}
+        initialSchedule={brand.restock_schedule}
+      />
       <DropsSplitPanel
         brandId={brand.id}
         userId={user.id}
