@@ -46,6 +46,7 @@ import { ImageUpload } from "@/components/ImageUpload";
 import { createClient } from "@/lib/supabase/client";
 import PageWrapper from "@/components/PageWrapper";
 import BrandSearchInput from "@/components/BrandSearchInput";
+import SlimeSearchInput from "@/components/log/SlimeSearchInput";
 import SubtypeAutocomplete from "@/components/SubtypeAutocomplete";
 // 2026-07-16 Commit B-wizard — brand-scoped variant picker (with
 // "Suggest a variant" fallback + POST to /api/variant-suggestions).
@@ -113,6 +114,11 @@ const DRAFT_DEBOUNCE_MS = 300;
 // [Change 1 — scent_notes] Added scent_notes: string to FormState
 interface FormState {
   slime_name: string;
+  // Track 2 (2026-07-23): catalog slime id, pre-filled when the user
+  // picks an existing entry from the brand-scoped slime autocomplete.
+  // Threaded into LogSlimeInput so the server auto-match can
+  // short-circuit. Null on free-type (server still resolves on save).
+  slime_id: string | null;
   brand_name_raw: string;
   brand_id: string | null;
   collection_name: string;
@@ -249,6 +255,7 @@ function LogPageInner() {
   // [Change 2 — scent_notes] Added scent_notes: "" to initial state
   const [form, setForm] = useState<FormState>({
     slime_name: searchParams.get("slime_name") ?? "",
+    slime_id: null,
     brand_name_raw: searchParams.get("brand") ?? "",
     brand_id: null,
     collection_name: searchParams.get("collection") ?? "",
@@ -372,6 +379,11 @@ function LogPageInner() {
 
       const input: LogSlimeInput = {
         slime_name: form.slime_name.trim() || undefined,
+        // Track 2 (2026-07-23): when the wizard already knows the catalog
+        // id (user picked from the brand-scoped autocomplete), send it so
+        // the server's Track 1b resolve short-circuits instead of
+        // re-deriving from name + brand.
+        slime_id: form.slime_id ?? undefined,
         brand_name_raw: form.brand_name_raw.trim() || undefined,
         brand_id: form.brand_id ?? undefined,
         base_type: form.base_type as SlimeBaseType,
@@ -490,8 +502,16 @@ function LogPageInner() {
                 <BrandSearchInput
                   value={form.brand_name_raw}
                   onChange={(name: string, id: string | null) => {
-                    set("brand_name_raw", name);
-                    setForm((f) => ({ ...f, brand_id: id }));
+                    // Track 2: a brand change invalidates any slime picked
+                    // from the previous brand's catalog. Clear the linked
+                    // slime_id (the typed name stays) so we don't save a
+                    // cross-brand catalog link.
+                    setForm((f) => ({
+                      ...f,
+                      brand_name_raw: name,
+                      brand_id: id,
+                      ...(id !== f.brand_id ? { slime_id: null } : {}),
+                    }));
                   }}
                   placeholder="Search brands..."
                 />
@@ -499,11 +519,27 @@ function LogPageInner() {
 
               <div>
                 <FieldLabel>Slime name</FieldLabel>
-                <input
-                  style={fieldInputStyle}
-                  placeholder="e.g. Honeydew Dreams"
+                {/* Track 2 (2026-07-23): brand-scoped autocomplete. When a
+                    brand is picked, surfaces slimes already in that brand's
+                    catalog so 2nd+ loggers pick the canonical entry instead
+                    of re-typing a variation. No brand yet → plain input. */}
+                <SlimeSearchInput
+                  brandId={form.brand_id}
                   value={form.slime_name}
-                  onChange={(e) => set("slime_name", e.target.value)}
+                  onChange={(name, id, baseType) => {
+                    setForm((f) => ({
+                      ...f,
+                      slime_name: name,
+                      slime_id: id,
+                      // Pre-fill base_type from the picked catalog row only
+                      // when the user hasn't already chosen one. Never
+                      // clobber a manual pick.
+                      ...(id && baseType && !f.base_type
+                        ? { base_type: baseType as SlimeBaseType }
+                        : {}),
+                    }));
+                  }}
+                  placeholder="e.g. Honeydew Dreams"
                 />
               </div>
 
