@@ -486,16 +486,6 @@ function LogPageInner() {
               </div>
 
               <div>
-                <FieldLabel>Slime name</FieldLabel>
-                <input
-                  style={fieldInputStyle}
-                  placeholder="e.g. Honeydew Dreams"
-                  value={form.slime_name}
-                  onChange={(e) => set("slime_name", e.target.value)}
-                />
-              </div>
-
-              <div>
                 <FieldLabel optional>Brand / shop name</FieldLabel>
                 <BrandSearchInput
                   value={form.brand_name_raw}
@@ -504,6 +494,16 @@ function LogPageInner() {
                     setForm((f) => ({ ...f, brand_id: id }));
                   }}
                   placeholder="Search brands..."
+                />
+              </div>
+
+              <div>
+                <FieldLabel>Slime name</FieldLabel>
+                <input
+                  style={fieldInputStyle}
+                  placeholder="e.g. Honeydew Dreams"
+                  value={form.slime_name}
+                  onChange={(e) => set("slime_name", e.target.value)}
                 />
               </div>
 
