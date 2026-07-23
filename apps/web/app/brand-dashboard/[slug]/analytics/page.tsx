@@ -565,8 +565,8 @@ export default async function AnalyticsPage({ params }: PageProps) {
                 className="text-sm mt-2"
                 style={{ color: "#8f83b0", fontFamily: "Inter, sans-serif" }}
               >
-                Coming soon: cross-brand benchmarks. See how your logs per drop
-                stack up against the platform average.
+                Coming soon: how your drops perform against the platform
+                average, per base type.
               </p>
             </div>
 
@@ -588,7 +588,8 @@ export default async function AnalyticsPage({ params }: PageProps) {
                 className="text-sm mt-2"
                 style={{ color: "#8f83b0", fontFamily: "Inter, sans-serif" }}
               >
-                Coming soon: aggregate care insights from your customers.
+                Coming soon: what products your customers reach for - top care
+                items, most common activators, seasonal spikes.
               </p>
             </div>
 
