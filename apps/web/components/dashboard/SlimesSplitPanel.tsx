@@ -8,6 +8,10 @@ import { SLIME_BASE_TYPE_LABELS, SlimeBaseType } from "@/lib/types";
 import { createClient } from "@/lib/supabase/client";
 // [Track 3a] — promote a community-added row to official.
 import { approveSlimeAsOfficial } from "@/lib/brand-catalog-actions";
+// Polish (2026-07-23): SCALE_BANDS is the single source of truth for the
+// See-scale band colors, shared with /how-to-rate and the slime detail page.
+// We reuse it to color the rating breakdown bars by band.
+import { SCALE_BANDS } from "@/app/how-to-rate/content";
 
 const supabase = createClient();
 
@@ -56,8 +60,22 @@ const DIMENSIONS = [
   { key: "avg_creativity", label: "Creativity" },
 ];
 
+// Polish (2026-07-23): map a rating value to its See-scale band color so a
+// 4.x reads "Great" green and a 2.x reads "Under" orange at a glance. Mirrors
+// ratingBandColor() on the slime detail page; sourced from SCALE_BANDS.
+function ratingBandColor(value: number): string {
+  const idx = Math.min(
+    SCALE_BANDS.length - 1,
+    Math.max(0, Math.floor(value) - 1),
+  );
+  return SCALE_BANDS[idx].accentColor;
+}
+
 function RatingBar({ label, value }: { label: string; value: number | null }) {
   const pct = value ? (value / 5) * 100 : 0;
+  // Polish (2026-07-23): color the fill + value by its See-scale band. Null
+  // ratings keep the empty-bar treatment (no fill, muted dash).
+  const bandColor = value ? ratingBandColor(value) : null;
   return (
     <div>
       <div className="flex justify-between mb-1">
@@ -73,7 +91,7 @@ function RatingBar({ label, value }: { label: string; value: number | null }) {
         <span
           className="text-xs font-semibold"
           style={{
-            color: value ? "#34e89e" : "rgba(245,245,245,0.2)",
+            color: bandColor ?? "rgba(245,245,245,0.2)",
             fontFamily: "Inter, sans-serif",
           }}
         >
@@ -88,7 +106,8 @@ function RatingBar({ label, value }: { label: string; value: number | null }) {
           className="h-full rounded-full transition-all duration-500"
           style={{
             width: `${pct}%`,
-            background: "linear-gradient(90deg, #34e89e, #22d3ee)",
+            background: bandColor ?? "transparent",
+            boxShadow: bandColor ? `0 0 6px ${bandColor}55` : undefined,
           }}
         />
       </div>
@@ -513,8 +532,9 @@ export default function SlimesSplitPanel({
                           <span
                             className="text-[9px] font-black px-2 py-0.5 rounded-[5px] tracking-widest"
                             style={{
-                              color: "#ff2bd6",
-                              border: "1px solid rgba(255,43,214,0.5)",
+                              color: "#FFD24A",
+                              border: "1px solid rgba(255,210,74,0.5)",
+                              backgroundColor: "rgba(255,210,74,0.10)",
                             }}
                           >
                             LIMITED
