@@ -89,6 +89,28 @@ export default async function AnalyticsPage({ params }: PageProps) {
     verification_tier: brand.verification_tier ?? "community",
   };
 
+  // [T137 Fix B-2] Pre-fetch this brand's slime IDs so analytics can count a
+  // log through EITHER linking path: collection_logs.brand_id = brand OR the
+  // log's slime belongs to the brand. Fix B counted only the slime_id path,
+  // which dropped logs where the wizard tagged the brand but no catalog slime
+  // (brand.total_logs on Overview counts those, so the two surfaces disagreed:
+  // Overview 14, Analytics 0). A brand has well under 500 slimes, so this extra
+  // query is small and bounded. See docs/cost-tracker.md.
+  const { data: brandSlimes } = await supabase
+    .from("slimes")
+    .select("id")
+    .eq("brand_id", brand.id);
+  const brandSlimeIds = (brandSlimes ?? []).map((s) => s.id as string);
+
+  // PostgREST .or() filter matching either path. When the brand has no catalog
+  // slimes yet, slime_id.in.() would be empty/invalid, so fall back to the
+  // brand_id path alone. A collection_logs row is returned once even when it
+  // satisfies both clauses, so the OR is inherently deduped (no double count).
+  const logOrFilter =
+    brandSlimeIds.length > 0
+      ? `brand_id.eq.${brand.id},slime_id.in.(${brandSlimeIds.join(",")})`
+      : `brand_id.eq.${brand.id}`;
+
   // [T137 Batch 3a] Paywall split: brand-specific data is FREE for any brand
   // owner. These six queries now run for everyone, not just Pro. Aggregate /
   // cross-brand / portability features stay Pro-gated at the section level.
@@ -100,17 +122,17 @@ export default async function AnalyticsPage({ params }: PageProps) {
     { data: cl },
     { data: sa },
   ] = await Promise.all([
-    // [T137 Batch B] Logs Over Time goes through slime_id -> slimes.brand_id
-    // instead of the brand_weekly_logs view, which filtered on
-    // collection_logs.brand_id (often NULL when the log wizard sets only
-    // slime_id, which zeroed the whole chart). We fetch logged_at for every
-    // non-wishlist community log of this brand's slimes and bucket by ISO week
-    // in JS below. Ordered newest-first and capped so a very large brand keeps
-    // the recent weeks the chart actually shows. See docs/cost-tracker.md.
+    // [T137 Fix B-2] Logs Over Time now counts logs through BOTH paths via the
+    // OR filter above: brand_id.eq OR slime_id.in.(brand's slimes). Fix B used
+    // only the slime_id -> slimes.brand_id embed, which missed brand_id-only
+    // logs and left the chart at 0 while Overview showed the real total. We
+    // fetch logged_at for every matching non-wishlist log and bucket by ISO
+    // week in JS below. Ordered newest-first and capped so a very large brand
+    // keeps the recent weeks the chart actually shows. See docs/cost-tracker.md.
     supabase
       .from("collection_logs")
-      .select("logged_at, slimes!inner(brand_id)")
-      .eq("slimes.brand_id", brand.id)
+      .select("logged_at")
+      .or(logOrFilter)
       .eq("in_wishlist", false)
       .order("logged_at", { ascending: false })
       .limit(10000),
@@ -134,10 +156,18 @@ export default async function AnalyticsPage({ params }: PageProps) {
       .eq("brand_id", brand.id)
       .order("drop_at", { ascending: false, nullsFirst: false })
       .limit(6),
+    // [T137 Fix B-2] Community Logging Activity uses the same OR filter so it
+    // lists brand_id-only logs too, not just catalog-slime logs. The slimes
+    // embed is now a LEFT join (no `!inner`), so logs with no catalog slime are
+    // kept: those display collection_logs.slime_name (always set) and base_type
+    // instead of a joined slime name. Catalog logs still prefer the canonical
+    // slime.name / slimes.slime_type for enrichment (see mapping below).
     supabase
       .from("collection_logs")
       .select(
-        `slimes!inner(name, slime_type, brand_id),
+        `id,
+         slime_name,
+         base_type,
          rating_overall,
          rating_texture,
          rating_scent,
@@ -146,9 +176,10 @@ export default async function AnalyticsPage({ params }: PageProps) {
          rating_creativity,
          rating_sensory_fit,
          logged_at,
+         slimes(name, slime_type),
          profiles!collection_logs_user_id_fkey(username)`,
       )
-      .eq("slimes.brand_id", brand.id)
+      .or(logOrFilter)
       .eq("in_wishlist", false)
       .order("logged_at", { ascending: false })
       .limit(500),
@@ -239,11 +270,20 @@ export default async function AnalyticsPage({ params }: PageProps) {
   });
 
   const communityLogs = (cl ?? []).map((row: Record<string, unknown>) => {
-    const slime = row.slimes as Record<string, unknown> | null;
+    // [T137 Fix B-2] slimes is now a LEFT embed, so it may be null for
+    // brand_id-only logs. Prefer the catalog slime's canonical name/type when
+    // present (unchanged display for catalog logs); otherwise fall back to the
+    // log's own free-text slime_name (never null) and base_type.
+    const slimeEmbed = row.slimes;
+    const slime = (Array.isArray(slimeEmbed) ? slimeEmbed[0] : slimeEmbed) as
+      | Record<string, unknown>
+      | null;
     const profile = row.profiles as Record<string, unknown> | null;
     return {
-      slime_name: (slime?.name as string) ?? "",
-      slime_type: (slime?.slime_type as string) ?? null,
+      slime_name:
+        (slime?.name as string) || (row.slime_name as string) || "",
+      slime_type:
+        (slime?.slime_type as string) ?? (row.base_type as string) ?? null,
       overall: (row.rating_overall as number) ?? null,
       texture: (row.rating_texture as number) ?? null,
       scent: (row.rating_scent as number) ?? null,

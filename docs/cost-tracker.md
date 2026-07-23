@@ -59,6 +59,20 @@ implemented mitigation and the concern is gone.
 
 ---
 
+### 2026-07-22 — Brand analytics slime-id pre-fetch for OR-filter (DB Query)
+
+**Query (T137 Fix B-2):** one small `SELECT id FROM slimes WHERE brand_id = :brand` per Analytics page load, feeding a PostgREST `.or(brand_id.eq.:brand, slime_id.in.(ids))` on the Logs Over Time and Community Logging Activity reads. Lets both surfaces count a log through either linking path (`collection_logs.brand_id` OR the log's slime → `slimes.brand_id`), matching Overview's `brand.total_logs`.
+
+**Current cost:** trivial. A brand has well under 500 slimes, so the pre-fetch returns a tiny id list and the `IN` clause stays short. Both indexed (`logs_brand_id_idx`, `logs_slime_id_idx`).
+
+**What makes it grow:** the `slime_id.in.(...)` list grows with a brand's catalog size. At thousands of slimes the OR-filter URL gets long; PostgREST/URL limits, not row cost, would bite first.
+
+**Mitigation path:** move the union into a DB view or RPC (`brand_all_logs(brand_id)`) that does the `brand_id OR slime_id IN (...)` join server-side — removes the id round-trip and the URL-length ceiling. Preferred once any brand's catalog is large.
+
+**Related:** T137 Fix B (slime_id-only path this replaces), Overview `brand.total_logs`.
+
+---
+
 ### 2026-07-12 — Marketplace waitlist position calc (DB Query)
 
 **Query:** `SELECT COUNT(*) FROM marketplace_waitlist WHERE created_at <= (my_row.created_at)` plus a bare `COUNT(*)` for the community total. Runs on every POST to `/api/marketplace/waitlist` and every GET to `/api/marketplace/waitlist/position` (mount of `/marketplace`).
