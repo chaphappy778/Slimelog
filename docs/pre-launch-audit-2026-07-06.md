@@ -213,7 +213,7 @@ SlimeLog is a solid Next.js 14 + Supabase app with a well-structured RLS-first d
 - **`subscription_status CHECK` includes literal `null` in `IN (...)`** — Rewrite as `IS NULL OR IN (...)`.
 - **`waitlist.email UNIQUE` is case-sensitive** — `CREATE UNIQUE INDEX ON waitlist (lower(email));`.
 - **`handle_new_user()` swallows unique-username violations** — `ON CONFLICT (id) DO NOTHING` masks username collisions.
-- **`user_collection_summary` view keeps regressing on `security_invoker`** — Add a repo lint grepping every `CREATE VIEW` for `security_invoker=on`.
+- **`user_collection_summary` view keeps regressing on `security_invoker`** — Add a repo lint grepping every `CREATE VIEW` for `security_invoker=on`. **[2026-07-23: root cause identified.]** `CREATE OR REPLACE VIEW` without a `WITH` clause RESETS the view's reloptions rather than merging them, so any later migration that appends a column silently drops `security_invoker`. Hit `upcoming_drops` (fixed in `20260723000090_upcoming_drops_security_invoker.sql`, flagged CRITICAL by the Supabase advisor). Audited all public views on the same pass: every other view's latest definition still carries the flag. The lint is still worth building; the check is `select relname, reloptions from pg_class where relkind = 'v' and relnamespace = 'public'::regnamespace;` and every row must read `{security_invoker=true}`. See `docs/error-tracker.md` 2026-07-23.
 - **`tags` INSERT is unbounded** — `WITH CHECK (true)` for authenticated is a spam vector. Add length/regex constraint.
 - **`follows` ignores `profile_visibility='private'`** — Consider a follow-request flow for private profiles.
 - **`brand_claims.document_storage_path` has no FK to `storage.objects`** — Orphan files accumulate after claim deletion.

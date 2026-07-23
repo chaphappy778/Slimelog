@@ -1,0 +1,79 @@
+-- ===========================================================================
+-- Security: convert public.upcoming_drops back to SECURITY INVOKER
+-- Supabase advisor: "security_definer_view" (CRITICAL)
+-- 2026-07-23
+-- ===========================================================================
+--
+-- WHAT HAPPENED
+--
+-- 20260407000025_security_fixes.sql correctly re-created the view with
+--   CREATE OR REPLACE VIEW public.upcoming_drops WITH (security_invoker = true)
+--
+-- Then 20260713000073_drops_tubs_available.sql appended the
+-- `tubs_available` column with a plain
+--   create or replace view public.upcoming_drops as ...
+-- (no WITH clause).
+--
+-- Postgres RESETS a view's reloptions when CREATE OR REPLACE VIEW omits the
+-- WITH clause. It does not merge with the existing options. So the
+-- security_invoker flag silently flipped back to the default (false), and the
+-- view reverted to running with the owner's (postgres) privileges, bypassing
+-- RLS on drops / brands / brand_follows.
+--
+-- PREVENTION: any future `create or replace view` on a view that carries
+-- reloptions MUST repeat `WITH (security_invoker = true)`. See
+-- docs/error-tracker.md.
+--
+-- ---------------------------------------------------------------------------
+-- APPROACH
+--
+-- Approach A (ALTER VIEW ... SET) is used here rather than a DROP + CREATE.
+-- It preserves the existing 13-column projection byte-for-byte (including the
+-- appended `tubs_available` column) so there is zero risk of reordering or
+-- dropping a column the app selects. `security_invoker` as a view storage
+-- parameter was added in Postgres 15; Supabase runs 15+.
+--
+-- ---------------------------------------------------------------------------
+-- SAFETY ANALYSIS — why switching to invoker does NOT break /discover
+--
+-- The view reads three tables. All three have a permissive, unrestricted
+-- SELECT policy granted to PUBLIC (no TO clause => anon AND authenticated):
+--
+--   public.drops         "Drops are publicly readable"         using (true)
+--   public.brands        "Brands are publicly readable"        using (true)
+--   public.brand_follows "Brand follows are publicly readable" using (true)
+--                        (all three from 20260324000001_slimelog_initial_schema.sql)
+--
+-- Later migrations that touched these tables only tightened WRITE paths:
+--   20260506000034_brands_rls_tightening.sql  -> brands INSERT/DELETE (admin only)
+--   20260706000049_audit_blocker_5_...sql     -> drops FOR ALL owner write policy
+-- Neither dropped or narrowed a SELECT policy. Verified by grepping every
+-- `DROP POLICY` in supabase/migrations/.
+--
+-- Sole consumer: apps/web/app/discover/page.tsx:155, via the anon-key
+-- @supabase/ssr server client (so RLS runs as anon for logged-out visitors and
+-- as the user for logged-in ones). Both roles satisfy `using (true)` on all
+-- three tables, so the row set returned is identical before and after this
+-- change. The definer bypass was buying nothing.
+-- ===========================================================================
+
+ALTER VIEW public.upcoming_drops SET (security_invoker = true);
+
+COMMENT ON VIEW public.upcoming_drops IS
+  'Upcoming and live drops (feed driver). SECURITY INVOKER: RLS on drops/brands/brand_follows evaluates as the querying user, not the view owner. Any future CREATE OR REPLACE VIEW on this view MUST repeat WITH (security_invoker = true) or the flag resets. See 20260723000090.';
+
+-- ---------------------------------------------------------------------------
+-- VERIFY (run in the Supabase SQL editor after `npx supabase db push`)
+--
+--   select relname, reloptions
+--   from pg_class
+--   where relname = 'upcoming_drops';
+--   -- expect: {security_invoker=true}
+--
+--   select pg_get_viewdef('public.upcoming_drops'::regclass, true);
+--   -- expect: the 13-column projection, no SECURITY DEFINER
+--
+--   -- row counts must match between the two roles:
+--   set role anon;          select count(*) from public.upcoming_drops; reset role;
+--   set role authenticated; select count(*) from public.upcoming_drops; reset role;
+-- ---------------------------------------------------------------------------

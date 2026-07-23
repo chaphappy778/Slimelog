@@ -29,6 +29,31 @@ Template for new entries:
 
 ---
 
+### 2026-07-23 — `CREATE OR REPLACE VIEW` silently resets `security_invoker` (DB)
+
+**Symptom:** Supabase advisor raised a CRITICAL `security_definer_view` on `public.upcoming_drops`. The view had been explicitly fixed to invoker mode months earlier and nobody touched security since. No user-visible symptom, which is the dangerous part: a definer view keeps returning rows either way, so the only signal is the advisor.
+
+**Root cause:** `20260407000025_security_fixes.sql` set `WITH (security_invoker = true)`. Then `20260713000073_drops_tubs_available.sql` appended the `tubs_available` column with a plain `create or replace view public.upcoming_drops as ...` and no `WITH` clause. **Postgres RESETS a view's reloptions when `CREATE OR REPLACE VIEW` omits the `WITH` clause. It does not merge with the existing options.** The flag flipped back to the default (false) and the view started evaluating RLS as its owner (postgres), bypassing RLS on `drops` / `brands` / `brand_follows`.
+
+The migration that broke it was itself careful, with a long comment about the append-only column restriction. Being thoughtful about the column list is not enough; the reloptions are a separate thing that vanishes.
+
+**Fix:** `20260723000090_upcoming_drops_security_invoker.sql` — `ALTER VIEW public.upcoming_drops SET (security_invoker = true);`. Used `ALTER VIEW` rather than a DROP + CREATE so the 13-column projection is preserved byte-for-byte and no consumer can break on a reordered column. Added a `COMMENT ON VIEW` that states the rule, so the next person doing `create or replace` on this view sees it in `\d+`.
+
+**Prevention pattern (the valuable read):**
+
+1. Any `CREATE OR REPLACE VIEW` on a view that carries reloptions MUST repeat `WITH (security_invoker = true)`. Treat the WITH clause as part of the view's identity, not as a one-time setup step.
+2. Before writing a `create or replace view`, grep the migration history for that view name and check what options the *most recent* definition carried. The latest definition wins, silently.
+3. To change only the option and not the body, `ALTER VIEW ... SET (...)` is the surgical tool. To change only the body, still repeat the options.
+4. Audited every other view at the same time (`top_rated_slimes`, `brand_top_slimes`, `user_collection_summary`, `profiles_public`, `profile_follow_counts`, `brand_weekly_logs`): all of their latest definitions do carry `security_invoker = true`. `upcoming_drops` was the sole regression.
+
+**Regression check:** `select relname, reloptions from pg_class where relkind = 'v' and relnamespace = 'public'::regnamespace;` — every row must show `{security_invoker=true}`. This is a one-liner; it belongs in the pre-deploy checklist, and eventually in the repo lint the audit doc already asks for.
+
+**Note on why the fix is safe rather than merely correct:** switching a definer view to invoker only breaks reads if the underlying RLS was the thing being bypassed. Here all three tables have `using (true)` SELECT policies granted to PUBLIC, so anon and authenticated both see identical rows before and after. Always confirm that before shipping this class of fix, otherwise a "security fix" empties a page.
+
+**Related:** `docs/pre-launch-audit-2026-07-06.md` nice-to-have "`user_collection_summary` view keeps regressing on `security_invoker`" — same failure mode, now diagnosed. Sole consumer: `apps/web/app/discover/page.tsx:155`.
+
+---
+
 ### 2026-07-23 — Splitting a form into two components: the last-write-wins clobber (UI)
 
 **Symptom:** none in production — caught during the T137 Batch 5 imagery extract, but this is the exact shape of a silent data-loss bug, so it's logged as a prevention pattern.
