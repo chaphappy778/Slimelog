@@ -8,10 +8,27 @@ import BrandSettingsForm from "@/components/dashboard/BrandSettingsForm";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }
 
-export default async function SettingsPage({ params }: PageProps) {
+// T137 Batch 6a (2026-07-23): the two editors are tabs now, not stacked
+// sections. The active tab lives in the URL (`?tab=imagery`) rather than in
+// client state so the view is linkable and each tab remounts with a fresh
+// server render of the row. That remount is also a second line of defense
+// behind the clobber rule in docs/error-tracker.md: the two forms are never
+// mounted at the same time, and neither one can hold a stale copy of the
+// other's columns.
+type SettingsTab = "profile" | "imagery";
+
+const TABS: Array<{ id: SettingsTab; label: string }> = [
+  { id: "profile", label: "Brand profile" },
+  { id: "imagery", label: "Brand imagery" },
+];
+
+export default async function SettingsPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
+  const { tab: tabParam } = await searchParams;
+  const activeTab: SettingsTab = tabParam === "imagery" ? "imagery" : "profile";
   const supabase = await createClient();
 
   const {
@@ -53,6 +70,35 @@ export default async function SettingsPage({ params }: PageProps) {
     banner_url: brand.banner_url,
     slug: brand.slug,
     verification_tier: brand.verification_tier,
+  };
+
+  // BrandSettingsForm renders a scaled-down public hero in its live preview,
+  // so it needs the current imagery to look right. It gets them read only,
+  // under different key names, so they can never reach its update payload.
+  // BrandImageryEditor stays the only writer of those two columns.
+  const settingsBrand = {
+    id: brand.id,
+    name: brand.name,
+    bio: brand.bio,
+    description: brand.description,
+    website_url: brand.website_url,
+    shop_url: brand.shop_url,
+    instagram_handle: brand.instagram_handle,
+    tiktok_handle: brand.tiktok_handle,
+    youtube_handle: brand.youtube_handle,
+    pinterest_handle: brand.pinterest_handle,
+    twitter_handle: brand.twitter_handle,
+    contact_email: brand.contact_email,
+    location: brand.location,
+    founded_year: brand.founded_year,
+    restock_schedule: brand.restock_schedule,
+    slug: brand.slug,
+    verification_tier: brand.verification_tier,
+  };
+
+  const settingsPreview = {
+    bannerSrc: brand.banner_url,
+    logoSrc: brand.logo_url,
   };
 
   return (
@@ -98,15 +144,47 @@ export default async function SettingsPage({ params }: PageProps) {
           </div>
         </div>
 
-        <BrandImageryEditor brand={imageryBrand} userId={user.id} />
+        {/* Sub-nav. Later batches add Featured variants and Team here. */}
+        <nav
+          className="flex gap-2 overflow-x-auto pb-4 mb-5"
+          style={{ borderBottom: "1px solid rgba(45,10,78,0.7)" }}
+          aria-label="Brand profile sections"
+        >
+          {TABS.map((t) => {
+            const isActive = t.id === activeTab;
+            return (
+              <Link
+                key={t.id}
+                href={`/brand-dashboard/${brand.slug}/settings?tab=${t.id}`}
+                scroll={false}
+                aria-current={isActive ? "page" : undefined}
+                className="flex-shrink-0 rounded-full px-4 py-2 text-xs font-bold whitespace-nowrap"
+                style={{
+                  fontFamily: "Montserrat, sans-serif",
+                  background: isActive
+                    ? "rgba(0,240,255,0.12)"
+                    : "rgba(45,10,78,0.35)",
+                  border: isActive
+                    ? "1px solid rgba(0,240,255,0.45)"
+                    : "1px solid rgba(45,10,78,0.7)",
+                  color: isActive ? "#00F0FF" : "rgba(245,245,245,0.5)",
+                }}
+              >
+                {t.label}
+              </Link>
+            );
+          })}
+        </nav>
 
-        <div
-          className="my-7"
-          style={{ height: 1, background: "rgba(45,10,78,0.7)" }}
-          aria-hidden="true"
-        />
-
-        <BrandSettingsForm brand={brand} userId={user.id} />
+        {activeTab === "imagery" ? (
+          <BrandImageryEditor brand={imageryBrand} userId={user.id} />
+        ) : (
+          <BrandSettingsForm
+            brand={settingsBrand}
+            userId={user.id}
+            preview={settingsPreview}
+          />
+        )}
       </div>
     </DashboardLayout>
   );
