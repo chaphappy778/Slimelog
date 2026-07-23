@@ -302,11 +302,42 @@ async function logSlimeInner(input: LogSlimeInput): Promise<LogSlimeResult> {
       : null;
   const cleanedKeywords = moderateKeywords(input.keywords);
 
+  // [Fix W 2026-07-22] Auto-match slime_id from name+brand when the wizard
+  // didn't send one. The wizard collects brand_id via BrandSearchInput but
+  // has no catalog-slime picker — users just type slime_name as text. When
+  // brand_id + slime_name are both set, look up the catalog for exactly one
+  // matching slime and link the log to it. Populates the slime_id → brand
+  // analytics path (Top Slimes, Community Ratings, Drop Performance) that
+  // was dead before this fix.
+  let matchedSlimeId: string | null = input.slime_id ?? null;
+  if (!matchedSlimeId && input.brand_id && cleanedSlimeName) {
+    const { data: candidates } = await supabase
+      .from("slimes")
+      .select("id, base_type")
+      .eq("brand_id", input.brand_id)
+      .eq("is_brand_official", true)
+      .ilike("name", cleanedSlimeName)
+      .limit(2);
+    // Only auto-link on an unambiguous match. If two catalog slimes have
+    // the same name (rare but possible with brand duplicates), leave
+    // slime_id null so we don't guess wrong.
+    if (candidates && candidates.length === 1) {
+      const c = candidates[0] as { id: string; base_type: string | null };
+      // Base-type sanity check: if the user picked a base_type AND the
+      // catalog slime has one, only link when they agree. Prevents
+      // "Blue Raspberry" logs (Butter base) from auto-linking to
+      // "Blue Raspberry" (Basic base) if a brand has both.
+      if (!c.base_type || !input.base_type || c.base_type === input.base_type) {
+        matchedSlimeId = c.id;
+      }
+    }
+  }
+
   const { data, error } = await supabase
     .from("collection_logs")
     .insert({
       user_id: userId,
-      slime_id: input.slime_id ?? null,
+      slime_id: matchedSlimeId,
       brand_id: input.brand_id ?? null,
       slime_name: cleanedSlimeName,
       brand_name_raw: cleanedBrandNameRaw,
@@ -499,6 +530,39 @@ async function updateSlimeLogInner(
   const prevBrandId = (preUpdate?.brand_id as string | null | undefined) ?? null;
   const prevIsPublic = (preUpdate?.is_public as boolean | undefined) ?? false;
 
+  // [Fix W 2026-07-22] Same auto-match as the create path, for edits. When
+  // the caller sends brand_id + slime_name but NO slime_id (the wizard has
+  // no catalog-slime picker), re-derive slime_id from the catalog so the
+  // edited log lands on the slime_id → brand analytics path. We build a
+  // patch object rather than a bare spread so the three cases stay explicit:
+  //   - caller sent slime_id      → honor it verbatim
+  //   - caller sent brand + name  → resolve from catalog (id, or null when
+  //                                 the match is missing/ambiguous — which
+  //                                 also clears a now-stale linkage)
+  //   - neither                   → leave slime_id untouched
+  let slimeIdPatch: { slime_id?: string | null } = {};
+  if (input.slime_id !== undefined) {
+    slimeIdPatch = { slime_id: input.slime_id };
+  } else if (input.brand_id && cleanedSlimeName) {
+    let matchedSlimeId: string | null = null;
+    const { data: candidates } = await supabase
+      .from("slimes")
+      .select("id, base_type")
+      .eq("brand_id", input.brand_id)
+      .eq("is_brand_official", true)
+      .ilike("name", cleanedSlimeName)
+      .limit(2);
+    if (candidates && candidates.length === 1) {
+      const c = candidates[0] as { id: string; base_type: string | null };
+      // Base-type sanity check: only link when the picked + catalog
+      // base_type agree (or either is absent). See create-path note.
+      if (!c.base_type || !input.base_type || c.base_type === input.base_type) {
+        matchedSlimeId = c.id;
+      }
+    }
+    slimeIdPatch = { slime_id: matchedSlimeId };
+  }
+
   // Audit hp-19 (2026-07-07): add `.select("id")` and throw when the
   // returned array is empty. Previously .update().eq(...).eq(...)
   // returned `{success:true}` even when zero rows matched — so a bad
@@ -509,7 +573,9 @@ async function updateSlimeLogInner(
   const { data: updated, error } = await supabase
     .from("collection_logs")
     .update({
-      ...(input.slime_id !== undefined && { slime_id: input.slime_id }),
+      // [Fix W 2026-07-22] slime_id resolution (honor caller / auto-match /
+      // leave untouched) computed above into slimeIdPatch.
+      ...slimeIdPatch,
       ...(input.brand_id !== undefined && { brand_id: input.brand_id }),
       ...(input.slime_name !== undefined && { slime_name: cleanedSlimeName }),
       ...(input.brand_name_raw !== undefined && {
