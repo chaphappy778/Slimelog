@@ -1,15 +1,19 @@
 // apps/web/components/dashboard/SlimesSplitPanel.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 // [Change 1] — SLIME_BASE_TYPE_LABELS and SlimeBaseType imported; local arrays removed
 import { SLIME_BASE_TYPE_LABELS, SlimeBaseType } from "@/lib/types";
 // Audit hp-24 (2026-07-09): use the shared browser singleton.
 import { createClient } from "@/lib/supabase/client";
+// [Track 3a] — promote a community-added row to official.
+import { approveSlimeAsOfficial } from "@/lib/brand-catalog-actions";
 
 const supabase = createClient();
 
 type FilterTab = "all" | "active" | "limited" | "discontinued";
+// [Track 3a] — catalog-status filter, independent of the state tabs above.
+type CatalogFilter = "all" | "official" | "community";
 
 // [Change 2] — Slime interface uses base_type: SlimeBaseType
 interface Slime {
@@ -22,6 +26,9 @@ interface Slime {
   retail_price: number | null;
   is_limited: boolean;
   is_discontinued: boolean;
+  // [Track 3a] — false = community-added (auto-created by a user log),
+  // true = official brand catalog entry.
+  is_brand_official: boolean;
   avg_texture: number | null;
   avg_scent: number | null;
   avg_sound: number | null;
@@ -135,6 +142,8 @@ export default function SlimesSplitPanel({
 }: SlimesSplitPanelProps) {
   const [slimes, setSlimes] = useState<Slime[]>(initialSlimes);
   const [filter, setFilter] = useState<FilterTab>("all");
+  // [Track 3a] — Official / Community / All catalog-status filter.
+  const [catalogFilter, setCatalogFilter] = useState<CatalogFilter>("all");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mode, setMode] = useState<PanelMode>("empty");
@@ -142,6 +151,9 @@ export default function SlimesSplitPanel({
   const [error, setError] = useState<string | null>(null);
   const [colorInput, setColorInput] = useState("");
   const [colors, setColors] = useState<string[]>([]);
+  // [Track 3a] — approve flow: pending transition + inline result banner.
+  const [approving, startApprove] = useTransition();
+  const [approveError, setApproveError] = useState<string | null>(null);
 
   // [Change 3] — emptyForm uses base_type
   const emptyForm = {
@@ -169,8 +181,34 @@ export default function SlimesSplitPanel({
             : filter === "discontinued"
               ? s.is_discontinued
               : true;
-    return matchSearch && matchFilter;
+    // [Track 3a] — narrow by catalog status, independent of the state tabs.
+    const matchCatalog =
+      catalogFilter === "all"
+        ? true
+        : catalogFilter === "official"
+          ? s.is_brand_official === true
+          : s.is_brand_official === false;
+    return matchSearch && matchFilter && matchCatalog;
   });
+
+  // [Track 3a] — approve a community-added row. Optimistic flip on
+  // success; inline red banner on failure (surfaces the action's error).
+  const handleApprove = (slime: Slime) => {
+    if (slime.is_brand_official) return;
+    setApproveError(null);
+    startApprove(async () => {
+      const res = await approveSlimeAsOfficial(slime.id);
+      if (!res.ok) {
+        setApproveError(res.error);
+        return;
+      }
+      setSlimes((prev) =>
+        prev.map((s) =>
+          s.id === slime.id ? { ...s, is_brand_official: true } : s,
+        ),
+      );
+    });
+  };
 
   const startAdd = () => {
     setSelectedId(null);
@@ -265,6 +303,13 @@ export default function SlimesSplitPanel({
     { key: "discontinued", label: "Discontinued" },
   ];
 
+  // [Track 3a] — catalog-status chips.
+  const catalogTabs: { key: CatalogFilter; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "official", label: "Official" },
+    { key: "community", label: "Community" },
+  ];
+
   return (
     <div
       className="rounded-2xl overflow-hidden flex"
@@ -351,6 +396,37 @@ export default function SlimesSplitPanel({
           ))}
         </div>
 
+        {/* [Track 3a] Catalog-status filter — All / Official / Community.
+            Independent of the state tabs above; lets an owner review the
+            community-added rows that Track 1b auto-creates. */}
+        <div
+          className="flex overflow-x-auto scrollbar-none px-3 py-2 gap-1.5"
+          style={{ borderBottom: "1px solid rgba(150,110,240,0.14)" }}
+        >
+          {catalogTabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setCatalogFilter(tab.key)}
+              className="flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full transition-all"
+              style={{
+                background:
+                  catalogFilter === tab.key
+                    ? "rgba(255,43,214,0.12)"
+                    : "rgba(255,255,255,0.03)",
+                color: catalogFilter === tab.key ? "#ff2bd6" : "#8f83b0",
+                border:
+                  catalogFilter === tab.key
+                    ? "1px solid rgba(255,43,214,0.35)"
+                    : "1px solid rgba(150,110,240,0.14)",
+                fontFamily: "Inter, sans-serif",
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         {/* Slime list */}
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {filtered.length === 0 ? (
@@ -376,6 +452,7 @@ export default function SlimesSplitPanel({
                   onClick={() => {
                     setSelectedId(slime.id);
                     setMode("detail");
+                    setApproveError(null);
                   }}
                   className="w-full text-left rounded-[14px] px-4 py-3 transition-all"
                   style={{
@@ -407,32 +484,54 @@ export default function SlimesSplitPanel({
                         {SLIME_BASE_TYPE_LABELS[slime.base_type] ??
                           slime.base_type}
                       </p>
-                      {(slime.is_limited || slime.is_discontinued) && (
-                        <div className="flex gap-1.5 mt-2">
-                          {slime.is_limited && (
-                            <span
-                              className="text-[9px] font-black px-2 py-0.5 rounded-[5px] tracking-widest"
-                              style={{
-                                color: "#ff2bd6",
-                                border: "1px solid rgba(255,43,214,0.5)",
-                              }}
-                            >
-                              LIMITED
-                            </span>
-                          )}
-                          {slime.is_discontinued && (
-                            <span
-                              className="text-[9px] font-black px-2 py-0.5 rounded-[5px] tracking-widest"
-                              style={{
-                                color: "#8f83b0",
-                                border: "1px solid rgba(150,110,240,0.3)",
-                              }}
-                            >
-                              DISC
-                            </span>
-                          )}
-                        </div>
-                      )}
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {/* [Track 3a] — catalog-status pill on every row.
+                            OFFICIAL = magenta (matches LIMITED family),
+                            COMMUNITY = muted violet. */}
+                        {slime.is_brand_official ? (
+                          <span
+                            className="text-[9px] font-black px-2 py-0.5 rounded-[5px] tracking-widest"
+                            style={{
+                              color: "#ff2bd6",
+                              border: "1px solid rgba(255,43,214,0.5)",
+                            }}
+                          >
+                            OFFICIAL
+                          </span>
+                        ) : (
+                          <span
+                            className="text-[9px] font-black px-2 py-0.5 rounded-[5px] tracking-widest"
+                            style={{
+                              color: "#8f83b0",
+                              border: "1px solid rgba(150,110,240,0.3)",
+                            }}
+                          >
+                            COMMUNITY
+                          </span>
+                        )}
+                        {slime.is_limited && (
+                          <span
+                            className="text-[9px] font-black px-2 py-0.5 rounded-[5px] tracking-widest"
+                            style={{
+                              color: "#ff2bd6",
+                              border: "1px solid rgba(255,43,214,0.5)",
+                            }}
+                          >
+                            LIMITED
+                          </span>
+                        )}
+                        {slime.is_discontinued && (
+                          <span
+                            className="text-[9px] font-black px-2 py-0.5 rounded-[5px] tracking-widest"
+                            style={{
+                              color: "#8f83b0",
+                              border: "1px solid rgba(150,110,240,0.3)",
+                            }}
+                          >
+                            DISC
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <span
                       className="flex-none text-[11px] font-bold"
@@ -543,6 +642,49 @@ export default function SlimesSplitPanel({
             <div className="px-5 py-4 pb-10">
               {mode === "detail" && selected && (
                 <div className="space-y-5">
+                  {/* [Track 3a] — Approve banner for community-added rows. */}
+                  {selected.is_brand_official === false && (
+                    <div
+                      className="rounded-2xl p-4"
+                      style={{
+                        background: "rgba(255,43,214,0.06)",
+                        border: "1px solid rgba(255,43,214,0.25)",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleApprove(selected)}
+                        disabled={approving}
+                        className="w-full py-3 rounded-xl text-sm font-black text-white disabled:opacity-50"
+                        style={{
+                          background: MAGENTA_GRADIENT,
+                          boxShadow: "0 8px 24px -6px rgba(255,43,214,0.5)",
+                          fontFamily: "Montserrat, sans-serif",
+                        }}
+                      >
+                        {approving ? "Approving..." : "Approve → Official"}
+                      </button>
+                      <p
+                        className="text-xs mt-2.5"
+                        style={{
+                          color: "#8f83b0",
+                          fontFamily: "Inter, sans-serif",
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        Community-added slime. Approving marks it as an official
+                        catalog entry and lets you edit it going forward.
+                      </p>
+                      {approveError && (
+                        <p
+                          className="text-xs mt-2 text-red-400"
+                          style={{ fontFamily: "Inter, sans-serif" }}
+                        >
+                          {approveError}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <div className="grid grid-cols-3 gap-2">
                     {[
                       {
@@ -840,6 +982,50 @@ export default function SlimesSplitPanel({
 
         {mode === "detail" && selected && (
           <div className="p-6">
+            {/* [Track 3a] — Approve banner shows only for community-added
+                (unofficial) rows. Approving promotes the row to official. */}
+            {selected.is_brand_official === false && (
+              <div
+                className="mb-6 rounded-2xl p-4"
+                style={{
+                  background: "rgba(255,43,214,0.06)",
+                  border: "1px solid rgba(255,43,214,0.25)",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => handleApprove(selected)}
+                  disabled={approving}
+                  className="w-full py-3 rounded-xl text-sm font-black text-white disabled:opacity-50 transition-opacity hover:opacity-90"
+                  style={{
+                    background: MAGENTA_GRADIENT,
+                    boxShadow: "0 8px 24px -6px rgba(255,43,214,0.5)",
+                    fontFamily: "Montserrat, sans-serif",
+                  }}
+                >
+                  {approving ? "Approving..." : "Approve → Official"}
+                </button>
+                <p
+                  className="text-xs mt-2.5"
+                  style={{
+                    color: "#8f83b0",
+                    fontFamily: "Inter, sans-serif",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Community-added slime. Approving marks it as an official
+                  catalog entry and lets you edit it going forward.
+                </p>
+                {approveError && (
+                  <p
+                    className="text-xs mt-2 text-red-400"
+                    style={{ fontFamily: "Inter, sans-serif" }}
+                  >
+                    {approveError}
+                  </p>
+                )}
+              </div>
+            )}
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h2

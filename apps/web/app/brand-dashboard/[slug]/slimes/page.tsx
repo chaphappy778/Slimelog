@@ -32,13 +32,15 @@ export default async function SlimesPage({ params }: PageProps) {
   if (!brand) redirect("/brands");
 
   // [Change 1] — base_type replaces slime_type in select string
+  // [Track 3a] — dropped the is_brand_official = true filter so brand
+  // owners also see community-added (unofficial) rows. is_brand_official
+  // is now in the select so the client can distinguish + offer Approve.
   const { data: slimes } = await supabase
     .from("slimes")
     .select(
-      "id, name, base_type, description, colors, scent, retail_price, is_limited, is_discontinued, avg_texture, avg_scent, avg_sound, avg_drizzle, avg_creativity, avg_sensory_fit, avg_overall, total_ratings, image_url",
+      "id, name, base_type, description, colors, scent, retail_price, is_limited, is_discontinued, is_brand_official, avg_texture, avg_scent, avg_sound, avg_drizzle, avg_creativity, avg_sensory_fit, avg_overall, total_ratings, image_url",
     )
     .eq("brand_id", brand.id)
-    .eq("is_brand_official", true)
     .order("created_at", { ascending: false });
 
   const layoutBrand = {
