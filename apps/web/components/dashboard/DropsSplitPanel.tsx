@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
 import type { SlimeBaseType } from "@/lib/types";
 import { ImageUpload } from "@/components/ImageUpload";
+import FormattedDropDate from "@/components/dashboard/FormattedDropDate";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -168,17 +169,6 @@ function FormLabel({ children }: { children: React.ReactNode }) {
       {children}
     </label>
   );
-}
-
-function formatDate(dateStr: string | null) {
-  if (!dateStr) return "TBA";
-  return new Date(dateStr).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
 }
 
 // ─── DateTimePicker ───────────────────────────────────────────────────────────
@@ -1659,7 +1649,7 @@ function CreateWizard({
                     className="text-sm text-white"
                     style={{ fontFamily: "Inter, sans-serif" }}
                   >
-                    {formatDate(form.drop_at)}
+                    <FormattedDropDate iso={form.drop_at} />
                   </p>
                 </div>
               )}
@@ -1916,7 +1906,7 @@ function DetailPanel({
           fontFamily: "Inter, sans-serif",
         }}
       >
-        {formatDate(selected.drop_at)}
+        <FormattedDropDate iso={selected.drop_at} />
       </p>
       {selected.recurrence_pattern && (
         <div
@@ -2463,7 +2453,7 @@ export default function DropsSplitPanel({
                       fontFamily: "Inter, sans-serif",
                     }}
                   >
-                    {formatDate(drop.drop_at)}
+                    <FormattedDropDate iso={drop.drop_at} />
                   </p>
                   {drop.recurrence_pattern && (
                     <p

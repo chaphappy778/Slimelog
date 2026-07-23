@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import FormattedDropDate from "@/components/dashboard/FormattedDropDate";
 
 type DropStatus = "announced" | "live" | "sold_out" | "restocked" | "cancelled";
 
@@ -58,17 +59,6 @@ const nextStatus: Partial<
   announced: { status: "live", label: "Go Live" },
   live: { status: "sold_out", label: "Mark Sold Out" },
 };
-
-function formatDate(dateStr: string | null) {
-  if (!dateStr) return "TBA";
-  return new Date(dateStr).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 export default function DropsManager({
   brandId,
@@ -229,7 +219,7 @@ export default function DropsManager({
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-white">{drop.name}</p>
                     <p className="text-xs text-[#6B5A7E] mt-0.5">
-                      {formatDate(drop.drop_at)}
+                      <FormattedDropDate iso={drop.drop_at} />
                     </p>
                     {drop.description && (
                       <p className="text-xs text-[#9B8AAE] mt-1 line-clamp-2">
