@@ -226,38 +226,13 @@ async function notifyBrandOwnerOfNewLog(args: {
 
 // ─── Track 1b: unofficial catalog auto-creation (2026-07-23) ────────────────
 //
-// slimes.slime_type (legacy NOT NULL enum) and slimes.base_type (the
-// slime_base_type enum) have DIVERGED — they are two different enums. Three
-// base_type values have NO slime_type twin: `basic`, `snowbutter`, and
-// `wax_and_wax_cracking`. Inserting slime_type = input.base_type verbatim
-// would raise `invalid input value for enum slime_type` for those three and
-// fail the whole log create. slime_type is a legacy column that analytics
-// never reads (Top Slimes / Community Ratings key off base_type + slime_id),
-// so the value only needs to be a VALID enum member. This map guarantees
-// that; the `?? "hybrid"` fallback in the caller covers any future base_type
-// added before this map is updated.
-const SLIME_TYPE_FOR_BASE_TYPE: Record<SlimeBaseType, string> = {
-  avalanche: "avalanche",
-  basic: "hybrid", // no slime_type twin → generic catch-all
-  beaded: "beaded",
-  butter: "butter",
-  clear: "clear",
-  cloud: "cloud",
-  floam: "floam",
-  fluffy: "fluffy",
-  hybrid: "hybrid",
-  icee: "icee",
-  jelly: "jelly",
-  magnetic: "magnetic",
-  sand: "sand",
-  slay: "slay",
-  snow_fizz: "snow_fizz",
-  snowbutter: "cloud_cream", // snowbutter was renamed FROM cloud_cream (mig 077)
-  sugar_scrub: "sugar_scrub",
-  thick_and_glossy: "thick_and_glossy",
-  water: "water",
-  wax_and_wax_cracking: "wax_cracking", // closest surviving slime_type twin
-};
+// hotfix 2026-07-23: the auto-catalog INSERT below used to also write a
+// legacy `slimes.slime_type` value. That column was DROPPED in migration
+// 20260509000037_t71_base_type_taxonomy.sql (base_type replaced it), so every
+// insert was failing with `column "slime_type" does not exist` — caught by the
+// non-fatal `if (createErr)` guard and console.warn'd, leaving the log saved
+// but no catalog row created. `base_type` is the current NOT NULL enum and is
+// sufficient on its own; the old base_type → slime_type mapping is gone.
 
 // Resolve a slime_id for a (brand_id, name) pair, auto-creating an unofficial
 // catalog row when nothing matches. Returns the resolved slime_id, or null
@@ -315,7 +290,6 @@ async function resolveOrCreateSlimeId(args: {
       brand_id: brandId,
       name: cleanedSlimeName,
       name_normalized: nameNormalized,
-      slime_type: SLIME_TYPE_FOR_BASE_TYPE[baseType] ?? "hybrid", // legacy NOT NULL enum
       base_type: baseType,
       is_brand_official: false,
       created_by: userId,
