@@ -255,23 +255,22 @@ async function resolveOrCreateSlimeId(args: {
   //    up duplicates.
   const { data: candidates } = await supabase
     .from("slimes")
-    .select("id, base_type")
+    .select("id")
     .eq("brand_id", brandId)
     .ilike("name", cleanedSlimeName)
     .limit(2);
 
+  // Logs with different base_types but the same slime_name for the same brand
+  // should still link to the same catalog row. A catalog row represents "a
+  // slime named X from this brand" — one entry per name. Individual logs
+  // preserve their OWN base_type value, which captures how the user perceived
+  // the slime. The old base_type sanity check was overly conservative and left
+  // legitimate logs unlinked (verified 2026-07-23: 3 test logs with the same
+  // name, 2 different base_types → only 1 log linked, other 2 became orphans
+  // with slime_id null).
   if (candidates && candidates.length === 1) {
-    const c = candidates[0] as { id: string; base_type: string | null };
-    // Base-type sanity check: only link when the picked + catalog base_type
-    // agree (or the catalog row has none). Prevents a Butter "Blue Razz"
-    // log from linking to a Basic "Blue Razz" catalog row.
-    if (!c.base_type || c.base_type === baseType) {
-      return c.id;
-    }
-    // Single match but base_type disagrees → don't guess, and don't
-    // auto-create either (a same-name row already exists; a new insert would
-    // just 23505 onto it and mis-link). Leave the log unlinked.
-    return null;
+    const c = candidates[0] as { id: string };
+    return c.id;
   }
   if (candidates && candidates.length >= 2) {
     // Ambiguous — two same-name catalog rows. Don't guess, don't create.
