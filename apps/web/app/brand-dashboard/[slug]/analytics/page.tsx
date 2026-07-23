@@ -455,70 +455,87 @@ export default async function AnalyticsPage({ params }: PageProps) {
           )}
         </div>
 
-        {/* Community Logs Per Drop — PRO. Cross-brand benchmark, no data yet. */}
+        {/* [T137 Fix Batch A] Brand Pro extras — three Pro-only sections merged
+            under ONE ProGate so free brand owners see a single blurred region
+            with one upgrade CTA, not three stacked overlays. The section label
+            stays outside the gate so the boundary is clear even when blurred. */}
+        <p
+          className={SECTION_LABEL}
+          style={{ color: "#22d3ee", fontFamily: "Montserrat, sans-serif" }}
+        >
+          Brand Pro Extras
+        </p>
         <ProGate isPro={isPro} brandId={brand.id} brandSlug={brand.slug}>
-          <div
-            className="p-6 flex flex-col items-center justify-center text-center min-h-[160px]"
-            style={PLACEHOLDER_STYLE}
-          >
-            <p
-              className={SECTION_LABEL}
-              style={{ color: "#22d3ee", fontFamily: "Montserrat, sans-serif" }}
+          <div className="flex flex-col gap-4">
+            {/* Community Logs Per Drop — PRO. Cross-brand benchmark, no data yet. */}
+            <div
+              className="p-6 flex flex-col items-center justify-center text-center min-h-[160px]"
+              style={PLACEHOLDER_STYLE}
             >
-              Community Logs Per Drop
-            </p>
-            <p
-              className="text-sm mt-2"
-              style={{ color: "#8f83b0", fontFamily: "Inter, sans-serif" }}
-            >
-              Coming soon: cross-brand benchmarks. See how your logs per drop
-              stack up against the platform average.
-            </p>
-          </div>
-        </ProGate>
+              <p
+                className={SECTION_LABEL}
+                style={{
+                  color: "#22d3ee",
+                  fontFamily: "Montserrat, sans-serif",
+                }}
+              >
+                Community Logs Per Drop
+              </p>
+              <p
+                className="text-sm mt-2"
+                style={{ color: "#8f83b0", fontFamily: "Inter, sans-serif" }}
+              >
+                Coming soon: cross-brand benchmarks. See how your logs per drop
+                stack up against the platform average.
+              </p>
+            </div>
 
-        {/* Care action market intel — PRO placeholder (future ticket) */}
-        <ProGate isPro={isPro} brandId={brand.id} brandSlug={brand.slug}>
-          <div
-            className="p-6 flex flex-col items-center justify-center text-center min-h-[160px]"
-            style={PLACEHOLDER_STYLE}
-          >
-            <p
-              className={SECTION_LABEL}
-              style={{ color: "#22d3ee", fontFamily: "Montserrat, sans-serif" }}
+            {/* Care action market intel — PRO placeholder (future ticket) */}
+            <div
+              className="p-6 flex flex-col items-center justify-center text-center min-h-[160px]"
+              style={PLACEHOLDER_STYLE}
             >
-              Care Action Market Intel
-            </p>
-            <p
-              className="text-sm mt-2"
-              style={{ color: "#8f83b0", fontFamily: "Inter, sans-serif" }}
-            >
-              Coming soon: aggregate care insights from your customers.
-            </p>
-          </div>
-        </ProGate>
+              <p
+                className={SECTION_LABEL}
+                style={{
+                  color: "#22d3ee",
+                  fontFamily: "Montserrat, sans-serif",
+                }}
+              >
+                Care Action Market Intel
+              </p>
+              <p
+                className="text-sm mt-2"
+                style={{ color: "#8f83b0", fontFamily: "Inter, sans-serif" }}
+              >
+                Coming soon: aggregate care insights from your customers.
+              </p>
+            </div>
 
-        {/* Export data — PRO. Portability feature, full-width block. */}
-        <ProGate isPro={isPro} brandId={brand.id} brandSlug={brand.slug}>
-          <div className="p-5 lg:p-6" style={CARD_STYLE}>
-            <p
-              className={SECTION_LABEL}
-              style={{ color: "#22d3ee", fontFamily: "Montserrat, sans-serif" }}
-            >
-              Export Data
-            </p>
-            <p
-              className="text-sm mt-1 mb-4"
-              style={{ color: "#8f83b0", fontFamily: "Inter, sans-serif" }}
-            >
-              Download your community logs and slime ratings as CSV
-            </p>
-            <BrandExportButtons
-              brandName={brand.name}
-              brandSlug={brand.slug}
-              communityLogs={communityLogs}
-              slimeAggregates={slimeAggregates}
-            />
+            {/* Export data — PRO. Portability feature, full-width block. */}
+            <div className="p-5 lg:p-6" style={CARD_STYLE}>
+              <p
+                className={SECTION_LABEL}
+                style={{
+                  color: "#22d3ee",
+                  fontFamily: "Montserrat, sans-serif",
+                }}
+              >
+                Export Data
+              </p>
+              <p
+                className="text-sm mt-1 mb-4"
+                style={{ color: "#8f83b0", fontFamily: "Inter, sans-serif" }}
+              >
+                Download your community logs and slime ratings as CSV
+              </p>
+              <BrandExportButtons
+                brandName={brand.name}
+                brandSlug={brand.slug}
+                communityLogs={communityLogs}
+                slimeAggregates={slimeAggregates}
+              />
+            </div>
           </div>
         </ProGate>
       </div>

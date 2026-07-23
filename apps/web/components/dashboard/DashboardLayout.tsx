@@ -285,6 +285,15 @@ export default function DashboardLayout({
 
         {/* Bottom: view public page + Brand Pro card */}
         <div className="px-3 pb-5 pt-2">
+          {/* [T137 Fix Batch A] Free-tier Upgrade card reads as an aspirational
+              CTA, not a disabled item. Hover intensifies the magenta tint. */}
+          <style>{`
+            .upgrade-cta:hover {
+              background: linear-gradient(135deg, rgba(255,43,214,0.18), rgba(168,85,247,0.10)) !important;
+              border-color: rgba(255,43,214,0.55) !important;
+              box-shadow: 0 0 26px rgba(255,43,214,0.20) !important;
+            }
+          `}</style>
           <Link
             href={`/brands/${brand.slug}`}
             className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-[13px] font-bold transition-colors"
@@ -327,21 +336,23 @@ export default function DashboardLayout({
           ) : (
             <Link
               href={`/brand-dashboard/${brand.slug}/subscription`}
-              className="mt-3 mx-1 p-4 rounded-2xl block transition-colors"
+              className="upgrade-cta mt-3 mx-1 p-4 rounded-2xl block transition-all"
               style={{
-                background: "rgba(255,255,255,0.03)",
-                border: "1px solid rgba(150,110,240,0.22)",
+                background:
+                  "linear-gradient(135deg, rgba(255,43,214,0.10), rgba(168,85,247,0.05))",
+                border: "1px solid rgba(255,43,214,0.35)",
+                boxShadow: "0 0 20px rgba(255,43,214,0.12)",
               }}
             >
               <p
                 className="text-[13px] font-black mb-1 text-white"
                 style={{ fontFamily: "Montserrat, sans-serif" }}
               >
-                Upgrade to Brand Pro
+                Upgrade to Brand Pro →
               </p>
               <p
                 className="text-[11px] font-semibold leading-snug"
-                style={{ color: INACTIVE }}
+                style={{ color: "rgba(245,245,245,0.85)" }}
               >
                 Featured chips, priority drops, richer analytics.
               </p>
@@ -394,17 +405,19 @@ export default function DashboardLayout({
               PRO
             </span>
           ) : (
-            <span
+            <Link
+              href={`/brand-dashboard/${brand.slug}/subscription`}
               className="flex-none text-[10px] font-black tracking-wider px-2.5 py-1 rounded-full"
               style={{
-                color: INACTIVE,
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(150,110,240,0.28)",
+                color: "#ff86e6",
+                background:
+                  "linear-gradient(135deg, rgba(255,43,214,0.14), rgba(168,85,247,0.08))",
+                border: "1px solid rgba(255,43,214,0.35)",
                 fontFamily: "Montserrat, sans-serif",
               }}
             >
               Upgrade
-            </span>
+            </Link>
           )}
         </header>
 
