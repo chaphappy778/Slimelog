@@ -476,17 +476,16 @@ export default async function DropPage({
   const shareTitle = `${drop.name}, ${brand.name}`;
   const shareText = `${brand.name} drop I'm watching on SlimeLog: ${drop.name}`;
 
-  // Full-width labeled Share, reused in the mobile action area and the
-  // desktop buy rail. The hero-corner icon share + hero back button were
-  // removed in the T139 hotfix (2026-07-24): the global PageHeader already
-  // provides Back, and this bar is the single Share affordance per viewport
-  // (the duplicated pair in the hero confused Jenn's smoke test).
-  const shareBar = (
+  // Single Share affordance: an icon button pinned to the hero top-right
+  // corner (T139 polish, 2026-07-24), matching the /brands/[slug] hero
+  // pattern. The prior full-width body share bar was removed so there is
+  // exactly one share on the page. Back stays with the global PageHeader.
+  const heroShare = (
     <ShareButton
       path={sharePath}
       title={shareTitle}
       text={shareText}
-      className="w-full justify-center"
+      variant="icon"
     />
   );
 
@@ -762,6 +761,52 @@ export default async function DropPage({
       )}
     </div>
   );
+
+  // ─── Promo (code + free-shipping) — inline in the Buy Now card ────────────
+  // T139 polish (2026-07-24): moved up from a buried below-the-fold row to
+  // directly under the Buy now button so shoppers actually see the code.
+  // Renders nothing when the brand set neither a code nor a threshold.
+  const promoBlock =
+    (drop.discount_code || drop.free_shipping_threshold != null) &&
+    !isCancelled ? (
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+        {drop.discount_code && (
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className="font-bold uppercase"
+              style={{
+                fontSize: 10,
+                letterSpacing: "0.12em",
+                color: "rgba(245,245,245,0.4)",
+                fontFamily: "Montserrat, Inter, sans-serif",
+              }}
+            >
+              Code
+            </span>
+            <span
+              className="font-black rounded-lg"
+              style={{
+                fontSize: 13,
+                padding: "2px 9px",
+                background: "rgba(0,240,255,0.12)",
+                border: "1px solid rgba(0,240,255,0.4)",
+                color: "#7DF6FF",
+              }}
+            >
+              {drop.discount_code}
+            </span>
+          </span>
+        )}
+        {drop.free_shipping_threshold != null && (
+          <span style={{ fontSize: 12, color: "rgba(245,245,245,0.55)" }}>
+            Free shipping on orders over $
+            {Number.isInteger(drop.free_shipping_threshold)
+              ? drop.free_shipping_threshold
+              : (drop.free_shipping_threshold as number).toFixed(2)}
+          </span>
+        )}
+      </div>
+    ) : null;
 
   // Description block (with the desktop "About this drop" eyebrow).
   const descriptionBlock = drop.description ? (
@@ -1110,9 +1155,11 @@ export default async function DropPage({
               }}
             />
 
-            {/* Hero back + share removed in the T139 hotfix — the global
-                PageHeader already renders Back, and the share bar below
-                covers Share. One back, one share. */}
+            {/* Share — hero top-right corner (the single share on the page).
+                Back stays with the global PageHeader. */}
+            <div className="absolute top-4 right-4 lg:top-6 lg:right-6 z-10">
+              {heroShare}
+            </div>
 
             {/* Bottom — pill + title */}
             <div className="absolute left-5 right-5 bottom-5 lg:left-10 lg:right-10 lg:bottom-8 flex flex-col gap-3 pointer-events-none">
@@ -1150,15 +1197,11 @@ export default async function DropPage({
               >
                 {metaStats}
                 <BuyButton drop={drop} />
+                {promoBlock}
               </div>
 
               {descriptionBlock}
               {slimesBlock}
-
-              {/* Share — mobile inline (desktop shows it in the rail).
-                  The drop-level "Log this drop" CTA was removed in the T139
-                  hotfix; logging is per-slime via the cards above. */}
-              <div className="lg:hidden">{shareBar}</div>
 
               {upcomingBlock}
             </div>
@@ -1178,10 +1221,7 @@ export default async function DropPage({
                 >
                   {metaStats}
                   <BuyButton drop={drop} />
-                  <div
-                    style={{ height: 1, background: "rgba(120,60,180,0.3)" }}
-                  />
-                  {shareBar}
+                  {promoBlock}
                 </div>
                 {brand.restock_schedule && (
                   <div
@@ -1208,54 +1248,6 @@ export default async function DropPage({
               </div>
             </aside>
           </div>
-
-          {/* Promo info (discount code + free shipping) — below the fold */}
-          {(drop.discount_code || drop.free_shipping_threshold != null) &&
-            !isCancelled && (
-              <div className="px-4 lg:px-0 mt-6 flex flex-wrap items-center gap-3">
-                {drop.discount_code && (
-                  <div
-                    className="inline-flex items-center gap-2 rounded-2xl"
-                    style={{
-                      padding: "8px 12px",
-                      background: "rgba(45,10,78,0.3)",
-                      border: "1px solid rgba(45,10,78,0.7)",
-                    }}
-                  >
-                    <span
-                      className="font-bold uppercase"
-                      style={{
-                        fontSize: 10,
-                        letterSpacing: "0.12em",
-                        color: "rgba(245,245,245,0.4)",
-                        fontFamily: "Montserrat, Inter, sans-serif",
-                      }}
-                    >
-                      Code
-                    </span>
-                    <span
-                      className="font-black text-white rounded-lg"
-                      style={{
-                        fontSize: 14,
-                        padding: "2px 8px",
-                        background: "rgba(45,10,78,0.5)",
-                        border: "1px solid rgba(45,10,78,0.8)",
-                      }}
-                    >
-                      {drop.discount_code}
-                    </span>
-                  </div>
-                )}
-                {drop.free_shipping_threshold != null && (
-                  <p style={{ fontSize: 12, color: "rgba(245,245,245,0.5)" }}>
-                    Free shipping on orders over $
-                    {Number.isInteger(drop.free_shipping_threshold)
-                      ? drop.free_shipping_threshold
-                      : (drop.free_shipping_threshold as number).toFixed(2)}
-                  </p>
-                )}
-              </div>
-            )}
         </div>
       </main>
     </PageWrapper>
