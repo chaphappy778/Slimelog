@@ -20,6 +20,13 @@
 //   writes at ~300ms, flush synchronously on pagehide, and hydrate on
 //   mount when the URL doesn't carry a pre-fill query param. Cleared
 //   on successful submit and on step-0 Cancel.
+// [T199 A1 2026-07-23] Removed a `supabase.auth.getUser()` fired from the
+//   render body behind a ref latch. A render React discards still fired
+//   the request and still flipped the latch, so the retained render could
+//   be left with `userId === null` forever (photo upload permanently
+//   stuck on its placeholder). Now reads `user.id` off `useAuth()`, which
+//   is also what CLAUDE.md requires, plus a real loading gate and an
+//   unauthenticated redirect to /login.
 
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -42,8 +49,9 @@ import type {
   ShelfState,
 } from "@/lib/types";
 import { ImageUpload } from "@/components/ImageUpload";
-// Audit hp-24 (2026-07-09): use the shared browser singleton.
-import { createClient } from "@/lib/supabase/client";
+// [T199 A1 2026-07-23] Auth comes from the shared AuthProvider, never a
+// local getUser(). See the auth block inside LogPageInner below.
+import { useAuth } from "@/components/AuthProvider";
 import PageWrapper from "@/components/PageWrapper";
 import BrandSearchInput from "@/components/BrandSearchInput";
 import SlimeSearchInput from "@/components/log/SlimeSearchInput";
@@ -241,16 +249,24 @@ function LogPageInner() {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, [step]);
 
-  const [userId, setUserId] = useState<string | null>(null);
-  const userIdFetchedRef = useRef(false);
+  // [T199 A1 2026-07-23] Shared auth state. `loading` is false as soon as
+  // AuthProvider's getSession() resolves (cookie read, no network hop), so
+  // the gate below is a tick, not a spinner the user notices.
+  const { user, loading: authLoading } = useAuth();
 
-  if (typeof window !== "undefined" && !userIdFetchedRef.current) {
-    userIdFetchedRef.current = true;
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      setUserId(data.user?.id ?? null);
-    });
-  }
+  // Unauthenticated visitors can't save anything here — logSlime()
+  // re-checks auth server-side and throws — so send them to sign in
+  // rather than letting them fill four steps and hit a wall. Preserve any
+  // pre-fill query params through `next` so a deep link from Discover
+  // survives the round trip. Matches app convention (/settings,
+  // /log/edit/[id], /welcome all redirect the same way).
+  useEffect(() => {
+    if (authLoading) return;
+    if (user) return;
+    const qs = searchParams.toString();
+    const next = qs ? `/log?${qs}` : "/log";
+    router.replace(`/login?next=${encodeURIComponent(next)}`);
+  }, [authLoading, user, searchParams, router]);
 
   // [Change 2 — scent_notes] Added scent_notes: "" to initial state
   const [form, setForm] = useState<FormState>({
@@ -454,6 +470,14 @@ function LogPageInner() {
     }
   }
 
+  // [T199 A1 2026-07-23] Auth gate. Held until AuthProvider resolves, and
+  // held again for signed-out visitors while the redirect effect above
+  // runs, so the wizard never renders in a state where it can't save.
+  // Every hook above this line runs unconditionally — keep it that way.
+  if (authLoading || !user) {
+    return <LogPageLoading />;
+  }
+
   return (
     <PageWrapper dots glow="cyan" orbs>
       <div className="flex flex-col min-h-screen">
@@ -476,25 +500,20 @@ function LogPageInner() {
                   reads as "add a photo," not "we forgot to render." */}
               <div>
                 <FieldLabel optional>Photo</FieldLabel>
-                {userId ? (
-                  <ImageUpload
-                    bucket="slime-photos"
-                    userId={userId}
-                    existingUrl={form.image_url}
-                    onUploadComplete={(url) => set("image_url", url)}
-                    onRemove={() => set("image_url", null)}
-                    label="Add a photo"
-                    aspectRatio="4:3"
-                  />
-                ) : (
-                  <div
-                    className="w-full aspect-[4/3] rounded-2xl animate-pulse"
-                    style={{
-                      background: "rgba(45,10,78,0.2)",
-                      border: "1px dashed rgba(120,60,180,0.5)",
-                    }}
-                  />
-                )}
+                {/* [T199 A1 2026-07-23] The pulsing dashed placeholder that
+                    used to live here was the "still fetching userId" state.
+                    The auth gate above guarantees `user` is resolved by the
+                    time this renders, so the upload tile is always live. */}
+                <ImageUpload
+                  bucket="slime-photos"
+                  userId={user.id}
+                  existingUrl={form.image_url}
+                  onUploadComplete={(url) => set("image_url", url)}
+                  onRemove={() => set("image_url", null)}
+                  label="Add a photo"
+                  aspectRatio="4:3"
+                />
+
               </div>
 
               <div>
