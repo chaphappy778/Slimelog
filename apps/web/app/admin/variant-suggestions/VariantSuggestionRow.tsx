@@ -538,7 +538,7 @@ export default function VariantSuggestionRow({
          style={{ color: "#FFAE3B" }}
         >
          No subtypes exist for {suggestion.base_type_label} yet.
-         Switch to "Create new" to add the first canonical subtype.
+         Switch to &quot;Create new&quot; to add the first canonical subtype.
         </p>
        ) : (
         <select

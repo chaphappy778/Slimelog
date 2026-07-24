@@ -576,7 +576,7 @@ export default function BrandSuggestionRow({
             style={{ ...inlineInputStyle, fontFamily: "monospace" }}
           />
           <p className="text-[11px] text-slime-muted/70 mt-1">
-            With a UUID: fires an "already in catalog" notification linked to
+            With a UUID: fires an &quot;already in catalog&quot; notification linked to
             that brand. Blank: silent dedupe, no notification.
           </p>
           <label className="block text-xs text-slime-muted mt-3 mb-1">

@@ -26,7 +26,7 @@
 //     message rather than silently swallowed — same rule that hardened
 //     BrandSearchInput after the brands.name_raw 400s ran silent.
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useId } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { SLIME_BASE_TYPE_LABELS } from "@/lib/types";
 import type { SlimeBaseType } from "@/lib/types";
@@ -76,6 +76,8 @@ export default function SlimeSearchInput({
   const [errored, setErrored] = useState(false);
   // Highlighted row for keyboard nav. -1 = nothing highlighted.
   const [highlight, setHighlight] = useState(-1);
+  // Stable id so the combobox can point aria-controls at its listbox.
+  const listboxId = useId();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -254,12 +256,14 @@ export default function SlimeSearchInput({
         autoComplete="off"
         role="combobox"
         aria-expanded={open}
+        aria-controls={listboxId}
         aria-autocomplete="list"
         style={fieldInputStyle}
       />
 
       {open && results.length > 0 && (
         <div
+          id={listboxId}
           role="listbox"
           style={{
             position: "absolute",

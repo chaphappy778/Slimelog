@@ -369,7 +369,7 @@ function EditLogPageInner() {
       <PageWrapper dots glow="cyan">
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-slime-accent text-sm font-medium animate-pulse">
-            Loading\u2026
+            Loading…
           </div>
         </div>
       </PageWrapper>
@@ -1014,7 +1014,7 @@ function EditLogPageLoading() {
       }}
     >
       <div className="text-slime-accent text-sm font-medium animate-pulse">
-        Loading\u2026
+        Loading…
       </div>
     </div>
   );

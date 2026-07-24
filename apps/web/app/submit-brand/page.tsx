@@ -89,7 +89,7 @@ export default async function SubmitBrandPage({
             Suggest a brand
           </h1>
           <p className="text-sm text-slime-muted mt-2">
-            Know a slime shop we should track? Drop the details and we'll
+            Know a slime shop we should track? Drop the details and we&apos;ll
             review it. If they check out, they join the catalog and you get a
             notification.
           </p>

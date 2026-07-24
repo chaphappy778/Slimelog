@@ -66,7 +66,7 @@ export default function ProCarePaywall() {
           Free reminders keep every slime on the same default cadence.
           Pro care packages let you set custom check-in intervals,
           jot per-slime care notes (activator ratios, storage quirks,
-          "always kneads better after a 3-day rest"), and see your
+          &quot;always kneads better after a 3-day rest&quot;), and see your
           care history at a glance.
         </p>
 

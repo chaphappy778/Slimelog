@@ -290,7 +290,7 @@ export default function SubmitBrandForm({
           One suggestion per day
         </p>
         <p className="mt-1">
-          You've already submitted one today. Check back tomorrow to send us
+          You&apos;ve already submitted one today. Check back tomorrow to send us
           another.
         </p>
       </div>

@@ -328,7 +328,7 @@ export default async function AdminBrandClaimReviewPage({
             </p>
             <p className="mt-1" style={{ color: "#ffb066" }}>
               This brand had no <code>website_url</code> at submit time, so
-              the email-domain match couldn't run. Verify the document
+              the email-domain match couldn&apos;t run. Verify the document
               carefully and cross-check the Instagram handle before
               approving.
             </p>
