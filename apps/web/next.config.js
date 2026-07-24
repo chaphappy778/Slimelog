@@ -185,7 +185,13 @@ module.exports = withSentryConfig(nextConfig, {
   widenClientFileUpload: true,
 
   // Strip the Sentry SDK's own logger from the client bundle.
-  disableLogger: true,
+  // T198 (2026-07-23): `disableLogger` is deprecated in @sentry/nextjs v10;
+  // the replacement is `webpack.treeshake.removeDebugLogging`.
+  webpack: {
+    treeshake: {
+      removeDebugLogging: true,
+    },
+  },
 
   // Route Sentry's browser requests through a same-origin path so ad
   // blockers / CSP connect-src don't drop them. Matches our strict CSP
