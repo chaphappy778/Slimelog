@@ -79,7 +79,11 @@ interface CatalogSlime {
   id: string;
   name: string | null;
   image_url: string | null;
-  slime_type: string | null;
+  // The catalog `slimes` table exposes `base_type` (slime_base_type enum) —
+  // the same enum as drop_slimes.base_type. It has NO `slime_type` column;
+  // selecting one made the whole embed 400 and silently emptied this
+  // section (T139 hotfix, 2026-07-24).
+  base_type: string | null;
   avg_overall: number | null;
   total_ratings: number | null;
 }
@@ -436,7 +440,7 @@ export default async function DropPage({
       .from("drop_slimes")
       .select(
         "slime_id, name, base_type, image_url, price, scent_notes, " +
-          "slimes ( id, name, image_url, slime_type, avg_overall, total_ratings )",
+          "slimes ( id, name, image_url, base_type, avg_overall, total_ratings )",
       )
       .eq("drop_id", drop.id),
     supabase
@@ -468,25 +472,16 @@ export default async function DropPage({
   const isSoldOut = drop.status === "sold_out";
   const isCancelled = drop.status === "cancelled";
 
-  const dropLogHref = logHref({ brandName: brand.name, dropName: drop.name });
-
   const sharePath = `/drops/${drop.id}?utm_source=share&utm_medium=drop`;
-  const shareTitle = `${drop.name} — ${brand.name}`;
+  const shareTitle = `${drop.name}, ${brand.name}`;
   const shareText = `${brand.name} drop I'm watching on SlimeLog: ${drop.name}`;
 
-  // Icon-only glass circle — used in the hero corner and the mobile
-  // action-row square (both are icon-sized slots).
-  const heroShareButton = (
-    <ShareButton
-      path={sharePath}
-      title={shareTitle}
-      text={shareText}
-      variant="icon"
-    />
-  );
-
-  // Full-width labeled Share — desktop buy rail.
-  const railShareButton = (
+  // Full-width labeled Share, reused in the mobile action area and the
+  // desktop buy rail. The hero-corner icon share + hero back button were
+  // removed in the T139 hotfix (2026-07-24): the global PageHeader already
+  // provides Back, and this bar is the single Share affordance per viewport
+  // (the duplicated pair in the hero confused Jenn's smoke test).
+  const shareBar = (
     <ShareButton
       path={sharePath}
       title={shareTitle}
@@ -768,36 +763,6 @@ export default async function DropPage({
     </div>
   );
 
-  const logThisDropButton = (
-    <Link
-      href={dropLogHref}
-      className="flex items-center justify-center gap-2 rounded-2xl font-extrabold"
-      style={{
-        padding: 15,
-        background: "linear-gradient(135deg,#39FF14,#00F0FF)",
-        color: "#04110A",
-        boxShadow: "0 0 20px rgba(57,255,20,0.35), 0 0 44px rgba(0,240,255,0.28)",
-        fontFamily: "Montserrat, Inter, sans-serif",
-      }}
-    >
-      <svg
-        viewBox="0 0 24 24"
-        width="20"
-        height="20"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M12 5v14" />
-        <path d="M5 12h14" />
-      </svg>
-      Log this drop
-    </Link>
-  );
-
   // Description block (with the desktop "About this drop" eyebrow).
   const descriptionBlock = drop.description ? (
     <div className="flex flex-col gap-2">
@@ -822,21 +787,26 @@ export default async function DropPage({
   ) : null;
 
   // ─── Slimes grid ─────────────────────────────────────────────────────────
-  const slimesBlock =
-    slimes.length > 0 ? (
-      <section className="flex flex-col gap-3">
-        <div className="flex items-baseline gap-2">
-          <h2
-            className="font-extrabold uppercase"
-            style={{
-              fontSize: 17,
-              letterSpacing: "0.02em",
-              color: "#fff",
-              fontFamily: "Montserrat, Inter, sans-serif",
-            }}
-          >
-            In this drop
-          </h2>
+  // Always rendered so the section reads as "present but empty" rather than
+  // vanishing (the T139 bug hid it entirely on every drop). Logging is
+  // per-slime — each card deep-links the log wizard prefilled for THAT slime
+  // and carries an explicit "+ Log" affordance so the tap target is obvious
+  // (T139 hotfix replaced the confusing drop-level "Log this drop" CTA).
+  const slimesBlock = (
+    <section className="flex flex-col gap-3">
+      <div className="flex items-baseline gap-2">
+        <h2
+          className="font-extrabold uppercase"
+          style={{
+            fontSize: 17,
+            letterSpacing: "0.02em",
+            color: "#fff",
+            fontFamily: "Montserrat, Inter, sans-serif",
+          }}
+        >
+          In this drop
+        </h2>
+        {slimes.length > 0 && (
           <span
             className="font-black"
             style={{
@@ -847,11 +817,26 @@ export default async function DropPage({
           >
             {slimes.length}
           </span>
+        )}
+      </div>
+      {slimes.length === 0 ? (
+        <div
+          className="rounded-2xl text-center"
+          style={{
+            padding: "22px 18px",
+            background: "rgba(45,10,78,0.28)",
+            border: "1px solid rgba(120,60,180,0.42)",
+            color: "rgba(245,245,245,0.6)",
+            fontSize: 14,
+          }}
+        >
+          No slimes attached to this drop yet.
         </div>
+      ) : (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           {slimes.map((s, idx) => {
             const name = s.name ?? s.slimes?.name ?? "Unnamed";
-            const rawType = s.base_type ?? s.slimes?.slime_type ?? null;
+            const rawType = s.base_type ?? s.slimes?.base_type ?? null;
             const typeLabel = baseTypeLabelOf(rawType);
             const typeColor = baseTypeColorOf(rawType);
             const img = s.image_url ?? s.slimes?.image_url ?? null;
@@ -910,7 +895,7 @@ export default async function DropPage({
                     </div>
                   )}
                 </div>
-                <div className="p-2.5 flex flex-col gap-1.5">
+                <div className="p-2.5 flex flex-col gap-2">
                   <div
                     className="font-extrabold truncate"
                     style={{
@@ -941,13 +926,45 @@ export default async function DropPage({
                     )}
                     {rating !== null && <RatingPill value={rating} />}
                   </div>
+                  {/* Explicit per-slime log affordance. The whole card is
+                      already this same deep-link, so this is a visual CTA
+                      (a span, not a nested anchor — avoids invalid nested
+                      interactive elements). */}
+                  <span
+                    className="flex items-center justify-center gap-1 rounded-xl font-extrabold"
+                    style={{
+                      padding: "7px 0",
+                      fontSize: 12,
+                      background: "rgba(57,255,20,0.12)",
+                      border: "1px solid rgba(57,255,20,0.4)",
+                      color: "#6DFF4D",
+                      fontFamily: "Montserrat, Inter, sans-serif",
+                    }}
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="13"
+                      height="13"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 5v14" />
+                      <path d="M5 12h14" />
+                    </svg>
+                    Log
+                  </span>
                 </div>
               </Link>
             );
           })}
         </div>
-      </section>
-    ) : null;
+      )}
+    </section>
+  );
 
   // ─── Upcoming drops from the same brand ──────────────────────────────────
   const upcomingBlock =
@@ -1093,42 +1110,9 @@ export default async function DropPage({
               }}
             />
 
-            {/* Top row — back + share */}
-            <div className="absolute top-4 left-4 right-4 lg:top-6 lg:left-6 lg:right-6 flex items-center justify-between z-10">
-              <Link
-                href={`/brands/${brand.slug}`}
-                className="inline-flex items-center gap-2 rounded-full"
-                style={{
-                  height: 42,
-                  padding: "0 14px",
-                  background: "rgba(10,0,20,0.5)",
-                  backdropFilter: "blur(10px)",
-                  WebkitBackdropFilter: "blur(10px)",
-                  border: "1px solid rgba(255,255,255,0.16)",
-                  color: "#fff",
-                }}
-                aria-label={`Back to ${brand.name}`}
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  width="20"
-                  height="20"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M19 12H5" />
-                  <path d="M12 18l-6-6 6-6" />
-                </svg>
-                <span className="hidden lg:inline font-semibold text-sm">
-                  Back to {brand.name}
-                </span>
-              </Link>
-              <div className="pointer-events-auto">{heroShareButton}</div>
-            </div>
+            {/* Hero back + share removed in the T139 hotfix — the global
+                PageHeader already renders Back, and the share bar below
+                covers Share. One back, one share. */}
 
             {/* Bottom — pill + title */}
             <div className="absolute left-5 right-5 bottom-5 lg:left-10 lg:right-10 lg:bottom-8 flex flex-col gap-3 pointer-events-none">
@@ -1171,21 +1155,10 @@ export default async function DropPage({
               {descriptionBlock}
               {slimesBlock}
 
-              {/* Actions — mobile inline (desktop shows them in the rail) */}
-              <div className="lg:hidden flex gap-2.5">
-                <div className="flex-1">{logThisDropButton}</div>
-                <div
-                  className="flex items-center justify-center rounded-2xl shrink-0"
-                  style={{
-                    width: 52,
-                    height: 52,
-                    background: "rgba(45,10,78,0.3)",
-                    border: "1px solid rgba(45,10,78,0.7)",
-                  }}
-                >
-                  {heroShareButton}
-                </div>
-              </div>
+              {/* Share — mobile inline (desktop shows it in the rail).
+                  The drop-level "Log this drop" CTA was removed in the T139
+                  hotfix; logging is per-slime via the cards above. */}
+              <div className="lg:hidden">{shareBar}</div>
 
               {upcomingBlock}
             </div>
@@ -1208,8 +1181,7 @@ export default async function DropPage({
                   <div
                     style={{ height: 1, background: "rgba(120,60,180,0.3)" }}
                   />
-                  {logThisDropButton}
-                  {railShareButton}
+                  {shareBar}
                 </div>
                 {brand.restock_schedule && (
                   <div

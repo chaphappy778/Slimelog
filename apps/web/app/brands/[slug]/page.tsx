@@ -612,27 +612,19 @@ export default async function BrandPage({
                 </span>
               )}
             </h1>
-            {/* 2026-07-13: Share icon moved above the Manage / Follow
-                action. Reads better than the two-button action row
-                below when the primary CTA is the shop catalog and
-                Share is secondary. */}
-            <div className="shrink-0 flex flex-col items-end gap-2">
-              <div
-                className="flex items-center justify-center rounded-2xl"
-                style={{
-                  width: 40,
-                  height: 40,
-                  background: "rgba(45,10,78,0.5)",
-                  border: "1px solid rgba(120,60,180,0.5)",
-                  color: "#FFFFFF",
-                }}
-              >
-                <ShareButton
-                  path={`/brands/${brand.slug}`}
-                  title={`${brand.name} on SlimeLog`}
-                  text={`Check out ${brand.name} on SlimeLog.`}
-                />
-              </div>
+            {/* Share + Follow/Manage on one aligned row.
+                2026-07-24 hotfix: Share previously sat in a fixed 40x40 box
+                stacked above Follow, but the default ShareButton renders a
+                labeled pill (not an icon), so it overflowed the box and
+                pushed off-center / off-screen on mobile. variant="icon" is a
+                self-sized 44x44 icon button that lines up with Follow. */}
+            <div className="shrink-0 flex items-center gap-2">
+              <ShareButton
+                path={`/brands/${brand.slug}`}
+                title={`${brand.name} on SlimeLog`}
+                text={`Check out ${brand.name} on SlimeLog.`}
+                variant="icon"
+              />
               {isVerifiedOwner ? (
                 <Link
                   href={`/brand-dashboard/${brand.slug}`}
@@ -1002,8 +994,10 @@ export default async function BrandPage({
             </div>
           )}
 
-          {/* Action row: catalog CTA (Share moved above Manage/Follow
-              in the name row on 2026-07-13). */}
+          {/* Action row: catalog CTA. 2026-07-24: the public catalog page
+              is still a "coming soon" placeholder (design mockup pending —
+              T-followup in tracker), so the label is honest about that
+              rather than implying a live catalog. */}
           <div className="mt-4">
             <Link
               href={`/brands/${brand.slug}/catalog`}
@@ -1013,14 +1007,14 @@ export default async function BrandPage({
                 padding: "0 16px",
                 background: "rgba(45,10,78,0.5)",
                 border: "1px solid rgba(120,60,180,0.5)",
-                color: "#FFFFFF",
+                color: "rgba(245,245,245,0.75)",
                 fontFamily: "Montserrat, sans-serif",
                 fontWeight: 700,
                 fontSize: 14,
                 textDecoration: "none",
               }}
             >
-              View slime catalog
+              Slime catalog (coming soon)
               <svg
                 width={16}
                 height={16}
@@ -1120,9 +1114,10 @@ export default async function BrandPage({
                 const tminus = computeTminus(drop.status, drop.drop_at);
                 const isLive = drop.status === "live";
                 return (
-                  <div
+                  <Link
                     key={drop.id}
-                    className="rounded-2xl flex gap-3 items-center"
+                    href={`/drops/${drop.id}`}
+                    className="rounded-2xl flex gap-3 items-center transition-transform active:scale-[0.985]"
                     style={{
                       padding: 12,
                       background: "rgba(45,10,78,0.28)",
@@ -1132,6 +1127,7 @@ export default async function BrandPage({
                       boxShadow: isLive
                         ? "0 0 22px rgba(255,0,229,0.28)"
                         : "0 0 12px rgba(0,240,255,0.06)",
+                      textDecoration: "none",
                     }}
                   >
                     <div
@@ -1202,7 +1198,7 @@ export default async function BrandPage({
                         )}
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
