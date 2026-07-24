@@ -39,6 +39,54 @@ Exception: if the error blocks the current batch from being verified (a type-che
 
 ---
 
+### 2026-07-23 — Silent-fail side-effect writes need Sentry capture, not just `console.error` (Ops)
+
+**Symptom:** none observed, and that is the point. A Brevo contact sync can fail on every account signup and the only trace is a `console.error` line buried in a Vercel runtime log for one specific request. Nobody reads those unless they are already suspicious of that exact request, so the first real signal would be noticing weeks later that the contact list is emptier than the signup count.
+
+**Root cause:** every third-party side-effect write in the signup path logs failures to the console and stops there. Four sites do it for Brevo: `app/auth/confirm/route.ts:213`, `app/auth/callback/route.ts:267`, `lib/profile-actions.ts:432` (`updateOnboardingProfile`) and `lib/profile-actions.ts:316` (`updateMarketingConsent`). Worse, `lib/brevo.ts:341-359` does not throw at all when `BREVO_API_KEY` or `BREVO_WAITLIST_LIST_ID` is missing or unparseable; it returns `{success: false, error}` and the callers' try/catch never fires, so a misconfigured environment produces no console line either. The pattern generalizes past Brevo: Stripe webhook side effects, PostHog `identify`, any fire-and-forget write to a service we do not own.
+
+**Fix:** NOT fixed. Tracked as **T201** with the concrete site list. Scope is a `Sentry.captureMessage()` next to each `console.error`, carrying the error string plus the context that makes it actionable (email, provider, list ID), and one capture inside the `{success:false}` env-var branch of `lib/brevo.ts`.
+
+**Regression check:** temporarily unset `BREVO_API_KEY` in a preview deploy and run a signup. Once T201 lands, that should produce a Sentry event, not silence.
+
+**Prevention pattern (the valuable read):** `console.error` is not observability, it is a breadcrumb for someone who already knows where to look. Any write to a system outside our database deserves a Sentry capture on the failure branch, because those failures are invisible by construction: the user's request still succeeds, the UI still renders, and nothing in the product degrades in a way anyone can see. The rule to carry forward is that a failure with no user-visible symptom needs *more* instrumentation than one with a symptom, not less. Also watch for the second half of this trap: a helper that returns a result union instead of throwing is the right shape for callers, but it means a `try/catch` around it is decorative. Check the return value, not just the exception.
+
+**Related:** tracker T201, T199 A2 diagnosis. Also the 2026-07-12 server-action entry (result unions vs. throws) — the same result-union shape that makes errors safe to surface is what makes them easy to drop on the floor.
+
+---
+
+### 2026-07-23 — Diagnosis pattern: prove innocence, don't assume guilt (Ops)
+
+**Symptom:** a signup regression was reported immediately after T199 Batch A2 shipped. The obvious read was "the batch that just landed broke signup," and the obvious response was a revert or a hotfix.
+
+**Root cause:** the batch did not break anything. Two separate things produced the appearance of a bug. First, the reported signup had in fact worked: Vercel runtime logs showed the Brevo contact created successfully (POST /v3/contacts → 204). Second, the check used to confirm it had worked was the wrong one, because the admin page being watched reflects a different pipeline entirely (see the entry below). A2's actual diff was semantically incapable of causing a signup failure: it moved a ref publish out of a render body into a bare `useEffect`, added an already-satisfied dependency to two `useCallback` deps arrays on click handlers, moved an `eslint-disable` comment down one line, and replaced a literal `…` escape in JSX text. Nothing in that set changes what data gets written or when.
+
+**Fix:** no code change. Two hours of diagnosis, and the batch stayed in.
+
+**Regression check:** not applicable, there was no defect. The check is procedural: before reverting, state which line of the diff produces the observed symptom, in one sentence. If that sentence cannot be written, the diff is probably not the cause.
+
+**Prevention pattern (the valuable read):** temporal correlation is the weakest evidence we routinely act on, and a revert feels cheap when it is not, since it also reverts the fixes and restores the bugs they closed. Two checks, in order. (1) Is the diff *semantically capable* of causing this symptom? `useCallback` dep-array changes on `onClick` handlers with no downstream `useEffect` dependency are inert; adding a dep that is already stable changes nothing at runtime. Comment moves and character-literal swaps are inert. Know which categories of change are inert and clear them fast. (2) Is the mental model of the failing system correct? Verify the actual code path before drawing a conclusion from a UI that is assumed to reflect it. In this incident the second check was the one that mattered, and it was the one nobody ran first.
+
+**Related:** tracker T199 (Batch A2), commit `92d37f1`. Pairs with the admin-views entry directly below.
+
+---
+
+### 2026-07-23 — SlimeLog admin views split by pipeline, not by kind (Ops)
+
+**Symptom:** a completed account signup did not appear on `/admin/waitlist`, which read as "signup is broken."
+
+**Root cause:** `app/admin/waitlist/page.tsx` reads `public.waitlist` and nothing else. That table is fed by the pre-launch waitlist form on `/waitlist` and `/landing`. Account signups, both email/password and OAuth, write to `auth.users` and `public.profiles`, and there is no admin view that surfaces them. The two are different pipelines that both end in "a person gave us their email," so it is natural to expect one page to show both. It does not, and the absence looks identical to a failure.
+
+**Fix:** no code change. The admin waitlist view is correct for what it covers.
+
+**Regression check:** when someone reports "signup isn't landing in the admin page," first establish which admin page and which table, then query `auth.users` / `public.profiles` directly for the address in question before treating it as a bug.
+
+**Prevention pattern (the valuable read):** an admin view named after a user-facing concept ("waitlist") will be read as covering every path that produces that concept. Ours is scoped to one table and one form. The durable fixes are either to name admin views after their data source or to give account signups their own view. Until one of those happens, the absence of a record on an admin page is not evidence that a write failed, only that *that* table has no row. If we decide we want a pre-launch admin view for account signups, that is new work, a T202 candidate rather than a bug fix.
+
+**Related:** tracker T199 (Batch A2 diagnosis), T40 (`/admin/waitlist` refactor to `createAdminClient`). Pairs with the "prove innocence" entry directly above.
+
+---
+
 ### 2026-07-23 — BrandSettingsForm writes user text with no moderation gate (UI + Ops)
 
 **Symptom:** none reported yet. Logged as a known gap while T137 Batch 6c added the free-text `display_location_override` field, which made it the second unmoderated free-text column on this form to reach a public page.
