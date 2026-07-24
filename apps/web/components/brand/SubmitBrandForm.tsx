@@ -74,6 +74,12 @@ const inputBaseStyle = {
 const FOCUS_BORDER = "1px solid rgba(0,240,255,0.6)";
 const REST_BORDER = "1px solid rgba(45,10,78,0.8)";
 const FOCUS_GLOW = "0 0 0 3px rgba(0,240,255,0.12)";
+// T205 revision (2026-07-24): inline per-field error styling from the
+// mockup's Input component. Red pill outline (--red-400 #FF3D6E) with the
+// design system's --glow-error outer bloom, and helper text in --red-300.
+const ERROR_BORDER = "1px solid #FF3D6E";
+const ERROR_GLOW =
+  "0 0 16px rgba(255,61,110,0.45), 0 0 40px rgba(255,61,110,0.20)";
 
 // ─── Field wrapper ──────────────────────────────────────────────────────────
 // Label row + input + optional helper/counter, managing its own focus
@@ -86,6 +92,10 @@ interface FieldProps {
   optional?: boolean;
   counter?: string;
   helper?: string;
+  // T205 revision (2026-07-24): when set, the field renders its error
+  // state, red pill outline + glow, a red dot next to the label, and the
+  // message underneath in place of the grey helper text.
+  error?: string | null;
   children: (opts: {
     focused: boolean;
     onFocus: () => void;
@@ -100,19 +110,37 @@ function Field({
   optional = false,
   counter,
   helper,
+  error = null,
   children,
 }: FieldProps) {
   const [focused, setFocused] = useState(false);
+  const hasError = !!error;
   const style: React.CSSProperties = {
     ...inputBaseStyle,
-    border: focused ? FOCUS_BORDER : REST_BORDER,
-    boxShadow: focused ? FOCUS_GLOW : "none",
+    // An active error outranks focus so the red pill holds while the user
+    // is typing the fix, then clears the moment the value goes valid.
+    border: hasError ? ERROR_BORDER : focused ? FOCUS_BORDER : REST_BORDER,
+    boxShadow: hasError ? ERROR_GLOW : focused ? FOCUS_GLOW : "none",
   };
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between gap-2">
         <span className="flex items-center gap-2">
           <span className="section-label">
+            {hasError && (
+              <span
+                aria-hidden="true"
+                style={{
+                  display: "inline-block",
+                  width: 6,
+                  height: 6,
+                  borderRadius: 9999,
+                  background: "#FF3D6E",
+                  marginRight: 8,
+                  verticalAlign: "middle",
+                }}
+              />
+            )}
             {label}
             {required && <span style={{ color: "#FF6187" }}> *</span>}
           </span>
@@ -134,11 +162,15 @@ function Field({
         onBlur: () => setFocused(false),
         style,
       })}
-      {helper && (
+      {hasError ? (
+        <p className="mt-1 text-[12px]" style={{ color: "#FF6187" }}>
+          {error}
+        </p>
+      ) : helper ? (
         <p className="text-[13px]" style={{ color: "rgba(245,245,245,0.65)" }}>
           {helper}
         </p>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -178,37 +210,42 @@ export default function SubmitBrandForm({
   const [tiktokHandle, setTiktokHandle] = useState<string>("");
   const [note, setNote] = useState<string>("");
   const [state, setState] = useState<SubmitState>({ kind: "idle" });
+  // T205 revision (2026-07-24): per-field client validation errors,
+  // rendered inline on each field (red pill + dot + helper) instead of a
+  // single generic banner. Server-side messages still flow through the
+  // `error` state kind and its small inline row below.
+  const [fieldErrors, setFieldErrors] = useState<{
+    name?: string;
+    website?: string;
+  }>({});
 
   const submitting = state.kind === "submitting";
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    // Client-side gates that mirror the server so we don't waste a round trip.
+    // Client-side gates that mirror the server so we don't waste a round
+    // trip. Errors are collected per field so each pill lights up inline
+    // instead of a single shared message row.
     const trimmedName = name.trim();
-    if (trimmedName.length < 2 || trimmedName.length > 60) {
-      setState({
-        kind: "error",
-        message: "Brand name needs to be between 2 and 60 characters.",
-      });
-      return;
-    }
     const trimmedWebsite = websiteUrl.trim();
-    if (trimmedWebsite.length === 0) {
-      setState({
-        kind: "error",
-        message: "Add a website or shop link so we can verify the brand.",
-      });
-      return;
+    const errs: { name?: string; website?: string } = {};
+    if (trimmedName.length < 2 || trimmedName.length > 60) {
+      errs.name = "Brand name needs to be between 2 and 60 characters.";
     }
-    if (!/^https?:\/\//i.test(trimmedWebsite)) {
-      setState({
-        kind: "error",
-        message: "That link needs to start with https://",
-      });
+    if (trimmedWebsite.length === 0) {
+      errs.website = "Add a website or shop link so we can verify the brand.";
+    } else if (!/^https?:\/\//i.test(trimmedWebsite)) {
+      errs.website = "That link needs to start with https:// or http://";
+    }
+    if (errs.name || errs.website) {
+      setFieldErrors(errs);
+      // Drop any stale server banner so only the inline pills show.
+      setState({ kind: "idle" });
       return;
     }
 
+    setFieldErrors({});
     setState({ kind: "submitting" });
 
     let res: Response;
@@ -300,7 +337,10 @@ export default function SubmitBrandForm({
             height: 84,
             background: "rgba(57,255,20,0.12)",
             border: "1px solid rgba(57,255,20,0.5)",
-            boxShadow: "0 0 40px rgba(57,255,20,0.25)",
+            // T205 revision (2026-07-24): match the mockup's --glow-green
+            // outer aura (two-layer bloom outside the circle, no inset).
+            boxShadow:
+              "0 0 16px rgba(57,255,20,0.45), 0 0 40px rgba(57,255,20,0.20)",
           }}
         >
           <svg
@@ -481,12 +521,21 @@ export default function SubmitBrandForm({
 
       <div className="rounded-2xl p-6" style={CARD_STYLE}>
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-          <Field label="Brand name" required counter={`${name.length}/60`}>
+          <Field
+            label="Brand name"
+            required
+            counter={`${name.length}/60`}
+            error={fieldErrors.name}
+          >
             {({ style, onFocus, onBlur }) => (
               <input
                 type="text"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (fieldErrors.name)
+                    setFieldErrors((f) => ({ ...f, name: undefined }));
+                }}
                 onFocus={onFocus}
                 onBlur={onBlur}
                 placeholder="Honeydew Slimes"
@@ -502,12 +551,17 @@ export default function SubmitBrandForm({
             label="Website or shop link"
             required
             helper="Etsy, TikTok Shop, or their own site, wherever they sell."
+            error={fieldErrors.website}
           >
             {({ style, onFocus, onBlur }) => (
               <input
                 type="url"
                 value={websiteUrl}
-                onChange={(e) => setWebsiteUrl(e.target.value)}
+                onChange={(e) => {
+                  setWebsiteUrl(e.target.value);
+                  if (fieldErrors.website)
+                    setFieldErrors((f) => ({ ...f, website: undefined }));
+                }}
                 onFocus={onFocus}
                 onBlur={onBlur}
                 placeholder="https://honeydewslimes.com"

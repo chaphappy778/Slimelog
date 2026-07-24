@@ -3,8 +3,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import PageWrapper from "@/components/PageWrapper";
+import PageHeader from "@/components/PageHeader";
 import UpgradeButton from "@/components/UpgradeButton";
 // Audit hp-24 (2026-07-09): use the shared browser singleton
 // (lib/supabase/client.ts) instead of instantiating a fresh
@@ -212,8 +212,9 @@ export default function SubscriptionPage() {
   if (!authChecked || !userId) {
     return (
       <PageWrapper>
-        <div className="px-4 pt-10 space-y-4 animate-pulse">
-          <div className="h-6 w-40 bg-slime-surface rounded-xl" />
+        <PageHeader />
+        <div className="px-4 pt-16 space-y-4 animate-pulse">
+          <div className="h-6 w-32 bg-slime-surface rounded-xl" />
           <div className="h-32 rounded-2xl" style={cardStyle} />
         </div>
       </PageWrapper>
@@ -241,38 +242,15 @@ export default function SubscriptionPage() {
 
   return (
     <PageWrapper dots glow="magenta">
-      <header className="px-4 pt-10 pb-6 flex items-center gap-3">
-        <Link
-          href="/settings"
-          className="w-8 h-8 rounded-xl bg-slime-surface border border-slime-border flex items-center justify-center active:scale-90 transition-transform"
-          aria-label="Back to settings"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            width={16}
-            height={16}
-            className="text-slime-muted"
-          >
-            <path
-              fillRule="evenodd"
-              d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </Link>
-        <div>
-          <h1 className="text-xl font-black text-slime-cyan leading-tight">
-            Subscription
-          </h1>
-          <p className="text-xs text-slime-muted mt-0.5">
-            Manage your SlimeLog plan
-          </p>
-        </div>
-      </header>
+      {/* T205 revision (2026-07-24): global chrome (back + wordmark + bell +
+          hamburger) instead of a page-local header. The old inline back
+          button and the duplicate "Subscription" title/subtext are gone;
+          the page now opens straight on the tier state. PageHeader renders
+          its own back button because /settings/subscription is registered
+          in BACK_BUTTON_ROUTES. */}
+      <PageHeader />
 
-      <div className="px-4 pb-28 max-w-3xl mx-auto">
+      <div className="px-4 pt-16 pb-28 max-w-3xl mx-auto">
         {/* Hero: tier pill + gradient headline + state subtitle. */}
         <div className="mb-6">
           <div className="mb-3">
@@ -369,9 +347,14 @@ export default function SubscriptionPage() {
                     <path d="M16 2v4M8 2v4M3 10h18" />
                   </svg>
                   <span>
-                    {formattedDate
-                      ? `Renews ${formattedDate}.`
-                      : "Your plan renews automatically."}
+                    {formattedDate ? (
+                      <>
+                        Renews{" "}
+                        <b style={{ color: "#FFFFFF" }}>{formattedDate}</b>.
+                      </>
+                    ) : (
+                      "Your plan renews automatically."
+                    )}
                   </span>
                 </>
               )}
@@ -393,9 +376,15 @@ export default function SubscriptionPage() {
                     <path d="M12 7v5l3 2" />
                   </svg>
                   <span>
-                    {formattedDate
-                      ? `Your Pro access runs until ${formattedDate}, then you move to Free. Nothing else to do.`
-                      : "Your Pro access ends at the close of the current period, then you move to Free."}
+                    {formattedDate ? (
+                      <>
+                        Your Pro access runs until{" "}
+                        <b style={{ color: "#FFFFFF" }}>{formattedDate}</b>, then
+                        you move to Free. Nothing else to do.
+                      </>
+                    ) : (
+                      "Your Pro access ends at the close of the current period, then you move to Free."
+                    )}
                   </span>
                 </>
               )}

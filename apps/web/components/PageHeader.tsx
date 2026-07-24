@@ -40,6 +40,11 @@ const BACK_BUTTON_ROUTES = [
   /^\/privacy$/,
   /^\/terms$/,
   /^\/wishlist$/,
+  // T205 revision (2026-07-24): /settings/subscription now uses the global
+  // PageHeader instead of a page-local header, so it needs the back-button
+  // affordance here (back routes to wherever the user came from, typically
+  // /settings). Other /settings/* pages keep their own inline headers.
+  /^\/settings\/subscription$/,
   /^\/brands\/[^/]+\/claim$/,
   /^\/brand-verification$/,
   // Admin sub-pages: back button routes them to /admin. Not needed on
