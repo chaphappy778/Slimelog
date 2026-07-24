@@ -10,6 +10,25 @@
 
 ---
 
+## A3 outcome (2026-07-24) — Batch B config decisions landed
+
+Batch B in the "Recommended attack order" below shipped under the label **T199 A3** (local commit, awaiting push). Config + `eslint-disable`-comment + docs only, no runtime code touched, no migration.
+
+**Downgrades** (in `apps/web/eslint.config.mjs`, a trailing rules object spread after `coreWebVitals` so it wins):
+- `react-hooks/set-state-in-effect`: error → **warn** (cluster 2, 27 findings — deliberate mount-gates / prop-resyncs, refactoring risks reopening Sentry `SLIMELOG-1` / `81b58fcb`).
+- `react-hooks/refs`: error → **warn** (cluster 1, ~32 false positives, ~4 real ones all in the redesign-held Timeline/Galaxy/Spiral views). This is a scope expansion beyond the original Batch B plan (which named only `set-state-in-effect`); done because the real `refs` findings are all in files we are explicitly not touching, so warn is the correct level for the whole cluster right now.
+
+**Unused `eslint-disable` directives** (cluster 3): the triage counted 20; by A3 there were **19** (the 20th, `SlimeMenu.tsx`, was already fixed in A2). Disposition:
+- **7 deleted** — 4 × `@next/next/no-img-element` in `opengraph-image.tsx` files (`brands/[slug]`, `slimes/[id]` ×2, `users/[username]`; Satori `ImageResponse`, rule genuinely N/A) + 3 × stale `react-hooks/exhaustive-deps` (`app/settings/profile/page.tsx:464`, `components/collection/SlimeDetailCard.tsx:229`, `components/feed/FeedListClient.tsx:361`).
+- **11 kept as traps** — all `@typescript-eslint/no-explicit-any`. They read "unused" only because `next/typescript` is off. Each now carries a `// KEEP: latent (T199 A3, needs next/typescript in flat config)` marker above it. See **T202** (opened to add `next/typescript`).
+- **1 deferred** — the stale `exhaustive-deps` disable at `components/collection/TimelineView.tsx:115`. It is genuinely stale and would normally be deleted, but `TimelineView` is in the "do not touch Timeline/Galaxy/Spiral" redesign-hold set, so it was left in place and folded into the eventual redesign pass rather than editing a held file for a comment removal.
+
+**Count:** 105 → **98 (82 errors → 22 errors, 23 → 76 warnings)**. The 60-error drop is the two downgrades converting errors to warnings; the 12 remaining `--fix`-able warnings are exactly the 11 traps + the 1 deferred TimelineView disable. Remaining 22 errors = 12 `react-hooks/purity` + 9 `react/no-unescaped-entities` + 1 `react-hooks/immutability` (clusters 4 / 5 / 8), all pre-existing — A3 introduced no new errors. `npm run type-check` and `npm run build` both clean.
+
+**Still open after A3:** Batch C (cosmetic: the 9 `no-unescaped-entities` + `aria-controls`, tracked as T199 A4 with the `log/edit/[id]` `Loading…` escape bug) and Batch D (post-launch). T202 tracks adding `next/typescript`, which will surface a fresh `no-explicit-any` wave and let the 11 trap markers come off.
+
+---
+
 ## Headline
 
 There is **one genuinely scary item** and a handful of small real bugs. The other ~95 problems are either false positives from the new React Compiler rule set in `eslint-plugin-react-hooks` v6, or cosmetic.

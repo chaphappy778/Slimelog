@@ -83,6 +83,7 @@ export async function checkRateLimit(args: CheckArgs): Promise<CheckResult> {
     // and we validate the return type below. When we regenerate
     // types (supabase gen types typescript), this cast can be
     // removed.
+    // KEEP: latent (T199 A3, needs next/typescript in flat config)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rpc = admin.rpc as unknown as (
       fn: string,

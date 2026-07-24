@@ -461,7 +461,7 @@ function ProfileSettingsContent({ userId }: { userId: string }) {
       cancelled = true;
       clearTimeout(failSafe);
     };
-  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   // ── username handlers ──────────────────────────────────────────────────────
   const checkUsername = useCallback(

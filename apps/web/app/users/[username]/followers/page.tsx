@@ -58,8 +58,10 @@ export default async function FollowersPage({ params }: PageProps) {
     bio: string | null;
     is_verified: boolean;
   }
+  // KEEP: latent (T199 A3, needs next/typescript in flat config)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const followers: FollowerProfile[] = ((rows ?? []) as any[])
+    // KEEP: latent (T199 A3, needs next/typescript in flat config)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .map((r: any): FollowerProfile | null => {
       const p = Array.isArray(r.profile) ? r.profile[0] : r.profile;

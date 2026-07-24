@@ -875,6 +875,7 @@ function SearchPageInner() {
           slimeQueryFailed = true;
           continue;
         }
+        // KEEP: latent (T199 A3, needs next/typescript in flat config)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const rows: any[] = (res.data as any[]) ?? [];
         // Index 1 is the subtype-id union query; anything found there

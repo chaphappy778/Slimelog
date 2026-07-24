@@ -180,7 +180,6 @@ export default async function OpengraphImage({
             }}
           >
             {brand?.logo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={brand.logo_url}
                 alt=""

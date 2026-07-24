@@ -262,6 +262,7 @@ function EditLogPageInner() {
         .eq("log_id", id);
 
       // [T67] Fix: PostgREST to-one join returns plain object, not array
+      // KEEP: latent (T199 A3, needs next/typescript in flat config)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const existingKeywords = (tagData ?? [])
         .map((row: any) => row.tags?.name as string | undefined)

@@ -358,7 +358,6 @@ export default function FeedListClient({
     setExtraLogoMap({});
     setCurrentHasMore(hasMore);
     setLoadError(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, hasMore]);
 
   const allLogs = useMemo(() => [...logs, ...moreLogs], [logs, moreLogs]);

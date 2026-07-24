@@ -226,7 +226,7 @@ export default function SlimeDetailCard({
     return () => {
       cancelled = true;
     };
-  }, [currentUserId, log.slime_name]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentUserId, log.slime_name]);
 
   async function handleAddToWishlist() {
     if (!currentUserId) {

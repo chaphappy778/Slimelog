@@ -214,7 +214,6 @@ export default async function OpengraphImage({
           }}
         >
           {profile?.avatar_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={profile.avatar_url}
               alt=""

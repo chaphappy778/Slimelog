@@ -157,6 +157,7 @@ export default function SearchTypeaheadDropdown({
       // Normalize slime brands join (Supabase returns as array in some
       // cases; we always want an object-or-null). href/hrefKind get
       // filled in by the enrichment step below.
+      // KEEP: latent (T199 A3, needs next/typescript in flat config)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawSlimes: any[] = (slimesRes.data as any[]) ?? [];
       type PreSlime = Omit<SlimeHit, "href" | "hrefKind">;

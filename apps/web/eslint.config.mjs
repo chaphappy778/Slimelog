@@ -20,6 +20,28 @@ const config = [
     ],
   },
   ...coreWebVitals,
+  {
+    // T199 A3 (2026-07-23): severity downgrades. This object is spread AFTER
+    // coreWebVitals so its rule levels win. See docs/lint-triage-2026-07-23.md
+    // clusters 1 and 2 for the per-finding audit behind each downgrade.
+    rules: {
+      // T199 A3 (2026-07-23): downgraded to warn. Most of the 27 findings in
+      // this cluster are deliberate mount-gate fixes for hydration bugs (see
+      // Sentry SLIMELOG-1 / 81b58fcb, T191). Enforcing as error would either
+      // reopen those closed issues or generate stale suppressions. Warn keeps
+      // the signal without blocking builds; real bugs in this class should
+      // still be triaged when they appear.
+      "react-hooks/set-state-in-effect": "warn",
+      // T199 A3 (2026-07-23): downgraded to warn. Of the 36 findings in this
+      // cluster, ~32 are false positives (refs passed as props, refs accessed
+      // in onClick handlers that the rule cannot see through). The ~4 real ones
+      // live in the Timeline / Galaxy / Spiral shelf views, which Jenn is
+      // holding for redesign (see triage doc + tracker T199 exclusion), so
+      // fixing them now would churn code slated to be replaced. Warn keeps the
+      // signal without blocking builds.
+      "react-hooks/refs": "warn",
+    },
+  },
 ];
 
 export default config;

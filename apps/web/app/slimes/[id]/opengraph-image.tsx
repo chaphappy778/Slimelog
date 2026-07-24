@@ -169,7 +169,6 @@ export default async function OpengraphImage({
         }}
       >
         {log?.image_url && (
-          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={log.image_url}
             alt=""
@@ -303,7 +302,6 @@ export default async function OpengraphImage({
           }}
         >
           {brandLogoUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={brandLogoUrl}
               alt=""

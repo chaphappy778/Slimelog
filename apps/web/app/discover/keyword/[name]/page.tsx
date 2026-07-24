@@ -55,10 +55,13 @@ export default async function KeywordDetailPage({ params }: PageProps) {
     .limit(50);
 
   const logs: DiscoverLog[] = (logTagRows ?? [])
+    // KEEP: latent (T199 A3, needs next/typescript in flat config)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .map((row: any) => row.log)
+    // KEEP: latent (T199 A3, needs next/typescript in flat config)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .filter((l: any) => l && l.is_public)
+    // KEEP: latent (T199 A3, needs next/typescript in flat config)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .map((l: any) => ({
       id: l.id,
