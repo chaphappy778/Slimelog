@@ -1144,7 +1144,7 @@ function LogPageLoading() {
       }}
     >
       <div className="text-slime-accent text-sm font-medium animate-pulse">
-        Loading\u2026
+        Loading…
       </div>
     </div>
   );

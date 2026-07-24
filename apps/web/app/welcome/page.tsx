@@ -355,7 +355,16 @@ function WelcomeInner() {
     }
 
     router.push(next);
-  }, [submitting, userId, avatarFile, username, marketingConsent, next, router]);
+  }, [
+    submitting,
+    userId,
+    avatarFile,
+    username,
+    marketingConsent,
+    showMarketingConsent,
+    next,
+    router,
+  ]);
 
   // ── Step 2: Skip ──
   const handleSkip = useCallback(async () => {
@@ -379,7 +388,14 @@ function WelcomeInner() {
     }
 
     router.push(next);
-  }, [submitting, username, marketingConsent, next, router]);
+  }, [
+    submitting,
+    username,
+    marketingConsent,
+    showMarketingConsent,
+    next,
+    router,
+  ]);
 
   const canContinue = usernameStatus === "available" && !submitting;
   const canFinish = !submitting && !avatarUploading;

@@ -198,7 +198,12 @@ export default function NotificationsFeed(): React.ReactElement {
   // → visible so users returning to the tab see fresh data without
   // waiting a full 30s cycle. Cleaned up on unmount.
   const refreshRef = useRef(refreshList);
-  refreshRef.current = refreshList;
+  // Latest-ref publish happens post-commit, never in the render body. A
+  // discarded render must not hand the poller a closure that was never
+  // committed. No dep array: runs after every commit, cheap.
+  useEffect(() => {
+    refreshRef.current = refreshList;
+  });
   useEffect(() => {
     if (authLoading || !user) return;
     if (typeof document === "undefined") return;

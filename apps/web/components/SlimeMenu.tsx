@@ -55,8 +55,8 @@ function Avatar({
 }) {
   const dim = size === "sm" ? "w-7 h-7 text-xs" : "w-9 h-9 text-sm";
   if (profile?.avatar_url) {
-    // eslint-disable-next-line @next/next/no-img-element
     return (
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={profile.avatar_url}
         alt="Profile photo"
