@@ -2692,22 +2692,18 @@ export default function DropsSplitPanel({
                   onUpdateSlime={handleUpdateSlime}
                 />
               )}
-              {/* Mobile catalog — only show during step 3 in create mode, always show in detail mode */}
+              {/* Mobile catalog — only show during step 3 in create mode, always show in detail mode.
+                  T137 Batch 6e: this wrapper used to carry its own "Add from
+                  Catalog" title directly above CatalogPanel's own header, so the
+                  sheet stacked two titles. The panel header stays because it is
+                  the drop-type aware one ("Select Slimes to Restock") and it is
+                  the only title in the desktop rail. */}
               {(mode === "detail" ||
                 (mode === "create" && wizardStep === 3)) && (
                 <div
                   className="px-5 pb-4 pt-2"
                   style={{ borderTop: "1px solid rgba(255,255,255,0.03)" }}
                 >
-                  <p
-                    className="text-xs font-bold uppercase tracking-widest mb-3"
-                    style={{
-                      color: "#22d3ee",
-                      fontFamily: "Montserrat, sans-serif",
-                    }}
-                  >
-                    Add from Catalog
-                  </p>
                   <CatalogPanel
                     brandId={brandId}
                     attachedIds={attachedIds}

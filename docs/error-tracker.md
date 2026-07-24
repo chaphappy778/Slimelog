@@ -29,6 +29,16 @@ Template for new entries:
 
 ---
 
+## Meta
+
+### Policy: incidental errors get tickets, not inline fixes
+
+Any dev-loop error surfaced while working on an unrelated task (lint failures, deprecation warnings, pre-existing test failures, unrelated console noise) gets a `SlimeLog_Tracker.md` ticket, not a mid-batch fix. Keeps batches predictable. Batch reports should still surface what was seen so the ticket gets opened rather than silently forgotten.
+
+Exception: if the error blocks the current batch from being verified (a type-check failure on the code you just wrote), fix it. That is a defect in the current work, not incidental.
+
+---
+
 ### 2026-07-23 — BrandSettingsForm writes user text with no moderation gate (UI + Ops)
 
 **Symptom:** none reported yet. Logged as a known gap while T137 Batch 6c added the free-text `display_location_override` field, which made it the second unmoderated free-text column on this form to reach a public page.
