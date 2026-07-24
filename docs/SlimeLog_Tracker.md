@@ -361,17 +361,9 @@ The handoff doc captures session-by-session changes. This tracker captures forwa
 
 ---
 
-## 2026-07-23 Session Close
+## Session log
 
-**Shipped tonight:** T137 Batches 6a / 6b / 6c / 6d / 6e, which completes the brand dashboard settings polish arc (`f7ae538`, `0d99168`, `3ec0a00`, `14736b3`, `beb5188`). Security fix converting the `upcoming_drops` view to SECURITY INVOKER per the Supabase advisor (`ed0676e`). T197 + T198 together (`1d90ee6`): the `next lint` script fixed for Next 16 and the Sentry `disableLogger` deprecation cleared. T199 A1 (`7026835`): the `getUser()`-in-render-body fix on `/log`. T199 A2 (`92d37f1`): notifications poller ref publish, `/welcome` `useCallback` deps, the `SlimeMenu` disable comment, and the `/log` `Loading…` escape.
-
-**Opened tonight:** T196 (moderation gate on brand settings writes), T197, T198, T199, T200, T201.
-
-**Remaining T199 batches:** A3, the config downgrade plus stale-disable cleanup, which is where the error count drops from 82 to roughly 20. Then A4, the copy and a11y polish, which also carries the `/log/edit/[id]/page.tsx:371` and `:1016` `Loading…` escape bug spotted during A2.
-
-**Next session pickup:** either T199 A3 or the T139 drop detail redesign (design mockup still pending), then the RevenueCat launch chain.
-
-Note on process: the A2 signup-regression scare turned out to be a false alarm, resolved without a revert. Both halves of that diagnosis are written up in `docs/error-tracker.md` as prevention patterns, and the two real gaps it surfaced became T200 and T201.
+Daily session notes live in `docs/session-notes/YYYY-MM-DD.md`. Convention lives in `docs/session-notes/README.md`. Latest sessions are updated at close each night.
 
 ---
 
