@@ -526,6 +526,11 @@ interface CatalogPanelProps {
   }) => Promise<CatalogSlime | null>;
   isActive: boolean;
   dropType: "new_drop" | "restock";
+  // T137 Batch 6d: the same panel serves the desktop right rail and the mobile
+  // bottom sheet. In the rail it owns its height and draws the divider between
+  // itself and the center column. In the sheet it has no column to divide and
+  // no height of its own, so an inner scroller here would fight the sheet's.
+  variant?: "rail" | "sheet";
 }
 
 function CatalogPanel({
@@ -535,7 +540,9 @@ function CatalogPanel({
   onAddNew,
   isActive,
   dropType,
+  variant = "rail",
 }: CatalogPanelProps) {
+  const isRail = variant === "rail";
   const supabase = createClient();
   const [brandSlimes, setBrandSlimes] = useState<CatalogSlime[]>([]);
   const [search, setSearch] = useState("");
@@ -584,10 +591,10 @@ function CatalogPanel({
 
   return (
     <div
-      className="flex flex-col h-full transition-opacity duration-200"
+      className={`flex flex-col transition-opacity duration-200 ${isRail ? "h-full" : ""}`}
       style={{
         opacity: panelOpacity,
-        borderLeft: "1px solid rgba(150,110,240,0.18)",
+        borderLeft: isRail ? "1px solid rgba(150,110,240,0.18)" : undefined,
         pointerEvents: isActive ? "auto" : "none",
       }}
     >
@@ -654,7 +661,9 @@ function CatalogPanel({
       </div>
 
       {/* Catalog list */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1.5">
+      <div
+        className={`px-3 py-3 space-y-1.5 ${isRail ? "flex-1 overflow-y-auto" : ""}`}
+      >
         {available.length === 0 && !showAddNew && (
           <p
             className="text-xs text-center py-6"
@@ -2350,20 +2359,24 @@ export default function DropsSplitPanel({
   const catalogActiveCreate = mode === "create" ? wizardStep === 3 : true;
 
   return (
+    // T137 Batch 6d: the height used to be a flat `calc(100vh - 200px)` with a
+    // 520px floor, which on a phone is taller than the visible viewport (vh
+    // counts the space under the browser chrome) and left the footer button
+    // sitting behind the bottom tab bar. Mobile now measures in dvh and budgets
+    // for the app bar, the page header, the cadence strip and the tab bar.
+    // The md+ height is byte-for-byte what shipped before.
     <div
-      className="rounded-2xl overflow-hidden flex"
+      className="rounded-2xl overflow-hidden flex h-[calc(100dvh_-_300px)] min-h-[380px] md:h-[calc(100vh_-_200px)] md:min-h-[520px]"
       style={{
         background: "rgba(255,255,255,0.02)",
         border: "1px solid rgba(150,110,240,0.18)",
-        height: "calc(100vh - 200px)",
-        minHeight: "520px",
       }}
     >
-      {/* ── LEFT PANEL: Drop list ── */}
-      <div
-        className="flex flex-col flex-shrink-0"
-        style={{ width: 280, borderRight: "1px solid rgba(150,110,240,0.18)" }}
-      >
+      {/* ── LEFT PANEL: Drop list ──
+          Full width on a phone (the center and catalog columns are md+ only,
+          so a fixed 280px here left a dead gutter down the right of the card).
+          Matches SlimesSplitPanel, which already stacks this way. */}
+      <div className="flex flex-col w-full md:w-[240px] lg:w-[280px] md:flex-shrink-0 md:border-r md:border-[rgba(150,110,240,0.18)]">
         <div
           className="flex gap-1 p-3"
           style={{ borderBottom: "1px solid rgba(150,110,240,0.14)" }}
@@ -2564,11 +2577,10 @@ export default function DropsSplitPanel({
         )}
       </div>
 
-      {/* ── RIGHT PANEL: Brand catalog browser ── */}
-      <div
-        className="hidden md:flex flex-col flex-shrink-0"
-        style={{ width: 300 }}
-      >
+      {/* ── RIGHT PANEL: Brand catalog browser ──
+          Narrower at md so the center column still has room on a tablet in
+          portrait. lg+ is the 300px that shipped. */}
+      <div className="hidden md:flex flex-col flex-shrink-0 md:w-[240px] lg:w-[300px]">
         <CatalogPanel
           brandId={brandId}
           attachedIds={attachedIds}
@@ -2594,7 +2606,9 @@ export default function DropsSplitPanel({
             style={{
               background: "#0A0A0A",
               border: "1px solid rgba(150,110,240,0.24)",
-              maxHeight: "90vh",
+              // dvh, not vh: 90vh on a phone reaches under the browser chrome,
+              // so the last rows of the sheet were unreachable.
+              maxHeight: "88dvh",
             }}
           >
             <div
@@ -2636,7 +2650,12 @@ export default function DropsSplitPanel({
                 </svg>
               </button>
             </div>
-            <div className="overflow-y-auto flex-1 pb-10">
+            <div
+              className="overflow-y-auto flex-1"
+              style={{
+                paddingBottom: "calc(env(safe-area-inset-bottom) + 40px)",
+              }}
+            >
               {mode === "detail" && selected && (
                 <DetailPanel
                   selected={selected}
@@ -2695,6 +2714,7 @@ export default function DropsSplitPanel({
                     onAttach={handleAttachSlime}
                     onAddNew={handleAddNewSlime}
                     isActive={true}
+                    variant="sheet"
                     dropType={
                       mode === "detail" && selected
                         ? (selected.drop_type ?? "new_drop")
