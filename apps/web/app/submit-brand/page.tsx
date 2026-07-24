@@ -25,7 +25,8 @@ import { createClient } from "@/lib/supabase/server";
 import { safeRedirect } from "@/lib/safe-redirect";
 
 export const metadata: Metadata = {
-  title: "Suggest a brand — SlimeLog",
+  // T205 (2026-07-24): pipe separator, not an em-dash, per the voice rules.
+  title: "Suggest a brand | SlimeLog",
   description: "Suggest a slime shop we should track.",
   robots: { index: false, follow: false },
 };
@@ -74,41 +75,12 @@ export default async function SubmitBrandPage({
     <PageWrapper dots glow="magenta">
       <PageHeader />
 
+      {/* T205 (2026-07-24): the hero, card, and success/error states all
+          live inside SubmitBrandForm now so each form state controls its
+          own layout (boxed form vs. centered success screen). This page
+          stays a thin auth gate + prefill/returnTo pass-through. */}
       <main className="pt-20 pb-24 px-4 max-w-lg mx-auto">
-        <div className="mb-6">
-          <h1
-            className="text-3xl font-black tracking-tight"
-            style={{
-              fontFamily: "Montserrat, sans-serif",
-              background:
-                "linear-gradient(90deg, #00F0FF 0%, #39FF14 50%, #FF00E5 100%)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-            }}
-          >
-            Suggest a brand
-          </h1>
-          <p className="text-sm text-slime-muted mt-2">
-            Know a slime shop we should track? Drop the details and we&apos;ll
-            review it. If they check out, they join the catalog and you get a
-            notification.
-          </p>
-        </div>
-
-        <div
-          className="rounded-2xl p-6"
-          style={{
-            background: "rgba(45,10,78,0.3)",
-            border: "1px solid rgba(45,10,78,0.8)",
-            boxShadow:
-              "inset 0 0 30px rgba(45,10,78,0.2), 0 8px 32px rgba(0,0,0,0.4)",
-          }}
-        >
-          <SubmitBrandForm
-            initialName={prefilledName}
-            returnTo={returnToSafe}
-          />
-        </div>
+        <SubmitBrandForm initialName={prefilledName} returnTo={returnToSafe} />
       </main>
     </PageWrapper>
   );

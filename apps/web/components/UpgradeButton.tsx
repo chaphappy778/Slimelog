@@ -10,6 +10,44 @@ interface Props {
   mode: "user" | "brand";
   brandId?: string;
   currentPath: string;
+  // T205 (2026-07-24): visual variants so the utility-pages redesign can
+  // render a magenta primary + secondary outline CTA without forking the
+  // Stripe checkout logic. Defaults keep every existing caller (brand
+  // dashboard, ProGate) on the original green gradient pill, unchanged.
+  variant?: "green" | "magenta" | "secondary";
+  fullWidth?: boolean;
+}
+
+// Per-variant surface styling. Loading swaps to a dimmed version of the
+// same surface so the button never jumps color mid-redirect.
+function surfaceFor(
+  variant: "green" | "magenta" | "secondary",
+  loading: boolean,
+): { background: string; color: string; border: string } {
+  if (variant === "magenta") {
+    return {
+      background: loading
+        ? "rgba(255,0,229,0.4)"
+        : "linear-gradient(135deg, #FF00E5, #00F0FF)",
+      color: "#FFFFFF",
+      border: "1px solid transparent",
+    };
+  }
+  if (variant === "secondary") {
+    return {
+      background: "rgba(45,10,78,0.4)",
+      color: "rgba(245,245,245,0.9)",
+      border: "1px solid rgba(45,10,78,0.9)",
+    };
+  }
+  // green (default): original CTA look.
+  return {
+    background: loading
+      ? "rgba(57,255,20,0.4)"
+      : "linear-gradient(135deg, #39FF14, #00F0FF)",
+    color: "#0A0A0A",
+    border: "none",
+  };
 }
 
 export default function UpgradeButton({
@@ -18,6 +56,8 @@ export default function UpgradeButton({
   mode,
   brandId,
   currentPath,
+  variant = "green",
+  fullWidth = false,
 }: Props) {
   const [loading, setLoading] = useState(false);
   const { showToast } = useToast(); // [Fix 2B]
@@ -45,7 +85,7 @@ export default function UpgradeButton({
       // checkout route returns { already_active: true, portal_url }. Show an
       // info toast first, then redirect to the Stripe billing portal after a
       // brief delay so the toast is visible. Button stays in "Redirecting..."
-      // state during the delay — do not unset loading here.
+      // state during the delay. Do not unset loading here.
       if (data.already_active && data.portal_url) {
         showToast(
           "You're already subscribed. Opening subscription management...",
@@ -69,27 +109,32 @@ export default function UpgradeButton({
     }
   };
 
+  const surface = surfaceFor(variant, loading);
+
   return (
     <button
       type="button"
       onClick={handleClick}
       disabled={loading}
       style={{
-        background: loading
-          ? "rgba(57,255,20,0.4)"
-          : "linear-gradient(135deg, #39FF14, #00F0FF)",
-        color: "#0A0A0A",
+        background: surface.background,
+        color: surface.color,
+        border: surface.border,
         opacity: loading ? 0.7 : 1,
         cursor: loading ? "not-allowed" : "pointer",
-        padding: "10px 20px",
+        padding: fullWidth ? "13px 20px" : "10px 20px",
         borderRadius: "9999px",
         fontSize: "14px",
         fontWeight: 700,
         fontFamily: "Montserrat, sans-serif",
-        border: "none",
+        boxShadow:
+          variant === "magenta" && !loading
+            ? "0 8px 24px rgba(255,0,229,0.28)"
+            : "none",
         transition: "opacity 0.15s ease",
-        display: "inline-block",
-        whiteSpace: "nowrap" as const,
+        display: fullWidth ? "block" : "inline-block",
+        width: fullWidth ? "100%" : undefined,
+        whiteSpace: fullWidth ? "normal" : ("nowrap" as const),
       }}
     >
       {loading ? "Redirecting..." : label}
